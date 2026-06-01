@@ -1,0 +1,27 @@
+# Dépendances
+node_modules/
+
+# Variables d'environnement — ne JAMAIS committer
+.env
+.env.*
+!.env.example
+
+# Build Vite
+client/dist/
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Prisma migrations générées localement (keep migrations, ignore shadow DB)
+server/prisma/migrations/**/migration_lock.toml

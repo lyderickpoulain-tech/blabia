@@ -1,0 +1,94 @@
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import Layout from '../components/Layout';
+import api from '../utils/api';
+
+export default function NewProject() {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const { data } = await api.post('/projects', { name, description });
+      navigate(`/projects/${data.id}`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erreur lors de la création');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Layout>
+      <div className="max-w-lg mx-auto">
+        <Link to="/dashboard" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-6">
+          ← Retour au tableau de bord
+        </Link>
+
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">Nouveau projet</h1>
+          <p className="text-gray-500 text-sm mb-6">Définissez le contexte de votre projet IA</p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nom du projet <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Ex : Stratégie de communication Q3"
+                maxLength={100}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description <span className="text-gray-400 font-normal">(optionnel)</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Quelques mots sur le contexte de ce projet…"
+                rows={3}
+                maxLength={500}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Link
+                to="/dashboard"
+                className="flex-1 text-center border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+              >
+                Annuler
+              </Link>
+              <button
+                type="submit"
+                disabled={loading || !name.trim()}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Création…' : 'Créer le projet'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Layout>
+  );
+}

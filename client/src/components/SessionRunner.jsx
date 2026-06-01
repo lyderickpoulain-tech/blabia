@@ -1,0 +1,390 @@
+import { useState, useEffect, useRef } from 'react';
+
+// ── Palette agents (même que NewSession) ──────────────────────────────────────
+const PALETTE = {
+  'Analyste':       { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-800',   dot: 'bg-blue-500',   ring: 'ring-blue-300' },
+  'Créatif':        { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-800', dot: 'bg-purple-500', ring: 'ring-purple-300' },
+  'Critique':       { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-500', ring: 'ring-orange-300' },
+  'Expert':         { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800',  dot: 'bg-green-500',  ring: 'ring-green-300' },
+  'Synthésiseur':   { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', dot: 'bg-indigo-500', ring: 'ring-indigo-300' },
+  'Chercheur':      { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-800',   dot: 'bg-cyan-500',   ring: 'ring-cyan-300' },
+  'Stratège':       { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-800',   dot: 'bg-rose-500',   ring: 'ring-rose-300' },
+  'Rédacteur':      { bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-800',   dot: 'bg-pink-500',   ring: 'ring-pink-300' },
+  'Synthèse finale':{ bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-800', dot: 'bg-violet-500', ring: 'ring-violet-300' },
+};
+const DEFAULT = { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', dot: 'bg-gray-400', ring: 'ring-gray-300' };
+const col = (name) => PALETTE[name] || DEFAULT;
+
+// ── Sous-composants ────────────────────────────────────────────────────────────
+
+function Avatar({ name, pulse = false }) {
+  const c = col(name);
+  return (
+    <div className={`w-8 h-8 rounded-full ${c.dot} flex items-center justify-center text-white text-xs font-bold shrink-0 ${pulse ? 'animate-pulse' : ''}`}>
+      {name[0]}
+    </div>
+  );
+}
+
+function AgentBubble({ agentName, content, streaming = false }) {
+  const c = col(agentName);
+  if (!content && !streaming) return null;
+  return (
+    <div className="flex items-start gap-2.5">
+      <Avatar name={agentName} />
+      <div className={`flex-1 rounded-2xl rounded-tl-sm px-4 py-3 border ${c.bg} ${c.border}`}>
+        <p className={`text-xs font-semibold ${c.text} mb-1.5`}>{agentName}</p>
+        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+          {content}
+          {streaming && (
+            <span className="inline-block w-0.5 h-3.5 bg-gray-400 ml-0.5 align-middle animate-pulse" />
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function HumanBubble({ content }) {
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3">
+        <p className="text-xs font-semibold text-blue-200 mb-1">Vous</p>
+        <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
+      </div>
+    </div>
+  );
+}
+
+function QuestionCard({ agent, question, answer, onChange, onSend, sending }) {
+  const c = col(agent);
+  const onKey = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSend(); };
+  return (
+    <div className={`rounded-2xl border-2 ${c.border} ${c.bg} p-4`}>
+      <div className="flex items-center gap-2 mb-3">
+        <Avatar name={agent} />
+        <div>
+          <p className={`text-sm font-semibold ${c.text}`}>{agent}</p>
+          <p className="text-xs text-gray-500">a besoin d'une information</p>
+        </div>
+        <span className="ml-auto text-lg">❓</span>
+      </div>
+      <p className="text-sm font-medium text-gray-800 mb-3 leading-relaxed">{question}</p>
+      <textarea
+        value={answer}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={onKey}
+        placeholder="Votre réponse… (Ctrl+Entrée pour envoyer)"
+        rows={3}
+        autoFocus
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+      />
+      <button
+        onClick={onSend}
+        disabled={!answer.trim() || sending}
+        className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-xl transition disabled:opacity-50"
+      >
+        {sending ? 'Envoi…' : 'Répondre →'}
+      </button>
+    </div>
+  );
+}
+
+function SummarySteps({ exchanges, activeAgent, isSummaryPhase }) {
+  const agentExchanges = exchanges.filter(e => e.type === 'agent');
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-3">Progression</p>
+      {agentExchanges.map((ex, i) => (
+        <div key={ex.id} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
+          <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">✓</div>
+          <span className="text-sm font-medium text-gray-700">{ex.agent}</span>
+          <span className="text-xs text-gray-400 ml-auto">Terminé</span>
+        </div>
+      ))}
+      {activeAgent && (
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 animate-pulse">
+          <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
+            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+          </div>
+          <span className="text-sm font-medium text-blue-700">
+            {isSummaryPhase ? 'Synthèse finale' : activeAgent.name}
+          </span>
+          <span className="text-xs text-blue-500 ml-auto">En cours…</span>
+        </div>
+      )}
+      {agentExchanges.length === 0 && !activeAgent && (
+        <p className="text-sm text-gray-400 py-4 text-center">Démarrage…</p>
+      )}
+    </div>
+  );
+}
+
+// ── Composant principal ────────────────────────────────────────────────────────
+
+export default function SessionRunner({ session, projectId, onComplete, onRetry }) {
+  const [exchanges, setExchanges]           = useState([]);
+  const [activeAgent, setActiveAgent]       = useState(null);
+  const [streamingText, setStreamingText]   = useState('');
+  const [isSummaryPhase, setIsSummaryPhase] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState(null);
+  const [humanAnswer, setHumanAnswer]       = useState('');
+  const [sending, setSending]               = useState(false);
+  const [error, setError]                   = useState('');
+
+  const bottomRef  = useRef(null);
+  const abortRef   = useRef(null);
+  const isRealtime = session.mode === 'realtime';
+
+  // Auto-scroll vers le bas
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [exchanges, streamingText, pendingQuestion]);
+
+  // Lancer le SSE au montage
+  useEffect(() => {
+    run();
+    return () => abortRef.current?.abort();
+  }, []);
+
+  async function run() {
+    setError('');
+    const token = localStorage.getItem('token');
+    abortRef.current = new AbortController();
+
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/sessions/${session.id}/run`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          signal: abortRef.current.signal
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || `Erreur ${res.status}`);
+        return;
+      }
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try { dispatch(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') setError('Connexion interrompue : ' + err.message);
+    }
+  }
+
+  function dispatch(ev) {
+    switch (ev.type) {
+      case 'agent_start':
+        setActiveAgent({ name: ev.name, role: ev.role });
+        setStreamingText('');
+        setIsSummaryPhase(false);
+        break;
+      case 'chunk':
+        if (isRealtime) setStreamingText(p => p + ev.text);
+        break;
+      case 'agent_done':
+        setExchanges(p => [...p, { type: 'agent', agent: ev.name, content: ev.content, id: `${ev.name}-${Date.now()}` }]);
+        setActiveAgent(null);
+        setStreamingText('');
+        break;
+      case 'question':
+        setPendingQuestion({ agent: ev.agent, question: ev.question });
+        setActiveAgent(null);
+        setStreamingText('');
+        break;
+      case 'answer_received':
+        setExchanges(p => [...p, { type: 'human', content: ev.answer, id: `human-${Date.now()}` }]);
+        setPendingQuestion(null);
+        setHumanAnswer('');
+        break;
+      case 'summary_start':
+        setIsSummaryPhase(true);
+        setActiveAgent({ name: 'Synthèse finale', role: 'Restitution structurée' });
+        setStreamingText('');
+        break;
+      case 'summary_chunk':
+        if (isRealtime) setStreamingText(p => p + ev.text);
+        break;
+      case 'summary_done':
+        setActiveAgent(null);
+        setStreamingText('');
+        onComplete(ev.summary);
+        break;
+      case 'error':
+        setError(ev.message);
+        setActiveAgent(null);
+        setStreamingText('');
+        break;
+      default: break;
+    }
+  }
+
+  const sendAnswer = async () => {
+    if (!humanAnswer.trim() || sending) return;
+    setSending(true);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/projects/${projectId}/sessions/${session.id}/answer`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer: humanAnswer.trim() })
+      });
+    } catch (e) {
+      setError('Erreur envoi : ' + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const agentsDone = new Set(exchanges.filter(e => e.type === 'agent').map(e => e.agent));
+
+  return (
+    <div className="space-y-4">
+      {/* ── Chips agents avec indicateur actif ───────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {session.agents.map((agent, i) => {
+            const c = col(agent.name);
+            const isActive = activeAgent?.name === agent.name;
+            const isDone   = agentsDone.has(agent.name);
+            return (
+              <div
+                key={i}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all duration-300 ${
+                  isActive
+                    ? `${c.bg} ${c.border} ring-2 ${c.ring}`
+                    : isDone
+                    ? 'bg-green-50 border-green-100'
+                    : 'bg-gray-50 border-gray-100 opacity-50'
+                }`}
+              >
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${
+                  isDone ? 'bg-green-500' : c.dot
+                } ${isActive ? 'animate-pulse' : ''}`}>
+                  {isDone ? '✓' : agent.name[0]}
+                </div>
+                <span className={`text-xs font-semibold truncate flex-1 ${isActive ? c.text : isDone ? 'text-green-700' : 'text-gray-400'}`}>
+                  {agent.name}
+                </span>
+                {isActive && (
+                  <span className="flex gap-0.5 shrink-0">
+                    {[0, 1, 2].map(d => (
+                      <span key={d} className={`w-1.5 h-1.5 rounded-full ${c.dot}`}
+                        style={{ animation: 'bounce 1s infinite', animationDelay: `${d * 150}ms` }} />
+                    ))}
+                  </span>
+                )}
+                {isDone && !isActive && (
+                  <span className="text-green-400 text-xs shrink-0">✓</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Indicateur synthèse finale */}
+        {isSummaryPhase && activeAgent?.name === 'Synthèse finale' && (
+          <div className="mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl bg-violet-50 border border-violet-200 ring-2 ring-violet-300">
+            <div className="w-6 h-6 rounded-full bg-violet-500 flex items-center justify-center text-white text-xs font-bold animate-pulse">S</div>
+            <span className="text-xs font-semibold text-violet-800 flex-1">Synthèse finale</span>
+            <span className="flex gap-0.5">
+              {[0,1,2].map(d => (
+                <span key={d} className="w-1.5 h-1.5 rounded-full bg-violet-500"
+                  style={{ animation: 'bounce 1s infinite', animationDelay: `${d*150}ms` }} />
+              ))}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Zone d'échanges ───────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 min-h-64">
+        {isRealtime ? (
+          // Mode temps réel : bulles de chat
+          <div className="space-y-4">
+            {exchanges.map(ex =>
+              ex.type === 'agent'
+                ? <AgentBubble key={ex.id} agentName={ex.agent} content={ex.content} />
+                : <HumanBubble key={ex.id} content={ex.content} />
+            )}
+            {/* Bulle de streaming en cours */}
+            {activeAgent && (streamingText || pendingQuestion === null) && (
+              <AgentBubble
+                agentName={isSummaryPhase ? 'Synthèse finale' : activeAgent.name}
+                content={streamingText}
+                streaming
+              />
+            )}
+          </div>
+        ) : (
+          // Mode résumé : liste d'étapes compactes
+          <SummarySteps
+            exchanges={exchanges}
+            activeAgent={activeAgent}
+            isSummaryPhase={isSummaryPhase}
+          />
+        )}
+
+        {/* Question agent — bloquante */}
+        {pendingQuestion && (
+          <div className={`${isRealtime ? 'mt-4' : ''}`}>
+            <QuestionCard
+              agent={pendingQuestion.agent}
+              question={pendingQuestion.question}
+              answer={humanAnswer}
+              onChange={setHumanAnswer}
+              onSend={sendAnswer}
+              sending={sending}
+            />
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* ── Erreur avec bouton relancer ───────────────────────────────────── */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
+          <p className="text-sm font-semibold text-red-700">⚠️ {error}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setError('');
+                setExchanges([]);
+                setActiveAgent(null);
+                setStreamingText('');
+                setPendingQuestion(null);
+                run();
+              }}
+              className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg transition font-medium"
+            >
+              Relancer
+            </button>
+            <button
+              onClick={onRetry}
+              className="text-xs text-red-500 hover:text-red-700 px-3 py-1.5 rounded-lg transition"
+            >
+              Revenir à la sélection d'équipe
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

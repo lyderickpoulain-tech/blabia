@@ -1,0 +1,243 @@
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import Layout from '../components/Layout';
+import api from '../utils/api';
+
+// ── Palette agents ─────────────────────────────────────────────────────────────
+const PALETTE = {
+  Analyste:     { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-800',   dot: 'bg-blue-500' },
+  Créatif:      { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-800', dot: 'bg-purple-500' },
+  Critique:     { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-500' },
+  Expert:       { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800',  dot: 'bg-green-500' },
+  Synthésiseur: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', dot: 'bg-indigo-500' },
+  Chercheur:    { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-800',   dot: 'bg-cyan-500' },
+  Stratège:     { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-800',   dot: 'bg-rose-500' },
+  Rédacteur:    { bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-800',   dot: 'bg-pink-500' },
+};
+const DEFAULT_P = { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', dot: 'bg-gray-400' };
+const col = (name) => PALETTE[name] || DEFAULT_P;
+
+// ── Composants Markdown ────────────────────────────────────────────────────────
+const MD = {
+  h1: ({ children }) => <h1 className="text-xl font-bold text-gray-900 mb-3 mt-6 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-base font-bold text-gray-800 mb-2 mt-5 pb-1 border-b border-gray-100">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-800 mb-2 mt-4">{children}</h3>,
+  p:  ({ children }) => <p className="text-sm text-gray-700 mb-3 leading-relaxed last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="mb-4 space-y-1 list-none">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-4 space-y-1 list-decimal list-inside text-sm text-gray-700">{children}</ol>,
+  li: ({ children }) => (
+    <li className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
+      <span className="text-blue-400 font-bold mt-0.5 shrink-0">·</span>
+      <span>{children}</span>
+    </li>
+  ),
+  strong:     ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+  em:         ({ children }) => <em className="italic text-gray-600">{children}</em>,
+  hr:         () => <hr className="my-5 border-gray-200" />,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-4 border-blue-200 pl-4 my-3 text-gray-600 italic text-sm">{children}</blockquote>
+  ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto mb-4">
+      <table className="text-sm w-full border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => <th className="text-left font-semibold text-gray-700 px-3 py-2 bg-gray-50 border border-gray-200">{children}</th>,
+  td: ({ children }) => <td className="px-3 py-2 border border-gray-200 text-gray-700">{children}</td>,
+};
+
+// ── Bulles d'échange ───────────────────────────────────────────────────────────
+function AgentBubble({ agentName, content }) {
+  const c = col(agentName);
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className={`w-8 h-8 rounded-full ${c.dot} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+        {agentName[0]}
+      </div>
+      <div className={`flex-1 rounded-2xl rounded-tl-sm px-4 py-3 border ${c.bg} ${c.border}`}>
+        <p className={`text-xs font-semibold ${c.text} mb-1.5`}>{agentName}</p>
+        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
+      </div>
+    </div>
+  );
+}
+
+function HumanBubble({ content }) {
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3">
+        <p className="text-xs font-semibold text-blue-200 mb-1">Vous</p>
+        <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Page principale ────────────────────────────────────────────────────────────
+export default function SessionView() {
+  const { id: projectId, sid: sessionId } = useParams();
+  const navigate = useNavigate();
+  const [session, setSession]         = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [showExchanges, setShowExchanges] = useState(false);
+
+  useEffect(() => {
+    api.get(`/projects/${projectId}/sessions/${sessionId}`)
+      .then(({ data }) => setSession(data))
+      .catch(() => navigate(`/projects/${projectId}`))
+      .finally(() => setLoading(false));
+  }, [projectId, sessionId]);
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!session) return null;
+
+  const isComplete    = session.status === 'complete';
+  const isRealtime    = session.mode === 'realtime';
+  const agents        = Array.isArray(session.agents)    ? session.agents    : [];
+  const exchanges     = Array.isArray(session.exchanges) ? session.exchanges : [];
+  const agentExchanges = exchanges.filter(e => e.type === 'agent' || e.type === 'human');
+  const date = new Date(session.createdAt).toLocaleDateString('fr-FR', {
+    day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  return (
+    <Layout>
+      <div className="max-w-2xl mx-auto space-y-4">
+
+        {/* Navigation */}
+        <Link to={`/projects/${projectId}`} className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700">
+          ← Retour au projet
+        </Link>
+
+        {/* En-tête session */}
+        <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isComplete ? 'border-gray-200' : 'border-orange-200'}`}>
+          <div className={`px-6 py-5 border-b ${isComplete ? 'bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-blue-100' : 'bg-orange-50 border-orange-100'}`}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  {isComplete
+                    ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                        Complète
+                      </span>
+                    : <span className="text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">
+                        ⚠ Interrompue
+                      </span>
+                  }
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                    isRealtime ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                  }`}>
+                    {isRealtime ? '⚡ Temps réel' : '📋 Résumé'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">{date}</p>
+              </div>
+            </div>
+
+            <h1 className="font-bold text-gray-900 text-base leading-snug mb-3">{session.task}</h1>
+
+            {/* Chips agents */}
+            <div className="flex flex-wrap gap-1.5">
+              {agents.map((agent, i) => {
+                const p = col(agent.name);
+                return (
+                  <span key={i} className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${p.bg} ${p.border} ${p.text}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />
+                    {agent.name}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Corps : restitution ou message interrompue */}
+          <div className="px-6 py-5">
+            {isComplete && session.summary ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>
+                {session.summary}
+              </ReactMarkdown>
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-orange-600 font-medium text-sm mb-1">⚠ Session interrompue</p>
+                <p className="text-gray-400 text-xs">
+                  Cette session n'a pas été finalisée. Aucune restitution n'est disponible.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Échanges (mode temps réel, optionnel) */}
+        {isRealtime && agentExchanges.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setShowExchanges(p => !p)}
+              className="w-full flex items-center justify-between px-5 py-4 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            >
+              <span className="flex items-center gap-2">
+                <span>💬</span>
+                Échanges des agents
+                <span className="text-xs font-normal text-gray-400">({agentExchanges.length} contribution{agentExchanges.length !== 1 ? 's' : ''})</span>
+              </span>
+              <span className={`text-gray-400 transition-transform ${showExchanges ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+
+            {showExchanges && (
+              <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
+                {agentExchanges.map((ex, i) =>
+                  ex.type === 'agent'
+                    ? <AgentBubble key={i} agentName={ex.agent} content={ex.content} />
+                    : <HumanBubble key={i} content={ex.content} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="space-y-3">
+          {isComplete && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Link
+                to={`/projects/${projectId}/session/${sessionId}/summary`}
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Voir le compte-rendu
+              </Link>
+              <Link
+                to={`/projects/${projectId}/session/new`}
+                className="flex items-center justify-center gap-2 border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold py-3 rounded-xl transition text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Nouvelle session
+              </Link>
+            </div>
+          )}
+          <Link
+            to={`/projects/${projectId}`}
+            className="flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition py-1"
+          >
+            ← Retour au projet
+          </Link>
+        </div>
+
+      </div>
+    </Layout>
+  );
+}
