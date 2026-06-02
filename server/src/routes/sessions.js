@@ -112,7 +112,8 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 2048)
   }
 
   if (stopReason === 'max_tokens') {
-    console.warn(`[streamAgent] Réponse tronquée — max_tokens (${maxTokens}) atteint. Augmenter la limite si nécessaire.`);
+    console.error(`[streamAgent] TRONCATURE — max_tokens (${maxTokens}) atteint. Texte tronqué à ${fullText.length} chars.`);
+    fullText += '\n\n---\n> ⚠️ *La restitution a été interrompue — limite de génération atteinte. Relancez une nouvelle session pour obtenir une synthèse complète.*';
   }
 
   return fullText;
