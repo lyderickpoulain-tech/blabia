@@ -1,18 +1,12 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-function getTransporter() {
-  if (!process.env.SMTP_HOST) return null;
+const FROM_ADDRESS = 'BlabIA <contact@rasia-editions.fr>';
+const SUPPORT = 'contact@rasia-editions.fr';
 
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
+function getClient() {
+  if (!process.env.RESEND_API_KEY) return null;
+  return new Resend(process.env.RESEND_API_KEY);
 }
-
-const FROM = () => process.env.SMTP_FROM || 'BlabIA <no-reply@blabIA.fr>';
-const SUPPORT = process.env.SMTP_USER || 'contact@rasia-editions.fr';
 
 // ── Template commun ───────────────────────────────────────────────────────────
 
@@ -63,10 +57,10 @@ function baseLayout(content) {
 
 async function sendInvitation(toEmail, token, senderEmail = '') {
   const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/register?token=${token}`;
-  const transporter = getTransporter();
+  const client = getClient();
 
-  if (!transporter) {
-    console.log(`[email] Invitation (SMTP non configuré) — lien d'activation : ${link}`);
+  if (!client) {
+    console.log(`[email] Invitation (RESEND_API_KEY absent) — lien d'activation : ${link}`);
     return;
   }
 
@@ -99,33 +93,34 @@ async function sendInvitation(toEmail, token, senderEmail = '') {
       <a href="${link}" style="color:#6b7280;word-break:break-all;">${link}</a>
     </p>`;
 
-  await transporter.sendMail({
-    from: FROM(),
+  const { error } = await client.emails.send({
+    from: FROM_ADDRESS,
     to: toEmail,
     subject: 'Vous êtes invité à rejoindre BlabIA',
     html: baseLayout(content)
   });
+
+  if (error) throw new Error(error.message);
 }
 
 // ── sendTestEmail ─────────────────────────────────────────────────────────────
 
 async function sendTestEmail(toEmail) {
-  const transporter = getTransporter();
+  const client = getClient();
 
-  if (!transporter) {
-    throw new Error('SMTP non configuré — ajoutez SMTP_HOST, SMTP_PORT, SMTP_USER et SMTP_PASS dans les variables d\'environnement.');
+  if (!client) {
+    throw new Error('RESEND_API_KEY absent — ajoutez la clé dans les variables d\'environnement Railway.');
   }
 
   const content = `
     <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Test de configuration email</h2>
     <p style="margin:0 0 16px;color:#374151;font-size:15px;">
-      Si vous recevez cet email, la configuration SMTP de BlabIA fonctionne correctement.
+      Si vous recevez cet email, la configuration Resend de BlabIA fonctionne correctement.
     </p>
 
     <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
       <p style="margin:0;color:#065f46;font-size:13px;">
-        ✓ Connexion SMTP établie avec <strong>${process.env.SMTP_HOST || '—'}</strong>
-        (port ${process.env.SMTP_PORT || '—'}, secure: ${process.env.SMTP_SECURE || 'false'})
+        ✓ Expéditeur : <strong>${FROM_ADDRESS}</strong>
       </p>
     </div>
 
@@ -133,12 +128,14 @@ async function sendTestEmail(toEmail) {
       Envoyé à ${new Date().toLocaleString('fr-FR')}
     </p>`;
 
-  await transporter.sendMail({
-    from: FROM(),
+  const { error } = await client.emails.send({
+    from: FROM_ADDRESS,
     to: toEmail,
     subject: '[BlabIA] Test de configuration email',
     html: baseLayout(content)
   });
+
+  if (error) throw new Error(error.message);
 }
 
 module.exports = { sendInvitation, sendTestEmail };
