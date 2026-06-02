@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Layout from '../components/Layout';
@@ -100,9 +100,12 @@ function ModeCard({ value, current, label, description, icon, onChange }) {
 
 export default function NewSession() {
   const { id: projectId } = useParams();
+  const location = useLocation();
+  const parentSessionId = location.state?.parentSessionId || null;
+  const initialTask     = location.state?.initialTask     || '';
 
   const [phase, setPhase]             = useState('input');
-  const [task, setTask]               = useState('');
+  const [task, setTask]               = useState(initialTask);
   const [mode, setMode]               = useState('realtime');
   const [session, setSession]         = useState(null);
   const [plan, setPlan]               = useState('');
@@ -115,7 +118,9 @@ export default function NewSession() {
     setError('');
     setPhase('forming');
     try {
-      const { data } = await api.post(`/projects/${projectId}/sessions`, { task: task.trim(), mode });
+      const payload = { task: task.trim(), mode };
+      if (parentSessionId) payload.parentSessionId = parentSessionId;
+      const { data } = await api.post(`/projects/${projectId}/sessions`, payload);
       setSession(data.session);
       setPlan(data.plan);
       setPhase('formed');
@@ -160,10 +165,24 @@ export default function NewSession() {
         {/* ── PHASE INPUT / FORMING ─────────────────────────────────────── */}
         {(phase === 'input' || phase === 'forming') && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-            <h1 className="text-xl font-bold text-gray-900">Nouvelle session</h1>
-            <p className="text-gray-500 text-sm mt-1 mb-6">
-              Décrivez votre tâche — les agents IA vont collaborer pour vous.
-            </p>
+            {parentSessionId ? (
+              <>
+                <h1 className="text-xl font-bold text-gray-900">Suite de session</h1>
+                <div className="mt-2 mb-5 flex items-start gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+                  <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Les agents auront accès au contexte complet de la session précédente.</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="text-xl font-bold text-gray-900">Nouvelle session</h1>
+                <p className="text-gray-500 text-sm mt-1 mb-6">
+                  Décrivez votre tâche — les agents IA vont collaborer pour vous.
+                </p>
+              </>
+            )}
 
             <div className="space-y-5">
               {/* Textarea tâche */}

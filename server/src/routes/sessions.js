@@ -122,7 +122,7 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 2048)
 // ── SOUS-ÉTAPE 1 : Création de session + formation d'équipe ──────────────────
 
 router.post('/', async (req, res) => {
-  const { task, mode = 'realtime' } = req.body;
+  const { task, mode = 'realtime', parentSessionId = null } = req.body;
   const { projectId } = req.params;
   const isAdmin = req.user.role === 'admin';
 
@@ -133,6 +133,13 @@ router.post('/', async (req, res) => {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     if (project.status === 'archived') return res.status(400).json({ error: 'Ce projet est archivé' });
+
+    if (parentSessionId) {
+      const [parent] = await db('Session').where({ id: parentSessionId, projectId }).limit(1);
+      if (!parent || parent.status !== 'complete') {
+        return res.status(400).json({ error: 'Session parente invalide ou non terminée' });
+      }
+    }
 
     const contextBlock = project.context
       ? `\n\nContexte des sessions précédentes de ce projet :\n${project.context}`
@@ -174,9 +181,10 @@ Tâche : ${task.trim()}`
         status: 'incomplete',
         mode,
         projectId,
+        parentSessionId: parentSessionId || null,
         createdAt: now
       })
-      .returning(['id', 'task', 'agents', 'exchanges', 'status', 'mode', 'createdAt', 'projectId']);
+      .returning(['id', 'task', 'agents', 'exchanges', 'status', 'mode', 'createdAt', 'projectId', 'parentSessionId']);
 
     await db('Project').where({ id: projectId }).update({ updatedAt: now });
 
@@ -203,6 +211,7 @@ router.post('/:sessionId/run', async (req, res) => {
   // Valider avant d'ouvrir le SSE
   let session;
   let projectContext = null;
+  let parentExchangesBlock = '';
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -212,6 +221,24 @@ router.post('/:sessionId/run', async (req, res) => {
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
     if (s.status === 'complete') return res.status(400).json({ error: 'Session déjà terminée' });
     session = s;
+
+    if (session.parentSessionId) {
+      const [parentSession] = await db('Session').where({ id: session.parentSessionId }).limit(1);
+      if (parentSession) {
+        const parentExchanges = typeof parentSession.exchanges === 'string'
+          ? JSON.parse(parentSession.exchanges)
+          : parentSession.exchanges;
+        const formatted = parentExchanges
+          .filter(e => e.type === 'agent' || e.type === 'human')
+          .map(e => e.type === 'agent'
+            ? `${e.agent} : ${e.content}`
+            : `Utilisateur : ${e.content}`)
+          .join('\n\n');
+        if (formatted) {
+          parentExchangesBlock = `\nSuite de la session précédente. Voici ce qui a été échangé :\n${formatted}\n\nNouveau prompt de l'utilisateur : ${session.task}\n`;
+        }
+      }
+    }
   } catch {
     return res.status(500).json({ error: 'Erreur serveur' });
   }
@@ -260,7 +287,7 @@ router.post('/:sessionId/run', async (req, res) => {
         : '';
 
       const systemPrompt =
-        `Tu es ${agent.name}, un agent IA spécialisé. Ton rôle dans cette session : ${agent.role}.${contextSection}
+        `Tu es ${agent.name}, un agent IA spécialisé. Ton rôle dans cette session : ${agent.role}.${contextSection}${parentExchangesBlock}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.`;
 
@@ -370,7 +397,7 @@ router.get('/', async (req, res) => {
 
     const sessions = await db('Session')
       .select(
-        'id', 'task', 'status', 'mode', 'createdAt',
+        'id', 'task', 'status', 'mode', 'createdAt', 'parentSessionId',
         db.raw('jsonb_array_length(agents) as "agentCount"')
       )
       .where({ projectId })

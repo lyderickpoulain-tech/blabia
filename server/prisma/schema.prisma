@@ -42,14 +42,17 @@ model Project {
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  task      String
-  agents    Json
-  exchanges Json
-  summary   String?
-  status    String   @default("complete") // "complete" ou "interrupted"
-  mode      String   @default("realtime") // "realtime" ou "summary"
-  createdAt DateTime @default(now())
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id])
+  id              String    @id @default(uuid())
+  task            String
+  agents          Json
+  exchanges       Json
+  summary         String?
+  status          String    @default("complete") // "complete" ou "interrupted"
+  mode            String    @default("realtime") // "realtime" ou "summary"
+  createdAt       DateTime  @default(now())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  parentSessionId String?
+  parentSession   Session?  @relation("SessionContinuation", fields: [parentSessionId], references: [id])
+  continuations   Session[] @relation("SessionContinuation")
 }

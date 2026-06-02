@@ -73,17 +73,45 @@ function SessionStatusBadge({ status }) {
     : <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Interrompue</span>;
 }
 
+// Aplatit la liste de sessions en fil indenté (roots → enfants → petits-enfants)
+function buildSessionThreads(sessions) {
+  const map = {};
+  sessions.forEach(s => { map[s.id] = { ...s, children: [] }; });
+  const roots = [];
+  sessions.forEach(s => {
+    if (s.parentSessionId && map[s.parentSessionId]) {
+      map[s.parentSessionId].children.push(map[s.id]);
+    } else {
+      roots.push(map[s.id]);
+    }
+  });
+  roots.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  function flattenNode(node, depth) {
+    const result = [{ ...node, depth }];
+    node.children
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      .forEach(child => result.push(...flattenNode(child, depth + 1)));
+    return result;
+  }
+  return roots.flatMap(root => flattenNode(root, 0));
+}
+
 function SessionRow({ session, projectId }) {
   const truncated = session.task.length > 50 ? session.task.substring(0, 50) + '…' : session.task;
   const date = new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const isComplete = session.status === 'complete';
+  const depth = session.depth ?? 0;
+  const isContinuation = depth > 0;
 
   const inner = (
     <>
       {/* Desktop */}
       <tr className={`hidden md:table-row ${isComplete ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-70'}`}>
         <td className="px-4 py-3 text-sm text-gray-800 max-w-xs">
-          <span className="truncate block">{truncated}</span>
+          <div className="flex items-center gap-1.5" style={{ paddingLeft: depth * 16 }}>
+            {isContinuation && <span className="text-gray-300 text-xs shrink-0">↳</span>}
+            <span className="truncate block">{truncated}</span>
+          </div>
         </td>
         <td className="px-4 py-3"><SessionStatusBadge status={session.status} /></td>
         <td className="px-4 py-3 text-sm text-gray-500">{session.agentCount ?? '–'} agents</td>
@@ -96,9 +124,15 @@ function SessionRow({ session, projectId }) {
       </tr>
 
       {/* Mobile */}
-      <div className={`md:hidden bg-white rounded-xl border p-4 shadow-sm ${isComplete ? 'border-gray-200 hover:shadow-md' : 'border-orange-100 opacity-75'} transition`}>
+      <div
+        className={`md:hidden bg-white rounded-xl border p-4 shadow-sm ${isComplete ? 'border-gray-200 hover:shadow-md' : 'border-orange-100 opacity-75'} transition`}
+        style={{ marginLeft: depth * 16 }}
+      >
         <div className="flex items-start justify-between gap-2 mb-2">
-          <p className="text-sm font-medium text-gray-800 leading-snug flex-1">{truncated}</p>
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            {isContinuation && <span className="text-gray-300 text-xs shrink-0">↳</span>}
+            <p className="text-sm font-medium text-gray-800 leading-snug truncate">{truncated}</p>
+          </div>
           <SessionStatusBadge status={session.status} />
         </div>
         <p className="text-xs text-gray-400">{session.agentCount ?? '–'} agents · {date}</p>
@@ -293,7 +327,7 @@ export default function ProjectView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {sessions.map(s => <SessionRow key={s.id} session={s} projectId={id} />)}
+              {buildSessionThreads(sessions).map(s => <SessionRow key={s.id} session={s} projectId={id} />)}
             </tbody>
           </table>
         )}
@@ -301,7 +335,7 @@ export default function ProjectView() {
         {/* Cards mobile */}
         {!sessionsLoading && sessions.length > 0 && (
           <div className="md:hidden p-4 space-y-3">
-            {sessions.map(s => <SessionRow key={s.id} session={s} projectId={id} />)}
+            {buildSessionThreads(sessions).map(s => <SessionRow key={s.id} session={s} projectId={id} />)}
           </div>
         )}
 

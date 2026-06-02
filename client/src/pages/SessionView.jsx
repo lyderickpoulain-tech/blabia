@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Layout from '../components/Layout';
 import api from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 
 // ── Palette agents ─────────────────────────────────────────────────────────────
 const PALETTE = {
@@ -79,9 +80,12 @@ function HumanBubble({ content }) {
 export default function SessionView() {
   const { id: projectId, sid: sessionId } = useParams();
   const navigate = useNavigate();
-  const [session, setSession]         = useState(null);
-  const [loading, setLoading]         = useState(true);
+  const { user } = useAuth();
+  const [session, setSession]             = useState(null);
+  const [loading, setLoading]             = useState(true);
   const [showExchanges, setShowExchanges] = useState(false);
+  const [showContinue, setShowContinue]   = useState(false);
+  const [continueTask, setContinueTask]   = useState('');
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
@@ -205,6 +209,39 @@ export default function SessionView() {
           </div>
         )}
 
+        {/* Continuation de session */}
+        {isComplete && showContinue && (
+          <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-5">
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">Suite de cette session</h3>
+            <p className="text-xs text-gray-400 mb-3">Les agents reprendront avec le contexte complet de la session précédente.</p>
+            <textarea
+              value={continueTask}
+              onChange={e => setContinueTask(e.target.value)}
+              rows={4}
+              autoFocus
+              placeholder="Décrivez la suite à donner à cette session…"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+            />
+            <div className="flex gap-3 mt-3">
+              <button
+                onClick={() => { setShowContinue(false); setContinueTask(''); }}
+                className="flex-1 border border-gray-300 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50 transition"
+              >
+                Annuler
+              </button>
+              <button
+                disabled={!continueTask.trim()}
+                onClick={() => navigate(`/projects/${projectId}/session/new`, {
+                  state: { parentSessionId: sessionId, initialTask: continueTask.trim() }
+                })}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
+              >
+                Lancer la suite →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="space-y-3">
           {isComplete && (
@@ -218,16 +255,27 @@ export default function SessionView() {
                 </svg>
                 Voir le compte-rendu
               </Link>
-              <Link
-                to={`/projects/${projectId}/session/new`}
-                className="flex items-center justify-center gap-2 border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold py-3 rounded-xl transition text-sm"
+              <button
+                onClick={() => setShowContinue(v => !v)}
+                className="flex items-center justify-center gap-2 border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 font-semibold py-3 rounded-xl transition text-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                 </svg>
-                Nouvelle session
-              </Link>
+                Continuer cette session
+              </button>
             </div>
+          )}
+          {!isComplete && (
+            <Link
+              to={`/projects/${projectId}/session/new`}
+              className="flex items-center justify-center gap-2 border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold py-3 rounded-xl transition text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Nouvelle session
+            </Link>
           )}
           <Link
             to={`/projects/${projectId}`}
