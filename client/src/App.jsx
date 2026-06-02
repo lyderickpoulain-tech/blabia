@@ -10,6 +10,7 @@ import NewSession from './pages/NewSession';
 import SessionView from './pages/SessionView';
 import SummaryView from './pages/SummaryView';
 import AgentsPage from './pages/AgentsPage';
+import EnvironmentPage from './pages/EnvironmentPage';
 
 function PlaceholderPage({ title }) {
   return (
@@ -48,6 +49,9 @@ export default function App() {
         } />
         <Route path="/agents" element={
           <ProtectedRoute><AgentsPage /></ProtectedRoute>
+        } />
+        <Route path="/profile/environment" element={
+          <ProtectedRoute><EnvironmentPage /></ProtectedRoute>
         } />
         <Route path="/admin/invitations" element={
           <ProtectedRoute adminOnly><AdminInvitations /></ProtectedRoute>

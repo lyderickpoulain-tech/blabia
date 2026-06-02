@@ -23,6 +23,12 @@ export default function Layout({ children }) {
           >
             Agents
           </Link>
+          <Link
+            to="/profile/environment"
+            className="text-sm text-gray-600 hover:text-gray-900 hidden sm:block"
+          >
+            Mon environnement
+          </Link>
           {user?.role === 'admin' && (
             <Link
               to="/admin/invitations"
