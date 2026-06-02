@@ -8,7 +8,6 @@ const router = express.Router({ mergeParams: true });
 router.use(authMiddleware);
 
 const MODEL = 'claude-sonnet-4-6';
-const AGENTS_LIST = ['Analyste', 'Créatif', 'Critique', 'Expert', 'Synthésiseur', 'Chercheur', 'Stratège', 'Rédacteur'];
 
 // Questions agents en attente d'une réponse humaine (en mémoire, par sessionId)
 const pendingQuestions = new Map();
@@ -141,6 +140,19 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Agents disponibles : défauts + personnels de l'utilisateur
+    const availableAgents = await db('Agent')
+      .select(['id', 'name', 'role', 'systemPrompt', 'emoji', 'isDefault'])
+      .where(function () {
+        this.where({ isDefault: true }).orWhere({ userId: req.user.id });
+      })
+      .orderBy([{ column: 'isDefault', order: 'desc' }, { column: 'createdAt', order: 'asc' }]);
+
+    if (availableAgents.length === 0) {
+      return res.status(500).json({ error: 'Aucun agent disponible — base non initialisée' });
+    }
+
+    const agentsList = availableAgents.map(a => `- ${a.name} (${a.role})`).join('\n');
     const contextBlock = project.context
       ? `\n\nContexte des sessions précédentes de ce projet :\n${project.context}`
       : '';
@@ -151,10 +163,13 @@ router.post('/', async (req, res) => {
       system: 'Tu es un coordinateur d\'agents IA. Tu réponds UNIQUEMENT en JSON valide, sans markdown, sans explication.',
       messages: [{
         role: 'user',
-        content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi : ${AGENTS_LIST.join(', ')}.${contextBlock}
+        content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi ceux disponibles ci-dessous. Utilise UNIQUEMENT les noms exacts de la liste.${contextBlock}
+
+Agents disponibles :
+${agentsList}
 
 Retourne EXACTEMENT ce format JSON :
-{"agents":[{"name":"NomAgent","role":"Rôle précis de cet agent pour cette tâche"}],"plan":"Une phrase décrivant l'approche collaborative"}
+{"agents":[{"name":"NomExact","role":"Rôle précis de cet agent pour cette tâche spécifique"}],"plan":"Une phrase décrivant l'approche collaborative"}
 
 Tâche : ${task.trim()}`
       }]
@@ -168,6 +183,20 @@ Tâche : ${task.trim()}`
       return res.status(500).json({ error: "Erreur formation d'équipe — réessayez" });
     }
 
+    // Enrichir les agents sélectionnés avec les données DB (systemPrompt, emoji)
+    const agentMap = {};
+    availableAgents.forEach(a => { agentMap[a.name.toLowerCase()] = a; });
+
+    const enrichedAgents = teamData.agents.map(selected => {
+      const dbAgent = agentMap[selected.name.toLowerCase()];
+      return {
+        name: selected.name,
+        role: selected.role,
+        systemPrompt: dbAgent?.systemPrompt || `Tu es ${selected.name}, un agent IA spécialisé. ${selected.role}.`,
+        emoji: dbAgent?.emoji || '🤖'
+      };
+    });
+
     const now = new Date();
     const initialExchanges = [{ type: 'plan', content: teamData.plan, createdAt: now.toISOString() }];
 
@@ -175,7 +204,7 @@ Tâche : ${task.trim()}`
       .insert({
         id: randomUUID(),
         task: task.trim(),
-        agents: JSON.stringify(teamData.agents),
+        agents: JSON.stringify(enrichedAgents),
         exchanges: JSON.stringify(initialExchanges),
         summary: null,
         status: 'incomplete',
@@ -286,18 +315,31 @@ router.post('/:sessionId/run', async (req, res) => {
         ? `\nContexte des sessions précédentes de ce projet :\n${projectContext}\n`
         : '';
 
+      const systemPromptBase = agent.systemPrompt
+        || `Tu es ${agent.name}, un agent IA spécialisé. ${agent.role}.`;
+
       const systemPrompt =
-        `Tu es ${agent.name}, un agent IA spécialisé. Ton rôle dans cette session : ${agent.role}.${contextSection}${parentExchangesBlock}
+        `${systemPromptBase}
+Ton rôle spécifique dans cette session : ${agent.role}.${contextSection}${parentExchangesBlock}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
-Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.`;
+Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
+Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.`;
 
       const fullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
         send('chunk', { agent: agent.name, text: chunk });
       });
 
-      // Détecter une question dans la réponse
+      // Détecter une question et/ou une suggestion d'agent
       const questionMatch = fullText.match(/\[QUESTION:\s*([\s\S]*?)\]/);
-      const agentContent = fullText.replace(/\[QUESTION:[\s\S]*?\]/, '').trim();
+      let suggestedAgentData = null;
+      const suggestMatch = fullText.match(/\[SUGGEST_AGENT:\s*(\{[\s\S]*?\})\]/);
+      if (suggestMatch) {
+        try { suggestedAgentData = JSON.parse(suggestMatch[1]); } catch {}
+      }
+      const agentContent = fullText
+        .replace(/\[QUESTION:[\s\S]*?\]/, '')
+        .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/, '')
+        .trim();
 
       exchanges.push({
         type: 'agent',
@@ -306,6 +348,15 @@ Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour
         createdAt: new Date().toISOString()
       });
       send('agent_done', { name: agent.name, content: agentContent });
+
+      if (suggestedAgentData?.name && suggestedAgentData?.role) {
+        send('suggest_agent', {
+          name: suggestedAgentData.name,
+          role: suggestedAgentData.role,
+          systemPrompt: suggestedAgentData.systemPrompt || `Tu es ${suggestedAgentData.name}. ${suggestedAgentData.role}.`,
+          emoji: suggestedAgentData.emoji || '🤖'
+        });
+      }
 
       if (questionMatch) {
         const question = questionMatch[1].trim();

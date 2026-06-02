@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import api from '../utils/api';
 
 // ── Palette agents (même que NewSession) ──────────────────────────────────────
 const PALETTE = {
@@ -90,6 +91,42 @@ function QuestionCard({ agent, question, answer, onChange, onSend, sending }) {
   );
 }
 
+function SuggestAgentCard({ suggestion, onAdd, onIgnore, adding }) {
+  return (
+    <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-4">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🤖</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Suggestion d'un nouvel agent</p>
+            <p className="text-xs text-gray-500">Un agent propose d'étendre la bibliothèque</p>
+          </div>
+        </div>
+        <button onClick={onIgnore} className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0">×</button>
+      </div>
+      <div className="bg-white rounded-xl border border-amber-200 px-4 py-3 mb-3">
+        <p className="text-sm font-semibold text-gray-800">{suggestion.name}</p>
+        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{suggestion.role}</p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onIgnore}
+          className="flex-1 text-sm text-gray-600 border border-gray-200 py-2 rounded-xl hover:bg-gray-50 transition"
+        >
+          Ignorer
+        </button>
+        <button
+          onClick={onAdd}
+          disabled={adding}
+          className="flex-1 text-sm bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 rounded-xl transition disabled:opacity-50"
+        >
+          {adding ? 'Création…' : 'Créer cet agent'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SummarySteps({ exchanges, activeAgent, isSummaryPhase }) {
   const agentExchanges = exchanges.filter(e => e.type === 'agent');
   return (
@@ -123,14 +160,16 @@ function SummarySteps({ exchanges, activeAgent, isSummaryPhase }) {
 // ── Composant principal ────────────────────────────────────────────────────────
 
 export default function SessionRunner({ session, projectId, onComplete, onRetry }) {
-  const [exchanges, setExchanges]           = useState([]);
-  const [activeAgent, setActiveAgent]       = useState(null);
-  const [streamingText, setStreamingText]   = useState('');
-  const [isSummaryPhase, setIsSummaryPhase] = useState(false);
-  const [pendingQuestion, setPendingQuestion] = useState(null);
-  const [humanAnswer, setHumanAnswer]       = useState('');
-  const [sending, setSending]               = useState(false);
-  const [error, setError]                   = useState('');
+  const [exchanges, setExchanges]               = useState([]);
+  const [activeAgent, setActiveAgent]           = useState(null);
+  const [streamingText, setStreamingText]       = useState('');
+  const [isSummaryPhase, setIsSummaryPhase]     = useState(false);
+  const [pendingQuestion, setPendingQuestion]   = useState(null);
+  const [humanAnswer, setHumanAnswer]           = useState('');
+  const [sending, setSending]                   = useState(false);
+  const [error, setError]                       = useState('');
+  const [pendingSuggestions, setPendingSuggestions] = useState([]);
+  const [addingAgent, setAddingAgent]           = useState(null);
 
   const bottomRef  = useRef(null);
   const abortRef   = useRef(null);
@@ -226,6 +265,15 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
         setStreamingText('');
         onComplete(ev.summary);
         break;
+      case 'suggest_agent':
+        setPendingSuggestions(p => [...p, {
+          id: `${ev.name}-${Date.now()}`,
+          name: ev.name,
+          role: ev.role,
+          systemPrompt: ev.systemPrompt,
+          emoji: ev.emoji || '🤖'
+        }]);
+        break;
       case 'error':
         setError(ev.message);
         setActiveAgent(null);
@@ -249,6 +297,23 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
       setError('Erreur envoi : ' + e.message);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleAddAgent = async (suggestion) => {
+    setAddingAgent(suggestion.id);
+    try {
+      await api.post('/agents', {
+        name: suggestion.name,
+        role: suggestion.role,
+        systemPrompt: suggestion.systemPrompt,
+        emoji: suggestion.emoji
+      });
+      setPendingSuggestions(p => p.filter(s => s.id !== suggestion.id));
+    } catch (e) {
+      console.error('[addAgent]', e.message);
+    } finally {
+      setAddingAgent(null);
     }
   };
 
@@ -352,6 +417,21 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
               onSend={sendAnswer}
               sending={sending}
             />
+          </div>
+        )}
+
+        {/* Suggestions d'agents — non bloquantes */}
+        {pendingSuggestions.length > 0 && (
+          <div className={`${isRealtime ? 'mt-4' : ''} space-y-3`}>
+            {pendingSuggestions.map(s => (
+              <SuggestAgentCard
+                key={s.id}
+                suggestion={s}
+                adding={addingAgent === s.id}
+                onAdd={() => handleAddAgent(s)}
+                onIgnore={() => setPendingSuggestions(p => p.filter(x => x.id !== s.id))}
+              />
+            ))}
           </div>
         )}
 
