@@ -3,7 +3,7 @@ const { randomUUID } = require('crypto');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const adminMiddleware = require('../middleware/admin');
-const { sendInvitation } = require('../services/email');
+const { sendInvitation, sendTestEmail } = require('../services/email');
 
 const router = express.Router();
 router.use(authMiddleware, adminMiddleware);
@@ -42,7 +42,7 @@ router.post('/invitations', async (req, res) => {
       .insert({ id: randomUUID(), email, token, used: false, createdBy: req.user.email })
       .returning(['id', 'email', 'token', 'used', 'createdAt', 'createdBy']);
 
-    await sendInvitation(email, token);
+    await sendInvitation(email, token, req.user.email);
 
     res.status(201).json(invitation);
   } catch (err) {
@@ -65,6 +65,17 @@ router.delete('/invitations/:id', async (req, res) => {
   } catch (err) {
     console.error('[admin/invitations DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/admin/test-email — envoie un email de test à l'admin connecté
+router.post('/test-email', async (req, res) => {
+  try {
+    await sendTestEmail(req.user.email);
+    res.json({ message: `Email de test envoyé à ${req.user.email}` });
+  } catch (err) {
+    console.error('[admin/test-email]', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

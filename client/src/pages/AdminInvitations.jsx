@@ -37,6 +37,8 @@ export default function AdminInvitations() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [testStatus, setTestStatus] = useState('idle'); // 'idle' | 'sending' | 'ok' | 'error'
+  const [testError, setTestError] = useState('');
 
   const fetchInvitations = async () => {
     try {
@@ -68,6 +70,19 @@ export default function AdminInvitations() {
     }
   };
 
+  const handleTestEmail = async () => {
+    setTestStatus('sending');
+    setTestError('');
+    try {
+      await api.post('/admin/test-email');
+      setTestStatus('ok');
+      setTimeout(() => setTestStatus('idle'), 5000);
+    } catch (err) {
+      setTestError(err.response?.data?.error || 'Erreur d\'envoi');
+      setTestStatus('error');
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!confirm('Supprimer cette invitation ?')) return;
     try {
@@ -84,18 +99,41 @@ export default function AdminInvitations() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Invitations</h1>
           <p className="text-gray-500 text-sm mt-1">Gérez les accès à BlabIA</p>
         </div>
-        <button
-          onClick={() => { setShowModal(true); setError(''); }}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition text-sm"
-        >
-          + Inviter quelqu'un
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleTestEmail}
+            disabled={testStatus === 'sending'}
+            className="text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 px-3 py-2 rounded-lg transition disabled:opacity-50 min-h-[40px]"
+          >
+            {testStatus === 'sending' ? 'Envoi…' : '📧 Tester la config email'}
+          </button>
+          <button
+            onClick={() => { setShowModal(true); setError(''); }}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition text-sm min-h-[40px]"
+          >
+            + Inviter quelqu'un
+          </button>
+        </div>
       </div>
+
+      {/* Feedback test email */}
+      {testStatus === 'ok' && (
+        <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm flex justify-between items-center">
+          <span>✓ Email de test envoyé — vérifiez votre boîte mail.</span>
+          <button onClick={() => setTestStatus('idle')} className="ml-4 font-bold text-green-600 hover:text-green-800">×</button>
+        </div>
+      )}
+      {testStatus === 'error' && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between items-center">
+          <span>⚠ {testError}</span>
+          <button onClick={() => setTestStatus('idle')} className="ml-4 font-bold text-red-600 hover:text-red-800">×</button>
+        </div>
+      )}
 
       {success && (
         <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm flex justify-between">
