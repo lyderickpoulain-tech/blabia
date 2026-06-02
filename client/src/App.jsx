@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import NewSession from './pages/NewSession';
 import SessionView from './pages/SessionView';
 import SummaryView from './pages/SummaryView';
+import AgentsPage from './pages/AgentsPage';
 
 function PlaceholderPage({ title }) {
   return (
@@ -44,6 +45,9 @@ export default function App() {
         } />
         <Route path="/projects/:id/session/:sid/summary" element={
           <ProtectedRoute><SummaryView /></ProtectedRoute>
+        } />
+        <Route path="/agents" element={
+          <ProtectedRoute><AgentsPage /></ProtectedRoute>
         } />
         <Route path="/admin/invitations" element={
           <ProtectedRoute adminOnly><AdminInvitations /></ProtectedRoute>

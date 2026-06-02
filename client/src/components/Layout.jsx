@@ -17,6 +17,12 @@ export default function Layout({ children }) {
           BlabIA
         </Link>
         <div className="flex items-center gap-4">
+          <Link
+            to="/agents"
+            className="text-sm text-gray-600 hover:text-gray-900 hidden sm:block"
+          >
+            Agents
+          </Link>
           {user?.role === 'admin' && (
             <Link
               to="/admin/invitations"
