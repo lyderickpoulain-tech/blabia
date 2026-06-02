@@ -7,7 +7,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'status', 'createdAt', 'updatedAt', 'userId'
+  'id', 'name', 'description', 'status', 'context', 'createdAt', 'updatedAt', 'userId'
 ];
 
 async function findProject(id, userId, isAdmin) {
@@ -131,6 +131,23 @@ router.patch('/:id/archive', async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('[projects/:id/archive PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/projects/:id/context — réinitialiser la mémoire (admin uniquement)
+router.delete('/:id/context', async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Action réservée aux administrateurs' });
+  }
+  try {
+    const project = await findProject(req.params.id, req.user.id, true);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    await db('Project').where({ id: req.params.id }).update({ context: null, updatedAt: new Date() });
+    res.json({ message: 'Mémoire réinitialisée' });
+  } catch (err) {
+    console.error('[projects/:id/context DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

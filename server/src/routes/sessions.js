@@ -36,6 +36,44 @@ async function saveSession(sessionId, exchanges, summary, status) {
   });
 }
 
+// Génère un digest 200-300 mots et l'ajoute à project.context (max ~3000 tokens)
+async function updateProjectContext(projectId, task, summaryText) {
+  try {
+    const digestResponse = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system: 'Tu es un assistant qui crée des résumés concis pour une mémoire de projet. Réponds uniquement avec le résumé, sans introduction.',
+      messages: [{
+        role: 'user',
+        content: `Crée un résumé de 200 à 300 mots de cette session pour la mémoire du projet. Inclus : la tâche demandée, les points clés abordés et les recommandations principales.\n\nTâche : ${task}\n\nRestitution finale :\n${summaryText.substring(0, 4000)}`
+      }]
+    });
+
+    const digest = digestResponse.content[0].text.trim();
+    const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const entry = `[Session du ${date}]\n${digest}`;
+
+    const [project] = await db('Project').select('context').where({ id: projectId }).limit(1);
+    const current = project?.context || '';
+    const separator = current ? '\n---\n' : '';
+    let newContext = current + separator + entry;
+
+    // Limiter à ~10 000 caractères (≈ 3000 tokens) — supprimer les plus anciennes
+    const MAX_CHARS = 10000;
+    if (newContext.length > MAX_CHARS) {
+      const parts = newContext.split('\n---\n');
+      while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) {
+        parts.shift();
+      }
+      newContext = parts.join('\n---\n');
+    }
+
+    await db('Project').where({ id: projectId }).update({ context: newContext });
+  } catch (err) {
+    console.error('[updateProjectContext]', err.message);
+  }
+}
+
 function waitForAnswer(sessionId, timeoutMs = 300_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -51,22 +89,33 @@ function waitForAnswer(sessionId, timeoutMs = 300_000) {
 }
 
 // Appel Anthropic en streaming — retourne le texte complet
-async function streamAgent(systemPrompt, userMessage, onChunk) {
+async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 2048) {
   const stream = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
     stream: true
   });
 
   let fullText = '';
+  let stopReason = null;
+
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
       fullText += event.delta.text;
       onChunk(event.delta.text);
     }
+    // Détecter une troncature silencieuse (limite de tokens atteinte)
+    if (event.type === 'message_delta' && event.delta?.stop_reason) {
+      stopReason = event.delta.stop_reason;
+    }
   }
+
+  if (stopReason === 'max_tokens') {
+    console.warn(`[streamAgent] Réponse tronquée — max_tokens (${maxTokens}) atteint. Augmenter la limite si nécessaire.`);
+  }
+
   return fullText;
 }
 
@@ -85,13 +134,17 @@ router.post('/', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     if (project.status === 'archived') return res.status(400).json({ error: 'Ce projet est archivé' });
 
+    const contextBlock = project.context
+      ? `\n\nContexte des sessions précédentes de ce projet :\n${project.context}`
+      : '';
+
     const teamResponse = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
       system: 'Tu es un coordinateur d\'agents IA. Tu réponds UNIQUEMENT en JSON valide, sans markdown, sans explication.',
       messages: [{
         role: 'user',
-        content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi : ${AGENTS_LIST.join(', ')}.
+        content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi : ${AGENTS_LIST.join(', ')}.${contextBlock}
 
 Retourne EXACTEMENT ce format JSON :
 {"agents":[{"name":"NomAgent","role":"Rôle précis de cet agent pour cette tâche"}],"plan":"Une phrase décrivant l'approche collaborative"}
@@ -149,9 +202,11 @@ router.post('/:sessionId/run', async (req, res) => {
 
   // Valider avant d'ouvrir le SSE
   let session;
+  let projectContext = null;
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    projectContext = project.context || null;
 
     const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
@@ -200,8 +255,12 @@ router.post('/:sessionId/run', async (req, res) => {
         ? `Tâche : ${session.task}`
         : `Tâche : ${session.task}\n\nÉchanges précédents :\n${contextParts.join('\n\n')}\n\nC'est maintenant ton tour de contribuer.`;
 
+      const contextSection = projectContext
+        ? `\nContexte des sessions précédentes de ce projet :\n${projectContext}\n`
+        : '';
+
       const systemPrompt =
-        `Tu es ${agent.name}, un agent IA spécialisé. Ton rôle dans cette session : ${agent.role}.
+        `Tu es ${agent.name}, un agent IA spécialisé. Ton rôle dans cette session : ${agent.role}.${contextSection}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.`;
 
@@ -255,7 +314,8 @@ Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour
     const summaryText = await streamAgent(
       'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.',
       `Tâche originale : ${session.task}\n\nContributions des agents :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
-      (chunk) => send('summary_chunk', { text: chunk })
+      (chunk) => send('summary_chunk', { text: chunk }),
+      8192   // La synthèse agrège plusieurs agents — 2048 tronquait le texte en milieu de phrase
     );
 
     send('summary_done', { summary: summaryText });
@@ -263,6 +323,9 @@ Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour
     // ── Sauvegarde en base ──────────────────────────────────────────────────
     await saveSession(sessionId, exchanges, summaryText, 'complete');
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+
+    // Mise à jour de la mémoire projet en arrière-plan (non bloquant)
+    updateProjectContext(projectId, session.task, summaryText);
 
     send('complete', { sessionId });
     res.end();

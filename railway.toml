@@ -4,6 +4,6 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 healthcheckPath = "/api/health"
-healthcheckTimeout = 60
+healthcheckTimeout = 300   # 5 min : laisse le temps à prisma migrate deploy + démarrage serveur
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

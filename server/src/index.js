@@ -5,8 +5,8 @@ const path    = require('path');
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-const app  = express();
-const PORT = process.env.PORT || 3001;
+const app    = express();
+const PORT   = process.env.PORT || 3001;   // Railway injecte toujours PORT ; 3001 = fallback local uniquement
 const isProd = process.env.NODE_ENV === 'production';
 
 // En production, le frontend est servi depuis le même serveur → pas de restriction CORS
@@ -44,7 +44,9 @@ if (isProd) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+// '0.0.0.0' est indispensable dans Docker : sans ça, Node écoute uniquement
+// sur 127.0.0.1 et le healthcheck Railway (externe au container) ne répond pas.
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`BlabIA server démarré sur le port ${PORT} (mode: ${isProd ? 'production' : 'développement'})`);
 });
 

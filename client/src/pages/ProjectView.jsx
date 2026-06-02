@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 
 function RenameModal({ project, onSave, onClose }) {
   const [name, setName] = useState(project.name);
@@ -117,12 +118,16 @@ function SessionRow({ session, projectId }) {
 export default function ProjectView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [project, setProject]           = useState(null);
   const [loading, setLoading]           = useState(true);
   const [sessions, setSessions]         = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [showRename, setShowRename]     = useState(false);
   const [archiving, setArchiving]       = useState(false);
+  const [memoryOpen, setMemoryOpen]     = useState(false);
+  const [resettingMemory, setResettingMemory] = useState(false);
 
   useEffect(() => {
     api.get(`/projects/${id}`)
@@ -147,6 +152,19 @@ export default function ProjectView() {
       alert('Erreur lors de l\'opération');
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const handleResetMemory = async () => {
+    if (!confirm('Réinitialiser la mémoire du projet ? Cette action est irréversible.')) return;
+    setResettingMemory(true);
+    try {
+      await api.delete(`/projects/${id}/context`);
+      setProject(prev => ({ ...prev, context: null }));
+    } catch {
+      alert('Erreur lors de la réinitialisation');
+    } finally {
+      setResettingMemory(false);
     }
   };
 
@@ -206,6 +224,35 @@ export default function ProjectView() {
           </div>
         </div>
       </div>
+
+      {/* Mémoire du projet */}
+      {project.context && (
+        <div className="bg-gray-50 rounded-xl border border-gray-200 shadow-sm mb-5">
+          <button
+            onClick={() => setMemoryOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-3 text-left"
+          >
+            <span className="text-sm font-medium text-gray-500">Mémoire du projet</span>
+            <span className="text-gray-400 text-xs">{memoryOpen ? '▲ Réduire' : '▼ Afficher'}</span>
+          </button>
+          {memoryOpen && (
+            <div className="px-5 pb-4 border-t border-gray-100">
+              <pre className="text-xs text-gray-500 whitespace-pre-wrap font-sans mt-3 leading-relaxed max-h-60 overflow-y-auto">
+                {project.context}
+              </pre>
+              {isAdmin && (
+                <button
+                  onClick={handleResetMemory}
+                  disabled={resettingMemory}
+                  className="mt-3 text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition"
+                >
+                  {resettingMemory ? 'Réinitialisation…' : 'Réinitialiser la mémoire'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Section sessions */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
