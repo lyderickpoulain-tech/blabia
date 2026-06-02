@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Layout from '../components/Layout';
 import SessionRunner from '../components/SessionRunner';
+import ExportModal from '../components/ExportModal';
 import api from '../utils/api';
 
 // Composants Markdown stylés Tailwind
@@ -111,6 +112,7 @@ export default function NewSession() {
   const [plan, setPlan]               = useState('');
   const [error, setError]             = useState('');
   const [finalSummary, setFinalSummary] = useState(null);
+  const [showExport, setShowExport]   = useState(false);
 
   // ── Phase 1 → 2 : formation de l'équipe ──────────────────────────────────
   const handleFormTeam = async () => {
@@ -408,6 +410,18 @@ export default function NewSession() {
               </button>
             </div>
 
+            {/* Exporter vers Claude Code */}
+            <button
+              onClick={() => setShowExport(true)}
+              className="w-full flex items-center justify-center gap-2 border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium py-3 rounded-xl transition text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Exporter vers Claude Code
+            </button>
+
             <Link
               to={`/projects/${projectId}`}
               className="flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition py-1"
@@ -417,6 +431,10 @@ export default function NewSession() {
           </div>
         )}
       </div>
+
+      {showExport && finalSummary && (
+        <ExportModal summary={finalSummary} onClose={() => setShowExport(false)} />
+      )}
     </Layout>
   );
 }
