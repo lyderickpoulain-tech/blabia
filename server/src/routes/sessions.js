@@ -127,7 +127,7 @@ router.post('/', async (req, res) => {
   const isAdmin = req.user.role === 'admin';
 
   if (!task?.trim()) return res.status(400).json({ error: 'La tâche est requise' });
-  if (!['realtime', 'summary'].includes(mode)) return res.status(400).json({ error: 'Mode invalide' });
+  if (!['realtime', 'summary', 'conversation'].includes(mode)) return res.status(400).json({ error: 'Mode invalide' });
 
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
@@ -236,6 +236,7 @@ Tâche : ${task.trim()}`
 
 router.post('/:sessionId/run', async (req, res) => {
   const { projectId, sessionId } = req.params;
+  const { humanInput } = req.body;
   const isAdmin = req.user.role === 'admin';
 
   // Valider avant d'ouvrir le SSE
@@ -293,10 +294,27 @@ router.post('/:sessionId/run', async (req, res) => {
 
   send('connected', { sessionId });
 
+  const isConversation = session.mode === 'conversation';
   const agents = typeof session.agents === 'string' ? JSON.parse(session.agents) : session.agents;
   const exchanges = typeof session.exchanges === 'string' ? JSON.parse(session.exchanges) : session.exchanges;
 
+  // Numéro du tour courant (nb d'interventions humaines déjà enregistrées + 1)
+  const turnNumber = isConversation
+    ? exchanges.filter(e => e.type === 'human').length + 1
+    : null;
+
   try {
+    // Injecter l'intervention humaine avant le tour d'agents (mode conversation tour ≥ 2)
+    if (isConversation && humanInput?.trim()) {
+      exchanges.push({
+        type: 'human',
+        agent: 'Utilisateur',
+        content: humanInput.trim(),
+        turn: turnNumber - 1,
+        createdAt: new Date().toISOString()
+      });
+    }
+
     // ── Tour de chaque agent ────────────────────────────────────────────────
     for (const agent of agents) {
       send('agent_start', { name: agent.name, role: agent.role });
@@ -319,9 +337,13 @@ router.post('/:sessionId/run', async (req, res) => {
       const systemPromptBase = agent.systemPrompt
         || `Tu es ${agent.name}, un agent IA spécialisé. ${agent.role}.`;
 
+      const conversationNote = isConversation
+        ? '\nCette session est une conversation continue : l\'utilisateur peut intervenir entre les tours. Sois attentif à ses interventions précédentes.'
+        : '';
+
       const systemPrompt =
         `${systemPromptBase}
-Ton rôle spécifique dans cette session : ${agent.role}.${contextSection}${parentExchangesBlock}
+Ton rôle spécifique dans cette session : ${agent.role}.${contextSection}${parentExchangesBlock}${conversationNote}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
 Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.`;
@@ -342,12 +364,14 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
         .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/, '')
         .trim();
 
-      exchanges.push({
+      const agentExchange = {
         type: 'agent',
         agent: agent.name,
         content: agentContent,
         createdAt: new Date().toISOString()
-      });
+      };
+      if (isConversation) agentExchange.turn = turnNumber;
+      exchanges.push(agentExchange);
       send('agent_done', { name: agent.name, content: agentContent });
 
       if (suggestedAgentData?.name && suggestedAgentData?.role) {
@@ -365,12 +389,14 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
 
         try {
           const humanAnswer = await waitForAnswer(sessionId);
-          exchanges.push({
+          const answerExchange = {
             type: 'human',
             agent: 'Utilisateur',
             content: humanAnswer,
             createdAt: new Date().toISOString()
-          });
+          };
+          if (isConversation) answerExchange.turn = turnNumber;
+          exchanges.push(answerExchange);
           send('answer_received', { answer: humanAnswer });
         } catch (timeoutErr) {
           send('error', { message: timeoutErr.message });
@@ -380,7 +406,86 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
       }
     }
 
-    // ── Synthèse finale ─────────────────────────────────────────────────────
+    if (isConversation) {
+      // ── Mode conversation : fin du tour, attente de l'intervention humaine ─
+      await saveSession(sessionId, exchanges, null, 'incomplete');
+      await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+      send('turn_complete', { sessionId, turn: turnNumber });
+      res.end();
+    } else {
+      // ── Modes realtime/summary : synthèse finale automatique ────────────────
+      send('summary_start', {});
+
+      const contextFull = exchanges
+        .filter(e => e.type === 'agent' || e.type === 'human')
+        .map(e => e.type === 'agent'
+          ? `**${e.agent}** : ${e.content}`
+          : `**Utilisateur** : ${e.content}`)
+        .join('\n\n');
+
+      const summaryText = await streamAgent(
+        'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.',
+        `Tâche originale : ${session.task}\n\nContributions des agents :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
+        (chunk) => send('summary_chunk', { text: chunk }),
+        8192
+      );
+
+      send('summary_done', { summary: summaryText });
+
+      await saveSession(sessionId, exchanges, summaryText, 'complete');
+      await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+      updateProjectContext(projectId, session.task, summaryText);
+
+      send('complete', { sessionId });
+      res.end();
+    }
+
+  } catch (err) {
+    console.error('[sessions/run]', err.message);
+    try {
+      send('error', { message: `Erreur d'orchestration : ${err.message}` });
+      await saveSession(sessionId, exchanges, null, 'interrupted');
+    } catch {}
+    res.end();
+  } finally {
+    pendingQuestions.delete(sessionId);
+  }
+});
+
+// ── Mode conversation : synthèse manuelle (SSE) ──────────────────────────────
+
+router.post('/:sessionId/synthesize', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = req.user.role === 'admin';
+
+  let session;
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    if (s.status === 'complete') return res.status(400).json({ error: 'Session déjà terminée' });
+    if (s.mode !== 'conversation') return res.status(400).json({ error: 'Réservé au mode conversation' });
+    session = s;
+  } catch {
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+
+  if (req.socket) req.socket.setNoDelay(true);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (type, data = {}) => {
+    try { res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); } catch {}
+  };
+
+  const exchanges = typeof session.exchanges === 'string' ? JSON.parse(session.exchanges) : session.exchanges;
+
+  try {
     send('summary_start', {});
 
     const contextFull = exchanges
@@ -392,32 +497,47 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
 
     const summaryText = await streamAgent(
       'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.',
-      `Tâche originale : ${session.task}\n\nContributions des agents :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
+      `Tâche originale : ${session.task}\n\nConversation complète :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
       (chunk) => send('summary_chunk', { text: chunk }),
-      8192   // La synthèse agrège plusieurs agents — 2048 tronquait le texte en milieu de phrase
+      8192
     );
 
     send('summary_done', { summary: summaryText });
 
-    // ── Sauvegarde en base ──────────────────────────────────────────────────
     await saveSession(sessionId, exchanges, summaryText, 'complete');
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
-
-    // Mise à jour de la mémoire projet en arrière-plan (non bloquant)
     updateProjectContext(projectId, session.task, summaryText);
 
-    send('complete', { sessionId });
     res.end();
-
   } catch (err) {
-    console.error('[sessions/run]', err.message);
-    try {
-      send('error', { message: `Erreur d'orchestration : ${err.message}` });
-      await saveSession(sessionId, exchanges, null, 'interrupted');
-    } catch {}
+    console.error('[sessions/synthesize]', err.message);
+    try { send('error', { message: `Erreur de synthèse : ${err.message}` }); } catch {}
     res.end();
-  } finally {
-    pendingQuestions.delete(sessionId);
+  }
+});
+
+// ── Mode conversation : fermeture sans synthèse ──────────────────────────────
+
+router.post('/:sessionId/close', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = req.user.role === 'admin';
+
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    if (s.status === 'complete') return res.status(400).json({ error: 'Session déjà terminée' });
+    if (s.mode !== 'conversation') return res.status(400).json({ error: 'Réservé au mode conversation' });
+
+    await db('Session').where({ id: sessionId }).update({ status: 'complete', summary: null });
+    await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+
+    res.json({ message: 'Conversation terminée' });
+  } catch (err) {
+    console.error('[sessions/close]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
@@ -480,6 +600,30 @@ router.get('/:sessionId', async (req, res) => {
     });
   } catch (err) {
     console.error('[sessions/:id GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── Suppression d'une session ─────────────────────────────────────────────────
+
+router.delete('/:sessionId', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+
+    // Orphelinage : les sessions de continuation ne sont pas supprimées (SET NULL)
+    await db('Session').where({ parentSessionId: sessionId }).update({ parentSessionId: null });
+
+    await db('Session').where({ id: sessionId }).delete();
+
+    res.json({ message: 'Session supprimée' });
+  } catch (err) {
+    console.error('[sessions/:id DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

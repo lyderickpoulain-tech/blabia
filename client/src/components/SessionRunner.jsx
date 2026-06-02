@@ -159,7 +159,7 @@ function SummarySteps({ exchanges, activeAgent, isSummaryPhase }) {
 
 // ── Composant principal ────────────────────────────────────────────────────────
 
-export default function SessionRunner({ session, projectId, onComplete, onRetry }) {
+export default function SessionRunner({ session, projectId, onComplete, onConversationEnd, onRetry }) {
   const [exchanges, setExchanges]               = useState([]);
   const [activeAgent, setActiveAgent]           = useState(null);
   const [streamingText, setStreamingText]       = useState('');
@@ -170,10 +170,16 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
   const [error, setError]                       = useState('');
   const [pendingSuggestions, setPendingSuggestions] = useState([]);
   const [addingAgent, setAddingAgent]           = useState(null);
+  const [turnComplete, setTurnComplete]         = useState(false);
+  const [currentTurn, setCurrentTurn]           = useState(1);
+  const [humanInput, setHumanInput]             = useState('');
+  const [closingSession, setClosingSession]     = useState(false);
+  const [synthesizing, setSynthesizing]         = useState(false);
 
-  const bottomRef  = useRef(null);
-  const abortRef   = useRef(null);
-  const isRealtime = session.mode === 'realtime';
+  const bottomRef      = useRef(null);
+  const abortRef       = useRef(null);
+  const isRealtime     = session.mode === 'realtime';
+  const isConversation = session.mode === 'conversation';
 
   // Auto-scroll vers le bas
   useEffect(() => {
@@ -186,8 +192,9 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
     return () => abortRef.current?.abort();
   }, []);
 
-  async function run() {
+  async function run(humanInputText = null) {
     setError('');
+    setTurnComplete(false);
     const token = localStorage.getItem('token');
     abortRef.current = new AbortController();
 
@@ -197,6 +204,7 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(humanInputText ? { humanInput: humanInputText } : {}),
           signal: abortRef.current.signal
         }
       );
@@ -274,6 +282,12 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
           emoji: ev.emoji || '🤖'
         }]);
         break;
+      case 'turn_complete':
+        setTurnComplete(true);
+        setCurrentTurn(ev.turn + 1);
+        setActiveAgent(null);
+        setStreamingText('');
+        break;
       case 'error':
         setError(ev.message);
         setActiveAgent(null);
@@ -282,6 +296,85 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
       default: break;
     }
   }
+
+  const continueConversation = async () => {
+    if (!humanInput.trim()) return;
+    const text = humanInput.trim();
+    setHumanInput('');
+    setTurnComplete(false);
+    setExchanges(p => [
+      ...p,
+      { type: 'turn_separator', turn: currentTurn - 1, id: `sep-${Date.now()}` },
+      { type: 'human', content: text, id: `human-input-${Date.now()}` }
+    ]);
+    await run(text);
+  };
+
+  const closeConversation = async () => {
+    if (closingSession) return;
+    setClosingSession(true);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/projects/${projectId}/sessions/${session.id}/close`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      onConversationEnd?.();
+    } catch (e) {
+      setError('Erreur fermeture : ' + e.message);
+    } finally {
+      setClosingSession(false);
+    }
+  };
+
+  const generateSummary = async () => {
+    if (synthesizing) return;
+    setSynthesizing(true);
+    setTurnComplete(false);
+    setIsSummaryPhase(true);
+    setActiveAgent({ name: 'Synthèse finale', role: 'Restitution structurée' });
+    const token = localStorage.getItem('token');
+    abortRef.current = new AbortController();
+
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/sessions/${session.id}/synthesize`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          signal: abortRef.current.signal
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || `Erreur ${res.status}`);
+        setSynthesizing(false);
+        setActiveAgent(null);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try { dispatch(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') setError('Erreur synthèse : ' + err.message);
+    } finally {
+      setSynthesizing(false);
+    }
+  };
 
   const sendAnswer = async () => {
     if (!humanAnswer.trim() || sending) return;
@@ -380,14 +473,20 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
 
       {/* ── Zone d'échanges ───────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 min-h-64">
-        {isRealtime ? (
-          // Mode temps réel : bulles de chat
+        {isRealtime || isConversation ? (
+          // Mode temps réel / conversation : bulles de chat
           <div className="space-y-4">
-            {exchanges.map(ex =>
-              ex.type === 'agent'
-                ? <AgentBubble key={ex.id} agentName={ex.agent} content={ex.content} />
-                : <HumanBubble key={ex.id} content={ex.content} />
-            )}
+            {exchanges.map(ex => {
+              if (ex.type === 'turn_separator') return (
+                <div key={ex.id} className="flex items-center gap-3 py-1">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-xs text-gray-400 font-medium px-2">Tour {ex.turn} terminé</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+              );
+              if (ex.type === 'agent') return <AgentBubble key={ex.id} agentName={ex.agent} content={ex.content} />;
+              return <HumanBubble key={ex.id} content={ex.content} />;
+            })}
             {/* Bulle de streaming en cours */}
             {activeAgent && (streamingText || pendingQuestion === null) && (
               <AgentBubble
@@ -435,6 +534,54 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
           </div>
         )}
 
+        {/* Intervention humaine — mode conversation, fin de tour */}
+        {turnComplete && isConversation && (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-emerald-200" />
+              <span className="text-xs text-emerald-600 font-semibold px-2">Tour {currentTurn - 1} terminé</span>
+              <div className="flex-1 h-px bg-emerald-200" />
+            </div>
+
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+              <p className="text-xs font-semibold text-emerald-700 mb-2">Ton intervention</p>
+              <textarea
+                value={humanInput}
+                onChange={e => setHumanInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) continueConversation(); }}
+                placeholder="Oriente la conversation, pose une question, fournis des précisions… (Ctrl+Entrée pour continuer)"
+                rows={3}
+                autoFocus
+                className="w-full px-3 py-2 text-sm border border-emerald-200 bg-white rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+              />
+              <button
+                onClick={continueConversation}
+                disabled={!humanInput.trim()}
+                className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+              >
+                Continuer la conversation →
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={closeConversation}
+                disabled={closingSession || synthesizing}
+                className="flex-1 text-sm text-gray-600 border border-gray-300 hover:bg-gray-50 py-2.5 rounded-xl transition disabled:opacity-50 font-medium"
+              >
+                {closingSession ? 'Fermeture…' : 'Terminer la conversation'}
+              </button>
+              <button
+                onClick={generateSummary}
+                disabled={synthesizing || closingSession}
+                className="flex-1 text-sm bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+              >
+                {synthesizing ? 'Synthèse en cours…' : 'Générer une synthèse'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
@@ -446,7 +593,7 @@ export default function SessionRunner({ session, projectId, onComplete, onRetry 
             <button
               onClick={() => {
                 setError('');
-                setExchanges([]);
+                if (!isConversation) setExchanges([]);
                 setActiveAgent(null);
                 setStreamingText('');
                 setPendingQuestion(null);

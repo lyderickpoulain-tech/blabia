@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Layout from '../components/Layout';
@@ -102,6 +102,7 @@ function ModeCard({ value, current, label, description, icon, onChange }) {
 export default function NewSession() {
   const { id: projectId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const parentSessionId = location.state?.parentSessionId || null;
   const initialTask     = location.state?.initialTask     || '';
 
@@ -141,6 +142,11 @@ export default function NewSession() {
   const handleComplete = (summary) => {
     setFinalSummary(summary);
     setPhase('complete');
+  };
+
+  // ── Fin de conversation sans synthèse (mode conversation) ─────────────────
+  const handleConversationEnd = () => {
+    navigate(`/projects/${projectId}`);
   };
 
   // ── Réinitialiser pour une nouvelle session ────────────────────────────────
@@ -209,22 +215,30 @@ export default function NewSession() {
               {/* Sélecteur de mode */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mode d'affichage
+                  Mode de session
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-2">
                   <ModeCard
                     value="realtime"
                     current={mode}
-                    label="Temps réel"
-                    description="Suivez chaque échange agent par agent au fur et à mesure"
+                    label="Synthèse approfondie"
+                    description="Les agents collaborent et produisent une restitution finale structurée"
                     icon="⚡"
+                    onChange={setMode}
+                  />
+                  <ModeCard
+                    value="conversation"
+                    current={mode}
+                    label="Conversation de projet"
+                    description="Échanges continus, vous pilotez — pas de synthèse finale obligatoire"
+                    icon="💬"
                     onChange={setMode}
                   />
                   <ModeCard
                     value="summary"
                     current={mode}
                     label="Résumé final"
-                    description="Recevez directement la restitution finale synthétisée"
+                    description="Recevez directement la restitution condensée sans voir les échanges"
                     icon="📋"
                     onChange={setMode}
                   />
@@ -271,9 +285,11 @@ export default function NewSession() {
                 </span>
                 <span className="text-sm font-semibold text-gray-700">Équipe prête</span>
                 <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-                  session.mode === 'realtime' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                  session.mode === 'realtime' ? 'bg-blue-100 text-blue-700'
+                  : session.mode === 'conversation' ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-gray-100 text-gray-600'
                 }`}>
-                  {session.mode === 'realtime' ? '⚡ Temps réel' : '📋 Résumé'}
+                  {session.mode === 'realtime' ? '⚡ Synthèse' : session.mode === 'conversation' ? '💬 Conversation' : '📋 Résumé'}
                 </span>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{session.task}</p>
@@ -315,9 +331,11 @@ export default function NewSession() {
             {/* Compact task bar */}
             <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-                session.mode === 'realtime' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                session.mode === 'realtime' ? 'bg-blue-100 text-blue-700'
+                : session.mode === 'conversation' ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-gray-100 text-gray-600'
               }`}>
-                {session.mode === 'realtime' ? '⚡ Temps réel' : '📋 Résumé'}
+                {session.mode === 'realtime' ? '⚡ Synthèse' : session.mode === 'conversation' ? '💬 Conversation' : '📋 Résumé'}
               </span>
               <p className="text-sm text-gray-600 truncate">{session.task}</p>
             </div>
@@ -326,6 +344,7 @@ export default function NewSession() {
               session={session}
               projectId={projectId}
               onComplete={handleComplete}
+              onConversationEnd={handleConversationEnd}
               onRetry={() => setPhase('formed')}
             />
           </div>
