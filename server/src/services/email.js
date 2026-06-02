@@ -55,7 +55,7 @@ function baseLayout(content) {
 
 // ── sendInvitation ────────────────────────────────────────────────────────────
 
-async function sendInvitation(toEmail, token, senderEmail = '') {
+async function sendInvitation(toEmail, token, senderEmail = '', projectName = '') {
   const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/register?token=${token}`;
   const client = getClient();
 
@@ -68,9 +68,18 @@ async function sendInvitation(toEmail, token, senderEmail = '') {
     ? `<p style="margin:0 0 20px;color:#374151;font-size:15px;"><strong>${senderEmail}</strong> vous invite à rejoindre <strong>BlabIA</strong>, la plateforme de sessions multi-agents IA.</p>`
     : `<p style="margin:0 0 20px;color:#374151;font-size:15px;">Vous avez été invité à rejoindre <strong>BlabIA</strong>, la plateforme de sessions multi-agents IA.</p>`;
 
+  const projectLine = projectName
+    ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+        <p style="margin:0;color:#1e40af;font-size:13px;">
+          📁 Vous serez automatiquement ajouté au projet <strong>"${projectName}"</strong> après votre inscription.
+        </p>
+      </div>`
+    : '';
+
   const content = `
     <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Vous êtes invité !</h2>
     ${senderLine}
+    ${projectLine}
     <p style="margin:0 0 24px;color:#6b7280;font-size:14px;">Cliquez sur le bouton ci-dessous pour créer votre compte et commencer à utiliser BlabIA :</p>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">

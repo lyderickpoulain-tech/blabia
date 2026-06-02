@@ -21,8 +21,17 @@ function extractJson(text) {
 }
 
 async function getProject(projectId, userId, isAdmin) {
-  const query = db('Project').where({ id: projectId });
-  if (!isAdmin) query.andWhere({ userId });
+  const query = db('Project').where('Project.id', projectId);
+  if (!isAdmin) {
+    query.where(function () {
+      this.where('Project.userId', userId)
+        .orWhereExists(
+          db.select(db.raw('1')).from('ProjectMember')
+            .where('ProjectMember.projectId', projectId)
+            .where('ProjectMember.userId', userId)
+        );
+    });
+  }
   const [project] = await query.limit(1);
   return project;
 }

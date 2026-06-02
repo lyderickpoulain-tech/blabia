@@ -8,15 +8,16 @@ datasource db {
 }
 
 model User {
-  id          String       @id @default(uuid())
-  email       String       @unique
-  password    String
-  role        String       @default("guest") // "admin" ou "guest"
-  techStack   Json         @default("{}")    // Environnement technique personnel
-  createdAt   DateTime     @default(now())
-  projects    Project[]
-  invitations Invitation[]
-  agents      Agent[]
+  id               String          @id @default(uuid())
+  email            String          @unique
+  password         String
+  role             String          @default("guest") // "admin", "guest" ou "collaborator"
+  techStack        Json            @default("{}")    // Environnement technique personnel
+  createdAt        DateTime        @default(now())
+  projects         Project[]
+  invitations      Invitation[]
+  agents           Agent[]
+  projectMemberships ProjectMember[]
 }
 
 model Agent {
@@ -40,19 +41,35 @@ model Invitation {
   createdBy String
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
+  projectId String?  // Si présent : auto-adhésion au projet après inscription
+  project   Project? @relation(fields: [projectId], references: [id])
 }
 
 model Project {
-  id          String    @id @default(uuid())
+  id          String          @id @default(uuid())
   name        String
   description String?
-  status      String    @default("active") // "active" ou "archived"
-  context     String?   // Mémoire cumulée des sessions précédentes
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  status      String          @default("active") // "active" ou "archived"
+  context     String?         // Mémoire cumulée des sessions précédentes
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   userId      String
-  user        User      @relation(fields: [userId], references: [id])
+  user        User            @relation(fields: [userId], references: [id])
   sessions    Session[]
+  members     ProjectMember[]
+  invitations Invitation[]
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String   @default("collaborator") // "collaborator" ou "viewer"
+  invitedAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
 }
 
 model Session {

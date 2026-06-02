@@ -224,10 +224,26 @@ export default function ProjectView() {
   const [resettingMemory, setResettingMemory] = useState(false);
   const [showDelete, setShowDelete]     = useState(false);
   const [deleting, setDeleting]         = useState(false);
+  const [members, setMembers]           = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [inviteEmail, setInviteEmail]   = useState('');
+  const [inviting, setInviting]         = useState(false);
+  const [inviteResult, setInviteResult] = useState(null); // { type, message, isError }
+  const [removingMember, setRemovingMember] = useState(null);
 
   useEffect(() => {
     api.get(`/projects/${id}`)
-      .then(({ data }) => setProject(data))
+      .then(({ data }) => {
+        setProject(data);
+        // Charger les membres si owner ou admin
+        if (data.userId === user?.id || user?.role === 'admin') {
+          setMembersLoading(true);
+          api.get(`/projects/${id}/members`)
+            .then(({ data: m }) => setMembers(m))
+            .catch(() => {})
+            .finally(() => setMembersLoading(false));
+        }
+      })
       .catch(() => navigate('/dashboard'))
       .finally(() => setLoading(false));
 
@@ -248,6 +264,39 @@ export default function ProjectView() {
       alert('Erreur lors de l\'opération');
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const handleInviteMember = async (e) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteResult(null);
+    try {
+      const { data } = await api.post(`/projects/${id}/members`, { email: inviteEmail.trim() });
+      if (data.type === 'added') {
+        setMembers(prev => [...prev, data.member]);
+        setInviteResult({ type: 'ok', message: `${data.member.email} ajouté comme collaborateur.` });
+      } else {
+        setInviteResult({ type: 'ok', message: `Invitation envoyée à ${data.email}.` });
+      }
+      setInviteEmail('');
+    } catch (err) {
+      setInviteResult({ type: 'error', message: err.response?.data?.error || 'Erreur lors de l\'invitation' });
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId) => {
+    setRemovingMember(userId);
+    try {
+      await api.delete(`/projects/${id}/members/${userId}`);
+      setMembers(prev => prev.filter(m => m.userId !== userId));
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erreur lors du retrait');
+    } finally {
+      setRemovingMember(null);
     }
   };
 
@@ -286,6 +335,9 @@ export default function ProjectView() {
   }
 
   if (!project) return null;
+
+  const isOwner = project.userId === user?.id;
+  const canManage = isOwner || isAdmin;
 
   return (
     <Layout>
@@ -361,6 +413,68 @@ export default function ProjectView() {
         </div>
       )}
 
+      {/* Section Membres du projet — visible propriétaire + admin */}
+      {canManage && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-5">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-gray-900">Membres du projet</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {members.length} collaborateur{members.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          {/* Formulaire invitation */}
+          <div className="px-5 py-4 border-b border-gray-100">
+            <form onSubmit={handleInviteMember} className="flex gap-2">
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={e => { setInviteEmail(e.target.value); setInviteResult(null); }}
+                placeholder="email@exemple.com"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+              <button
+                type="submit"
+                disabled={inviting || !inviteEmail.trim()}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50 shrink-0"
+              >
+                {inviting ? '…' : 'Inviter'}
+              </button>
+            </form>
+            {inviteResult && (
+              <p className={`text-xs mt-2 ${inviteResult.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+                {inviteResult.type === 'ok' ? '✓ ' : '⚠ '}{inviteResult.message}
+              </p>
+            )}
+          </div>
+
+          {/* Liste des membres */}
+          {membersLoading ? (
+            <div className="px-5 py-4 text-sm text-gray-400">Chargement…</div>
+          ) : members.length === 0 ? (
+            <div className="px-5 py-4 text-sm text-gray-400">Aucun collaborateur pour l'instant.</div>
+          ) : (
+            <ul className="divide-y divide-gray-50">
+              {members.map(m => (
+                <li key={m.id} className="flex items-center justify-between px-5 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{m.email}</p>
+                    <p className="text-xs text-gray-400 capitalize">{m.role}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveMember(m.userId)}
+                    disabled={removingMember === m.userId}
+                    className="text-xs text-red-400 hover:text-red-600 transition disabled:opacity-40"
+                  >
+                    {removingMember === m.userId ? '…' : 'Retirer'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* Section sessions */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -428,15 +542,17 @@ export default function ProjectView() {
         )}
       </div>
 
-      {/* Zone de danger — suppression projet */}
-      <div className="mt-8 border-t border-gray-200 pt-6">
-        <button
-          onClick={() => setShowDelete(true)}
-          className="text-sm text-red-500 hover:text-red-700 transition"
-        >
-          Supprimer le projet…
-        </button>
-      </div>
+      {/* Zone de danger — visible propriétaire + admin uniquement */}
+      {canManage && (
+        <div className="mt-8 border-t border-gray-200 pt-6">
+          <button
+            onClick={() => setShowDelete(true)}
+            className="text-sm text-red-500 hover:text-red-700 transition"
+          >
+            Supprimer le projet…
+          </button>
+        </div>
+      )}
 
       {showRename && (
         <RenameModal

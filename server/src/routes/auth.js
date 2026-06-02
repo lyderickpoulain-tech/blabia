@@ -66,6 +66,19 @@ router.post('/register', async (req, res) => {
 
     await db('Invitation').where({ token }).update({ used: true });
 
+    // Auto-adhésion au projet si l'invitation était liée à un projet spécifique
+    if (invitation.projectId) {
+      await db('ProjectMember')
+        .insert({
+          id: randomUUID(),
+          projectId: invitation.projectId,
+          userId: user.id,
+          role: 'collaborator',
+          invitedAt: new Date()
+        })
+        .onConflict(['projectId', 'userId']).ignore();
+    }
+
     res.json({ token: makeToken(user), user });
   } catch (err) {
     console.error('[auth/register]', err.message);
