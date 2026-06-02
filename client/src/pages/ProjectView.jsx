@@ -67,6 +67,66 @@ function RenameModal({ project, onSave, onClose }) {
   );
 }
 
+function DeleteProjectModal({ project, sessionCount, onClose, onConfirm, deleting }) {
+  const [inputName, setInputName] = useState('');
+  const isValid = inputName === project.name;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Supprimer le projet</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Cette action est irréversible</p>
+          </div>
+        </div>
+
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-700">
+          Cette action supprimera définitivement le projet{' '}
+          <strong>"{project.name}"</strong> et ses{' '}
+          <strong>{sessionCount} session{sessionCount !== 1 ? 's' : ''}</strong>.
+        </div>
+
+        <div className="mb-5">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Tapez <span className="font-semibold text-gray-900">"{project.name}"</span> pour confirmer
+          </label>
+          <input
+            type="text"
+            value={inputName}
+            onChange={e => setInputName(e.target.value)}
+            placeholder={project.name}
+            autoFocus
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-sm"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl hover:bg-gray-50 transition text-sm font-medium"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!isValid || deleting}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {deleting ? 'Suppression…' : 'Supprimer définitivement'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionStatusBadge({ status }) {
   return status === 'complete'
     ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Complète</span>
@@ -162,6 +222,8 @@ export default function ProjectView() {
   const [archiving, setArchiving]       = useState(false);
   const [memoryOpen, setMemoryOpen]     = useState(false);
   const [resettingMemory, setResettingMemory] = useState(false);
+  const [showDelete, setShowDelete]     = useState(false);
+  const [deleting, setDeleting]         = useState(false);
 
   useEffect(() => {
     api.get(`/projects/${id}`)
@@ -186,6 +248,17 @@ export default function ProjectView() {
       alert('Erreur lors de l\'opération');
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/projects/${id}`);
+      navigate('/dashboard');
+    } catch {
+      alert('Erreur lors de la suppression');
+      setDeleting(false);
     }
   };
 
@@ -355,11 +428,30 @@ export default function ProjectView() {
         )}
       </div>
 
+      {/* Zone de danger — suppression projet */}
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <button
+          onClick={() => setShowDelete(true)}
+          className="text-sm text-red-500 hover:text-red-700 transition"
+        >
+          Supprimer le projet…
+        </button>
+      </div>
+
       {showRename && (
         <RenameModal
           project={project}
           onSave={updated => { setProject(prev => ({ ...prev, ...updated })); setShowRename(false); }}
           onClose={() => setShowRename(false)}
+        />
+      )}
+      {showDelete && (
+        <DeleteProjectModal
+          project={project}
+          sessionCount={project.sessionCount ?? 0}
+          onClose={() => setShowDelete(false)}
+          onConfirm={handleDeleteProject}
+          deleting={deleting}
         />
       )}
     </Layout>

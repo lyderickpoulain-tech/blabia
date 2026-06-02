@@ -77,6 +77,47 @@ function HumanBubble({ content }) {
   );
 }
 
+// ── Modale suppression session ─────────────────────────────────────────────────
+function DeleteSessionModal({ onClose, onConfirm, deleting }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Supprimer la session</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Cette action est irréversible</p>
+          </div>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-5">
+          Cette session sera définitivement supprimée. Les sessions de continuation créées depuis celle-ci resteront accessibles, sans lien parent.
+        </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl hover:bg-gray-50 transition text-sm font-medium"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl transition text-sm font-medium disabled:opacity-50"
+          >
+            {deleting ? 'Suppression…' : 'Supprimer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page principale ────────────────────────────────────────────────────────────
 export default function SessionView() {
   const { id: projectId, sid: sessionId } = useParams();
@@ -88,6 +129,8 @@ export default function SessionView() {
   const [showContinue, setShowContinue]   = useState(false);
   const [continueTask, setContinueTask]   = useState('');
   const [showExport, setShowExport]       = useState(false);
+  const [showDelete, setShowDelete]       = useState(false);
+  const [deleting, setDeleting]           = useState(false);
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
@@ -95,6 +138,17 @@ export default function SessionView() {
       .catch(() => navigate(`/projects/${projectId}`))
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
+
+  const handleDeleteSession = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/projects/${projectId}/sessions/${sessionId}`);
+      navigate(`/projects/${projectId}`);
+    } catch {
+      alert('Erreur lors de la suppression');
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -300,12 +354,26 @@ export default function SessionView() {
           >
             ← Retour au projet
           </Link>
+
+          <button
+            onClick={() => setShowDelete(true)}
+            className="text-xs text-red-400 hover:text-red-600 transition py-1"
+          >
+            Supprimer cette session
+          </button>
         </div>
 
       </div>
 
       {showExport && session.summary && (
         <ExportModal summary={session.summary} onClose={() => setShowExport(false)} />
+      )}
+      {showDelete && (
+        <DeleteSessionModal
+          onClose={() => setShowDelete(false)}
+          onConfirm={handleDeleteSession}
+          deleting={deleting}
+        />
       )}
     </Layout>
   );

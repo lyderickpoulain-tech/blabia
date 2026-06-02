@@ -135,6 +135,29 @@ router.patch('/:id/archive', async (req, res) => {
   }
 });
 
+// DELETE /api/projects/:id — suppression définitive avec cascade
+router.delete('/:id', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    // Briser les références auto-référentielles (parentSessionId) avant suppression
+    await db('Session').where({ projectId: req.params.id }).update({ parentSessionId: null });
+
+    // Supprimer toutes les sessions du projet
+    await db('Session').where({ projectId: req.params.id }).delete();
+
+    // Supprimer le projet
+    await db('Project').where({ id: req.params.id }).delete();
+
+    res.json({ message: 'Projet supprimé' });
+  } catch (err) {
+    console.error('[projects/:id DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // DELETE /api/projects/:id/context — réinitialiser la mémoire (admin uniquement)
 router.delete('/:id/context', async (req, res) => {
   if (req.user.role !== 'admin') {
