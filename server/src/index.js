@@ -19,9 +19,10 @@ app.use(cors({
 app.use(express.json());
 
 // ── API routes ────────────────────────────────────────────────────────────────
-app.use('/api/auth',                       require('./routes/auth'));
-app.use('/api/admin',                      require('./routes/admin'));
-app.use('/api/projects',                   require('./routes/projects'));
+app.use('/api/auth',                         require('./routes/auth'));
+app.use('/api/admin',                        require('./routes/admin'));
+app.use('/api/agents',                       require('./routes/agents'));
+app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
 
 app.get('/api/health', (req, res) => {
