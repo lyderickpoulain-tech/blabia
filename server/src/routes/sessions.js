@@ -240,16 +240,23 @@ async function extractPlanSuggestions(summaryText) {
         role: 'user',
         content: `À partir de cette restitution, extrais les jalons et tâches en JSON.
 
+Pour chaque jalon, détermine aussi son type parmi :
+- "meeting" : réunion de réflexion, analyse, décision ou bilan de projet
+- "technical" : développement, implémentation de code, configuration technique
+- "stack_check" : vérification ou validation d'outils, de l'environnement technique
+- "milestone" : livraison, lancement, validation externe, jalon de progression
+
 Retourne UNIQUEMENT ce JSON valide :
 {
   "milestones": [
-    { "title": "...", "description": "...", "todos": [{ "title": "...", "priority": "high" }] }
+    { "title": "...", "description": "...", "type": "meeting", "todos": [{ "title": "...", "priority": "high" }] }
   ],
   "standalone_todos": [{ "title": "...", "priority": "medium" }]
 }
 
 Si aucun jalon ni tâche identifiable, retourne {"milestones":[],"standalone_todos":[]}.
 Priorités possibles : low, medium, high.
+Types de jalons : meeting, technical, stack_check, milestone.
 
 Restitution :
 ${summaryText.substring(0, 4000)}`

@@ -331,7 +331,8 @@ export default function NewSession() {
       await api.post(`/projects/${projectId}/plan/bulk`, {
         milestones:       selMilestones,
         standalone_todos: selStandalone,
-        sessionId:        session?.id
+        sessionId:        session?.id,
+        sourceSessionId:  session?.id   // traçabilité : session qui a généré ces jalons
       });
       setAddedToPlan(true);
       setPlanSuggestions(null);

@@ -86,16 +86,18 @@ model Milestone {
   title        String
   description  String?
   dueDate      DateTime?
-  status        String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
-  type          String     @default("meeting") // "meeting" | "technical" | "stack_check" | "milestone"
-  checklistData Json?      // { items: [{ id, label, category, checked, notes }] }
-  displayOrder  Int        @default(0)
+  status              String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
+  type                String     @default("meeting") // "meeting" | "technical" | "stack_check" | "milestone"
+  checklistData       Json?      // { items: [{ id, label, category, checked, notes }] }
+  createdFromSessionId String?
+  displayOrder        Int        @default(0)
   createdAt    DateTime   @default(now())
   createdBy    String?
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator      User?      @relation("MilestoneCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  todos        TodoItem[]
-  sessions     Session[]  @relation("SessionMilestone")
+  todos              TodoItem[]
+  sessions           Session[]  @relation("SessionMilestone")
+  createdFromSession Session?   @relation("MilestoneSource", fields: [createdFromSessionId], references: [id], onDelete: SetNull)
 }
 
 model TodoItem {
@@ -153,5 +155,6 @@ model Session {
   parentSessionId String?
   parentSession   Session?  @relation("SessionContinuation", fields: [parentSessionId], references: [id])
   continuations   Session[] @relation("SessionContinuation")
-  milestone       Milestone? @relation("SessionMilestone", fields: [milestoneId], references: [id], onDelete: SetNull)
+  milestone         Milestone? @relation("SessionMilestone", fields: [milestoneId], references: [id], onDelete: SetNull)
+  sourcedMilestones Milestone[] @relation("MilestoneSource")
 }

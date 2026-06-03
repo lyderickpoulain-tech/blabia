@@ -401,7 +401,7 @@ router.delete('/:id/todos/:tid', async (req, res) => {
 // ── POST /api/projects/:id/plan/bulk — lot de jalons+todos depuis suggestion session ──
 
 router.post('/:id/plan/bulk', async (req, res) => {
-  const { milestones = [], standalone_todos = [], sessionId } = req.body;
+  const { milestones = [], standalone_todos = [], sessionId, sourceSessionId } = req.body;
   const isAdmin = req.user.role === 'admin';
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
@@ -424,6 +424,7 @@ router.post('/:id/plan/bulk', async (req, res) => {
           status: 'pending',
           type: VALID_TYPES.includes(mData.type) ? mData.type : 'meeting',
           displayOrder: milestoneOrder++,
+          createdFromSessionId: sourceSessionId || null,
           createdAt: new Date(), createdBy: req.user.id
         })
         .returning(['id']);
