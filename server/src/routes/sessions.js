@@ -448,6 +448,7 @@ router.post('/:sessionId/run', async (req, res) => {
   let session;
   let projectContext = null;
   let parentExchangesBlock = '';
+  let stackLines = [];
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -465,7 +466,7 @@ router.post('/:sessionId/run', async (req, res) => {
       ? (typeof project.techStack === 'string' ? JSON.parse(project.techStack) : project.techStack)
       : null;
     const effectiveStack = projectStack ?? userStack;
-    const stackLines = formatTechStack(effectiveStack);
+    stackLines = formatTechStack(effectiveStack);
 
     // ── 2.2 : Contexte projet tronqué (~2000 tokens) sauf si fullContext ──────
     const CONTEXT_MAX_CHARS = 8000;
