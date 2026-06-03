@@ -230,6 +230,7 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
   const abortRef             = useRef(null);
   const currentAgentIdRef    = useRef(null);
   const currentQuestionIdRef = useRef(null);
+  const streamCompletedRef   = useRef(false);
 
   const isRealtime     = session.mode === 'realtime';
   const isConversation = session.mode === 'conversation';
@@ -246,6 +247,7 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
   }, []);
 
   async function run(humanInputText = null) {
+    streamCompletedRef.current = false;
     setError('');
     setTurnComplete(false);
     const token = localStorage.getItem('token');
@@ -282,6 +284,13 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
           if (!line.startsWith('data: ')) continue;
           try { dispatch(JSON.parse(line.slice(6))); } catch {}
         }
+      }
+
+      // Stream fermé sans événement terminal (timeout Railway, coupure réseau, erreur Anthropic non transmise)
+      if (!streamCompletedRef.current) {
+        setError('La connexion a été interrompue avant la fin de la session. Consultez les logs Railway pour le détail, puis relancez.');
+        setActiveAgent(null);
+        setStreamingText('');
       }
     } catch (err) {
       if (err.name !== 'AbortError') setError('Connexion interrompue : ' + err.message);
@@ -360,6 +369,7 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
         onPlanSuggestions?.({ milestones: ev.milestones || [], standalone_todos: ev.standalone_todos || [] });
         break;
       case 'summary_done':
+        streamCompletedRef.current = true;
         setLiveTimeline(prev => prev.map(e => e.id === 'syn' ? { ...e, status: 'done' } : e));
         setActiveAgent(null);
         setStreamingText('');
@@ -375,6 +385,7 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
         }]);
         break;
       case 'turn_complete':
+        streamCompletedRef.current = true;
         setTurnComplete(true);
         setCurrentTurn(ev.turn + 1);
         setActiveAgent(null);

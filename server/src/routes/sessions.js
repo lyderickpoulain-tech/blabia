@@ -511,11 +511,17 @@ router.post('/:sessionId/run', async (req, res) => {
 
   // Nettoyage si le client se déconnecte
   req.on('close', () => {
+    clearInterval(heartbeatInterval);
     const pending = pendingQuestions.get(sessionId);
     if (pending) pending.reject(new Error('Client déconnecté'));
   });
 
   send('connected', { sessionId });
+
+  // Heartbeat toutes les 20s — empêche le proxy Railway de couper les connexions longues (Opus)
+  const heartbeatInterval = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch { clearInterval(heartbeatInterval); }
+  }, 20000);
 
   const isConversation = session.mode === 'conversation';
   const isAdditionalPrompt = session.status === 'complete' && !!humanInput?.trim();
@@ -787,13 +793,14 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
     }
 
   } catch (err) {
-    console.error('[sessions/run]', err.message);
+    console.error('[sessions/run] modèle=%s mode=%s erreur=%s', session.model, session.mode, err.message);
     try {
       send('error', { message: `Erreur d'orchestration : ${err.message}` });
       await saveSession(sessionId, exchanges, null, 'interrupted');
     } catch {}
     res.end();
   } finally {
+    clearInterval(heartbeatInterval);
     pendingQuestions.delete(sessionId);
   }
 });
