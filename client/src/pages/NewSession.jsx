@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import ProjectLayout from '../components/ProjectLayout';
+import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import SessionRunner from '../components/SessionRunner';
 import ExportModal from '../components/ExportModal';
 import api from '../utils/api';
@@ -105,6 +105,7 @@ export default function NewSession() {
   const navigate = useNavigate();
   const parentSessionId = location.state?.parentSessionId || null;
   const initialTask     = location.state?.initialTask     || '';
+  const milestoneId     = location.state?.milestoneId     || null;
 
   const [phase, setPhase]                 = useState('input');
   const [task, setTask]                   = useState(initialTask);
@@ -128,11 +129,13 @@ export default function NewSession() {
   const [selectedSugg, setSelectedSugg]           = useState(new Set());
   const [addingToPlan, setAddingToPlan]           = useState(false);
   const [addedToPlan, setAddedToPlan]             = useState(false);
+  const { refreshPanel } = useProjectPanel();
 
   // ── Construit le payload de base pour toutes les requêtes de session ──────
   const basePayload = () => {
     const p = { task: task.trim(), mode, model, fullContext };
     if (parentSessionId) p.parentSessionId = parentSessionId;
+    if (milestoneId)     p.milestoneId     = milestoneId;
     return p;
   };
 
@@ -150,6 +153,7 @@ export default function NewSession() {
         setSession(data.session);
         setPlan(data.plan);
         setPhase('formed');
+        if (milestoneId) refreshPanel(); // Le milestone vient de passer in_progress
       }
     } catch (err) {
       setError(err.response?.data?.error || "Erreur lors de la formation de l'équipe");

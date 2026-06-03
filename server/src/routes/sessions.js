@@ -271,6 +271,7 @@ router.post('/', async (req, res) => {
     task,
     mode = 'realtime',
     parentSessionId = null,
+    milestoneId = null,
     model: modelParam,
     fullContext: fullContextParam = false,
     forceNew = false,
@@ -417,11 +418,19 @@ Tâche : ${task.trim()}`
         fullContext: fullContextEnabled,
         projectId,
         parentSessionId: parentSessionId || null,
+        milestoneId:     milestoneId     || null,
         createdAt: now
       })
-      .returning(['id', 'task', 'agents', 'exchanges', 'status', 'mode', 'model', 'createdAt', 'projectId', 'parentSessionId']);
+      .returning(['id', 'task', 'agents', 'exchanges', 'status', 'mode', 'model', 'createdAt', 'projectId', 'parentSessionId', 'milestoneId']);
 
     await db('Project').where({ id: projectId }).update({ updatedAt: now });
+
+    // Lier le jalon et passer son statut à in_progress
+    if (milestoneId) {
+      try {
+        await db('Milestone').where({ id: milestoneId, projectId }).update({ status: 'in_progress' });
+      } catch {}
+    }
 
     res.status(201).json({
       session: {
@@ -779,6 +788,16 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
       updateProjectContext(projectId, session.task, summaryText);
       extractSuggestedTools(sessionId, summaryText);
 
+      // Mise à jour du statut du jalon lié
+      if (session.milestoneId) {
+        try {
+          // hasCode → in_progress (en attente implémentation), sinon done
+          await db('Milestone').where({ id: session.milestoneId }).update({
+            status: summaryHasCode ? 'in_progress' : 'done'
+          });
+        } catch {}
+      }
+
       send('complete', { sessionId });
 
       // Extraction jalons/tâches pour suggestions plan (async in-stream)
@@ -888,6 +907,15 @@ router.post('/:sessionId/synthesize', async (req, res) => {
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
     updateProjectContext(projectId, session.task, summaryText);
     extractSuggestedTools(sessionId, summaryText);
+
+    // Mise à jour du statut du jalon lié (mode conversation)
+    if (session.milestoneId) {
+      try {
+        await db('Milestone').where({ id: session.milestoneId }).update({
+          status: convHasCode ? 'in_progress' : 'done'
+        });
+      } catch {}
+    }
 
     // Suggestions plan (async in-stream)
     try {
@@ -1045,6 +1073,15 @@ router.patch('/:sessionId/code-status', async (req, res) => {
     if (!session) return res.status(404).json({ error: 'Session introuvable' });
 
     await db('Session').where({ id: sessionId }).update({ codeStatus: status });
+
+    // Mettre à jour le statut du jalon lié à cette session
+    if (session.milestoneId) {
+      try {
+        await db('Milestone').where({ id: session.milestoneId }).update({
+          status: status === 'implemented' ? 'done' : 'blocked'
+        });
+      } catch {}
+    }
 
     // Si code non généré, recalculer les jalons liés aux todos de cette session
     if (status === 'not_generated') {

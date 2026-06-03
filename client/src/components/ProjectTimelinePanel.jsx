@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import ExportModal from './ExportModal';
 
-// ── Icônes et statuts ──────────────────────────────────────────────────────────
+// ── Configs ────────────────────────────────────────────────────────────────────
 const TYPE_ICON = {
   meeting:     '🤝',
   technical:   '💻',
@@ -18,12 +20,72 @@ const STATUS_DOT = {
   blocked:     { cls: 'bg-red-400',   label: 'Bloqué' },
 };
 
+const STATUS_OPTS = ['pending', 'in_progress', 'done', 'blocked'];
+const STATUS_LABELS = { pending: 'Pas commencé', in_progress: 'En cours', done: 'Terminé', blocked: 'Bloqué' };
+
 function trunc(str, n = 28) {
   return str && str.length > n ? str.slice(0, n) + '…' : (str || '');
 }
 
-// ── Contenu partagé desktop / mobile ──────────────────────────────────────────
-function PanelBody({ milestones, loading, showAdd, setShowAdd, onAdd }) {
+// ── Drawer inline pour type 'milestone' (détail + statut) ─────────────────────
+function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh }) {
+  const [status, setStatus] = useState(milestone.status);
+  const [saving, setSaving] = useState(false);
+
+  const changeStatus = async (s) => {
+    setStatus(s);
+    setSaving(true);
+    try {
+      await api.patch(`/projects/${projectId}/milestones/${milestone.id}`, { status: s });
+      onRefresh();
+    } catch {}
+    setSaving(false);
+  };
+
+  return (
+    <div className="absolute inset-0 bg-white z-10 flex flex-col rounded-r-xl">
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-100 shrink-0">
+        <button onClick={onClose}
+          className="text-gray-400 hover:text-gray-700 text-base leading-none font-bold">←</button>
+        <span className="text-xs font-semibold text-gray-700 flex-1 min-w-0 truncate">
+          🎯 {trunc(milestone.title, 22)}
+        </span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {milestone.description ? (
+          <p className="text-xs text-gray-600 leading-relaxed">{milestone.description}</p>
+        ) : (
+          <p className="text-xs text-gray-300 italic">Aucune description</p>
+        )}
+        <div>
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
+            Statut
+          </label>
+          <select value={status} onChange={e => changeStatus(e.target.value)} disabled={saving}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            {STATUS_OPTS.map(s => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+        </div>
+        {milestone.dueDate && (
+          <p className="text-xs text-gray-400">
+            Échéance : {new Date(milestone.dueDate).toLocaleDateString('fr-FR', {
+              day: '2-digit', month: 'short', year: 'numeric'
+            })}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Corps partagé desktop / mobile ─────────────────────────────────────────────
+function PanelBody({
+  projectId, milestones, milestoneSessions,
+  loading, showAdd, setShowAdd, onAdd, onMilestoneClick,
+  detailMilestone, setDetailMilestone, onRefresh,
+}) {
   const [title, setTitle]   = useState('');
   const [type, setType]     = useState('meeting');
   const [saving, setSaving] = useState(false);
@@ -40,7 +102,17 @@ function PanelBody({ milestones, loading, showAdd, setShowAdd, onAdd }) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {/* Drawer détail (type milestone) */}
+      {detailMilestone && (
+        <MilestoneDetailDrawer
+          milestone={detailMilestone}
+          projectId={projectId}
+          onClose={() => setDetailMilestone(null)}
+          onRefresh={onRefresh}
+        />
+      )}
+
       {/* Liste des étapes */}
       <div className="flex-1 overflow-y-auto py-1 px-1">
         {loading ? (
@@ -51,49 +123,47 @@ function PanelBody({ milestones, loading, showAdd, setShowAdd, onAdd }) {
           <p className="text-xs text-gray-400 text-center py-8 px-3">
             Aucune étape —<br />commencez par en créer une
           </p>
-        ) : (
-          milestones.map(m => {
-            const sd = STATUS_DOT[m.status] || STATUS_DOT.pending;
-            return (
-              <div key={m.id}
-                className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition group"
-                title={m.title}
-              >
-                <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🎯'}</span>
-                <span className="text-xs text-gray-700 flex-1 min-w-0 truncate leading-snug">
-                  {trunc(m.title)}
-                </span>
-                <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`}
-                  title={sd.label}
-                />
-              </div>
-            );
-          })
-        )}
+        ) : milestones.map(m => {
+          const sd     = STATUS_DOT[m.status] || STATUS_DOT.pending;
+          const linked = milestoneSessions[m.id];
+          return (
+            <div key={m.id}
+              onClick={() => onMilestoneClick(m, linked)}
+              className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none"
+              title={m.title}
+            >
+              <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🎯'}</span>
+              <span className="text-xs text-gray-700 flex-1 min-w-0 truncate leading-snug">
+                {trunc(m.title)}
+              </span>
+              {/* Indicateur session liée */}
+              {linked && (
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-300 shrink-0" title="Session liée" />
+              )}
+              {/* Dot statut */}
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`}
+                title={sd.label}
+              />
+            </div>
+          );
+        })}
       </div>
 
-      {/* Bouton / formulaire "Ajouter une étape" */}
+      {/* Bouton / formulaire "+ Ajouter une étape" */}
       <div className="shrink-0 border-t border-gray-100 px-2 py-2">
         {showAdd ? (
           <form onSubmit={handleSubmit} className="space-y-1.5">
-            <input
-              autoFocus
-              type="text"
-              value={title}
+            <input autoFocus type="text" value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="Titre de l'étape…"
               className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400 bg-white"
             />
-            {/* Sélecteur de type — icônes compactes */}
             <div className="flex gap-1">
               {TYPES.map(t => (
-                <button key={t} type="button" onClick={() => setType(t)}
-                  title={t}
+                <button key={t} type="button" onClick={() => setType(t)} title={t}
                   className={`flex-1 text-sm py-1 rounded-lg border transition ${
-                    type === t
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+                    type === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
                   }`}>
                   {TYPE_ICON[t]}
                 </button>
@@ -124,11 +194,16 @@ function PanelBody({ milestones, loading, showAdd, setShowAdd, onAdd }) {
 
 // ── Composant principal ────────────────────────────────────────────────────────
 export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
-  const [isOpen, setIsOpen]         = useState(true);
-  const [milestones, setMilestones] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [showAdd, setShowAdd]       = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const [isOpen, setIsOpen]                     = useState(true);
+  const [milestones, setMilestones]             = useState([]);
+  const [milestoneSessions, setMilestoneSessions] = useState({});
+  const [loading, setLoading]                   = useState(true);
+  const [showAdd, setShowAdd]                   = useState(false);
+  const [mobileOpen, setMobileOpen]             = useState(false);
+  const [exportSession, setExportSession]       = useState(null);   // ExportModal
+  const [detailMilestone, setDetailMilestone]   = useState(null);   // drawer 'milestone' type
 
   const loadMilestones = useCallback(async () => {
     if (!projectId) return;
@@ -136,6 +211,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     try {
       const { data } = await api.get(`/projects/${projectId}/plan`);
       setMilestones(data.milestones || []);
+      setMilestoneSessions(data.milestoneSessions || {});
     } catch {}
     setLoading(false);
   }, [projectId]);
@@ -149,24 +225,65 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     } catch {}
   };
 
-  // ── Desktop ──────────────────────────────────────────────────────────────────
+  // ── Comportement au clic selon le type ──────────────────────────────────────
+  const handleMilestoneClick = (m, linked) => {
+    switch (m.type) {
+      case 'meeting':
+        if (linked) {
+          navigate(`/projects/${projectId}/session/${linked.id}`);
+        } else {
+          navigate(`/projects/${projectId}/session/new`, {
+            state: { milestoneId: m.id, initialTask: m.title }
+          });
+        }
+        break;
+
+      case 'technical':
+        if (linked?.hasCode && linked?.summary) {
+          setExportSession(linked);
+        } else {
+          navigate(`/projects/${projectId}/session/new`, {
+            state: { milestoneId: m.id, initialTask: `Implémenter : ${m.title}` }
+          });
+        }
+        break;
+
+      case 'stack_check':
+        // Évolution 4 — StackCheckModal à venir
+        alert('Vérification stack — disponible en Évolution 4');
+        break;
+
+      case 'milestone':
+        setDetailMilestone(m);
+        break;
+
+      default: break;
+    }
+  };
+
+  const panelBodyProps = {
+    projectId, milestones, milestoneSessions,
+    loading, showAdd, setShowAdd,
+    onAdd: handleAdd,
+    onMilestoneClick: handleMilestoneClick,
+    detailMilestone, setDetailMilestone,
+    onRefresh: loadMilestones,
+  };
+
   return (
     <>
+      {/* ── Desktop ─────────────────────────────────────────────────────── */}
       <div className="hidden lg:flex items-start shrink-0 sticky top-6 self-start">
-        {/* Bouton toggle sur le bord gauche du panel */}
-        <button
-          onClick={() => setIsOpen(p => !p)}
+        {/* Bouton toggle sur le bord gauche */}
+        <button onClick={() => setIsOpen(p => !p)}
           title={isOpen ? 'Fermer le panel' : 'Ouvrir le panel'}
-          className="flex items-center justify-center w-5 h-8 bg-white border border-gray-200 rounded-l-lg shadow-sm text-gray-400 hover:text-blue-500 text-xs transition shrink-0 mt-2"
-        >
+          className="flex items-center justify-center w-5 h-8 bg-white border border-gray-200 rounded-l-lg shadow-sm text-gray-400 hover:text-blue-500 text-xs transition shrink-0 mt-2">
           {isOpen ? '›' : '‹'}
         </button>
 
-        {/* Panel */}
         <div className={`transition-all duration-300 overflow-hidden ${isOpen ? 'w-64' : 'w-0'}`}>
           <div className="w-64 bg-white border border-gray-200 border-l-0 rounded-r-xl shadow-sm"
                style={{ minHeight: '320px', maxHeight: 'calc(100vh - 120px)' }}>
-            {/* En-tête */}
             <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-100">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">
                 ⏱ Timeline
@@ -174,24 +291,16 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               <span className="text-xs text-gray-400">{milestones.length}</span>
             </div>
             <div style={{ height: 'calc(100vh - 120px - 44px)', display: 'flex', flexDirection: 'column' }}>
-              <PanelBody
-                milestones={milestones}
-                loading={loading}
-                showAdd={showAdd}
-                setShowAdd={setShowAdd}
-                onAdd={handleAdd}
-              />
+              <PanelBody {...panelBodyProps} />
             </div>
           </div>
         </div>
       </div>
 
       {/* ── Mobile : bouton flottant ─────────────────────────────────────── */}
-      <button
-        onClick={() => setMobileOpen(true)}
+      <button onClick={() => setMobileOpen(true)}
         className="lg:hidden fixed bottom-6 right-6 z-40 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center text-lg transition"
-        title="Timeline du projet"
-      >
+        title="Timeline du projet">
         ⏱
       </button>
 
@@ -207,19 +316,20 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
                 ×
               </button>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <PanelBody
-                  milestones={milestones}
-                  loading={loading}
-                  showAdd={showAdd}
-                  setShowAdd={setShowAdd}
-                  onAdd={handleAdd}
-                />
-              </div>
+            <div className="flex-1 overflow-hidden relative">
+              <PanelBody {...panelBodyProps} />
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── ExportModal (type technical avec session hasCode) ────────────── */}
+      {exportSession && (
+        <ExportModal
+          summary={exportSession.summary}
+          projectId={projectId}
+          onClose={() => setExportSession(null)}
+        />
       )}
     </>
   );

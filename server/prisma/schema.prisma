@@ -94,6 +94,7 @@ model Milestone {
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator      User?      @relation("MilestoneCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   todos        TodoItem[]
+  sessions     Session[]  @relation("SessionMilestone")
 }
 
 model TodoItem {
@@ -143,6 +144,7 @@ model Session {
   suggestedTools  Json?     // { suggestedTools: string[], missingTools: string[] }
   planSuggestions Json?     // { milestones: [...], standalone_todos: [...] }
   timeline        Json      @default("[]") // [ { id, type, label, status, timestamp, meta } ]
+  milestoneId     String?
   todos           TodoItem[]
   createdAt       DateTime  @default(now())
   projectId       String
@@ -150,4 +152,5 @@ model Session {
   parentSessionId String?
   parentSession   Session?  @relation("SessionContinuation", fields: [parentSessionId], references: [id])
   continuations   Session[] @relation("SessionContinuation")
+  milestone       Milestone? @relation("SessionMilestone", fields: [milestoneId], references: [id], onDelete: SetNull)
 }

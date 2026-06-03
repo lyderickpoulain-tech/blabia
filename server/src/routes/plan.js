@@ -50,7 +50,19 @@ router.get('/:id/plan', async (req, res) => {
         .orderBy([{ column: 'milestoneId', order: 'asc', nulls: 'last' }, { column: 'displayOrder', order: 'asc' }])
     ]);
 
-    res.json({ milestones, todos });
+    // Sessions liées aux jalons — une par jalon (la plus récente)
+    let milestoneSessions = {};
+    if (milestones.length > 0) {
+      const linkedSessions = await db('Session')
+        .select(['id', 'milestoneId', 'status', 'hasCode', 'codeStatus', 'task', 'summary'])
+        .whereIn('milestoneId', milestones.map(m => m.id))
+        .orderBy('createdAt', 'desc');
+      for (const s of linkedSessions) {
+        if (!milestoneSessions[s.milestoneId]) milestoneSessions[s.milestoneId] = s;
+      }
+    }
+
+    res.json({ milestones, todos, milestoneSessions });
   } catch (err) {
     console.error('[plan GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -149,6 +161,24 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('[milestones/:mid PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/projects/:id/milestones/:mid — jalon unique (breadcrumb, panel)
+router.get('/:id/milestones/:mid', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [milestone] = await db('Milestone')
+      .select(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder'])
+      .where({ id: req.params.mid, projectId: req.params.id })
+      .limit(1);
+    if (!milestone) return res.status(404).json({ error: 'Jalon introuvable' });
+    res.json(milestone);
+  } catch (err) {
+    console.error('[milestones/:mid GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

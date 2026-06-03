@@ -199,6 +199,7 @@ export default function SessionView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [session, setSession]                 = useState(null);
+  const [milestone, setMilestone]             = useState(null);
   const [loading, setLoading]                 = useState(true);
   const [activeTab, setActiveTab]             = useState('restitution');
   const [timeline, setTimeline]               = useState([]);
@@ -213,9 +214,15 @@ export default function SessionView() {
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         setSession(data);
         setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
+        if (data.milestoneId) {
+          try {
+            const { data: ms } = await api.get(`/projects/${projectId}/milestones/${data.milestoneId}`);
+            setMilestone(ms);
+          } catch {}
+        }
       })
       .catch(() => navigate(`/projects/${projectId}`))
       .finally(() => setLoading(false));
@@ -295,10 +302,21 @@ export default function SessionView() {
     <ProjectLayout projectId={projectId}>
       <div className="max-w-2xl mx-auto space-y-4">
 
-        {/* Navigation */}
-        <Link to={`/projects/${projectId}`} className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700">
-          ← Retour au projet
-        </Link>
+        {/* Navigation / breadcrumb */}
+        {milestone ? (
+          <div className="flex items-center gap-1.5 text-sm text-gray-500 flex-wrap">
+            <Link to={`/projects/${projectId}`} className="hover:text-gray-700 transition">← Projet</Link>
+            <span className="text-gray-300">/</span>
+            <span className="font-medium text-gray-700 truncate max-w-xs">
+              {({ meeting: '🤝', technical: '💻', stack_check: '🔧', milestone: '🎯' })[milestone.type] || '🎯'}
+              {' '}{milestone.title}
+            </span>
+          </div>
+        ) : (
+          <Link to={`/projects/${projectId}`} className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700">
+            ← Retour au projet
+          </Link>
+        )}
 
         {/* Carte principale : en-tête + onglets + contenu */}
         <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isComplete ? 'border-gray-200' : 'border-orange-200'}`}>
