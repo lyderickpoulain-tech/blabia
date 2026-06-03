@@ -519,10 +519,10 @@ router.post('/:sessionId/run', async (req, res) => {
 
   send('connected', { sessionId });
 
-  // Heartbeat toutes les 20s — empêche le proxy Railway de couper les connexions longues (Opus)
+  // Keep-alive toutes les 15s — empêche le proxy Railway de couper les connexions longues (Opus)
   const heartbeatInterval = setInterval(() => {
-    try { res.write(': ping\n\n'); } catch { clearInterval(heartbeatInterval); }
-  }, 20000);
+    try { res.write(': keep-alive\n\n'); } catch { clearInterval(heartbeatInterval); }
+  }, 15000);
 
   const isConversation = session.mode === 'conversation';
   const isAdditionalPrompt = session.status === 'complete' && !!humanInput?.trim();
@@ -837,6 +837,12 @@ router.post('/:sessionId/synthesize', async (req, res) => {
     try { res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); } catch {}
   };
 
+  // Keep-alive toutes les 15s — synthèse Opus peut dépasser le timeout Railway
+  const synthHeartbeat = setInterval(() => {
+    try { res.write(': keep-alive\n\n'); } catch { clearInterval(synthHeartbeat); }
+  }, 15000);
+  req.on('close', () => clearInterval(synthHeartbeat));
+
   const exchanges = typeof session.exchanges === 'string' ? JSON.parse(session.exchanges) : session.exchanges;
 
   try {
@@ -892,10 +898,12 @@ router.post('/:sessionId/synthesize', async (req, res) => {
       }
     } catch {}
 
+    clearInterval(synthHeartbeat);
     res.end();
   } catch (err) {
     console.error('[sessions/synthesize]', err.message);
     try { send('error', { message: `Erreur de synthèse : ${err.message}` }); } catch {}
+    clearInterval(synthHeartbeat);
     res.end();
   }
 });
