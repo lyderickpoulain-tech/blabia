@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
+import { getPricing, PRICING_CONFIG } from '../utils/techStack';
 
 const CATEGORIES = [
   {
@@ -103,7 +104,14 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
               onChange={() => onToggle(category.id, option)}
               className="w-3.5 h-3.5 accent-blue-600 shrink-0"
             />
-            <span className="text-xs font-medium leading-snug">{option}</span>
+            <span className="text-xs font-medium leading-snug flex-1">{option}</span>
+            {(() => {
+              const p = getPricing(option);
+              const cfg = p && PRICING_CONFIG[p];
+              return cfg ? (
+                <span className={`text-xs px-1 py-0.5 rounded font-medium shrink-0 ${cfg.color}`}>{cfg.dot}</span>
+              ) : null;
+            })()}
           </label>
         ))}
 

@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { getPricing, PRICING_CONFIG } from '../utils/techStack';
 
 // ── Définition des catégories de stack (idem EnvironmentPage) ─────────────────
 const CATEGORIES = [
@@ -37,7 +38,12 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
             selected.includes(option) ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
           }`}>
             <input type="checkbox" checked={selected.includes(option)} onChange={() => onToggle(category.id, option)} className="w-3 h-3 accent-blue-600 shrink-0" />
-            {option}
+            <span className="flex-1 truncate">{option}</span>
+            {(() => {
+              const p = getPricing(option);
+              const cfg = p && PRICING_CONFIG[p];
+              return cfg ? <span className={`text-xs px-1 py-0.5 rounded shrink-0 ${cfg.color}`}>{cfg.dot}</span> : null;
+            })()}
           </label>
         ))}
         {category.hasAutre && (
@@ -121,6 +127,89 @@ function RenameModal({ project, onSave, onClose }) {
               Annuler
             </button>
             <button type="submit" disabled={loading || !name.trim()}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50">
+              {loading ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function parseBriefFields(brief) {
+  const objectif = brief?.match(/OBJECTIF\s*:\s*([\s\S]*?)(?=\n\nCONTEXTE|\n\nNOTES|$)/)?.[1]?.trim() || '';
+  const contexte = brief?.match(/CONTEXTE\s*:\s*([\s\S]*?)(?=\n\nOBJECTIF|\n\nNOTES|$)/)?.[1]?.trim() || '';
+  const notes    = brief?.match(/NOTES\s*:\s*([\s\S]*?)(?=\n\nOBJECTIF|\n\nCONTEXTE|$)/)?.[1]?.trim() || '';
+  return { objectif, contexte, notes };
+}
+
+function BriefModal({ project, onSave, onClose }) {
+  const { objectif: initObj, contexte: initCtx, notes: initNotes } = parseBriefFields(project.brief);
+  const [objectif, setObjectif] = useState(initObj);
+  const [contexte, setContexte] = useState(initCtx);
+  const [notes, setNotes]       = useState(initNotes);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.patch(`/projects/${project.id}/brief`, { objectif, contexte, notes });
+      onSave(data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erreur lors de la modification');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Modifier le brief projet</h2>
+        <p className="text-xs text-gray-400 mb-5">Transmis aux agents dès le début de chaque session</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Objectif principal</label>
+            <textarea
+              value={objectif}
+              onChange={e => setObjectif(e.target.value)}
+              rows={3}
+              placeholder="Quel est l'objectif de ce projet ? Que cherchez-vous à accomplir ?"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contexte</label>
+            <textarea
+              value={contexte}
+              onChange={e => setContexte(e.target.value)}
+              rows={3}
+              placeholder="Quel est le contexte ? Qui sont les utilisateurs ? Quelles contraintes ?"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes initiales</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Idées, inspirations, références, contraintes techniques…"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-sm"
+            />
+          </div>
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+          )}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+              Annuler
+            </button>
+            <button type="submit" disabled={loading}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50">
               {loading ? 'Enregistrement…' : 'Enregistrer'}
             </button>
@@ -293,6 +382,8 @@ export default function ProjectView() {
   const [sessions, setSessions]         = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [showRename, setShowRename]     = useState(false);
+  const [showBrief, setShowBrief]       = useState(false);
+  const [briefExpanded, setBriefExpanded] = useState(false);
   const [archiving, setArchiving]       = useState(false);
   const [memoryOpen, setMemoryOpen]     = useState(false);
   const [resettingMemory, setResettingMemory] = useState(false);
@@ -593,6 +684,31 @@ export default function ProjectView() {
             </div>
             {project.description && (
               <p className="text-gray-500 text-sm mt-1">{project.description}</p>
+            )}
+            {project.brief && (
+              <div className="mt-2">
+                <p className="text-xs text-gray-500 leading-relaxed line-clamp-2" style={briefExpanded ? { WebkitLineClamp: 'unset' } : {}}>
+                  {project.brief}
+                </p>
+                <div className="flex items-center gap-3 mt-1">
+                  <button onClick={() => setBriefExpanded(v => !v)}
+                    className="text-xs text-blue-500 hover:text-blue-700 font-medium transition">
+                    {briefExpanded ? 'Réduire' : 'Voir tout'}
+                  </button>
+                  {(isAdmin || project.userId === user?.id) && (
+                    <button onClick={() => setShowBrief(true)}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition">
+                      Modifier le brief
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {!project.brief && (isAdmin || project.userId === user?.id) && (
+              <button onClick={() => setShowBrief(true)}
+                className="mt-1 text-xs text-gray-400 hover:text-blue-500 transition">
+                + Ajouter un brief projet
+              </button>
             )}
             <p className="text-xs text-gray-400 mt-2">
               {project.sessionCount ?? 0} session{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · Créé le {new Date(project.createdAt).toLocaleDateString('fr-FR')}
@@ -1038,6 +1154,13 @@ export default function ProjectView() {
           project={project}
           onSave={updated => { setProject(prev => ({ ...prev, ...updated })); setShowRename(false); }}
           onClose={() => setShowRename(false)}
+        />
+      )}
+      {showBrief && (
+        <BriefModal
+          project={project}
+          onSave={updated => { setProject(prev => ({ ...prev, ...updated })); setShowBrief(false); }}
+          onClose={() => setShowBrief(false)}
         />
       )}
       {showDelete && (

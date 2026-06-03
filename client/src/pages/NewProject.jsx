@@ -6,6 +6,9 @@ import api from '../utils/api';
 export default function NewProject() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [objectif, setObjectif] = useState('');
+  const [contexte, setContexte] = useState('');
+  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -15,7 +18,7 @@ export default function NewProject() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/projects', { name, description });
+      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes });
       navigate(`/projects/${data.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
@@ -59,10 +62,58 @@ export default function NewProject() {
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 placeholder="Quelques mots sur le contexte de ce projet…"
-                rows={3}
+                rows={2}
                 maxLength={500}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
               />
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Brief projet</p>
+              <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+                Ce brief est transmis aux agents dès la première session — ils arrivent avec ce contexte dès le départ.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Objectif principal <span className="text-gray-400 font-normal">(optionnel)</span>
+                  </label>
+                  <textarea
+                    value={objectif}
+                    onChange={e => setObjectif(e.target.value)}
+                    placeholder="Quel est l'objectif de ce projet ? Que cherchez-vous à accomplir ?"
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contexte <span className="text-gray-400 font-normal">(optionnel)</span>
+                  </label>
+                  <textarea
+                    value={contexte}
+                    onChange={e => setContexte(e.target.value)}
+                    placeholder="Quel est le contexte ? Qui sont les utilisateurs ? Quelles contraintes ?"
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes initiales <span className="text-gray-400 font-normal">(optionnel)</span>
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Idées, inspirations, références, contraintes techniques…"
+                    rows={2}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none text-sm"
+                  />
+                </div>
+              </div>
             </div>
 
             {error && (

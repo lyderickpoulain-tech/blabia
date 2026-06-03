@@ -126,8 +126,6 @@ export default function NewSession() {
   const [showCodeConfirm, setShowCodeConfirm]     = useState(false);
   const [savingCodeStatus, setSavingCodeStatus]   = useState(false);
   const [planSuggestions, setPlanSuggestions]     = useState(null);
-  const [selectedSugg, setSelectedSugg]           = useState(new Set());
-  const [addingToPlan, setAddingToPlan]           = useState(false);
   const [addedToPlan, setAddedToPlan]             = useState(false);
   const { refreshPanel } = useProjectPanel();
 
@@ -285,62 +283,31 @@ export default function NewSession() {
     navigate(`/projects/${projectId}`);
   };
 
-  // ── Plan suggestions : sélectionner tout par défaut ─────────────────────
-  const initSuggestions = (data) => {
-    const keys = new Set();
-    (data.milestones || []).forEach((m, mi) =>
-      (m.todos || []).forEach((_, ti) => keys.add(`m${mi}_t${ti}`))
-    );
-    (data.standalone_todos || []).forEach((_, i) => keys.add(`s${i}`));
-    setPlanSuggestions(data);
-    setSelectedSugg(keys);
-    setAddedToPlan(false);
-  };
-
-  const toggleSugg = (key) => setSelectedSugg(prev => {
-    const next = new Set(prev);
-    next.has(key) ? next.delete(key) : next.add(key);
-    return next;
-  });
-
-  const toggleAllSugg = () => {
-    if (!planSuggestions) return;
-    const allKeys = new Set();
-    planSuggestions.milestones.forEach((m, mi) =>
-      m.todos.forEach((_, ti) => allKeys.add(`m${mi}_t${ti}`))
-    );
-    planSuggestions.standalone_todos.forEach((_, i) => allKeys.add(`s${i}`));
-    setSelectedSugg(selectedSugg.size === allKeys.size ? new Set() : allKeys);
-  };
-
-  const handleAddToPlan = async () => {
-    if (addingToPlan || selectedSugg.size === 0 || !planSuggestions) return;
-    setAddingToPlan(true);
+  // ── Ajout automatique du plan sans intervention utilisateur ──────────────
+  const autoAddToPlan = async (data) => {
+    const milestones = data.milestones || [];
+    const standalone_todos = data.standalone_todos || [];
+    if (milestones.length === 0 && standalone_todos.length === 0) return;
     try {
-      const selMilestones = planSuggestions.milestones
-        .map((m, mi) => ({
-          title:       m.title,
-          description: m.description,
-          todos:       (m.todos || []).filter((_, ti) => selectedSugg.has(`m${mi}_t${ti}`))
-        }))
-        .filter(m => m.todos.length > 0);
-
-      const selStandalone = (planSuggestions.standalone_todos || [])
-        .filter((_, i) => selectedSugg.has(`s${i}`));
-
       await api.post(`/projects/${projectId}/plan/bulk`, {
-        milestones:       selMilestones,
-        standalone_todos: selStandalone,
-        sessionId:        session?.id,
-        sourceSessionId:  session?.id   // traçabilité : session qui a généré ces jalons
+        milestones,
+        standalone_todos,
+        sessionId:       session?.id,
+        sourceSessionId: session?.id
       });
+      setPlanSuggestions(data);
       setAddedToPlan(true);
-      setPlanSuggestions(null);
+      refreshPanel();
     } catch (err) {
-      console.error('[addToPlan]', err.message);
-    } finally {
-      setAddingToPlan(false);
+      console.error('[autoAddToPlan]', err.message);
     }
+  };
+
+  const initSuggestions = (data) => {
+    const milestones = data.milestones || [];
+    const standalone_todos = data.standalone_todos || [];
+    if (milestones.length === 0 && standalone_todos.length === 0) return;
+    autoAddToPlan(data);
   };
 
   // ── Export + affichage du widget de confirmation ──────────────────────────
@@ -379,7 +346,6 @@ export default function NewSession() {
     setRelaunchError('');
     setError('');
     setPlanSuggestions(null);
-    setSelectedSugg(new Set());
     setAddedToPlan(false);
   };
 
@@ -782,104 +748,33 @@ export default function NewSession() {
               </div>
             )}
 
-            {/* ── Suggestions plan ─────────────────────────────────────── */}
-            {addedToPlan && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
-                </svg>
-                Tâches ajoutées au plan du projet.
-                {session && (
-                  <a href={`/projects/${projectId}/plan`} className="ml-auto text-xs font-medium text-green-800 hover:underline">
-                    Voir le plan →
-                  </a>
+            {/* ── Plan ajouté automatiquement ──────────────────────────── */}
+            {addedToPlan && planSuggestions && (
+              <div className="bg-green-50 border border-green-200 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                  </svg>
+                  <span className="text-sm font-semibold text-green-800">Plan ajouté à la timeline</span>
+                </div>
+                {(planSuggestions.milestones || []).length > 0 && (
+                  <div className="space-y-1 pl-1">
+                    {(planSuggestions.milestones || []).map((m, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm text-green-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                        <span>{m.title}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
+                <Link
+                  to={`/projects/${projectId}/plan`}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-green-800 hover:underline"
+                >
+                  Voir le plan →
+                </Link>
               </div>
             )}
-
-            {planSuggestions && !addedToPlan && (() => {
-              const PRIO_DOT = { high: 'bg-red-500', medium: 'bg-amber-400', low: 'bg-gray-300' };
-              const totalCount = planSuggestions.milestones.reduce((a, m) => a + (m.todos?.length || 0), 0)
-                + (planSuggestions.standalone_todos?.length || 0);
-              const allKeys = new Set();
-              planSuggestions.milestones.forEach((m, mi) =>
-                (m.todos || []).forEach((_, ti) => allKeys.add(`m${mi}_t${ti}`))
-              );
-              (planSuggestions.standalone_todos || []).forEach((_, i) => allKeys.add(`s${i}`));
-              const allSelected = selectedSugg.size === allKeys.size && allKeys.size > 0;
-
-              return (
-                <div className="bg-white rounded-2xl border border-violet-200 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-violet-900 flex items-center gap-2">
-                      ✨ Tâches suggérées par les agents
-                      <span className="text-xs font-normal text-violet-400">{totalCount} éléments</span>
-                    </h3>
-                    <button onClick={toggleAllSugg}
-                      className="text-xs text-violet-600 hover:text-violet-800 font-medium transition">
-                      {allSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
-                    </button>
-                  </div>
-
-                  {/* Jalons avec tâches */}
-                  {planSuggestions.milestones.map((m, mi) => (
-                    <div key={mi} className="border border-gray-100 rounded-xl overflow-hidden">
-                      <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100">
-                        <p className="text-xs font-semibold text-gray-700">{m.title}</p>
-                        {m.description && <p className="text-xs text-gray-400 mt-0.5 leading-snug">{m.description}</p>}
-                      </div>
-                      <div className="p-2 space-y-0.5">
-                        {(m.todos || []).map((t, ti) => {
-                          const key = `m${mi}_t${ti}`;
-                          return (
-                            <label key={ti} className="flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer hover:bg-violet-50 transition">
-                              <input type="checkbox" checked={selectedSugg.has(key)} onChange={() => toggleSugg(key)}
-                                className="w-3.5 h-3.5 accent-violet-600 shrink-0" />
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${PRIO_DOT[t.priority] || 'bg-amber-400'}`} />
-                              <span className="text-xs text-gray-700 flex-1">{t.title}</span>
-                              <span className="text-xs text-gray-400 capitalize shrink-0">{t.priority || 'medium'}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Tâches autonomes */}
-                  {(planSuggestions.standalone_todos || []).length > 0 && (
-                    <div className="border border-gray-100 rounded-xl overflow-hidden">
-                      <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100">
-                        <p className="text-xs font-semibold text-gray-700">Tâches sans jalon</p>
-                      </div>
-                      <div className="p-2 space-y-0.5">
-                        {(planSuggestions.standalone_todos || []).map((t, i) => {
-                          const key = `s${i}`;
-                          return (
-                            <label key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer hover:bg-violet-50 transition">
-                              <input type="checkbox" checked={selectedSugg.has(key)} onChange={() => toggleSugg(key)}
-                                className="w-3.5 h-3.5 accent-violet-600 shrink-0" />
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${PRIO_DOT[t.priority] || 'bg-amber-400'}`} />
-                              <span className="text-xs text-gray-700 flex-1">{t.title}</span>
-                              <span className="text-xs text-gray-400 capitalize shrink-0">{t.priority || 'medium'}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleAddToPlan}
-                    disabled={selectedSugg.size === 0 || addingToPlan}
-                    className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
-                  >
-                    {addingToPlan
-                      ? 'Ajout en cours…'
-                      : `Ajouter ${selectedSugg.size} tâche${selectedSugg.size !== 1 ? 's' : ''} sélectionnée${selectedSugg.size !== 1 ? 's' : ''} au plan`}
-                  </button>
-                </div>
-              );
-            })()}
 
             {/* Zone d'approfondissement */}
             {!isRelaunching && (

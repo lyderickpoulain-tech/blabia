@@ -414,21 +414,46 @@ router.post('/:id/plan/bulk', async (req, res) => {
     let milestonesCreated = 0;
     let todosCreated = 0;
 
+    // Charger les titres existants pour déduplication (LOWER+TRIM)
+    const existingMilestones = await db('Milestone')
+      .select('id', 'title')
+      .where({ projectId: req.params.id });
+    const existingTitlesMap = {};
+    for (const em of existingMilestones) {
+      existingTitlesMap[em.title.toLowerCase().trim()] = em.id;
+    }
+
     for (const mData of milestones) {
       if (!mData.title?.trim()) continue;
       const VALID_TYPES = ['meeting', 'technical', 'stack_check', 'milestone'];
-      const [milestone] = await db('Milestone')
-        .insert({
-          id: randomUUID(), projectId: req.params.id,
-          title: mData.title.trim(), description: mData.description?.trim() || null,
-          status: 'pending',
-          type: VALID_TYPES.includes(mData.type) ? mData.type : 'meeting',
-          displayOrder: milestoneOrder++,
-          createdFromSessionId: sourceSessionId || null,
-          createdAt: new Date(), createdBy: req.user.id
-        })
-        .returning(['id']);
-      milestonesCreated++;
+      const titleKey = mData.title.trim().toLowerCase();
+      let milestoneId;
+
+      // Déduplication : si un jalon avec ce titre existe déjà, mettre à jour la description
+      if (existingTitlesMap[titleKey]) {
+        milestoneId = existingTitlesMap[titleKey];
+        if (mData.description?.trim()) {
+          await db('Milestone').where({ id: milestoneId })
+            .update({ description: mData.description.trim() });
+        }
+      } else {
+        const [milestone] = await db('Milestone')
+          .insert({
+            id: randomUUID(), projectId: req.params.id,
+            title: mData.title.trim(), description: mData.description?.trim() || null,
+            status: 'pending',
+            type: VALID_TYPES.includes(mData.type) ? mData.type : 'meeting',
+            displayOrder: milestoneOrder++,
+            createdFromSessionId: sourceSessionId || null,
+            createdAt: new Date(), createdBy: req.user.id
+          })
+          .returning(['id']);
+        milestoneId = milestone.id;
+        milestonesCreated++;
+        existingTitlesMap[titleKey] = milestoneId;
+      }
+
+      const milestone = { id: milestoneId };
 
       const mTodos = Array.isArray(mData.todos) ? mData.todos : [];
       for (let i = 0; i < mTodos.length; i++) {

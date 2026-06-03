@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { getPricing, PRICING_CONFIG } from '../utils/techStack';
 
 // ── Composant principal ────────────────────────────────────────────────────────
 export default function StackCheckModal({ milestone, projectId, onClose, onRefresh }) {
@@ -139,12 +140,23 @@ export default function StackCheckModal({ milestone, projectId, onClose, onRefre
                     </button>
 
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium leading-snug ${
-                        item.checked ? 'text-green-800' : 'text-gray-800'
-                      }`}>
-                        {item.label}
-                        {item.checked && <span className="ml-1.5 text-green-500 text-xs">✓</span>}
-                      </p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className={`text-sm font-medium leading-snug ${
+                          item.checked ? 'text-green-800' : 'text-gray-800'
+                        }`}>
+                          {item.label}
+                          {item.checked && <span className="ml-1.5 text-green-500 text-xs">✓</span>}
+                        </p>
+                        {(() => {
+                          const p = getPricing(item.label);
+                          const cfg = p && PRICING_CONFIG[p];
+                          return cfg ? (
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cfg.color}`}>
+                              {cfg.dot} {cfg.label}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                       <input
                         type="text"
                         value={item.notes}

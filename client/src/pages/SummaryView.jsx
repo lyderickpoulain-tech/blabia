@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import api from '../utils/api';
@@ -146,13 +146,21 @@ export default function SummaryView() {
       {/* ── Barre supérieure ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base font-bold text-blue-600 shrink-0">BlabIA</span>
+          <Link
+            to={`/projects/${projectId}`}
+            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition shrink-0"
+          >
+            ← Retour au projet
+          </Link>
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-center">
+            <span className="text-sm font-bold text-blue-600 shrink-0">BlabIA</span>
             {project && (
-              <span className="text-sm text-gray-400 truncate hidden xs:inline">{project.name}</span>
+              <>
+                <span className="text-xs text-gray-300 shrink-0">·</span>
+                <span className="text-sm text-gray-500 truncate">{project.name}</span>
+              </>
             )}
           </div>
-          {/* Bouton Copier — texte masqué sous 360px */}
           <div className="shrink-0">
             <CopyButton />
           </div>

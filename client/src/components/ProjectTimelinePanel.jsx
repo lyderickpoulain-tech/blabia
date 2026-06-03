@@ -12,6 +12,12 @@ const TYPE_ICON = {
   stack_check: '🔧',
   milestone:   '🎯',
 };
+const TYPE_LABEL = {
+  meeting:     'Réunion',
+  technical:   'Technique',
+  stack_check: 'Vérification stack',
+  milestone:   'Jalon',
+};
 
 const TYPES = ['meeting', 'technical', 'stack_check', 'milestone'];
 
@@ -22,14 +28,14 @@ const STATUS_DOT = {
   blocked:     { cls: 'bg-red-400',   label: 'Bloqué' },
 };
 
-const STATUS_OPTS = ['pending', 'in_progress', 'done', 'blocked'];
+const STATUS_OPTS   = ['pending', 'in_progress', 'done', 'blocked'];
 const STATUS_LABELS = { pending: 'Pas commencé', in_progress: 'En cours', done: 'Terminé', blocked: 'Bloqué' };
 
 function trunc(str, n = 28) {
   return str && str.length > n ? str.slice(0, n) + '…' : (str || '');
 }
 
-// ── Drawer inline pour type 'milestone' (détail + statut) ─────────────────────
+// ── Drawer pour type 'milestone' (détail + statut modifiable uniquement) ──────
 function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh }) {
   const [status, setStatus] = useState(milestone.status);
   const [saving, setSaving] = useState(false);
@@ -82,15 +88,183 @@ function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh }) {
   );
 }
 
+// ── Drawer session (meeting / technical) ──────────────────────────────────────
+function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh }) {
+  const [status, setStatus] = useState(milestone.status);
+  const [saving, setSaving] = useState(false);
+
+  const changeStatus = async (s) => {
+    setStatus(s);
+    setSaving(true);
+    try {
+      await api.patch(`/projects/${projectId}/milestones/${milestone.id}`, { status: s });
+      onRefresh();
+    } catch {}
+    setSaving(false);
+  };
+
+  const sessionDate = linkedSession?.createdAt
+    ? new Date(linkedSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+
+  return (
+    <div className="absolute inset-0 bg-white z-10 flex flex-col rounded-r-xl">
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-100 shrink-0">
+        <button onClick={onClose}
+          className="text-gray-400 hover:text-gray-700 text-base leading-none font-bold">←</button>
+        <span className="text-xs font-semibold text-gray-700 flex-1 min-w-0 truncate">
+          {TYPE_ICON[milestone.type]} {trunc(milestone.title, 20)}
+        </span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* Badge type */}
+        <span className="inline-flex items-center gap-1 text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+          {TYPE_ICON[milestone.type]} {TYPE_LABEL[milestone.type]}
+        </span>
+
+        {/* Description */}
+        {milestone.description ? (
+          <p className="text-xs text-gray-600 leading-relaxed">{milestone.description}</p>
+        ) : (
+          <p className="text-xs text-gray-300 italic">Aucune description</p>
+        )}
+
+        {/* Statut */}
+        <div>
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
+            Statut
+          </label>
+          <select value={status} onChange={e => changeStatus(e.target.value)} disabled={saving}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            {STATUS_OPTS.map(s => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Action session */}
+        {linkedSession ? (
+          <div className="space-y-2 pt-1">
+            <button
+              onClick={() => navigate(`/projects/${projectId}/session/${linkedSession.id}`)}
+              className="w-full bg-green-600 hover:bg-green-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
+            >
+              ✓ Ouvrir la session
+            </button>
+            <div className="text-xs text-gray-400 text-center">
+              {sessionDate} ·{' '}
+              <span className={`font-medium ${linkedSession.status === 'complete' ? 'text-green-600' : 'text-orange-500'}`}>
+                {linkedSession.status === 'complete' ? 'Complète' : 'Interrompue'}
+              </span>
+            </div>
+            <button onClick={onClose}
+              className="w-full border border-gray-200 text-gray-500 text-xs font-medium py-2 rounded-xl hover:bg-gray-50 transition">
+              Annuler
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2 pt-1">
+            <button
+              onClick={() => navigate(`/projects/${projectId}/session/new`, {
+                state: { milestoneId: milestone.id, initialTask: milestone.title }
+              })}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
+            >
+              🤖 Créer une session
+            </button>
+            <button onClick={onClose}
+              className="w-full border border-gray-200 text-gray-500 text-xs font-medium py-2 rounded-xl hover:bg-gray-50 transition">
+              Annuler
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Bouton d'insertion entre étapes ──────────────────────────────────────────
+function InsertButton({ onClick, alwaysVisible }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      className={`flex items-center gap-1 px-2 py-0.5 transition cursor-pointer group ${alwaysVisible || hovered ? 'opacity-100' : 'opacity-0 hover:opacity-100'}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
+    >
+      <div className="flex-1 border-t border-dashed border-gray-200 group-hover:border-blue-300 transition" />
+      <button
+        type="button"
+        className="w-4 h-4 rounded-full bg-gray-100 group-hover:bg-blue-100 text-gray-400 group-hover:text-blue-500 text-xs flex items-center justify-center shrink-0 transition"
+      >
+        +
+      </button>
+      <div className="flex-1 border-t border-dashed border-gray-200 group-hover:border-blue-300 transition" />
+    </div>
+  );
+}
+
+// ── Formulaire d'insertion inline ─────────────────────────────────────────────
+function InsertForm({ displayOrder, projectId, onDone, onCancel }) {
+  const [title, setTitle]   = useState('');
+  const [type, setType]     = useState('meeting');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!title.trim() || saving) return;
+    setSaving(true);
+    try {
+      await api.post(`/projects/${projectId}/milestones`, { title: title.trim(), type, displayOrder });
+      onDone();
+    } catch {}
+    setSaving(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="mx-2 my-1 p-2 bg-blue-50 border border-blue-200 rounded-lg space-y-1.5">
+      <input autoFocus type="text" value={title}
+        onChange={e => setTitle(e.target.value)}
+        placeholder="Titre de l'étape…"
+        className="w-full text-xs border border-blue-200 bg-white rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+      />
+      <div className="flex gap-1">
+        {TYPES.map(t => (
+          <button key={t} type="button" onClick={() => setType(t)} title={t}
+            className={`flex-1 text-sm py-1 rounded-lg border transition ${
+              type === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+            }`}>
+            {TYPE_ICON[t]}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <button type="submit" disabled={!title.trim() || saving}
+          className="flex-1 text-xs bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50">
+          {saving ? '…' : 'Insérer'}
+        </button>
+        <button type="button" onClick={onCancel}
+          className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition">
+          ✕
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Corps partagé desktop / mobile ─────────────────────────────────────────────
 function PanelBody({
   projectId, milestones, milestoneSessions,
   loading, showAdd, setShowAdd, onAdd, onMilestoneClick,
-  detailMilestone, setDetailMilestone, onRefresh,
+  detailMilestone, setDetailMilestone,
+  sessionDrawer, setSessionDrawer,
+  onRefresh, navigate, isMobile,
 }) {
-  const [title, setTitle]   = useState('');
-  const [type, setType]     = useState('meeting');
-  const [saving, setSaving] = useState(false);
+  const [title, setTitle]           = useState('');
+  const [type, setType]             = useState('meeting');
+  const [saving, setSaving]         = useState(false);
+  const [insertingAt, setInsertingAt] = useState(null); // displayOrder for the insert form
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -103,14 +277,31 @@ function PanelBody({
     setShowAdd(false);
   };
 
+  const openInsertForm = (order) => {
+    setInsertingAt(order);
+    setShowAdd(false);
+  };
+
   return (
     <div className="flex flex-col h-full relative">
-      {/* Drawer détail (type milestone) */}
+      {/* Drawer détail type 'milestone' */}
       {detailMilestone && (
         <MilestoneDetailDrawer
           milestone={detailMilestone}
           projectId={projectId}
           onClose={() => setDetailMilestone(null)}
+          onRefresh={onRefresh}
+        />
+      )}
+
+      {/* Drawer session (meeting / technical) */}
+      {sessionDrawer && (
+        <SessionDrawer
+          milestone={sessionDrawer.milestone}
+          linkedSession={sessionDrawer.linked}
+          projectId={projectId}
+          navigate={navigate}
+          onClose={() => setSessionDrawer(null)}
           onRefresh={onRefresh}
         />
       )}
@@ -125,31 +316,69 @@ function PanelBody({
           <p className="text-xs text-gray-400 text-center py-8 px-3">
             Aucune étape —<br />commencez par en créer une
           </p>
-        ) : milestones.map(m => {
-          const sd     = STATUS_DOT[m.status] || STATUS_DOT.pending;
-          const linked = milestoneSessions[m.id];
-          return (
-            <div key={m.id}
-              onClick={() => onMilestoneClick(m, linked)}
-              className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none"
-              title={m.title}
-            >
-              <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🎯'}</span>
-              <span className="text-xs text-gray-700 flex-1 min-w-0 truncate leading-snug">
-                {trunc(m.title)}
-              </span>
-              {/* Indicateur session liée */}
-              {linked && (
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-300 shrink-0" title="Session liée" />
-              )}
-              {/* Dot statut */}
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`}
-                title={sd.label}
+        ) : (
+          <>
+            {/* Bouton d'insertion AVANT le premier élément */}
+            {insertingAt === 'before-first' ? (
+              <InsertForm
+                displayOrder={(milestones[0]?.displayOrder ?? 1) - 1}
+                projectId={projectId}
+                onDone={() => { setInsertingAt(null); onRefresh(); }}
+                onCancel={() => setInsertingAt(null)}
               />
-            </div>
-          );
-        })}
+            ) : (
+              <InsertButton
+                alwaysVisible={isMobile}
+                onClick={() => openInsertForm('before-first')}
+              />
+            )}
+
+            {milestones.map((m, idx) => {
+              const sd     = STATUS_DOT[m.status] || STATUS_DOT.pending;
+              const linked = milestoneSessions[m.id];
+              const nextM  = milestones[idx + 1];
+
+              return (
+                <div key={m.id}>
+                  <div
+                    onClick={() => onMilestoneClick(m, linked)}
+                    className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none"
+                    title={m.title}
+                  >
+                    <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🎯'}</span>
+                    <span className="text-xs text-gray-700 flex-1 min-w-0 truncate leading-snug">
+                      {trunc(m.title)}
+                    </span>
+                    {linked && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-300 shrink-0" title="Session liée" />
+                    )}
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`}
+                      title={sd.label}
+                    />
+                  </div>
+
+                  {/* Bouton d'insertion APRÈS cet élément */}
+                  {nextM && (
+                    insertingAt === m.id ? (
+                      <InsertForm
+                        displayOrder={(m.displayOrder + nextM.displayOrder) / 2}
+                        projectId={projectId}
+                        onDone={() => { setInsertingAt(null); onRefresh(); }}
+                        onCancel={() => setInsertingAt(null)}
+                      />
+                    ) : (
+                      <InsertButton
+                        alwaysVisible={isMobile}
+                        onClick={() => openInsertForm(m.id)}
+                      />
+                    )
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* Bouton / formulaire "+ Ajouter une étape" */}
@@ -204,11 +433,12 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [loading, setLoading]                   = useState(true);
   const [showAdd, setShowAdd]                   = useState(false);
   const [mobileOpen, setMobileOpen]             = useState(false);
-  const [exportSession, setExportSession]             = useState(null); // ExportModal (session hasCode)
-  const [detailMilestone, setDetailMilestone]         = useState(null); // drawer 'milestone' type
-  const [stackCheckMilestone, setStackCheckMilestone] = useState(null); // StackCheckModal
-  const [techChoiceMilestone, setTechChoiceMilestone] = useState(null); // choice rapide vs réunion
-  const [quickExportMilestone, setQuickExportMilestone] = useState(null); // QuickExportModal
+  const [exportSession, setExportSession]             = useState(null);
+  const [detailMilestone, setDetailMilestone]         = useState(null);
+  const [sessionDrawer, setSessionDrawer]             = useState(null); // { milestone, linked }
+  const [stackCheckMilestone, setStackCheckMilestone] = useState(null);
+  const [techChoiceMilestone, setTechChoiceMilestone] = useState(null);
+  const [quickExportMilestone, setQuickExportMilestone] = useState(null);
 
   const loadMilestones = useCallback(async () => {
     if (!projectId) return;
@@ -234,32 +464,25 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const handleMilestoneClick = async (m, linked) => {
     switch (m.type) {
       case 'meeting':
-        if (linked) {
-          navigate(`/projects/${projectId}/session/${linked.id}`);
-        } else {
-          navigate(`/projects/${projectId}/session/new`, {
-            state: { milestoneId: m.id, initialTask: m.title }
-          });
-        }
+        setSessionDrawer({ milestone: m, linked: linked || null });
         break;
 
       case 'technical':
         if (linked?.hasCode && linked?.summary) {
-          // Session liée avec code → ouvrir l'ExportModal existant
           setExportSession(linked);
+        } else if (linked) {
+          setSessionDrawer({ milestone: m, linked });
         } else {
-          // Pas de session liée → proposer le choix rapide vs réunion
           setTechChoiceMilestone(m);
         }
         break;
 
       case 'stack_check': {
-        // Charger le milestone avec checklistData complet puis ouvrir la modale
         try {
           const { data: full } = await api.get(`/projects/${projectId}/milestones/${m.id}`);
           setStackCheckMilestone(full);
         } catch {
-          setStackCheckMilestone(m); // fallback avec données partielles
+          setStackCheckMilestone(m);
         }
         break;
       }
@@ -278,14 +501,15 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     onAdd: handleAdd,
     onMilestoneClick: handleMilestoneClick,
     detailMilestone, setDetailMilestone,
+    sessionDrawer, setSessionDrawer,
     onRefresh: loadMilestones,
+    navigate,
   };
 
   return (
     <>
       {/* ── Desktop ─────────────────────────────────────────────────────── */}
       <div className="hidden lg:flex items-start shrink-0 sticky top-6 self-start">
-        {/* Bouton toggle sur le bord gauche */}
         <button onClick={() => setIsOpen(p => !p)}
           title={isOpen ? 'Fermer le panel' : 'Ouvrir le panel'}
           className="flex items-center justify-center w-5 h-8 bg-white border border-gray-200 rounded-l-lg shadow-sm text-gray-400 hover:text-blue-500 text-xs transition shrink-0 mt-2">
@@ -302,7 +526,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               <span className="text-xs text-gray-400">{milestones.length}</span>
             </div>
             <div style={{ height: 'calc(100vh - 120px - 44px)', display: 'flex', flexDirection: 'column' }}>
-              <PanelBody {...panelBodyProps} />
+              <PanelBody {...panelBodyProps} isMobile={false} />
             </div>
           </div>
         </div>
@@ -328,7 +552,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               </button>
             </div>
             <div className="flex-1 overflow-hidden relative">
-              <PanelBody {...panelBodyProps} />
+              <PanelBody {...panelBodyProps} isMobile={true} />
             </div>
           </div>
         </div>
@@ -369,7 +593,6 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
             </div>
             <p className="text-xs text-gray-500">Comment voulez-vous avancer sur cette tâche technique ?</p>
 
-            {/* Option 1 : mode rapide */}
             <button
               onClick={() => {
                 setQuickExportMilestone(techChoiceMilestone);
@@ -386,7 +609,6 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               </div>
             </button>
 
-            {/* Option 2 : réunion d'abord */}
             <button
               onClick={() => {
                 navigate(`/projects/${projectId}/session/new`, {

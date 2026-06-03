@@ -229,22 +229,25 @@ async function patchTimelineEntry(sessionId, entryId, patch) {
   await db('Session').where({ id: sessionId }).update({ timeline: JSON.stringify(tl) });
 }
 
-// Extrait jalons et tâches depuis le summary pour suggestions plan (synchrone)
+// Extrait jalons et tâches depuis le summary pour suggestions plan
 async function extractPlanSuggestions(summaryText) {
+  const TIMEOUT_MS = 30_000;
   try {
-    const response = await anthropic.messages.create({
+    const extractPromise = anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
       system: 'Tu extrais jalons et tâches depuis une restitution. Réponds UNIQUEMENT en JSON valide, sans markdown.',
       messages: [{
         role: 'user',
-        content: `À partir de cette restitution, extrais les jalons et tâches en JSON.
+        content: `À partir de cette restitution, extrais le plan d'actions en JSON.
+Pour chaque jalon, détermine :
+- title : titre court et explicite (max 50 chars)
+- description : description détaillée de ce que couvre cette étape
+- type : "meeting" (réflexion/décision), "technical" (dev/code/implémentation), "stack_check" (vérification outils), "milestone" (livraison/validation)
+- todos : liste de tâches concrètes avec priority (low/medium/high)
 
-Pour chaque jalon, détermine aussi son type parmi :
-- "meeting" : réunion de réflexion, analyse, décision ou bilan de projet
-- "technical" : développement, implémentation de code, configuration technique
-- "stack_check" : vérification ou validation d'outils, de l'environnement technique
-- "milestone" : livraison, lancement, validation externe, jalon de progression
+Si la restitution ne contient pas de plan d'actions structuré : retourner {"milestones":[],"standalone_todos":[]}.
+Ne jamais inventer de jalons si la restitution n'en contient pas.
 
 Retourne UNIQUEMENT ce JSON valide :
 {
@@ -254,15 +257,16 @@ Retourne UNIQUEMENT ce JSON valide :
   "standalone_todos": [{ "title": "...", "priority": "medium" }]
 }
 
-Si aucun jalon ni tâche identifiable, retourne {"milestones":[],"standalone_todos":[]}.
-Priorités possibles : low, medium, high.
-Types de jalons : meeting, technical, stack_check, milestone.
-
 Restitution :
 ${summaryText.substring(0, 4000)}`
       }]
     });
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('extractPlanSuggestions timeout')), TIMEOUT_MS)
+    );
+
+    const response = await Promise.race([extractPromise, timeoutPromise]);
     const match = response.content[0].text.trim().match(/\{[\s\S]*\}/);
     if (!match) return null;
     const parsed = JSON.parse(match[0]);
@@ -270,7 +274,8 @@ ${summaryText.substring(0, 4000)}`
       milestones:       Array.isArray(parsed.milestones)       ? parsed.milestones       : [],
       standalone_todos: Array.isArray(parsed.standalone_todos) ? parsed.standalone_todos : []
     };
-  } catch {
+  } catch (err) {
+    console.error('[extractPlanSuggestions]', err.message);
     return null;
   }
 }
@@ -429,6 +434,9 @@ router.post('/', async (req, res) => {
       teamPlan = 'Équipe précédente réutilisée.';
     } else {
       const agentsList = availableAgents.map(a => `- ${a.name} (${a.role})`).join('\n');
+      const briefBlock = project.brief
+        ? `\n\nBrief du projet :\n${project.brief}`
+        : '';
       // Contexte tronqué à ~2000 tokens pour la formation d'équipe
       const ctxForTeam = project.context
         ? project.context.substring(0, 8000)
@@ -443,7 +451,7 @@ router.post('/', async (req, res) => {
         system: 'Tu es un coordinateur d\'agents IA. Tu réponds UNIQUEMENT en JSON valide, sans markdown, sans explication.',
         messages: [{
           role: 'user',
-          content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi ceux disponibles ci-dessous. Utilise UNIQUEMENT les noms exacts de la liste.${contextBlock}
+          content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi ceux disponibles ci-dessous. Utilise UNIQUEMENT les noms exacts de la liste.${briefBlock}${contextBlock}
 
 Agents disponibles :
 ${agentsList}
@@ -696,6 +704,10 @@ router.post('/:sessionId/run', async (req, res) => {
         ? `Tâche : ${session.task}${synthBlock}`
         : `Tâche : ${session.task}${synthBlock}\n\nÉchanges précédents :\n${contextParts.join('\n\n')}\n\nC'est maintenant ton tour de contribuer.`;
 
+      const briefSection = project.brief
+        ? `\nBrief du projet :\n${project.brief}\n`
+        : '';
+
       const contextSection = projectContext
         ? `\nContexte des sessions précédentes de ce projet :\n${projectContext}\n`
         : '';
@@ -713,7 +725,7 @@ router.post('/:sessionId/run', async (req, res) => {
 
       const systemPrompt =
         `${systemPromptBase}
-Ton rôle spécifique dans cette session : ${agent.role}.${contextSection}${parentExchangesBlock}${stackSection}${conversationNote}
+Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${contextSection}${parentExchangesBlock}${stackSection}${conversationNote}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
 Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.`;
@@ -875,14 +887,16 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
 
       send('complete', { sessionId });
 
-      // Extraction jalons/tâches pour suggestions plan (async in-stream)
+      // Extraction jalons/tâches pour suggestions plan (async in-stream, robuste)
       try {
         const planSuggestions = await extractPlanSuggestions(summaryText);
         if (planSuggestions && (planSuggestions.milestones.length > 0 || planSuggestions.standalone_todos.length > 0)) {
-          await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(planSuggestions) });
+          await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(planSuggestions) }).catch(() => {});
           send('plan_suggestions', planSuggestions);
         }
-      } catch {}
+      } catch (err) {
+        console.error('[plan_suggestions extraction]', err.message);
+      }
 
       res.end();
     }

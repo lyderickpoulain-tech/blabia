@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
+  'id', 'name', 'description', 'brief', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
 ];
 
 // Trouve un projet accessible : propriétaire OU membre OU admin
@@ -77,10 +77,17 @@ router.get('/', async (req, res) => {
 
 // POST /api/projects
 router.post('/', async (req, res) => {
-  const { name, description } = req.body;
+  const { name, description, objectif, contexte, notes } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
+
+  const briefParts = [];
+  if (objectif?.trim()) briefParts.push(`OBJECTIF : ${objectif.trim()}`);
+  if (contexte?.trim()) briefParts.push(`CONTEXTE : ${contexte.trim()}`);
+  if (notes?.trim())    briefParts.push(`NOTES : ${notes.trim()}`);
+  const brief = briefParts.length > 0 ? briefParts.join('\n\n') : null;
+
   const now = new Date();
   try {
     const [project] = await db('Project')
@@ -88,6 +95,7 @@ router.post('/', async (req, res) => {
         id: randomUUID(),
         name: name.trim(),
         description: description?.trim() || null,
+        brief,
         status: 'active',
         userId: req.user.id,
         createdAt: now,
@@ -164,6 +172,34 @@ router.patch('/:id', async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('[projects/:id PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/projects/:id/brief — mettre à jour le brief structuré (propriétaire ou admin)
+router.patch('/:id/brief', async (req, res) => {
+  const { objectif, contexte, notes } = req.body;
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (!isOwnerOrAdmin(project, req.user.id, isAdmin)) {
+      return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    }
+
+    const briefParts = [];
+    if (objectif?.trim()) briefParts.push(`OBJECTIF : ${objectif.trim()}`);
+    if (contexte?.trim()) briefParts.push(`CONTEXTE : ${contexte.trim()}`);
+    if (notes?.trim())    briefParts.push(`NOTES : ${notes.trim()}`);
+    const brief = briefParts.length > 0 ? briefParts.join('\n\n') : null;
+
+    const [updated] = await db('Project')
+      .where({ id: req.params.id })
+      .update({ brief, updatedAt: new Date() })
+      .returning(PROJECT_FIELDS);
+    res.json(updated);
+  } catch (err) {
+    console.error('[projects/:id/brief PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
