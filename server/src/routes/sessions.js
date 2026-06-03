@@ -538,11 +538,12 @@ router.post('/:sessionId/run', async (req, res) => {
 
   // Valider avant d'ouvrir le SSE
   let session;
+  let project = null;
   let projectContext = null;
   let parentExchangesBlock = '';
   let stackLines = [];
   try {
-    const project = await getProject(projectId, req.user.id, isAdmin);
+    project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
     const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
