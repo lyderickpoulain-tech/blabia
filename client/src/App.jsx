@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NewProject from './pages/NewProject';
@@ -11,6 +12,7 @@ import SessionView from './pages/SessionView';
 import SummaryView from './pages/SummaryView';
 import AgentsPage from './pages/AgentsPage';
 import EnvironmentPage from './pages/EnvironmentPage';
+import PlanView from './pages/PlanView';
 
 function PlaceholderPage({ title }) {
   return (
@@ -24,10 +26,15 @@ function PlaceholderPage({ title }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    fetch('/api/ping').catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Login />} />
 
         <Route path="/dashboard" element={
           <ProtectedRoute><Dashboard /></ProtectedRoute>
@@ -37,6 +44,9 @@ export default function App() {
         } />
         <Route path="/projects/:id" element={
           <ProtectedRoute><ProjectView /></ProtectedRoute>
+        } />
+        <Route path="/projects/:id/plan" element={
+          <ProtectedRoute><PlanView /></ProtectedRoute>
         } />
         <Route path="/projects/:id/session/new" element={
           <ProtectedRoute><NewSession /></ProtectedRoute>

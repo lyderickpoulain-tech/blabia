@@ -242,11 +242,33 @@ export default function SummaryView() {
               </h2>
 
               {hasContent ? (
-                <article className="prose-summary">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>
-                    {session.summary}
-                  </ReactMarkdown>
-                </article>
+                (() => {
+                  const summaryExchanges = Array.isArray(session.exchanges)
+                    ? session.exchanges
+                        .filter(e => e.type === 'summary')
+                        .sort((a, b) => (a.turn || 1) - (b.turn || 1))
+                    : [];
+                  const allSummaries = summaryExchanges.length > 0
+                    ? summaryExchanges
+                    : [{ content: session.summary, turn: 1 }];
+
+                  return allSummaries.map((s, idx) => (
+                    <div key={idx}>
+                      {idx > 0 && (
+                        <div className="flex items-center gap-3 py-6 my-2">
+                          <div className="flex-1 h-px bg-gray-200" />
+                          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4">
+                            Tour {s.turn || idx + 1}
+                          </span>
+                          <div className="flex-1 h-px bg-gray-200" />
+                        </div>
+                      )}
+                      <article className="prose-summary">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>{s.content}</ReactMarkdown>
+                      </article>
+                    </div>
+                  ));
+                })()
               ) : (
                 <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-200">
                   <div className="text-4xl mb-3">📭</div>

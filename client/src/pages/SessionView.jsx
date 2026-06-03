@@ -77,6 +77,81 @@ function HumanBubble({ content }) {
   );
 }
 
+// ── Timeline persistante ───────────────────────────────────────────────────────
+
+const TL_TYPE = {
+  team_formation: { icon: '🤝', defaultLabel: 'Formation de l\'équipe' },
+  agent_turn:     { icon: '💬', defaultLabel: 'Agent' },
+  question:       { icon: '❓', defaultLabel: 'Question' },
+  synthesis:      { icon: '✨', defaultLabel: 'Synthèse finale' },
+  export:         { icon: '💻', defaultLabel: 'Export Claude Code' },
+  implementation: { icon: '✅', defaultLabel: 'Implémentation' },
+};
+
+const TL_STATUS = {
+  pending:     { dot: 'bg-gray-300',  badge: 'bg-gray-100 text-gray-500 border-gray-200',    label: 'Pas commencé', pulse: false },
+  in_progress: { dot: 'bg-blue-500',  badge: 'bg-blue-100 text-blue-600 border-blue-200',    label: 'En cours',     pulse: true  },
+  done:        { dot: 'bg-green-500', badge: 'bg-green-100 text-green-700 border-green-200', label: 'Terminé',      pulse: false },
+  blocked:     { dot: 'bg-red-500',   badge: 'bg-red-100 text-red-700 border-red-200',       label: 'Bloqué',       pulse: false },
+};
+
+function SessionTimeline({ entries, onExportClick, onImplementationClick }) {
+  if (!entries || entries.length === 0) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-gray-400 text-sm">Aucune étape enregistrée pour cette session</p>
+        <p className="text-xs text-gray-300 mt-1">La timeline se remplit automatiquement lors du run</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <div className="absolute left-[15px] top-4 bottom-4 w-px bg-gray-100" />
+      <div className="space-y-0.5">
+        {entries.map((entry, i) => {
+          const tc = TL_TYPE[entry.type] || { icon: '•', defaultLabel: entry.type };
+          const sc = TL_STATUS[entry.status] || TL_STATUS.pending;
+          const isClickable = entry.type === 'export' || entry.type === 'implementation';
+          const label = entry.label || tc.defaultLabel;
+          const ts = entry.timestamp
+            ? new Date(entry.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+            : '';
+
+          return (
+            <div key={entry.id || i} className="relative flex items-start gap-3 py-2">
+              <div className={`relative z-10 w-8 h-8 rounded-full ${sc.dot} flex items-center justify-center text-sm shrink-0 ring-2 ring-white shadow-sm ${sc.pulse ? 'animate-pulse' : ''}`}>
+                <span>{tc.icon}</span>
+              </div>
+              <div
+                className={`flex-1 min-w-0 py-0.5 ${isClickable ? 'cursor-pointer group' : ''}`}
+                onClick={() => {
+                  if (entry.type === 'export') onExportClick?.();
+                  if (entry.type === 'implementation') onImplementationClick?.();
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className={`text-sm font-medium leading-snug ${isClickable ? 'text-blue-700 group-hover:underline' : 'text-gray-800'}`}>
+                    {label}
+                    {isClickable && <span className="ml-1 text-xs text-blue-400">→</span>}
+                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {ts && <span className="text-xs text-gray-400">{ts}</span>}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${sc.badge}`}>{sc.label}</span>
+                  </div>
+                </div>
+                {entry.meta?.question && (
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{entry.meta.question}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Modale suppression session ─────────────────────────────────────────────────
 function DeleteSessionModal({ onClose, onConfirm, deleting }) {
   return (
@@ -123,18 +198,25 @@ export default function SessionView() {
   const { id: projectId, sid: sessionId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [session, setSession]             = useState(null);
-  const [loading, setLoading]             = useState(true);
-  const [showExchanges, setShowExchanges] = useState(false);
-  const [showContinue, setShowContinue]   = useState(false);
-  const [continueTask, setContinueTask]   = useState('');
-  const [showExport, setShowExport]       = useState(false);
-  const [showDelete, setShowDelete]       = useState(false);
-  const [deleting, setDeleting]           = useState(false);
+  const [session, setSession]                 = useState(null);
+  const [loading, setLoading]                 = useState(true);
+  const [activeTab, setActiveTab]             = useState('restitution');
+  const [timeline, setTimeline]               = useState([]);
+  const [showExchanges, setShowExchanges]     = useState(false);
+  const [showContinue, setShowContinue]       = useState(false);
+  const [continueTask, setContinueTask]       = useState('');
+  const [showExport, setShowExport]           = useState(false);
+  const [showCodeConfirm, setShowCodeConfirm] = useState(false);
+  const [savingCodeStatus, setSavingCodeStatus] = useState(false);
+  const [showDelete, setShowDelete]           = useState(false);
+  const [deleting, setDeleting]               = useState(false);
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
-      .then(({ data }) => setSession(data))
+      .then(({ data }) => {
+        setSession(data);
+        setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
+      })
       .catch(() => navigate(`/projects/${projectId}`))
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
@@ -148,6 +230,44 @@ export default function SessionView() {
       alert('Erreur lors de la suppression');
       setDeleting(false);
     }
+  };
+
+  const handleCodeStatus = async (status) => {
+    if (savingCodeStatus) return;
+    setSavingCodeStatus(true);
+    try {
+      await api.patch(`/projects/${projectId}/sessions/${sessionId}/code-status`, { status });
+      setSession(prev => ({ ...prev, codeStatus: status }));
+      // Ajouter l'entrée implementation dans la timeline locale
+      const implEntry = {
+        id: `impl-${Date.now()}`,
+        type: 'implementation',
+        label: status === 'implemented' ? 'Code implémenté et commité' : 'Code non généré',
+        status: status === 'implemented' ? 'done' : 'blocked',
+        timestamp: new Date().toISOString(),
+        meta: { codeStatus: status }
+      };
+      setTimeline(prev => [...prev, implEntry]);
+      setShowCodeConfirm(false);
+    } catch (err) {
+      console.error('[code-status]', err.message);
+    } finally {
+      setSavingCodeStatus(false);
+    }
+  };
+
+  const recordExportEvent = async () => {
+    const entry = {
+      type: 'export',
+      label: 'Export Claude Code',
+      status: 'done',
+      timestamp: new Date().toISOString(),
+      meta: {}
+    };
+    setTimeline(prev => [...prev, entry]);
+    try {
+      await api.post(`/projects/${projectId}/sessions/${sessionId}/timeline-event`, entry);
+    } catch {}
   };
 
   if (loading) {
@@ -180,8 +300,10 @@ export default function SessionView() {
           ← Retour au projet
         </Link>
 
-        {/* En-tête session */}
+        {/* Carte principale : en-tête + onglets + contenu */}
         <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isComplete ? 'border-gray-200' : 'border-orange-200'}`}>
+
+          {/* En-tête session */}
           <div className={`px-6 py-5 border-b ${isComplete ? 'bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-blue-100' : 'bg-orange-50 border-orange-100'}`}>
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex-1 min-w-0">
@@ -219,27 +341,96 @@ export default function SessionView() {
                 );
               })}
             </div>
-          </div>
 
-          {/* Corps : restitution ou message interrompue */}
-          <div className="px-6 py-5">
-            {isComplete && session.summary ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>
-                {session.summary}
-              </ReactMarkdown>
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-orange-600 font-medium text-sm mb-1">⚠ Session interrompue</p>
-                <p className="text-gray-400 text-xs">
-                  Cette session n'a pas été finalisée. Aucune restitution n'est disponible.
-                </p>
+            {/* Badge statut code */}
+            {session.hasCode && (
+              <div className="mt-2">
+                {session.codeStatus === 'implemented' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">
+                    ✅ Implémenté
+                  </span>
+                )}
+                {session.codeStatus === 'not_generated' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded-full">
+                    ❌ Non généré
+                  </span>
+                )}
+                {!session.codeStatus && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-full">
+                    ⏳ En attente
+                  </span>
+                )}
               </div>
             )}
           </div>
+
+          {/* Onglets Restitution / Timeline */}
+          <div className="flex border-b border-gray-100">
+            <button
+              onClick={() => setActiveTab('restitution')}
+              className={`flex-1 py-3 text-sm font-medium transition border-b-2 -mb-px ${
+                activeTab === 'restitution'
+                  ? 'border-blue-500 text-blue-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Restitution
+            </button>
+            <button
+              onClick={() => setActiveTab('timeline')}
+              className={`flex-1 py-3 text-sm font-medium transition border-b-2 -mb-px flex items-center justify-center gap-1.5 ${
+                activeTab === 'timeline'
+                  ? 'border-blue-500 text-blue-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span>⏱</span>
+              Timeline
+              {timeline.length > 0 && (
+                <span className="text-xs font-normal text-gray-400">({timeline.length})</span>
+              )}
+            </button>
+          </div>
+
+          {/* Contenu onglet Restitution */}
+          {activeTab === 'restitution' && (
+            <div className="px-6 py-5">
+              {isComplete && session.summary ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>
+                  {session.summary}
+                </ReactMarkdown>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-orange-600 font-medium text-sm mb-1">⚠ Session interrompue</p>
+                  <p className="text-gray-400 text-xs">
+                    Cette session n'a pas été finalisée. Aucune restitution n'est disponible.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Contenu onglet Timeline */}
+          {activeTab === 'timeline' && (
+            <div className="px-6 py-5">
+              <SessionTimeline
+                entries={timeline}
+                onExportClick={() => {
+                  setActiveTab('restitution');
+                  setShowExport(true);
+                  setShowCodeConfirm(true);
+                }}
+                onImplementationClick={() => {
+                  setActiveTab('restitution');
+                  setShowCodeConfirm(true);
+                }}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Échanges (mode temps réel, optionnel) */}
-        {isRealtime && agentExchanges.length > 0 && (
+        {/* Échanges (mode temps réel, optionnel) — onglet Restitution uniquement */}
+        {activeTab === 'restitution' && isRealtime && agentExchanges.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <button
               onClick={() => setShowExchanges(p => !p)}
@@ -334,18 +525,46 @@ export default function SessionView() {
             </Link>
           )}
 
-          {/* Exporter vers Claude Code */}
-          {isComplete && session.summary && (
-            <button
-              onClick={() => setShowExport(true)}
-              className="w-full flex items-center justify-center gap-2 border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium py-3 rounded-xl transition text-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Exporter vers Claude Code
-            </button>
+          {/* Exporter vers Claude Code — conditionnel hasCode */}
+          {isComplete && session.hasCode && session.summary && (
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  setShowExport(true);
+                  setShowCodeConfirm(true);
+                  recordExportEvent();
+                }}
+                className="w-full flex items-center justify-center gap-2 border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium py-3 rounded-xl transition text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Exporter vers Claude Code
+              </button>
+
+              {showCodeConfirm && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
+                  <p className="text-xs font-semibold text-gray-600 text-center">Le code a-t-il été implémenté ?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCodeStatus('implemented')}
+                      disabled={savingCodeStatus}
+                      className="flex-1 bg-green-50 hover:bg-green-100 border border-green-300 text-green-700 font-medium py-2.5 rounded-xl transition text-sm disabled:opacity-50"
+                    >
+                      ✅ Code implémenté et commité
+                    </button>
+                    <button
+                      onClick={() => handleCodeStatus('not_generated')}
+                      disabled={savingCodeStatus}
+                      className="flex-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-medium py-2.5 rounded-xl transition text-sm disabled:opacity-50"
+                    >
+                      ❌ Ce code n'a pas été généré
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           <Link
@@ -366,7 +585,7 @@ export default function SessionView() {
       </div>
 
       {showExport && session.summary && (
-        <ExportModal summary={session.summary} onClose={() => setShowExport(false)} />
+        <ExportModal summary={session.summary} projectId={projectId} onClose={() => setShowExport(false)} />
       )}
       {showDelete && (
         <DeleteSessionModal

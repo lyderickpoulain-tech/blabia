@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
 
-export default function ExportModal({ summary, onClose }) {
+export default function ExportModal({ summary, projectId, onClose }) {
   const [prompt,  setPrompt]  = useState('');
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [copied,  setCopied]  = useState(false);
 
   useEffect(() => {
-    api.post('/export/claude-code', { summary })
+    api.post('/export/claude-code', { summary, ...(projectId ? { projectId } : {}) })
       .then(({ data }) => setPrompt(data.prompt))
       .catch((err)     => setError(err.response?.data?.error || 'Erreur lors de la génération'))
       .finally(()      => setLoading(false));

@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'status', 'context', 'createdAt', 'updatedAt', 'userId'
+  'id', 'name', 'description', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
 ];
 
 // Trouve un projet accessible : propriétaire OU membre OU admin
@@ -46,7 +46,10 @@ router.get('/', async (req, res) => {
         'Project.createdAt',
         'Project.updatedAt',
         'Project.userId',
-        db.raw('COUNT(DISTINCT "Session"."id")::int AS "sessionCount"')
+        db.raw('COUNT(DISTINCT "Session"."id")::int AS "sessionCount"'),
+        db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status != 'cancelled') AS "todoTotal"`),
+        db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'done') AS "todoDone"`),
+        db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'in_progress') AS "todoInProgress"`)
       )
       .leftJoin('Session', 'Session.projectId', 'Project.id')
       .groupBy('Project.id')
@@ -91,6 +94,26 @@ router.post('/', async (req, res) => {
         updatedAt: now
       })
       .returning(PROJECT_FIELDS);
+
+    // ── Auto-initialiser ProjectAgent avec tous les agents par défaut ──────
+    const defaultAgents = await db('Agent')
+      .select(['id'])
+      .where({ isDefault: true })
+      .orderBy('createdAt', 'asc');
+
+    if (defaultAgents.length > 0) {
+      await db('ProjectAgent').insert(
+        defaultAgents.map((a, i) => ({
+          id: randomUUID(),
+          projectId: project.id,
+          agentId: a.id,
+          enabled: true,
+          displayOrder: i,
+          source: 'manual'
+        }))
+      );
+    }
+
     res.status(201).json({ ...project, sessionCount: 0 });
   } catch (err) {
     console.error('[projects POST]', err.message);
@@ -184,6 +207,25 @@ router.delete('/:id', async (req, res) => {
     res.json({ message: 'Projet supprimé' });
   } catch (err) {
     console.error('[projects/:id DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/projects/:id/tech-stack — sauvegarder la stack technique du projet
+router.patch('/:id/tech-stack', async (req, res) => {
+  const { techStack } = req.body;
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    await db('Project').where({ id: req.params.id }).update({
+      techStack: techStack !== undefined ? JSON.stringify(techStack) : null,
+      updatedAt: new Date()
+    });
+    res.json({ message: 'Stack sauvegardée' });
+  } catch (err) {
+    console.error('[projects/:id/tech-stack PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -329,6 +371,155 @@ router.delete('/:id/members/:uid', async (req, res) => {
     res.json({ message: 'Membre retiré' });
   } catch (err) {
     console.error('[projects/:id/members/:uid DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── Agents par projet ─────────────────────────────────────────────────────────
+
+// GET /api/projects/:id/agents — tous les agents avec leur statut dans ce projet
+router.get('/:id/agents', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const agents = await db('Agent')
+      .select(
+        'Agent.id', 'Agent.name', 'Agent.role', 'Agent.emoji', 'Agent.isDefault', 'Agent.systemPrompt',
+        'ProjectAgent.id as projectAgentId',
+        'ProjectAgent.enabled',
+        'ProjectAgent.displayOrder',
+        'ProjectAgent.source'
+      )
+      .leftJoin('ProjectAgent', function () {
+        this.on('ProjectAgent.agentId', '=', 'Agent.id')
+            .andOn('ProjectAgent.projectId', '=', db.raw('?', [req.params.id]));
+      })
+      .where(function () {
+        this.where('Agent.isDefault', true).orWhere('Agent.userId', req.user.id);
+      })
+      .orderByRaw('"ProjectAgent"."displayOrder" ASC NULLS LAST, "Agent"."isDefault" DESC, "Agent"."createdAt" ASC');
+
+    res.json(agents);
+  } catch (err) {
+    console.error('[projects/:id/agents GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/agents — ajouter un agent au projet
+router.post('/:id/agents', async (req, res) => {
+  const { agentId, source = 'manual' } = req.body;
+  if (!agentId) return res.status(400).json({ error: 'agentId requis' });
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [agent] = await db('Agent').where({ id: agentId }).limit(1);
+    if (!agent) return res.status(404).json({ error: 'Agent introuvable' });
+
+    // displayOrder = position après le dernier agent actif
+    const [{ maxOrder }] = await db('ProjectAgent')
+      .max('displayOrder as maxOrder')
+      .where({ projectId: req.params.id });
+
+    const [pa] = await db('ProjectAgent')
+      .insert({
+        id: randomUUID(),
+        projectId: req.params.id,
+        agentId,
+        enabled: true,
+        displayOrder: (maxOrder ?? -1) + 1,
+        source
+      })
+      .onConflict(['projectId', 'agentId'])
+      .merge({ enabled: true, source })
+      .returning(['id', 'projectId', 'agentId', 'enabled', 'displayOrder', 'source']);
+
+    res.status(201).json(pa);
+  } catch (err) {
+    console.error('[projects/:id/agents POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/projects/:id/agents/reorder — réordonner les agents actifs
+router.patch('/:id/agents/reorder', async (req, res) => {
+  const { order } = req.body; // tableau d'agentId dans l'ordre souhaité
+  const isAdmin = req.user.role === 'admin';
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order (tableau) requis' });
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    await Promise.all(
+      order.map((agentId, i) =>
+        db('ProjectAgent')
+          .where({ projectId: req.params.id, agentId })
+          .update({ displayOrder: i })
+      )
+    );
+    res.json({ message: 'Ordre mis à jour' });
+  } catch (err) {
+    console.error('[projects/:id/agents/reorder PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/projects/:id/agents/:agentId — toggle enabled
+router.patch('/:id/agents/:agentId', async (req, res) => {
+  const { enabled } = req.body;
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [existing] = await db('ProjectAgent')
+      .where({ projectId: req.params.id, agentId: req.params.agentId })
+      .limit(1);
+
+    if (!existing) {
+      // Créer l'entrée si elle n'existe pas (agent non encore dans le projet)
+      const [{ maxOrder }] = await db('ProjectAgent')
+        .max('displayOrder as maxOrder')
+        .where({ projectId: req.params.id });
+      await db('ProjectAgent').insert({
+        id: randomUUID(),
+        projectId: req.params.id,
+        agentId: req.params.agentId,
+        enabled: enabled ?? true,
+        displayOrder: (maxOrder ?? -1) + 1,
+        source: 'manual'
+      });
+    } else {
+      await db('ProjectAgent')
+        .where({ projectId: req.params.id, agentId: req.params.agentId })
+        .update({ enabled: enabled ?? !existing.enabled });
+    }
+
+    res.json({ message: 'Mis à jour' });
+  } catch (err) {
+    console.error('[projects/:id/agents/:agentId PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/projects/:id/agents/:agentId — retirer un agent du projet
+router.delete('/:id/agents/:agentId', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    await db('ProjectAgent')
+      .where({ projectId: req.params.id, agentId: req.params.agentId })
+      .delete();
+
+    res.json({ message: 'Agent retiré du projet' });
+  } catch (err) {
+    console.error('[projects/:id/agents/:agentId DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

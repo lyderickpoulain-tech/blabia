@@ -26,10 +26,15 @@ app.use('/api/export',                       require('./routes/export'));
 app.use('/api/users',                        require('./routes/users'));
 app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
+app.use('/api/projects',                     require('./routes/plan'));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'BlabIA server en ligne', timestamp: new Date() });
 });
+
+// Endpoint de warm-up — répond < 10ms pour éliminer le cold start Railway.
+// Pour supprimer le cold start définitivement, passer au plan Railway Hobby (5€/mois).
+app.get('/api/ping', (_req, res) => res.json({ ok: true }));
 
 // ── Production : servir le build Vite ────────────────────────────────────────
 if (isProd) {

@@ -36,18 +36,28 @@ function formatTechStack(ts) {
 
 // POST /api/export/claude-code — génère un prompt Claude Code depuis une restitution
 router.post('/claude-code', async (req, res) => {
-  const { summary } = req.body;
+  const { summary, projectId } = req.body;
   if (!summary?.trim()) {
     return res.status(400).json({ error: 'La restitution est requise' });
   }
 
   try {
-    // Récupérer l'environnement technique de l'utilisateur
+    // Récupérer l'environnement technique : project.techStack ?? user.techStack
     const [user] = await db('User').select(['techStack']).where({ id: req.user.id }).limit(1);
-    const techStack = typeof user?.techStack === 'string'
-      ? JSON.parse(user.techStack)
-      : (user?.techStack || {});
+    const userStack = typeof user?.techStack === 'string'
+      ? JSON.parse(user.techStack) : (user?.techStack || {});
 
+    let effectiveStack = userStack;
+    if (projectId) {
+      const [project] = await db('Project').select(['techStack']).where({ id: projectId }).limit(1);
+      if (project?.techStack) {
+        const projectStack = typeof project.techStack === 'string'
+          ? JSON.parse(project.techStack) : project.techStack;
+        effectiveStack = projectStack;
+      }
+    }
+
+    const techStack = effectiveStack;
     const stackLines = formatTechStack(techStack);
     const stackSection = stackLines.length > 0
       ? `\n\nEnvironnement technique de l'utilisateur :\n${stackLines.join('\n')}\nAdapte toutes tes suggestions à cet environnement.\nNe propose pas d'alternatives sauf si l'outil choisi est inadapté à la tâche.`

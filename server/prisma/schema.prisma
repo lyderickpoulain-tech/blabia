@@ -14,22 +14,25 @@ model User {
   role             String          @default("guest") // "admin", "guest" ou "collaborator"
   techStack        Json            @default("{}")    // Environnement technique personnel
   createdAt        DateTime        @default(now())
-  projects         Project[]
-  invitations      Invitation[]
-  agents           Agent[]
+  projects           Project[]
+  invitations        Invitation[]
+  agents             Agent[]
   projectMemberships ProjectMember[]
+  createdMilestones  Milestone[] @relation("MilestoneCreator")
+  createdTodos       TodoItem[]  @relation("TodoCreator")
 }
 
 model Agent {
-  id           String   @id @default(uuid())
-  name         String
-  role         String
-  systemPrompt String
-  emoji        String   @default("🤖")
-  isDefault    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  userId       String?
-  user         User?    @relation(fields: [userId], references: [id])
+  id            String         @id @default(uuid())
+  name          String
+  role          String
+  systemPrompt  String
+  emoji         String         @default("🤖")
+  isDefault     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  userId        String?
+  user          User?          @relation(fields: [userId], references: [id])
+  projectAgents ProjectAgent[]
 }
 
 model Invitation {
@@ -46,18 +49,70 @@ model Invitation {
 }
 
 model Project {
-  id          String          @id @default(uuid())
-  name        String
-  description String?
-  status      String          @default("active") // "active" ou "archived"
-  context     String?         // Mémoire cumulée des sessions précédentes
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  userId      String
-  user        User            @relation(fields: [userId], references: [id])
-  sessions    Session[]
-  members     ProjectMember[]
-  invitations Invitation[]
+  id            String          @id @default(uuid())
+  name          String
+  description   String?
+  status        String          @default("active") // "active" ou "archived"
+  context       String?         // Mémoire cumulée des sessions précédentes
+  techStack     Json?           // Surcharge de la stack technique de l'utilisateur
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
+  sessions      Session[]
+  members       ProjectMember[]
+  invitations   Invitation[]
+  projectAgents ProjectAgent[]
+  milestones    Milestone[]
+  todos         TodoItem[]
+}
+
+model ProjectAgent {
+  id           String  @id @default(dbgenerated("gen_random_uuid()::text"))
+  projectId    String
+  agentId      String
+  enabled      Boolean @default(true)
+  displayOrder Int     @default(0)
+  source       String  @default("manual") // "manual" | "suggestion"
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agent        Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, agentId])
+}
+
+model Milestone {
+  id           String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  projectId    String
+  title        String
+  description  String?
+  dueDate      DateTime?
+  status       String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
+  displayOrder Int        @default(0)
+  createdAt    DateTime   @default(now())
+  createdBy    String?
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User?      @relation("MilestoneCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  todos        TodoItem[]
+}
+
+model TodoItem {
+  id           String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  projectId    String
+  milestoneId  String?
+  title        String
+  description  String?
+  status       String     @default("todo")    // "todo" | "in_progress" | "done" | "cancelled"
+  priority     String     @default("medium")  // "low" | "medium" | "high"
+  dueDate      DateTime?
+  displayOrder Int        @default(0)
+  source       String     @default("manual")  // "manual" | "agent" | "session"
+  sessionId    String?
+  createdAt    DateTime   @default(now())
+  createdBy    String?
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone    Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  session      Session?   @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  creator      User?      @relation("TodoCreator", fields: [createdBy], references: [id], onDelete: SetNull)
 }
 
 model ProjectMember {
@@ -80,6 +135,14 @@ model Session {
   summary         String?
   status          String    @default("complete") // "complete" ou "interrupted"
   mode            String    @default("realtime") // "realtime" ou "summary"
+  hasCode         Boolean   @default(false)
+  codeStatus      String?   // null | "implemented" | "not_generated"
+  model           String    @default("claude-sonnet-4-6")
+  fullContext     Boolean   @default(false)
+  suggestedTools  Json?     // { suggestedTools: string[], missingTools: string[] }
+  planSuggestions Json?     // { milestones: [...], standalone_todos: [...] }
+  timeline        Json      @default("[]") // [ { id, type, label, status, timestamp, meta } ]
+  todos           TodoItem[]
   createdAt       DateTime  @default(now())
   projectId       String
   project         Project   @relation(fields: [projectId], references: [id])

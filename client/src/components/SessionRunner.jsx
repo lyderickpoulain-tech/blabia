@@ -16,6 +16,14 @@ const PALETTE = {
 const DEFAULT = { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', dot: 'bg-gray-400', ring: 'ring-gray-300' };
 const col = (name) => PALETTE[name] || DEFAULT;
 
+// ── Icônes par type d'entrée timeline ─────────────────────────────────────────
+const TL_ICON = {
+  team_formation: '🤝',
+  agent_turn:     '💬',
+  question:       '❓',
+  synthesis:      '✨',
+};
+
 // ── Sous-composants ────────────────────────────────────────────────────────────
 
 function Avatar({ name, pulse = false }) {
@@ -157,9 +165,48 @@ function SummarySteps({ exchanges, activeAgent, isSummaryPhase }) {
   );
 }
 
+// ── Timeline compacte live ─────────────────────────────────────────────────────
+
+function LiveTimeline({ entries }) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100">
+      <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2.5">⏱ Timeline en cours</p>
+      <div className="relative pl-5">
+        <div className="absolute left-[7px] top-0 bottom-0 w-px bg-gray-100" />
+        <div className="space-y-2">
+          {entries.map((e, i) => (
+            <div key={e.id || i} className="relative flex items-center gap-2">
+              <div className={`relative z-10 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] shrink-0 ${
+                e.status === 'done'
+                  ? 'bg-green-500 text-white'
+                  : e.status === 'in_progress'
+                  ? 'bg-blue-500 text-white animate-pulse'
+                  : 'bg-gray-200 text-gray-400'
+              }`}>
+                {e.status === 'done' ? '✓' : (TL_ICON[e.type] || '')}
+              </div>
+              <span className={`text-xs font-medium truncate ${
+                e.status === 'done'
+                  ? 'text-green-700'
+                  : e.status === 'in_progress'
+                  ? 'text-blue-700'
+                  : 'text-gray-400'
+              }`}>{e.label}</span>
+              {e.status === 'in_progress' && (
+                <span className="text-[10px] text-blue-400 ml-auto shrink-0">En cours…</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Composant principal ────────────────────────────────────────────────────────
 
-export default function SessionRunner({ session, projectId, onComplete, onConversationEnd, onRetry }) {
+export default function SessionRunner({ session, projectId, onComplete, onConversationEnd, onRetry, onHasCode, onPlanSuggestions }) {
   const [exchanges, setExchanges]               = useState([]);
   const [activeAgent, setActiveAgent]           = useState(null);
   const [streamingText, setStreamingText]       = useState('');
@@ -175,9 +222,15 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
   const [humanInput, setHumanInput]             = useState('');
   const [closingSession, setClosingSession]     = useState(false);
   const [synthesizing, setSynthesizing]         = useState(false);
+  const [toastMessage, setToastMessage]         = useState('');
+  const [liveTimeline, setLiveTimeline]         = useState([]);
+  const [showTimeline, setShowTimeline]         = useState(false);
 
-  const bottomRef      = useRef(null);
-  const abortRef       = useRef(null);
+  const bottomRef            = useRef(null);
+  const abortRef             = useRef(null);
+  const currentAgentIdRef    = useRef(null);
+  const currentQuestionIdRef = useRef(null);
+
   const isRealtime     = session.mode === 'realtime';
   const isConversation = session.mode === 'conversation';
 
@@ -237,38 +290,77 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
 
   function dispatch(ev) {
     switch (ev.type) {
-      case 'agent_start':
+      case 'agent_start': {
+        const agentId = `at-${ev.name}-${Date.now()}`;
+        currentAgentIdRef.current = agentId;
+        setLiveTimeline(prev => {
+          const withTF = prev.some(e => e.type === 'team_formation')
+            ? prev
+            : [...prev, { id: 'tf', type: 'team_formation', label: 'Formation de l\'équipe', status: 'done' }];
+          return [...withTF, { id: agentId, type: 'agent_turn', label: ev.name, status: 'in_progress' }];
+        });
         setActiveAgent({ name: ev.name, role: ev.role });
         setStreamingText('');
         setIsSummaryPhase(false);
         break;
+      }
       case 'chunk':
         if (isRealtime) setStreamingText(p => p + ev.text);
         break;
-      case 'agent_done':
+      case 'agent_done': {
+        const id = currentAgentIdRef.current;
+        if (id) {
+          setLiveTimeline(prev => prev.map(e => e.id === id ? { ...e, status: 'done' } : e));
+          currentAgentIdRef.current = null;
+        }
         setExchanges(p => [...p, { type: 'agent', agent: ev.name, content: ev.content, id: `${ev.name}-${Date.now()}` }]);
         setActiveAgent(null);
         setStreamingText('');
         break;
-      case 'question':
+      }
+      case 'question': {
+        const qId = `q-${Date.now()}`;
+        currentQuestionIdRef.current = qId;
+        setLiveTimeline(prev => [
+          ...prev,
+          { id: qId, type: 'question', label: `Question de ${ev.agent}`, status: 'in_progress' }
+        ]);
         setPendingQuestion({ agent: ev.agent, question: ev.question });
         setActiveAgent(null);
         setStreamingText('');
         break;
-      case 'answer_received':
+      }
+      case 'answer_received': {
+        const qId = currentQuestionIdRef.current;
+        if (qId) {
+          setLiveTimeline(prev => prev.map(e => e.id === qId ? { ...e, status: 'done' } : e));
+          currentQuestionIdRef.current = null;
+        }
         setExchanges(p => [...p, { type: 'human', content: ev.answer, id: `human-${Date.now()}` }]);
         setPendingQuestion(null);
         setHumanAnswer('');
         break;
+      }
       case 'summary_start':
+        setLiveTimeline(prev => [
+          ...prev,
+          { id: 'syn', type: 'synthesis', label: 'Synthèse finale', status: 'in_progress' }
+        ]);
         setIsSummaryPhase(true);
         setActiveAgent({ name: 'Synthèse finale', role: 'Restitution structurée' });
         setStreamingText('');
         break;
       case 'summary_chunk':
-        if (isRealtime) setStreamingText(p => p + ev.text);
+        if (isRealtime) setStreamingText(p => p + ev.text.replace('[HAS_CODE]', ''));
+        break;
+      case 'has_code':
+        onHasCode?.(ev.value);
+        break;
+      case 'plan_suggestions':
+        onPlanSuggestions?.({ milestones: ev.milestones || [], standalone_todos: ev.standalone_todos || [] });
         break;
       case 'summary_done':
+        setLiveTimeline(prev => prev.map(e => e.id === 'syn' ? { ...e, status: 'done' } : e));
         setActiveAgent(null);
         setStreamingText('');
         onComplete(ev.summary);
@@ -396,12 +488,23 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
   const handleAddAgent = async (suggestion) => {
     setAddingAgent(suggestion.id);
     try {
-      await api.post('/agents', {
+      const { data: newAgent } = await api.post('/agents', {
         name: suggestion.name,
         role: suggestion.role,
         systemPrompt: suggestion.systemPrompt,
         emoji: suggestion.emoji
       });
+
+      // Ajouter automatiquement au projet avec source 'suggestion'
+      try {
+        await api.post(`/projects/${projectId}/agents`, {
+          agentId: newAgent.id,
+          source: 'suggestion'
+        });
+        setToastMessage(`Agent "${newAgent.name}" ajouté au projet`);
+        setTimeout(() => setToastMessage(''), 3000);
+      } catch {}
+
       setPendingSuggestions(p => p.filter(s => s.id !== suggestion.id));
     } catch (e) {
       console.error('[addAgent]', e.message);
@@ -469,6 +572,21 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
             </span>
           </div>
         )}
+
+        {/* Toggle timeline live */}
+        {liveTimeline.length > 0 && (
+          <button
+            onClick={() => setShowTimeline(p => !p)}
+            className="mt-3 w-full text-xs text-gray-400 hover:text-gray-600 transition flex items-center justify-center gap-1.5 py-1"
+          >
+            <span>⏱</span>
+            <span>{showTimeline ? 'Masquer la timeline' : 'Timeline en cours'}</span>
+            <span className="text-gray-300">· {liveTimeline.length} étape{liveTimeline.length > 1 ? 's' : ''}</span>
+          </button>
+        )}
+
+        {/* Timeline compacte live */}
+        {showTimeline && <LiveTimeline entries={liveTimeline} />}
       </div>
 
       {/* ── Zone d'échanges ───────────────────────────────────────────────── */}
@@ -584,6 +702,16 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
 
         <div ref={bottomRef} />
       </div>
+
+      {/* ── Toast de confirmation ────────────────────────────────────────── */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm font-medium px-5 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <svg className="w-4 h-4 text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+          </svg>
+          {toastMessage}
+        </div>
+      )}
 
       {/* ── Erreur avec bouton relancer ───────────────────────────────────── */}
       {error && (
