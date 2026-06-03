@@ -86,9 +86,10 @@ model Milestone {
   title        String
   description  String?
   dueDate      DateTime?
-  status       String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
-  type         String     @default("meeting") // "meeting" | "technical" | "stack_check" | "milestone"
-  displayOrder Int        @default(0)
+  status        String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
+  type          String     @default("meeting") // "meeting" | "technical" | "stack_check" | "milestone"
+  checklistData Json?      // { items: [{ id, label, category, checked, notes }] }
+  displayOrder  Int        @default(0)
   createdAt    DateTime   @default(now())
   createdBy    String?
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)

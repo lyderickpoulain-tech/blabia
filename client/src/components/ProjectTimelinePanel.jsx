@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import ExportModal from './ExportModal';
+import StackCheckModal from './StackCheckModal';
 
 // ── Configs ────────────────────────────────────────────────────────────────────
 const TYPE_ICON = {
@@ -202,8 +203,9 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [loading, setLoading]                   = useState(true);
   const [showAdd, setShowAdd]                   = useState(false);
   const [mobileOpen, setMobileOpen]             = useState(false);
-  const [exportSession, setExportSession]       = useState(null);   // ExportModal
-  const [detailMilestone, setDetailMilestone]   = useState(null);   // drawer 'milestone' type
+  const [exportSession, setExportSession]         = useState(null);   // ExportModal
+  const [detailMilestone, setDetailMilestone]     = useState(null);   // drawer 'milestone' type
+  const [stackCheckMilestone, setStackCheckMilestone] = useState(null); // StackCheckModal
 
   const loadMilestones = useCallback(async () => {
     if (!projectId) return;
@@ -226,7 +228,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   };
 
   // ── Comportement au clic selon le type ──────────────────────────────────────
-  const handleMilestoneClick = (m, linked) => {
+  const handleMilestoneClick = async (m, linked) => {
     switch (m.type) {
       case 'meeting':
         if (linked) {
@@ -248,10 +250,16 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
         }
         break;
 
-      case 'stack_check':
-        // Évolution 4 — StackCheckModal à venir
-        alert('Vérification stack — disponible en Évolution 4');
+      case 'stack_check': {
+        // Charger le milestone avec checklistData complet puis ouvrir la modale
+        try {
+          const { data: full } = await api.get(`/projects/${projectId}/milestones/${m.id}`);
+          setStackCheckMilestone(full);
+        } catch {
+          setStackCheckMilestone(m); // fallback avec données partielles
+        }
         break;
+      }
 
       case 'milestone':
         setDetailMilestone(m);
@@ -329,6 +337,16 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
           summary={exportSession.summary}
           projectId={projectId}
           onClose={() => setExportSession(null)}
+        />
+      )}
+
+      {/* ── StackCheckModal (type stack_check) ───────────────────────────── */}
+      {stackCheckMilestone && (
+        <StackCheckModal
+          milestone={stackCheckMilestone}
+          projectId={projectId}
+          onClose={() => setStackCheckMilestone(null)}
+          onRefresh={loadMilestones}
         />
       )}
     </>

@@ -105,8 +105,8 @@ function formatTechStack(ts) {
   return lines;
 }
 
-// Extrait les outils suggérés / manquants depuis le summary (fire-and-forget)
-async function extractSuggestedTools(sessionId, summaryText) {
+// Extrait les outils suggérés / manquants depuis le summary, puis crée le milestone stack_check
+async function extractSuggestedTools(sessionId, summaryText, projectId = null) {
   try {
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -129,14 +129,82 @@ ${summaryText.substring(0, 3000)}`
     const match = response.content[0].text.trim().match(/\{[\s\S]*\}/);
     if (!match) return;
     const parsed = JSON.parse(match[0]);
+    const suggestedTools = Array.isArray(parsed.suggestedTools) ? parsed.suggestedTools : [];
+    const missingTools   = Array.isArray(parsed.missingTools)   ? parsed.missingTools   : [];
+
     await db('Session').where({ id: sessionId }).update({
-      suggestedTools: JSON.stringify({
-        suggestedTools: Array.isArray(parsed.suggestedTools) ? parsed.suggestedTools : [],
-        missingTools:   Array.isArray(parsed.missingTools)   ? parsed.missingTools   : []
-      })
+      suggestedTools: JSON.stringify({ suggestedTools, missingTools })
     });
+
+    // Créer automatiquement un milestone stack_check si c'est la première session avec des outils
+    if (projectId && (suggestedTools.length > 0 || missingTools.length > 0)) {
+      await createStackCheckIfNeeded(projectId, suggestedTools, missingTools);
+    }
   } catch (err) {
     console.error('[extractSuggestedTools]', err.message);
+  }
+}
+
+// Crée un milestone stack_check si aucun n'existe encore pour ce projet
+async function createStackCheckIfNeeded(projectId, suggestedTools, missingTools) {
+  try {
+    const [existing] = await db('Milestone').where({ projectId, type: 'stack_check' }).limit(1);
+    if (existing) return; // Déjà présent
+
+    const [project] = await db('Project').select(['techStack']).where({ id: projectId }).limit(1);
+    const ts = project?.techStack
+      ? (typeof project.techStack === 'string' ? JSON.parse(project.techStack) : project.techStack)
+      : {};
+
+    const CAT_LABELS = {
+      hebergement: 'Hébergement',   bdd: 'Base de données',
+      frontend: 'Framework frontend', backend: 'Framework backend',
+      auth: 'Authentification',       emails: "Envoi d'emails",
+      devtools: 'Outils de dev',      domaine: 'Domaine'
+    };
+
+    const items = [];
+    const slug = (s) => s.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+    // Outils déjà configurés dans la techStack → checked: true
+    for (const [key, cat] of Object.entries(CAT_LABELS)) {
+      const selected = Array.isArray(ts[key]) ? ts[key] : [];
+      for (const item of selected) {
+        const label = item === 'Autre' ? (ts[`${key}_autre`] || null) : item;
+        if (!label) continue;
+        items.push({ id: `tech-${key}-${slug(label)}`, label, category: cat, checked: true, notes: '' });
+      }
+    }
+
+    // Outils suggérés par les agents → checked: false
+    for (const tool of suggestedTools) {
+      if (!items.some(i => i.label.toLowerCase() === tool.toLowerCase())) {
+        items.push({ id: `sugg-${slug(tool)}`, label: tool, category: 'Suggéré par les agents', checked: false, notes: '' });
+      }
+    }
+
+    // Outils manquants identifiés → checked: false
+    for (const tool of missingTools) {
+      if (!items.some(i => i.label.toLowerCase() === tool.toLowerCase())) {
+        items.push({ id: `miss-${slug(tool)}`, label: tool, category: 'À mettre en place', checked: false, notes: '' });
+      }
+    }
+
+    if (items.length === 0) return;
+
+    const [{ maxOrder }] = await db('Milestone').max('displayOrder as maxOrder').where({ projectId });
+    await db('Milestone').insert({
+      id: randomUUID(), projectId,
+      title: 'Vérification de la stack technique',
+      description: 'Confirmez que tous les outils nécessaires sont bien configurés pour ce projet.',
+      status: 'pending', type: 'stack_check',
+      checklistData: JSON.stringify({ items }),
+      displayOrder: (maxOrder ?? -1) + 1,
+      createdAt: new Date()
+    });
+    console.log(`[createStackCheckIfNeeded] Milestone stack_check créé — projet ${projectId} (${items.length} items)`);
+  } catch (err) {
+    console.error('[createStackCheckIfNeeded]', err.message);
   }
 }
 
@@ -786,7 +854,7 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
       await saveSession(sessionId, exchanges, summaryText, 'complete');
       await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
       updateProjectContext(projectId, session.task, summaryText);
-      extractSuggestedTools(sessionId, summaryText);
+      extractSuggestedTools(sessionId, summaryText, projectId);
 
       // Mise à jour du statut du jalon lié
       if (session.milestoneId) {
@@ -906,7 +974,7 @@ router.post('/:sessionId/synthesize', async (req, res) => {
     await saveSession(sessionId, exchanges, summaryText, 'complete');
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
     updateProjectContext(projectId, session.task, summaryText);
-    extractSuggestedTools(sessionId, summaryText);
+    extractSuggestedTools(sessionId, summaryText, projectId);
 
     // Mise à jour du statut du jalon lié (mode conversation)
     if (session.milestoneId) {
