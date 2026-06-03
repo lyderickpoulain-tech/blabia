@@ -36,7 +36,7 @@ router.get('/:id/plan', async (req, res) => {
     const [milestones, todos] = await Promise.all([
       db('Milestone')
         .select([
-          'id', 'title', 'description', 'dueDate', 'status', 'displayOrder', 'createdAt', 'createdBy'
+          'id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'createdAt', 'createdBy'
         ])
         .where({ projectId: req.params.id })
         .orderBy('displayOrder', 'asc'),
@@ -63,7 +63,7 @@ router.get('/:id/plan', async (req, res) => {
 
 // POST /api/projects/:id/milestones
 router.post('/:id/milestones', async (req, res) => {
-  const { title, description, dueDate, displayOrder } = req.body;
+  const { title, description, dueDate, displayOrder, type } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Le titre est requis' });
   const isAdmin = req.user.role === 'admin';
   try {
@@ -85,11 +85,12 @@ router.post('/:id/milestones', async (req, res) => {
         description: description?.trim() || null,
         dueDate:     dueDate || null,
         status:      'pending',
+        type:        ['meeting', 'technical', 'stack_check', 'milestone'].includes(type) ? type : 'meeting',
         displayOrder: order,
         createdAt:   new Date(),
         createdBy:   req.user.id
       })
-      .returning(['id', 'title', 'description', 'dueDate', 'status', 'displayOrder', 'createdAt', 'createdBy']);
+      .returning(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'createdAt', 'createdBy']);
 
     res.status(201).json(milestone);
   } catch (err) {
@@ -121,7 +122,7 @@ router.patch('/:id/milestones/reorder', async (req, res) => {
 
 // PATCH /api/projects/:id/milestones/:mid
 router.patch('/:id/milestones/:mid', async (req, res) => {
-  const { title, description, dueDate, status, displayOrder } = req.body;
+  const { title, description, dueDate, status, type, displayOrder } = req.body;
   const isAdmin = req.user.role === 'admin';
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
@@ -135,6 +136,7 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
     if (description          !== undefined) updates.description  = description?.trim() || null;
     if (dueDate              !== undefined) updates.dueDate      = dueDate || null;
     if (status               !== undefined) updates.status       = status;
+    if (type                 !== undefined) updates.type         = ['meeting', 'technical', 'stack_check', 'milestone'].includes(type) ? type : 'meeting';
     if (displayOrder         !== undefined) updates.displayOrder = displayOrder;
 
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Aucune modification' });
@@ -142,7 +144,7 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
     const [updated] = await db('Milestone')
       .where({ id: req.params.mid })
       .update(updates)
-      .returning(['id', 'title', 'description', 'dueDate', 'status', 'displayOrder', 'createdAt', 'createdBy']);
+      .returning(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'createdAt', 'createdBy']);
 
     res.json(updated);
   } catch (err) {
@@ -347,11 +349,14 @@ router.post('/:id/plan/bulk', async (req, res) => {
 
     for (const mData of milestones) {
       if (!mData.title?.trim()) continue;
+      const VALID_TYPES = ['meeting', 'technical', 'stack_check', 'milestone'];
       const [milestone] = await db('Milestone')
         .insert({
           id: randomUUID(), projectId: req.params.id,
           title: mData.title.trim(), description: mData.description?.trim() || null,
-          status: 'pending', displayOrder: milestoneOrder++,
+          status: 'pending',
+          type: VALID_TYPES.includes(mData.type) ? mData.type : 'meeting',
+          displayOrder: milestoneOrder++,
           createdAt: new Date(), createdBy: req.user.id
         })
         .returning(['id']);

@@ -87,6 +87,7 @@ model Milestone {
   description  String?
   dueDate      DateTime?
   status       String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
+  type         String     @default("meeting") // "meeting" | "technical" | "stack_check" | "milestone"
   displayOrder Int        @default(0)
   createdAt    DateTime   @default(now())
   createdBy    String?

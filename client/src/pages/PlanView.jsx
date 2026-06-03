@@ -12,6 +12,15 @@ const STATUS_CONFIG = {
 };
 const STATUSES = ['pending', 'in_progress', 'done', 'blocked'];
 
+// ── Types d'étapes ────────────────────────────────────────────────────────────
+const MILESTONE_TYPE_CONFIG = {
+  meeting:     { label: 'Réunion',            icon: '🤝', borderColor: 'border-l-blue-400' },
+  technical:   { label: 'Tâche technique',    icon: '💻', borderColor: 'border-l-violet-400' },
+  stack_check: { label: 'Vérif. stack',       icon: '🔧', borderColor: 'border-l-orange-400' },
+  milestone:   { label: 'Jalon',             icon: '🎯', borderColor: 'border-l-gray-300' },
+};
+const MILESTONE_TYPES = Object.keys(MILESTONE_TYPE_CONFIG);
+
 // ── Configs priorité et source ────────────────────────────────────────────────
 const PRIORITY_CONFIG = {
   high:   { dot: 'bg-red-500',   label: 'Haute',   badge: 'bg-red-100 text-red-700 border-red-200' },
@@ -120,9 +129,10 @@ function InlineAddTodo({ onSave, onCancel }) {
 
 // ── Formulaire d'insertion de jalon ───────────────────────────────────────────
 function InsertMilestoneForm({ onSave, onCancel }) {
-  const [title, setTitle]       = useState('');
-  const [dueDate, setDueDate]   = useState('');
-  const [saving, setSaving]     = useState(false);
+  const [title, setTitle]     = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [type, setType]       = useState('meeting');
+  const [saving, setSaving]   = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -131,34 +141,55 @@ function InsertMilestoneForm({ onSave, onCancel }) {
     e.preventDefault();
     if (!title.trim() || saving) return;
     setSaving(true);
-    await onSave({ title: title.trim(), dueDate: dueDate || null });
+    await onSave({ title: title.trim(), dueDate: dueDate || null, type });
     setSaving(false);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 my-2">
-      <input
-        ref={inputRef}
-        type="text"
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        placeholder="Titre du jalon…"
-        className="flex-1 text-sm bg-transparent outline-none text-gray-800 placeholder-gray-400"
-      />
-      <input
-        type="date"
-        value={dueDate}
-        onChange={e => setDueDate(e.target.value)}
-        className="text-xs border border-blue-200 bg-white rounded-lg px-2 py-1 outline-none text-gray-600 hidden sm:block"
-      />
-      <button type="submit" disabled={!title.trim() || saving}
-        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
-        {saving ? '…' : 'Ajouter'}
-      </button>
-      <button type="button" onClick={onCancel}
-        className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition">
-        ✕
-      </button>
+    <form onSubmit={handleSubmit} className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 my-2 space-y-2">
+      {/* Sélecteur de type */}
+      <div className="flex gap-1 flex-wrap">
+        {MILESTONE_TYPES.map(t => {
+          const tc = MILESTONE_TYPE_CONFIG[t];
+          return (
+            <button key={t} type="button" onClick={() => setType(t)}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition ${
+                type === t
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+              }`}
+            >
+              <span>{tc.icon}</span>
+              <span className="hidden sm:inline">{tc.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Titre + date + actions */}
+      <div className="flex items-center gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Titre de l'étape…"
+          className="flex-1 text-sm bg-transparent outline-none text-gray-800 placeholder-gray-400"
+        />
+        <input
+          type="date"
+          value={dueDate}
+          onChange={e => setDueDate(e.target.value)}
+          className="text-xs border border-blue-200 bg-white rounded-lg px-2 py-1 outline-none text-gray-600 hidden sm:block"
+        />
+        <button type="submit" disabled={!title.trim() || saving}
+          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
+          {saving ? '…' : 'Ajouter'}
+        </button>
+        <button type="button" onClick={onCancel}
+          className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition">
+          ✕
+        </button>
+      </div>
     </form>
   );
 }
@@ -188,13 +219,14 @@ function MilestoneCard({
   isDragOver, draggable,
   onDragStart, onDragOver, onDrop, onDragEnd,
 }) {
-  const [form, setForm]   = useState({ title: milestone.title, description: milestone.description || '' });
+  const typeConfig = MILESTONE_TYPE_CONFIG[milestone.type] || MILESTONE_TYPE_CONFIG.meeting;
+  const [form, setForm]   = useState({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'meeting' });
   const [saving, setSaving] = useState(false);
   const titleRef = useRef(null);
 
   useEffect(() => {
     if (isEditing) {
-      setForm({ title: milestone.title, description: milestone.description || '' });
+      setForm({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'meeting' });
       setTimeout(() => titleRef.current?.focus(), 50);
     }
   }, [isEditing, milestone]);
@@ -202,7 +234,7 @@ function MilestoneCard({
   const handleSave = async () => {
     if (!form.title.trim() || saving) return;
     setSaving(true);
-    await onSave({ title: form.title.trim(), description: form.description.trim() || null });
+    await onSave({ title: form.title.trim(), description: form.description.trim() || null, type: form.type });
     setSaving(false);
   };
 
@@ -217,7 +249,7 @@ function MilestoneCard({
 
   return (
     <div
-      className={`bg-white rounded-xl border shadow-sm p-4 transition-all ${
+      className={`bg-white rounded-xl border border-l-4 shadow-sm p-4 transition-all ${typeConfig.borderColor} ${
         isDragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:shadow-md'
       } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       draggable={draggable}
@@ -245,6 +277,24 @@ function MilestoneCard({
             rows={2}
             className="w-full text-xs text-gray-600 resize-none border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-blue-300"
           />
+          {/* Sélecteur de type */}
+          <div className="flex gap-1 flex-wrap">
+            {MILESTONE_TYPES.map(t => {
+              const tc = MILESTONE_TYPE_CONFIG[t];
+              return (
+                <button key={t} type="button" onClick={() => setForm(p => ({ ...p, type: t }))}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition ${
+                    form.type === t
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  <span>{tc.icon}</span>
+                  <span className="hidden sm:inline">{tc.label}</span>
+                </button>
+              );
+            })}
+          </div>
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={!form.title.trim() || saving}
               className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
@@ -259,6 +309,11 @@ function MilestoneCard({
       ) : (
         /* ── Affichage normal ── */
         <div>
+          {/* Badge type */}
+          <div className="flex items-center gap-1 mb-1.5">
+            <span className="text-xs">{typeConfig.icon}</span>
+            <span className="text-xs text-gray-400 font-medium">{typeConfig.label}</span>
+          </div>
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3
               className="text-sm font-semibold text-gray-900 cursor-pointer hover:text-blue-700 flex-1 leading-snug"
@@ -827,7 +882,7 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
-  const handleInsert = async ({ title, dueDate }, afterId) => {
+  const handleInsert = async ({ title, dueDate, type }, afterId) => {
     try {
       // Calculer le displayOrder pour l'insertion
       let targetOrder;
@@ -844,6 +899,7 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
       const { data } = await api.post(`/projects/${projectId}/milestones`, {
         title,
         dueDate,
+        type: type || 'meeting',
         displayOrder: targetOrder
       });
       // Normaliser les ordres après insertion
