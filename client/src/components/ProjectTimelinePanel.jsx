@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import ExportModal from './ExportModal';
 import StackCheckModal from './StackCheckModal';
+import QuickExportModal from './QuickExportModal';
 
 // ── Configs ────────────────────────────────────────────────────────────────────
 const TYPE_ICON = {
@@ -203,9 +204,11 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [loading, setLoading]                   = useState(true);
   const [showAdd, setShowAdd]                   = useState(false);
   const [mobileOpen, setMobileOpen]             = useState(false);
-  const [exportSession, setExportSession]         = useState(null);   // ExportModal
-  const [detailMilestone, setDetailMilestone]     = useState(null);   // drawer 'milestone' type
+  const [exportSession, setExportSession]             = useState(null); // ExportModal (session hasCode)
+  const [detailMilestone, setDetailMilestone]         = useState(null); // drawer 'milestone' type
   const [stackCheckMilestone, setStackCheckMilestone] = useState(null); // StackCheckModal
+  const [techChoiceMilestone, setTechChoiceMilestone] = useState(null); // choice rapide vs réunion
+  const [quickExportMilestone, setQuickExportMilestone] = useState(null); // QuickExportModal
 
   const loadMilestones = useCallback(async () => {
     if (!projectId) return;
@@ -242,11 +245,11 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
 
       case 'technical':
         if (linked?.hasCode && linked?.summary) {
+          // Session liée avec code → ouvrir l'ExportModal existant
           setExportSession(linked);
         } else {
-          navigate(`/projects/${projectId}/session/new`, {
-            state: { milestoneId: m.id, initialTask: `Implémenter : ${m.title}` }
-          });
+          // Pas de session liée → proposer le choix rapide vs réunion
+          setTechChoiceMilestone(m);
         }
         break;
 
@@ -346,6 +349,74 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
           milestone={stackCheckMilestone}
           projectId={projectId}
           onClose={() => setStackCheckMilestone(null)}
+          onRefresh={loadMilestones}
+        />
+      )}
+
+      {/* ── Choix : mode rapide vs réunion (type technical sans session) ─── */}
+      {techChoiceMilestone && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full sm:max-w-sm p-5 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">💻</span>
+              <h2 className="text-sm font-bold text-gray-900 flex-1 leading-snug truncate">
+                {techChoiceMilestone.title}
+              </h2>
+              <button onClick={() => setTechChoiceMilestone(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0">
+                ×
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">Comment voulez-vous avancer sur cette tâche technique ?</p>
+
+            {/* Option 1 : mode rapide */}
+            <button
+              onClick={() => {
+                setQuickExportMilestone(techChoiceMilestone);
+                setTechChoiceMilestone(null);
+              }}
+              className="w-full flex items-start gap-3 p-4 border-2 border-violet-200 bg-violet-50 hover:border-violet-400 hover:bg-violet-100 rounded-xl transition text-left"
+            >
+              <span className="text-2xl shrink-0 mt-0.5">⚡</span>
+              <div>
+                <p className="text-sm font-semibold text-violet-900">Générer directement un prompt</p>
+                <p className="text-xs text-violet-600 mt-0.5 leading-snug">
+                  Créer un prompt Claude Code à partir du titre de l'étape — rapide, sans session
+                </p>
+              </div>
+            </button>
+
+            {/* Option 2 : réunion d'abord */}
+            <button
+              onClick={() => {
+                navigate(`/projects/${projectId}/session/new`, {
+                  state: {
+                    milestoneId: techChoiceMilestone.id,
+                    initialTask: `Implémenter : ${techChoiceMilestone.title}`
+                  }
+                });
+                setTechChoiceMilestone(null);
+              }}
+              className="w-full flex items-start gap-3 p-4 border-2 border-blue-200 bg-blue-50 hover:border-blue-400 hover:bg-blue-100 rounded-xl transition text-left"
+            >
+              <span className="text-2xl shrink-0 mt-0.5">🤝</span>
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Organiser une réunion d'abord</p>
+                <p className="text-xs text-blue-600 mt-0.5 leading-snug">
+                  Lancer une session d'agents pour explorer la tâche et préparer l'implémentation
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── QuickExportModal (mode rapide sans session) ──────────────────── */}
+      {quickExportMilestone && (
+        <QuickExportModal
+          milestone={quickExportMilestone}
+          projectId={projectId}
+          onClose={() => setQuickExportMilestone(null)}
           onRefresh={loadMilestones}
         />
       )}
