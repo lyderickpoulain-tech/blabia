@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import Layout from '../components/Layout';
+import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -559,11 +559,11 @@ export default function ProjectView() {
 
   if (loading) {
     return (
-      <Layout>
+      <ProjectLayout projectId={id}>
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
-      </Layout>
+      </ProjectLayout>
     );
   }
 
@@ -573,7 +573,7 @@ export default function ProjectView() {
   const canManage = isOwner || isAdmin;
 
   return (
-    <Layout>
+    <ProjectLayout projectId={id}>
       {/* Navigation */}
       <Link to="/dashboard" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-5">
         ← Tableau de bord
@@ -1049,6 +1049,6 @@ export default function ProjectView() {
           deleting={deleting}
         />
       )}
-    </Layout>
+    </ProjectLayout>
   );
 }

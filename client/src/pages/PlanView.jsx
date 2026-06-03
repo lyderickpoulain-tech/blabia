@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import Layout from '../components/Layout';
+import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 
 // ── Constantes statut ──────────────────────────────────────────────────────────
@@ -1103,7 +1103,7 @@ export default function PlanView() {
   useEffect(() => { loadPlan(); }, [projectId]);
 
   return (
-    <Layout>
+    <ProjectLayout projectId={projectId}>
       <div className="max-w-5xl mx-auto">
         {/* Navigation */}
         <div className="flex items-center gap-3 mb-5">
@@ -1177,6 +1177,6 @@ export default function PlanView() {
           </div>
         )}
       </div>
-    </Layout>
+    </ProjectLayout>
   );
 }

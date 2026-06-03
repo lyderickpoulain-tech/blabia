@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import Layout from '../components/Layout';
+import ProjectLayout from '../components/ProjectLayout';
 import SessionRunner from '../components/SessionRunner';
 import ExportModal from '../components/ExportModal';
 import api from '../utils/api';
@@ -379,7 +379,7 @@ export default function NewSession() {
   };
 
   return (
-    <Layout>
+    <ProjectLayout projectId={projectId}>
       <div className="max-w-2xl mx-auto">
         <Link
           to={`/projects/${projectId}`}
@@ -967,6 +967,6 @@ export default function NewSession() {
       {showExport && summaries.length > 0 && (
         <ExportModal summary={summaries[summaries.length - 1]} projectId={projectId} onClose={() => setShowExport(false)} />
       )}
-    </Layout>
+    </ProjectLayout>
   );
 }

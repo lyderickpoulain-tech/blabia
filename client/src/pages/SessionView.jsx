@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import Layout from '../components/Layout';
+import ProjectLayout from '../components/ProjectLayout';
 import ExportModal from '../components/ExportModal';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -272,11 +272,11 @@ export default function SessionView() {
 
   if (loading) {
     return (
-      <Layout>
+      <ProjectLayout projectId={projectId}>
         <div className="flex items-center justify-center min-h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
-      </Layout>
+      </ProjectLayout>
     );
   }
 
@@ -292,7 +292,7 @@ export default function SessionView() {
   });
 
   return (
-    <Layout>
+    <ProjectLayout projectId={projectId}>
       <div className="max-w-2xl mx-auto space-y-4">
 
         {/* Navigation */}
@@ -594,6 +594,6 @@ export default function SessionView() {
           deleting={deleting}
         />
       )}
-    </Layout>
+    </ProjectLayout>
   );
 }

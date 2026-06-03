@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function Layout({ children }) {
+export default function Layout({ children, wide = false }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -48,7 +48,7 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
+      <main className={`flex-1 w-full mx-auto px-4 py-6 ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
         {children}
       </main>
     </div>
