@@ -211,12 +211,21 @@ export default function SessionView() {
   const [savingCodeStatus, setSavingCodeStatus] = useState(false);
   const [showDelete, setShowDelete]           = useState(false);
   const [deleting, setDeleting]               = useState(false);
+  const [planSuggestions, setPlanSuggestions] = useState(null);
+  const [planAlreadyAdded, setPlanAlreadyAdded] = useState(false);
+  const [addingToPlan, setAddingToPlan]       = useState(false);
+  const [addedToPlan, setAddedToPlan]         = useState(false);
+  const [planIgnored, setPlanIgnored]         = useState(false);
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
       .then(async ({ data }) => {
         setSession(data);
         setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
+        if (data.planSuggestions?.milestones?.length > 0) {
+          setPlanSuggestions(data.planSuggestions);
+        }
+        setPlanAlreadyAdded(data.planAlreadyAdded || false);
         if (data.milestoneId) {
           try {
             const { data: ms } = await api.get(`/projects/${projectId}/milestones/${data.milestoneId}`);
@@ -227,6 +236,24 @@ export default function SessionView() {
       .catch(() => navigate(`/projects/${projectId}`))
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
+
+  const handleAddToPlan = async () => {
+    if (addingToPlan || !planSuggestions) return;
+    setAddingToPlan(true);
+    try {
+      await api.post(`/projects/${projectId}/plan/bulk`, {
+        milestones:       planSuggestions.milestones       || [],
+        standalone_todos: planSuggestions.standalone_todos || [],
+        sessionId:        sessionId,
+        sourceSessionId:  sessionId
+      });
+      setAddedToPlan(true);
+    } catch (err) {
+      console.error('[addToPlan]', err.message);
+    } finally {
+      setAddingToPlan(false);
+    }
+  };
 
   const handleDeleteSession = async () => {
     setDeleting(true);
@@ -504,6 +531,60 @@ export default function SessionView() {
                 Lancer la suite →
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Plan généré par les agents */}
+        {isComplete && planSuggestions && !planIgnored && !addedToPlan && !planAlreadyAdded && (
+          <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+              📋 Plan généré par les agents
+              <span className="text-xs font-normal text-gray-400">
+                {(planSuggestions.milestones || []).length} jalon{(planSuggestions.milestones || []).length !== 1 ? 's' : ''}
+              </span>
+            </h3>
+            <div className="space-y-1.5">
+              {(planSuggestions.milestones || []).map((m, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="shrink-0">
+                    {{ meeting: '🤝', technical: '💻', stack_check: '🔧', milestone: '🎯' }[m.type] || '🎯'}
+                  </span>
+                  <span>{m.title}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleAddToPlan}
+                disabled={addingToPlan}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
+              >
+                {addingToPlan ? 'Ajout…' : '+ Ajouter à la timeline'}
+              </button>
+              <button
+                onClick={() => setPlanIgnored(true)}
+                className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-2.5 px-4 rounded-xl text-sm transition"
+              >
+                Ignorer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isComplete && planSuggestions && (addedToPlan || planAlreadyAdded) && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-green-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+              </svg>
+              <span className="text-sm font-semibold text-green-800">Plan ajouté à la timeline</span>
+            </div>
+            <Link
+              to={`/projects/${projectId}/plan`}
+              className="text-sm font-medium text-green-800 hover:underline shrink-0"
+            >
+              Voir le plan →
+            </Link>
           </div>
         )}
 

@@ -1108,11 +1108,18 @@ router.get('/:sessionId', async (req, res) => {
       if (Array.isArray(v) || (v && typeof v === 'object')) return v;
       try { return JSON.parse(v || fallback); } catch { return JSON.parse(fallback); }
     };
+
+    const [{ count: planCount }] = await db('Milestone')
+      .count('id as count')
+      .where({ createdFromSessionId: sessionId });
+
     res.json({
       ...session,
-      agents:    parseJson(session.agents, '[]'),
-      exchanges: parseJson(session.exchanges, '[]'),
-      timeline:  parseJson(session.timeline, '[]'),
+      agents:          parseJson(session.agents, '[]'),
+      exchanges:       parseJson(session.exchanges, '[]'),
+      timeline:        parseJson(session.timeline, '[]'),
+      planSuggestions: parseJson(session.planSuggestions, 'null'),
+      planAlreadyAdded: parseInt(planCount || 0) > 0,
     });
   } catch (err) {
     console.error('[sessions/:id GET]', err.message);

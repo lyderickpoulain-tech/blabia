@@ -127,6 +127,8 @@ export default function NewSession() {
   const [savingCodeStatus, setSavingCodeStatus]   = useState(false);
   const [planSuggestions, setPlanSuggestions]     = useState(null);
   const [addedToPlan, setAddedToPlan]             = useState(false);
+  const [planIgnored, setPlanIgnored]             = useState(false);
+  const [addingToPlan, setAddingToPlan]           = useState(false);
   const { refreshPanel } = useProjectPanel();
 
   // ── Construit le payload de base pour toutes les requêtes de session ──────
@@ -283,31 +285,30 @@ export default function NewSession() {
     navigate(`/projects/${projectId}`);
   };
 
-  // ── Ajout automatique du plan sans intervention utilisateur ──────────────
-  const autoAddToPlan = async (data) => {
-    const milestones = data.milestones || [];
-    const standalone_todos = data.standalone_todos || [];
-    if (milestones.length === 0 && standalone_todos.length === 0) return;
+  // ── Réception des suggestions plan (SSE) — stockage local uniquement ────
+  const initSuggestions = (data) => {
+    if ((data.milestones || []).length === 0 && (data.standalone_todos || []).length === 0) return;
+    setPlanSuggestions(data);
+  };
+
+  // ── Ajout manuel à la timeline ─────────────────────────────────────────
+  const handleAddToPlan = async () => {
+    if (addingToPlan || !planSuggestions) return;
+    setAddingToPlan(true);
     try {
       await api.post(`/projects/${projectId}/plan/bulk`, {
-        milestones,
-        standalone_todos,
-        sessionId:       session?.id,
-        sourceSessionId: session?.id
+        milestones:       planSuggestions.milestones       || [],
+        standalone_todos: planSuggestions.standalone_todos || [],
+        sessionId:        session?.id,
+        sourceSessionId:  session?.id
       });
-      setPlanSuggestions(data);
       setAddedToPlan(true);
       refreshPanel();
     } catch (err) {
-      console.error('[autoAddToPlan]', err.message);
+      console.error('[addToPlan]', err.message);
+    } finally {
+      setAddingToPlan(false);
     }
-  };
-
-  const initSuggestions = (data) => {
-    const milestones = data.milestones || [];
-    const standalone_todos = data.standalone_todos || [];
-    if (milestones.length === 0 && standalone_todos.length === 0) return;
-    autoAddToPlan(data);
   };
 
   // ── Export + affichage du widget de confirmation ──────────────────────────
@@ -347,6 +348,8 @@ export default function NewSession() {
     setError('');
     setPlanSuggestions(null);
     setAddedToPlan(false);
+    setPlanIgnored(false);
+    setAddingToPlan(false);
   };
 
   return (
@@ -748,25 +751,53 @@ export default function NewSession() {
               </div>
             )}
 
-            {/* ── Plan ajouté automatiquement ──────────────────────────── */}
+            {/* ── Plan généré par les agents — ajout manuel ────────────── */}
+            {planSuggestions && !addedToPlan && !planIgnored && (
+              <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-5 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                  📋 Plan généré par les agents
+                  <span className="text-xs font-normal text-gray-400">
+                    {(planSuggestions.milestones || []).length} jalon{(planSuggestions.milestones || []).length !== 1 ? 's' : ''}
+                  </span>
+                </h3>
+                <div className="space-y-1.5">
+                  {(planSuggestions.milestones || []).map((m, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="shrink-0">
+                        {{ meeting: '🤝', technical: '💻', stack_check: '🔧', milestone: '🎯' }[m.type] || '🎯'}
+                      </span>
+                      <span>{m.title}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleAddToPlan}
+                    disabled={addingToPlan}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
+                  >
+                    {addingToPlan ? 'Ajout…' : '+ Ajouter à la timeline'}
+                  </button>
+                  <button
+                    onClick={() => setPlanIgnored(true)}
+                    className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-2.5 px-4 rounded-xl text-sm transition"
+                  >
+                    Ignorer
+                  </button>
+                </div>
+              </div>
+            )}
+
             {addedToPlan && planSuggestions && (
-              <div className="bg-green-50 border border-green-200 rounded-2xl p-5 space-y-3">
+              <div className="bg-green-50 border border-green-200 rounded-2xl p-5 space-y-2">
                 <div className="flex items-center gap-2">
                   <svg className="w-4 h-4 text-green-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
                   </svg>
-                  <span className="text-sm font-semibold text-green-800">Plan ajouté à la timeline</span>
+                  <span className="text-sm font-semibold text-green-800">
+                    ✓ {(planSuggestions.milestones || []).length} étape{(planSuggestions.milestones || []).length !== 1 ? 's' : ''} ajoutée{(planSuggestions.milestones || []).length !== 1 ? 's' : ''} à la timeline
+                  </span>
                 </div>
-                {(planSuggestions.milestones || []).length > 0 && (
-                  <div className="space-y-1 pl-1">
-                    {(planSuggestions.milestones || []).map((m, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm text-green-700">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                        <span>{m.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
                 <Link
                   to={`/projects/${projectId}/plan`}
                   className="inline-flex items-center gap-1 text-sm font-medium text-green-800 hover:underline"
