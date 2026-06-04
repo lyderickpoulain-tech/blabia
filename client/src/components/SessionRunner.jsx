@@ -135,19 +135,29 @@ function SuggestAgentCard({ suggestion, onAdd, onIgnore, adding }) {
   );
 }
 
-function SummarySteps({ exchanges, activeAgent, isSummaryPhase }) {
+function SummarySteps({ exchanges, activeAgent, isSummaryPhase, pendingQuestion }) {
   const agentExchanges = exchanges.filter(e => e.type === 'agent');
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-3">Progression</p>
-      {agentExchanges.map((ex, i) => (
+      {agentExchanges.map((ex) => (
         <div key={ex.id} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
           <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">✓</div>
           <span className="text-sm font-medium text-gray-700">{ex.agent}</span>
           <span className="text-xs text-gray-400 ml-auto">Terminé</span>
         </div>
       ))}
-      {activeAgent && (
+      {pendingQuestion && (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base shrink-0">❓</span>
+            <span className="text-sm font-semibold text-amber-800">{pendingQuestion.agent}</span>
+            <span className="text-xs text-amber-600 ml-auto font-medium">Attend votre réponse</span>
+          </div>
+          <p className="text-sm text-gray-800 leading-relaxed">{pendingQuestion.question}</p>
+        </div>
+      )}
+      {activeAgent && !pendingQuestion && (
         <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 animate-pulse">
           <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
             <span className="w-2 h-2 rounded-full bg-white animate-ping" />
@@ -158,7 +168,7 @@ function SummarySteps({ exchanges, activeAgent, isSummaryPhase }) {
           <span className="text-xs text-blue-500 ml-auto">En cours…</span>
         </div>
       )}
-      {agentExchanges.length === 0 && !activeAgent && (
+      {agentExchanges.length === 0 && !activeAgent && !pendingQuestion && (
         <p className="text-sm text-gray-400 py-4 text-center">Démarrage…</p>
       )}
     </div>
@@ -631,6 +641,7 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
             exchanges={exchanges}
             activeAgent={activeAgent}
             isSummaryPhase={isSummaryPhase}
+            pendingQuestion={pendingQuestion}
           />
         )}
 
