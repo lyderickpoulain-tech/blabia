@@ -165,18 +165,39 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
   }
 });
 
-// GET /api/projects/:id/milestones/:mid — jalon unique (breadcrumb, panel)
+// GET /api/projects/:id/milestones/:mid — jalon unique (breadcrumb, panel, StackCheckModal)
 router.get('/:id/milestones/:mid', async (req, res) => {
   const isAdmin = req.user.role === 'admin';
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
     const [milestone] = await db('Milestone')
       .select(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'checklistData'])
       .where({ id: req.params.mid, projectId: req.params.id })
       .limit(1);
     if (!milestone) return res.status(404).json({ error: 'Jalon introuvable' });
-    res.json(milestone);
+
+    // Données supplémentaires pour StackCheckModal
+    const [ownerUser] = await db('User').select(['techStack']).where({ id: project.userId }).limit(1);
+
+    const parse = (v) => v ? (typeof v === 'string' ? JSON.parse(v) : v) : null;
+
+    const [linkedSession] = await db('Session')
+      .select(['suggestedTools'])
+      .where({ milestoneId: req.params.mid })
+      .orderBy('createdAt', 'desc')
+      .limit(1);
+
+    const parsedSuggested = parse(linkedSession?.suggestedTools) || {};
+
+    res.json({
+      ...milestone,
+      userTechStack:    parse(ownerUser?.techStack)  || {},
+      projectTechStack: parse(project.techStack)     || {},
+      suggestedTools:   parsedSuggested.suggestedTools || [],
+      missingTools:     parsedSuggested.missingTools   || [],
+    });
   } catch (err) {
     console.error('[milestones/:mid GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
