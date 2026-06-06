@@ -232,6 +232,11 @@ async function patchTimelineEntry(sessionId, entryId, patch) {
 // Extrait jalons et tâches depuis le summary pour suggestions plan
 async function extractPlanSuggestions(summaryText) {
   const TIMEOUT_MS = 30_000;
+  console.log('[extractPlanSuggestions] START — summaryText length:', summaryText?.length ?? 0);
+  if (!summaryText || summaryText.trim().length < 50) {
+    console.log('[extractPlanSuggestions] SKIP — summaryText trop court');
+    return null;
+  }
   try {
     const extractPromise = anthropic.messages.create({
       model: MODEL,
@@ -266,16 +271,31 @@ ${summaryText.substring(0, 4000)}`
       setTimeout(() => reject(new Error('extractPlanSuggestions timeout')), TIMEOUT_MS)
     );
 
+    console.log('[extractPlanSuggestions] API call envoyée, attente réponse…');
     const response = await Promise.race([extractPromise, timeoutPromise]);
-    const match = response.content[0].text.trim().match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    const parsed = JSON.parse(match[0]);
-    return {
+    const rawText = response.content[0].text.trim();
+    console.log('[extractPlanSuggestions] réponse reçue, longueur:', rawText.length, '— début:', rawText.substring(0, 120));
+
+    const match = rawText.match(/\{[\s\S]*\}/);
+    if (!match) {
+      console.log('[extractPlanSuggestions] FAIL — aucun JSON trouvé dans la réponse');
+      return null;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (parseErr) {
+      console.error('[extractPlanSuggestions] FAIL — JSON.parse error:', parseErr.message, '— texte:', match[0].substring(0, 200));
+      return null;
+    }
+    const result = {
       milestones:       Array.isArray(parsed.milestones)       ? parsed.milestones       : [],
       standalone_todos: Array.isArray(parsed.standalone_todos) ? parsed.standalone_todos : []
     };
+    console.log('[extractPlanSuggestions] OK — milestones:', result.milestones.length, '/ standalone_todos:', result.standalone_todos.length);
+    return result;
   } catch (err) {
-    console.error('[extractPlanSuggestions]', err.message);
+    console.error('[extractPlanSuggestions] ERREUR:', err.message);
     return null;
   }
 }
@@ -888,15 +908,24 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
 
       send('complete', { sessionId });
 
-      // Extraction jalons/tâches pour suggestions plan (async in-stream, robuste)
+      // Extraction jalons/tâches pour suggestions plan
+      console.log('[sessions/run] début extraction plan — sessionId:', sessionId, '— summaryText length:', summaryText?.length ?? 0);
       try {
         const planSuggestions = await extractPlanSuggestions(summaryText);
+        console.log('[sessions/run] extractPlanSuggestions retour:', planSuggestions === null ? 'null' : `${planSuggestions.milestones?.length ?? 0} jalons`);
         if (planSuggestions && (planSuggestions.milestones.length > 0 || planSuggestions.standalone_todos.length > 0)) {
-          await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(planSuggestions) }).catch(() => {});
+          try {
+            await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(planSuggestions) });
+            console.log('[sessions/run] planSuggestions sauvegardé en DB ✓');
+          } catch (dbErr) {
+            console.error('[sessions/run] ERREUR DB update planSuggestions:', dbErr.message);
+          }
           send('plan_suggestions', planSuggestions);
+        } else {
+          console.log('[sessions/run] plan vide ou null — pas de sauvegarde');
         }
       } catch (err) {
-        console.error('[plan_suggestions extraction]', err.message);
+        console.error('[sessions/run] erreur extraction plan:', err.message);
       }
 
       res.end();
@@ -1007,14 +1036,23 @@ router.post('/:sessionId/synthesize', async (req, res) => {
       } catch {}
     }
 
-    // Suggestions plan (async in-stream)
+    // Suggestions plan (synthesize)
+    console.log('[sessions/synthesize] début extraction plan — sessionId:', sessionId);
     try {
       const planSuggestions = await extractPlanSuggestions(summaryText);
+      console.log('[sessions/synthesize] extractPlanSuggestions retour:', planSuggestions === null ? 'null' : `${planSuggestions.milestones?.length ?? 0} jalons`);
       if (planSuggestions && (planSuggestions.milestones.length > 0 || planSuggestions.standalone_todos.length > 0)) {
-        await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(planSuggestions) });
+        try {
+          await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(planSuggestions) });
+          console.log('[sessions/synthesize] planSuggestions sauvegardé en DB ✓');
+        } catch (dbErr) {
+          console.error('[sessions/synthesize] ERREUR DB update planSuggestions:', dbErr.message);
+        }
         send('plan_suggestions', planSuggestions);
       }
-    } catch {}
+    } catch (err) {
+      console.error('[sessions/synthesize] erreur extraction plan:', err.message);
+    }
 
     clearInterval(synthHeartbeat);
     res.end();
