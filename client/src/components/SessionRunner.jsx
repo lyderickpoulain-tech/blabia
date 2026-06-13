@@ -135,6 +135,64 @@ function SuggestAgentCard({ suggestion, onAdd, onIgnore, adding }) {
   );
 }
 
+const STEP_TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
+const STEP_TYPE_ICON = { synthesis: '📄', memory: '🧠', claude_code: '💻', timeline_steps: '📅', stack_check: '🔧', milestone: '🎯' };
+
+function SuggestStepCard({ suggestion, projectId, onAdd, onIgnore }) {
+  const [title, setTitle]   = useState(suggestion.title);
+  const [type, setType]     = useState(suggestion.type || 'synthesis');
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded]   = useState(false);
+
+  const handleAdd = async () => {
+    setAdding(true);
+    try {
+      await onAdd({ title: title.trim(), type });
+      setAdded(true);
+    } catch {}
+    setAdding(false);
+  };
+
+  if (added) return (
+    <div className="rounded-2xl border border-green-200 bg-green-50 p-3 text-xs text-green-700 flex items-center gap-2">
+      <span>✓</span><span>Étape ajoutée à la timeline</span>
+    </div>
+  );
+
+  return (
+    <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-base">💡</span>
+          <div>
+            <p className="text-sm font-semibold text-blue-800">{suggestion.agentName} suggère une étape</p>
+          </div>
+        </div>
+        <button onClick={onIgnore} className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0">×</button>
+      </div>
+      <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+        className="w-full text-sm border border-blue-200 bg-white rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+      <div className="flex gap-1">
+        {STEP_TYPES.map(t => (
+          <button key={t} type="button" onClick={() => setType(t)} title={t}
+            className={`flex-1 text-base py-1 rounded-lg border transition ${
+              type === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+            }`}>
+            {STEP_TYPE_ICON[t]}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onIgnore} className="flex-1 text-sm border border-gray-200 text-gray-500 py-2 rounded-xl hover:bg-gray-50">Ignorer</button>
+        <button onClick={handleAdd} disabled={!title.trim() || adding}
+          className="flex-1 text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl disabled:opacity-50">
+          {adding ? 'Ajout…' : '+ Ajouter à la timeline'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SummarySteps({ exchanges, activeAgent, isSummaryPhase, pendingQuestion }) {
   const agentExchanges = exchanges.filter(e => e.type === 'agent');
   return (
@@ -225,7 +283,8 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
   const [humanAnswer, setHumanAnswer]           = useState('');
   const [sending, setSending]                   = useState(false);
   const [error, setError]                       = useState('');
-  const [pendingSuggestions, setPendingSuggestions] = useState([]);
+  const [pendingSuggestions, setPendingSuggestions]   = useState([]);
+  const [pendingStepSuggestions, setPendingStepSuggestions] = useState([]);
   const [addingAgent, setAddingAgent]           = useState(null);
   const [turnComplete, setTurnComplete]         = useState(false);
   const [currentTurn, setCurrentTurn]           = useState(1);
@@ -392,6 +451,14 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
           role: ev.role,
           systemPrompt: ev.systemPrompt,
           emoji: ev.emoji || '🤖'
+        }]);
+        break;
+      case 'suggest_step':
+        setPendingStepSuggestions(p => [...p, {
+          id: `step-${Date.now()}`,
+          title: ev.title,
+          agentName: ev.agentName,
+          type: 'synthesis',
         }]);
         break;
       case 'turn_complete':
@@ -669,6 +736,23 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
                 adding={addingAgent === s.id}
                 onAdd={() => handleAddAgent(s)}
                 onIgnore={() => setPendingSuggestions(p => p.filter(x => x.id !== s.id))}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Suggestions d'étapes — non bloquantes */}
+        {pendingStepSuggestions.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {pendingStepSuggestions.map(s => (
+              <SuggestStepCard
+                key={s.id}
+                suggestion={s}
+                projectId={projectId}
+                onAdd={async ({ title, type }) => {
+                  await api.post(`/projects/${projectId}/milestones`, { title, type });
+                }}
+                onIgnore={() => setPendingStepSuggestions(p => p.filter(x => x.id !== s.id))}
               />
             ))}
           </div>

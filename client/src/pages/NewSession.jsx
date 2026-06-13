@@ -74,31 +74,6 @@ function AgentChip({ agent }) {
   );
 }
 
-function ModeCard({ value, current, label, description, icon, onChange }) {
-  const active = value === current;
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(value)}
-      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left w-full transition ${
-        active ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
-      }`}
-    >
-      <span className="text-xl mt-0.5">{icon}</span>
-      <div>
-        <p className={`font-semibold text-sm ${active ? 'text-blue-700' : 'text-gray-800'}`}>{label}</p>
-        <p className="text-xs text-gray-500 mt-0.5 leading-snug">{description}</p>
-      </div>
-      {active && (
-        <div className="ml-auto shrink-0 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mt-0.5">
-          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
-          </svg>
-        </div>
-      )}
-    </button>
-  );
-}
 
 // ── Phases ─────────────────────────────────────────────────────────────────────
 // 'input'    → formulaire tâche + mode
@@ -114,6 +89,7 @@ export default function NewSession() {
   const parentSessionId = location.state?.parentSessionId || null;
   const initialTask     = location.state?.initialTask     || '';
   const milestoneId     = location.state?.milestoneId     || null;
+  const milestoneType   = location.state?.milestoneType   || null;
 
   const [phase, setPhase]                 = useState('intention');
   const [task, setTask]                   = useState(initialTask);
@@ -138,7 +114,16 @@ export default function NewSession() {
   const [planIgnored, setPlanIgnored]             = useState(false);
   const [addingToPlan, setAddingToPlan]           = useState(false);
   // ── Évolution 2 : configurateur 3 étapes ──────────────────────────────────
-  const [intentions, setIntentions]               = useState(new Set(['synthesis']));
+  const [intentions, setIntentions]               = useState(() => {
+    const MT_MAP = {
+      synthesis: 'synthesis', meeting: 'synthesis',
+      memory: 'memory',
+      claude_code: 'claude_code', technical: 'claude_code',
+      timeline_steps: 'timeline_steps',
+    };
+    const initial = milestoneType && MT_MAP[milestoneType] ? MT_MAP[milestoneType] : 'synthesis';
+    return new Set([initial]);
+  });
   const [availableAgents, setAvailableAgents]     = useState([]);
   const [selectedAgentIds, setSelectedAgentIds]   = useState(new Set());
   const [agentsLoading, setAgentsLoading]         = useState(false);
@@ -600,36 +585,34 @@ export default function NewSession() {
                 </p>
               </div>
 
-              {/* Sélecteur de mode */}
+              {/* Sélecteur de mode simplifié */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mode de session
-                </label>
-                <div className="grid grid-cols-1 gap-2">
-                  <ModeCard
-                    value="realtime"
-                    current={mode}
-                    label="Synthèse approfondie"
-                    description="Les agents collaborent et produisent une restitution finale structurée"
-                    icon="⚡"
-                    onChange={setMode}
-                  />
-                  <ModeCard
-                    value="conversation"
-                    current={mode}
-                    label="Conversation de projet"
-                    description="Échanges continus, vous pilotez — pas de synthèse finale obligatoire"
-                    icon="💬"
-                    onChange={setMode}
-                  />
-                  <ModeCard
-                    value="summary"
-                    current={mode}
-                    label="Résumé final"
-                    description="Recevez directement la restitution condensée sans voir les échanges"
-                    icon="📋"
-                    onChange={setMode}
-                  />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    {
+                      value: 'conversation',
+                      label: '💬 Conversation',
+                      desc: intentions.has('claude_code') && intentions.size === 1
+                        ? 'Décrire le besoin avec les agents'
+                        : 'Échanges libres avec les agents (recommandé)',
+                    },
+                    {
+                      value: 'realtime',
+                      label: intentions.has('claude_code') && intentions.size === 1 ? '⚡ Génération directe' : '⚡ Synthèse directe',
+                      desc: intentions.has('claude_code') && intentions.size === 1
+                        ? 'Les agents génèrent le prompt Claude Code directement'
+                        : 'Les agents produisent directement sans échange',
+                    },
+                  ].map(opt => (
+                    <button key={opt.value} type="button" onClick={() => setMode(opt.value)}
+                      className={`flex flex-col items-start gap-1 p-3.5 rounded-xl border-2 text-left transition ${
+                        mode === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}>
+                      <span className={`text-sm font-semibold ${mode === opt.value ? 'text-blue-700' : 'text-gray-700'}`}>{opt.label}</span>
+                      <span className="text-xs text-gray-400 leading-snug">{opt.desc}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 

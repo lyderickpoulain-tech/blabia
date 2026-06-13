@@ -797,22 +797,27 @@ Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${timeli
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
 Contraintes de réponse : maximum 250 mots, va à l'essentiel avec des points clés, évite les introductions et conclusions génériques.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
-Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.`;
+Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.
+Si tu identifies une étape future importante et concrète pour ce projet (action à mener après cette session), tu peux la signaler avec : [SUGGEST_STEP: titre de l'étape]. Une seule suggestion par contribution.`;
 
       const fullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
         send('chunk', { agent: agent.name, text: chunk });
       }, 2048, session.model || MODEL);
 
-      // Détecter une question et/ou une suggestion d'agent
+      // Détecter question, suggestion agent, suggestion étape
       const questionMatch = fullText.match(/\[QUESTION:\s*([\s\S]*?)\]/);
       let suggestedAgentData = null;
       const suggestMatch = fullText.match(/\[SUGGEST_AGENT:\s*(\{[\s\S]*?\})\]/);
       if (suggestMatch) {
         try { suggestedAgentData = JSON.parse(suggestMatch[1]); } catch {}
       }
+      const stepMatch = fullText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
+      const suggestedStepTitle = stepMatch ? stepMatch[1].trim() : null;
+
       const agentContent = fullText
         .replace(/\[QUESTION:[\s\S]*?\]/, '')
         .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/, '')
+        .replace(/\[SUGGEST_STEP:[\s\S]*?\]/, '')
         .trim();
 
       const agentExchange = {
@@ -836,6 +841,9 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
           systemPrompt: suggestedAgentData.systemPrompt || `Tu es ${suggestedAgentData.name}. ${suggestedAgentData.role}.`,
           emoji: suggestedAgentData.emoji || '🤖'
         });
+      }
+      if (suggestedStepTitle) {
+        send('suggest_step', { title: suggestedStepTitle, agentName: agent.name });
       }
 
       if (questionMatch) {
@@ -942,7 +950,7 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
       await saveSession(sessionId, exchanges, summaryText, 'open');
       await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
       updateProjectContext(projectId, session.task, summaryText);
-      if (project.isTechnical) extractSuggestedTools(sessionId, summaryText, projectId);
+      extractSuggestedTools(sessionId, summaryText, projectId);
 
       // Mise à jour du statut du jalon lié
       if (session.milestoneId) {

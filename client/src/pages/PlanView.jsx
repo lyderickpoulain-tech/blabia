@@ -14,12 +14,17 @@ const STATUSES = ['pending', 'in_progress', 'done', 'blocked'];
 
 // ── Types d'étapes ────────────────────────────────────────────────────────────
 const MILESTONE_TYPE_CONFIG = {
-  meeting:     { label: 'Réunion',            icon: '🤝', borderColor: 'border-l-blue-400' },
-  technical:   { label: 'Tâche technique',    icon: '💻', borderColor: 'border-l-violet-400' },
-  stack_check: { label: 'Vérif. stack',       icon: '🔧', borderColor: 'border-l-orange-400' },
-  milestone:   { label: 'Jalon',             icon: '🎯', borderColor: 'border-l-gray-300' },
+  synthesis:      { label: 'Synthèse',      icon: '📄', borderColor: 'border-l-blue-400' },
+  memory:         { label: 'Souvenir',      icon: '🧠', borderColor: 'border-l-green-400' },
+  claude_code:    { label: 'Claude Code',   icon: '💻', borderColor: 'border-l-violet-400' },
+  timeline_steps: { label: 'Étapes',        icon: '📅', borderColor: 'border-l-yellow-400' },
+  stack_check:    { label: 'Vérif. stack',  icon: '🔧', borderColor: 'border-l-orange-400' },
+  milestone:      { label: 'Jalon',         icon: '🎯', borderColor: 'border-l-gray-300' },
+  // rétrocompat
+  meeting:        { label: 'Synthèse',      icon: '📄', borderColor: 'border-l-blue-400' },
+  technical:      { label: 'Claude Code',   icon: '💻', borderColor: 'border-l-violet-400' },
 };
-const MILESTONE_TYPES = Object.keys(MILESTONE_TYPE_CONFIG);
+const MILESTONE_TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
 
 // ── Configs priorité et source ────────────────────────────────────────────────
 const PRIORITY_CONFIG = {
@@ -220,7 +225,7 @@ function MilestoneCard({
   onDragStart, onDragOver, onDrop, onDragEnd,
 }) {
   const typeConfig = MILESTONE_TYPE_CONFIG[milestone.type] || MILESTONE_TYPE_CONFIG.meeting;
-  const [form, setForm]   = useState({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'meeting' });
+  const [form, setForm]   = useState({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'synthesis' });
   const [saving, setSaving] = useState(false);
   const titleRef = useRef(null);
 

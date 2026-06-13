@@ -9,7 +9,6 @@ export default function NewProject() {
   const [objectif, setObjectif] = useState('');
   const [contexte, setContexte] = useState('');
   const [notes, setNotes] = useState('');
-  const [isTechnical, setIsTechnical] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -19,7 +18,7 @@ export default function NewProject() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, isTechnical });
+      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes });
       navigate(`/projects/${data.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
@@ -67,32 +66,6 @@ export default function NewProject() {
                 maxLength={500}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
               />
-            </div>
-
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Type de projet</p>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <button type="button" onClick={() => setIsTechnical(false)}
-                  className={`flex items-start gap-2.5 p-3.5 rounded-xl border-2 text-left transition ${
-                    !isTechnical ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}>
-                  <span className="text-xl shrink-0">💬</span>
-                  <div>
-                    <p className={`font-semibold text-sm ${!isTechnical ? 'text-blue-700' : 'text-gray-700'}`}>Projet libre</p>
-                    <p className="text-xs text-gray-400 mt-0.5 leading-snug">Questions, stratégie, marketing, contenu…</p>
-                  </div>
-                </button>
-                <button type="button" onClick={() => setIsTechnical(true)}
-                  className={`flex items-start gap-2.5 p-3.5 rounded-xl border-2 text-left transition ${
-                    isTechnical ? 'border-violet-500 bg-violet-50' : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}>
-                  <span className="text-xl shrink-0">💻</span>
-                  <div>
-                    <p className={`font-semibold text-sm ${isTechnical ? 'text-violet-700' : 'text-gray-700'}`}>Projet technique</p>
-                    <p className="text-xs text-gray-400 mt-0.5 leading-snug">Code, développement, infrastructure…</p>
-                  </div>
-                </button>
-              </div>
             </div>
 
             <div className="border-t border-gray-100 pt-4">

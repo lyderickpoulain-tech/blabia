@@ -48,13 +48,15 @@ router.post('/claude-code', async (req, res) => {
       ? JSON.parse(user.techStack) : (user?.techStack || {});
 
     let effectiveStack = userStack;
+    let devDirectory = null;
     if (projectId) {
-      const [project] = await db('Project').select(['techStack']).where({ id: projectId }).limit(1);
+      const [project] = await db('Project').select(['techStack', 'devDirectory']).where({ id: projectId }).limit(1);
       if (project?.techStack) {
         const projectStack = typeof project.techStack === 'string'
           ? JSON.parse(project.techStack) : project.techStack;
         effectiveStack = projectStack;
       }
+      devDirectory = project?.devDirectory || null;
     }
 
     const techStack = effectiveStack;
@@ -75,7 +77,7 @@ Restitution :
 ${summary.trim()}
 
 Le prompt doit :
-- Commencer par le contexte du projet
+${devDirectory ? `- Commencer par : cd "${devDirectory}"\n` : '- Mentionner que l\'utilisateur doit naviguer manuellement vers son répertoire de projet\n'}- Commencer par le contexte du projet
 - Lister les tâches techniques à implémenter dans l'ordre
 - Préciser la stack technique si mentionnée
 - Demander une validation étape par étape

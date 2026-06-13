@@ -5,21 +5,30 @@ import ExportModal from './ExportModal';
 import StackCheckModal from './StackCheckModal';
 import QuickExportModal from './QuickExportModal';
 
-// ── Configs ────────────────────────────────────────────────────────────────────
+// ── Configs types (alignés sur intentions v2.1) ───────────────────────────────
 const TYPE_ICON = {
-  meeting:     '🤝',
-  technical:   '💻',
-  stack_check: '🔧',
-  milestone:   '🎯',
+  synthesis:      '📄',
+  memory:         '🧠',
+  claude_code:    '💻',
+  timeline_steps: '📅',
+  stack_check:    '🔧',
+  milestone:      '🎯',
+  // rétrocompat
+  meeting:        '📄',
+  technical:      '💻',
 };
 const TYPE_LABEL = {
-  meeting:     'Réunion',
-  technical:   'Technique',
-  stack_check: 'Vérification stack',
-  milestone:   'Jalon',
+  synthesis:      'Synthèse',
+  memory:         'Souvenir',
+  claude_code:    'Claude Code',
+  timeline_steps: 'Étapes',
+  stack_check:    'Vérif. stack',
+  milestone:      'Jalon',
+  meeting:        'Synthèse',
+  technical:      'Claude Code',
 };
 
-const TYPES = ['meeting', 'technical', 'stack_check', 'milestone'];
+const TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
 
 const STATUS_DOT = {
   pending:     { cls: 'bg-gray-300',  label: 'Pas commencé' },
@@ -166,7 +175,7 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
           <div className="space-y-2 pt-1">
             <button
               onClick={() => navigate(`/projects/${projectId}/session/new`, {
-                state: { milestoneId: milestone.id, initialTask: milestone.title }
+                state: { milestoneId: milestone.id, initialTask: milestone.title, milestoneType: milestone.type }
               })}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
             >
@@ -259,7 +268,7 @@ function PanelBody({
   loading, showAdd, setShowAdd, onAdd, onMilestoneClick,
   detailMilestone, setDetailMilestone,
   sessionDrawer, setSessionDrawer,
-  onRefresh, navigate, isMobile, hiddenCount,
+  onRefresh, navigate, isMobile, devDirectory,
 }) {
   const [title, setTitle]           = useState('');
   const [type, setType]             = useState('meeting');
@@ -346,8 +355,13 @@ function PanelBody({
                     title={m.title}
                   >
                     <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🎯'}</span>
-                    <span className="text-xs text-gray-700 flex-1 min-w-0 truncate leading-snug">
-                      {trunc(m.title)}
+                    <span className="flex-1 min-w-0 leading-snug">
+                      <span className="text-xs text-gray-700 truncate block">{trunc(m.title)}</span>
+                      {(m.type === 'claude_code' || m.type === 'technical') && (
+                        <span className={`text-[9px] truncate block ${devDirectory ? 'text-gray-400' : 'text-orange-400'}`}>
+                          📁 {devDirectory ? trunc(devDirectory, 22) : 'Répertoire non défini'}
+                        </span>
+                      )}
                     </span>
                     {linked && (
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-300 shrink-0" title="Session liée" />
@@ -380,13 +394,6 @@ function PanelBody({
           </>
         )}
       </div>
-
-      {/* Notice étapes masquées */}
-      {hiddenCount > 0 && (
-        <div className="mx-2 mb-1 px-2 py-1.5 bg-gray-50 rounded-lg text-[10px] text-gray-400 text-center">
-          {hiddenCount} étape{hiddenCount > 1 ? 's' : ''} technique{hiddenCount > 1 ? 's' : ''} masquée{hiddenCount > 1 ? 's' : ''} — passer en mode technique pour les voir
-        </div>
-      )}
 
       {/* Bouton / formulaire "+ Ajouter une étape" */}
       <div className="shrink-0 border-t border-gray-100 px-2 py-2">
@@ -447,7 +454,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [techChoiceMilestone, setTechChoiceMilestone] = useState(null);
   const [quickExportMilestone, setQuickExportMilestone] = useState(null);
 
-  const [isTechnical, setIsTechnical] = useState(true); // défaut true pour ne pas masquer par erreur
+  const [devDirectory, setDevDirectory] = useState(null);
 
   const loadMilestones = useCallback(async () => {
     if (!projectId) return;
@@ -456,7 +463,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
       const { data } = await api.get(`/projects/${projectId}/plan`);
       setMilestones(data.milestones || []);
       setMilestoneSessions(data.milestoneSessions || {});
-      if (data.isTechnical !== undefined) setIsTechnical(data.isTechnical);
+      if (data.devDirectory !== undefined) setDevDirectory(data.devDirectory);
     } catch {}
     setLoading(false);
   }, [projectId]);
@@ -470,47 +477,50 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     } catch {}
   };
 
-  // ── Comportement au clic selon le type ──────────────────────────────────────
-  const handleMilestoneClick = async (m, linked) => {
-    switch (m.type) {
-      case 'meeting':
-        setSessionDrawer({ milestone: m, linked: linked || null });
-        break;
-
-      case 'technical':
-        if (linked?.hasCode && linked?.summary) {
-          setExportSession(linked);
-        } else if (linked) {
-          setSessionDrawer({ milestone: m, linked });
-        } else {
-          setTechChoiceMilestone(m);
-        }
-        break;
-
-      case 'stack_check': {
-        try {
-          const { data: full } = await api.get(`/projects/${projectId}/milestones/${m.id}`);
-          setStackCheckMilestone(full);
-        } catch {
-          setStackCheckMilestone(m);
-        }
-        break;
-      }
-
-      case 'milestone':
-        setDetailMilestone(m);
-        break;
-
-      default: break;
-    }
+  // Mapping type → intention pour pré-sélection
+  const TYPE_TO_INTENTION = {
+    synthesis: 'synthesis', meeting: 'synthesis',
+    memory: 'memory',
+    claude_code: 'claude_code', technical: 'claude_code',
+    timeline_steps: 'timeline_steps',
   };
 
-  // Filtre : masquer stack_check et technical pour projets non techniques
-  const visibleMilestones = isTechnical
-    ? milestones
-    : milestones.filter(m => m.type !== 'stack_check' && m.type !== 'technical');
-  const hiddenCount = milestones.length - visibleMilestones.length;
+  // ── Comportement au clic selon le type ──────────────────────────────────────
+  const handleMilestoneClick = async (m, linked) => {
+    const t = m.type;
+    // Types qui ouvrent un drawer session
+    if (['synthesis', 'memory', 'timeline_steps', 'meeting'].includes(t)) {
+      setSessionDrawer({ milestone: m, linked: linked || null, intention: TYPE_TO_INTENTION[t] });
+      return;
+    }
+    // claude_code / technical : choix rapide vs session
+    if (['claude_code', 'technical'].includes(t)) {
+      if (linked?.hasCode && linked?.summary) {
+        setExportSession(linked);
+      } else if (linked) {
+        setSessionDrawer({ milestone: m, linked, intention: 'claude_code' });
+      } else {
+        setTechChoiceMilestone(m);
+      }
+      return;
+    }
+    if (t === 'stack_check') {
+      try {
+        const { data: full } = await api.get(`/projects/${projectId}/milestones/${m.id}`);
+        setStackCheckMilestone(full);
+      } catch { setStackCheckMilestone(m); }
+      return;
+    }
+    if (t === 'milestone') {
+      setDetailMilestone(m);
+      return;
+    }
+    // fallback
+    setSessionDrawer({ milestone: m, linked: linked || null, intention: 'synthesis' });
+  };
 
+  const visibleMilestones = milestones;
+  const hiddenCount = 0;
   const doneMilestones = milestones.filter(m => m.status === 'done').length;
 
   const panelBodyProps = {
@@ -521,7 +531,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     detailMilestone, setDetailMilestone,
     sessionDrawer, setSessionDrawer,
     onRefresh: loadMilestones,
-    navigate,
+    navigate, devDirectory,
   };
 
   return (
@@ -553,7 +563,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               )}
             </div>
             <div style={{ height: 'calc(100vh - 120px - 44px)', display: 'flex', flexDirection: 'column' }}>
-              <PanelBody {...panelBodyProps} isMobile={false} hiddenCount={hiddenCount} />
+              <PanelBody {...panelBodyProps} isMobile={false} devDirectory={devDirectory} />
             </div>
           </div>
         </div>
@@ -579,7 +589,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               </button>
             </div>
             <div className="flex-1 overflow-hidden relative">
-              <PanelBody {...panelBodyProps} isMobile={true} hiddenCount={hiddenCount} />
+              <PanelBody {...panelBodyProps} isMobile={true} devDirectory={devDirectory} />
             </div>
           </div>
         </div>

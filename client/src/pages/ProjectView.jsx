@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
@@ -377,6 +377,53 @@ function SessionRow({ session, projectId }) {
   );
 }
 
+function DevDirectoryRow({ project, isOwner, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState(project.devDirectory || '');
+  const [saving, setSaving]   = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/projects/${project.id}`, { devDirectory: val });
+      onSave(val.trim() || null);
+      setEditing(false);
+    } catch {}
+    setSaving(false);
+  };
+
+  if (editing) return (
+    <div className="flex items-center gap-1.5 mt-1.5">
+      <span className="text-xs text-gray-400">📁</span>
+      <input autoFocus type="text" value={val} onChange={e => setVal(e.target.value)}
+        placeholder="ex : C:\MonProjet ou /home/user/projet"
+        className="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400 font-mono"
+        onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+      />
+      <button onClick={handleSave} disabled={saving} className="text-xs bg-blue-600 text-white px-2 py-1 rounded-lg">
+        {saving ? '…' : '✓'}
+      </button>
+      <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+    </div>
+  );
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5">
+      <span className="text-xs text-gray-400">📁</span>
+      {project.devDirectory
+        ? <span className="text-xs text-gray-500 font-mono">{project.devDirectory}</span>
+        : <span className="text-xs text-gray-300">Aucun répertoire de dev</span>
+      }
+      {isOwner && (
+        <button onClick={() => { setVal(project.devDirectory || ''); setEditing(true); }}
+          className="text-xs text-gray-400 hover:text-blue-500 transition ml-1">
+          {project.devDirectory ? 'Modifier' : 'Définir'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectView() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -687,23 +734,6 @@ export default function ProjectView() {
                   Archivé
                 </span>
               )}
-              {project.isTechnical
-                ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 shrink-0">💻 Projet technique</span>
-                : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 shrink-0">💬 Projet libre</span>
-              }
-              {(isAdmin || project.userId === user?.id) && (
-                <button
-                  onClick={async () => {
-                    try {
-                      const { data } = await api.patch(`/projects/${id}`, { isTechnical: !project.isTechnical });
-                      setProject(prev => ({ ...prev, isTechnical: data.isTechnical }));
-                    } catch {}
-                  }}
-                  className="text-xs text-gray-400 hover:text-blue-500 transition underline underline-offset-2"
-                >
-                  {project.isTechnical ? 'Passer en projet libre' : 'Passer en projet technique'}
-                </button>
-              )}
             </div>
             {project.description && (
               <p className="text-gray-500 text-sm mt-1">{project.description}</p>
@@ -733,7 +763,10 @@ export default function ProjectView() {
                 + Ajouter un brief projet
               </button>
             )}
-            <p className="text-xs text-gray-400 mt-2">
+            {/* Répertoire de dev (Évolution 7) */}
+            <DevDirectoryRow project={project} isOwner={isAdmin || project.userId === user?.id}
+              onSave={d => setProject(prev => ({ ...prev, devDirectory: d }))} />
+            <p className="text-xs text-gray-400 mt-1">
               {project.sessionCount ?? 0} session{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · Créé le {new Date(project.createdAt).toLocaleDateString('fr-FR')}
             </p>
           </div>
@@ -863,24 +896,7 @@ export default function ProjectView() {
         </div>
       )}
 
-      {/* ── Onglets Sessions / Stack / Agents ───────────────────────────── */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-1">
-        {[
-          { id: 'sessions', label: 'Sessions' },
-          ...(project.isTechnical ? [{ id: 'stack', label: 'Stack' }] : []),
-          { id: 'agents',   label: 'Agents' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              activeTab === tab.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* ── Onglet Sessions ──────────────────────────────────────────────── */}
 
       {/* ── ONGLET SESSIONS ─────────────────────────────────────────────────── */}
       {activeTab === 'sessions' && (
@@ -935,237 +951,6 @@ export default function ProjectView() {
         </div>
       )}
 
-      {/* ── ONGLET STACK ────────────────────────────────────────────────────── */}
-      {activeTab === 'stack' && (() => {
-        // Agréger les outils suggérés/manquants depuis toutes les sessions
-        const allSuggested = [...new Set(
-          sessions.flatMap(s => {
-            const st = s.suggestedTools
-              ? (typeof s.suggestedTools === 'string' ? JSON.parse(s.suggestedTools) : s.suggestedTools)
-              : null;
-            return st?.suggestedTools || [];
-          })
-        )];
-        const allMissing = [...new Set(
-          sessions.flatMap(s => {
-            const st = s.suggestedTools
-              ? (typeof s.suggestedTools === 'string' ? JSON.parse(s.suggestedTools) : s.suggestedTools)
-              : null;
-            return st?.missingTools || [];
-          })
-        )];
-
-        return (
-          <div className="space-y-5">
-            {/* En-tête stack */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold text-gray-900">Stack technique du projet</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Surcharge votre environnement global pour ce projet. Sauvegarde automatique.</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {savingStack && (
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                      Sauvegarde…
-                    </span>
-                  )}
-                  {savedStack && !savingStack && (
-                    <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">✓ Sauvegardée</span>
-                  )}
-                  <button
-                    onClick={() => { setProjectStack({ ...userGlobalStack }); isFirstStackLoad.current = false; }}
-                    className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 px-2.5 py-1 rounded-lg transition"
-                  >
-                    ↺ Réinitialiser depuis mon environnement global
-                  </button>
-                </div>
-              </div>
-              {stackError && <p className="text-xs text-red-600 mt-2">⚠️ {stackError}</p>}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {CATEGORIES.map(cat => (
-                <CategoryCard key={cat.id} category={cat} stack={projectStack} onToggle={toggleStackOption} onAutreChange={setStackAutre} />
-              ))}
-            </div>
-
-            {/* Section 2 — Outils préconisés */}
-            {allSuggested.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-                <h3 className="font-semibold text-gray-900 mb-1">Outils préconisés par les agents</h3>
-                <p className="text-xs text-gray-400 mb-3">Extraits automatiquement des sessions.</p>
-                <div className="flex flex-wrap gap-2">
-                  {allSuggested.map(tool => (
-                    <div key={tool} className="flex items-center gap-1.5 bg-violet-50 border border-violet-200 rounded-lg px-3 py-1.5">
-                      <span className="text-xs font-medium text-violet-800">{tool}</span>
-                      <button
-                        onClick={() => addToolToStack(tool)}
-                        className="text-xs text-violet-600 hover:text-violet-800 font-semibold transition"
-                        title="Ajouter à ma stack"
-                      >
-                        + Ajouter
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Section 3 — Outils manquants */}
-            {allMissing.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-                <h3 className="font-semibold text-gray-900 mb-1">Outils manquants identifiés</h3>
-                <p className="text-xs text-gray-400 mb-3">Fonctionnalités ou outils mentionnés comme nécessaires.</p>
-                <div className="flex flex-wrap gap-2">
-                  {allMissing.map(tool => (
-                    <div key={tool} className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
-                      <span className="text-xs font-medium text-orange-800">{tool}</span>
-                      <button
-                        onClick={() => addToolToStack(tool)}
-                        className="text-xs text-orange-600 hover:text-orange-800 font-semibold transition"
-                        title="Ajouter à ma stack"
-                      >
-                        + Ajouter
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {allSuggested.length === 0 && allMissing.length === 0 && sessions.length > 0 && (
-              <div className="bg-gray-50 rounded-xl border border-gray-200 p-5 text-center text-xs text-gray-400">
-                Les outils suggérés apparaîtront ici après chaque session complète.
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ── ONGLET AGENTS ────────────────────────────────────────────────── */}
-      {activeTab === 'agents' && (() => {
-        const activeAgents   = projectAgents.filter(a => a.enabled);
-        const inactiveAgents = projectAgents.filter(a => !a.enabled);
-        return (
-          <div className="space-y-5">
-            {/* En-tête */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="font-semibold text-gray-900">Agents du projet</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Activez les agents pour ce projet et réordonnez par glisser-déposer.</p>
-              </div>
-              <button onClick={() => setShowCreateAgent(v => !v)} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-xl transition">
-                + Créer un agent
-              </button>
-            </div>
-
-            {/* Formulaire de création inline */}
-            {showCreateAgent && (
-              <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-5">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Nouvel agent pour ce projet</h3>
-                <form onSubmit={handleCreateAgent} className="space-y-3">
-                  <div className="flex items-end gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Emoji</label>
-                      <input type="text" value={newAgentForm.emoji} onChange={e => setNewAgentForm(p => ({ ...p, emoji: e.target.value }))} maxLength={2} className="w-12 text-center text-xl px-1 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Nom <span className="text-red-400">*</span></label>
-                      <input type="text" required value={newAgentForm.name} onChange={e => setNewAgentForm(p => ({ ...p, name: e.target.value }))} placeholder="Ex : Juriste…" className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Rôle <span className="text-red-400">*</span></label>
-                    <input type="text" required value={newAgentForm.role} onChange={e => setNewAgentForm(p => ({ ...p, role: e.target.value }))} placeholder="Ex : Analyse les aspects juridiques" className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Prompt système <span className="text-red-400">*</span></label>
-                    <textarea required rows={4} value={newAgentForm.systemPrompt} onChange={e => setNewAgentForm(p => ({ ...p, systemPrompt: e.target.value }))} placeholder="Tu es un expert en…" className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
-                  </div>
-                  {createAgentError && <p className="text-xs text-red-600">⚠️ {createAgentError}</p>}
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setShowCreateAgent(false)} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50 transition">Annuler</button>
-                    <button type="submit" disabled={creatingAgent} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-medium transition disabled:opacity-50">
-                      {creatingAgent ? 'Création…' : 'Créer et ajouter'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {agentsLoading && <div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>}
-
-            {/* Agents actifs — draggable */}
-            {!agentsLoading && activeAgents.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Actifs — {activeAgents.length}</p>
-                </div>
-                <ul className="divide-y divide-gray-50">
-                  {activeAgents.map(agent => (
-                    <li key={agent.id} draggable
-                      onDragStart={() => handleAgentDragStart(agent.id)}
-                      onDragOver={e => handleAgentDragOver(e, agent.id)}
-                      onDrop={e => handleAgentDrop(e, agent.id)}
-                      onDragEnd={handleAgentDragEnd}
-                      className={`flex items-center gap-3 px-5 py-3 transition cursor-grab active:cursor-grabbing ${
-                        dragOverAgentId === agent.id && draggedAgentId !== agent.id ? 'bg-blue-50 border-l-2 border-l-blue-400' : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="text-gray-300 shrink-0 select-none text-sm">⠿</span>
-                      <span className="text-xl shrink-0">{agent.emoji || '🤖'}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-sm font-medium text-gray-800">{agent.name}</p>
-                          {agent.isDefault && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Défaut</span>}
-                          {agent.source === 'suggestion' && <span className="text-xs bg-violet-100 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded-full">Suggéré</span>}
-                        </div>
-                        <p className="text-xs text-gray-400 truncate">{agent.role}</p>
-                      </div>
-                      <button onClick={() => toggleAgent(agent)} className="shrink-0 w-9 h-5 rounded-full bg-blue-500 transition-colors relative" title="Désactiver">
-                        <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Agents disponibles — inactifs */}
-            {!agentsLoading && inactiveAgents.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Disponibles — {inactiveAgents.length}</p>
-                </div>
-                <ul className="divide-y divide-gray-50">
-                  {inactiveAgents.map(agent => (
-                    <li key={agent.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition">
-                      <span className="text-xl shrink-0">{agent.emoji || '🤖'}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-sm font-medium text-gray-500">{agent.name}</p>
-                          {agent.isDefault && <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Défaut</span>}
-                        </div>
-                        <p className="text-xs text-gray-400 truncate">{agent.role}</p>
-                      </div>
-                      <button onClick={() => toggleAgent(agent)} className="shrink-0 w-9 h-5 rounded-full bg-gray-200 transition-colors relative" title="Activer">
-                        <span className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {!agentsLoading && activeAgents.length === 0 && inactiveAgents.length === 0 && (
-              <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center text-xs text-gray-400">Aucun agent disponible.</div>
-            )}
-          </div>
-        );
-      })()}
-
       {/* Zone de danger — visible propriétaire + admin uniquement */}
       {canManage && (
         <div className="mt-8 border-t border-gray-200 pt-6">
@@ -1212,3 +997,4 @@ export default function ProjectView() {
     </ProjectLayout>
   );
 }
+

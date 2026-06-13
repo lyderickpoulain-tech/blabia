@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'brief', 'isTechnical', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
+  'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
 ];
 
 // Trouve un projet accessible : propriétaire OU membre OU admin
@@ -43,7 +43,6 @@ router.get('/', async (req, res) => {
         'Project.id',
         'Project.name',
         'Project.description',
-        'Project.isTechnical',
         'Project.status',
         'Project.createdAt',
         'Project.updatedAt',
@@ -79,7 +78,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/projects
 router.post('/', async (req, res) => {
-  const { name, description, objectif, contexte, notes, isTechnical } = req.body;
+  const { name, description, objectif, contexte, notes } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -98,7 +97,6 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         description: description?.trim() || null,
         brief,
-        isTechnical: isTechnical === true || isTechnical === 'true',
         status: 'active',
         userId: req.user.id,
         createdAt: now,
@@ -150,9 +148,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PATCH /api/projects/:id — renommer + isTechnical (propriétaire ou admin uniquement)
+// PATCH /api/projects/:id — mettre à jour les champs du projet (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
-  const { name, description, isTechnical } = req.body;
+  const { name, description, devDirectory } = req.body;
   if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -165,9 +163,9 @@ router.patch('/:id', async (req, res) => {
     }
 
     const updates = { updatedAt: new Date() };
-    if (name !== undefined)          updates.name        = name.trim();
-    if (description !== undefined)   updates.description = description?.trim() || null;
-    if (isTechnical !== undefined)   updates.isTechnical = isTechnical === true || isTechnical === 'true';
+    if (name !== undefined)          updates.name         = name.trim();
+    if (description !== undefined)   updates.description  = description?.trim() || null;
+    if (devDirectory !== undefined)  updates.devDirectory = devDirectory?.trim() || null;
 
     const [updated] = await db('Project')
       .where({ id: req.params.id })
@@ -606,24 +604,28 @@ router.post('/:id/generate-timeline', async (req, res) => {
       system: 'Tu es un expert en gestion de projet. Tu génères des timelines spécifiques et actionnables. Réponds UNIQUEMENT en JSON valide, sans backticks ni markdown.',
       messages: [{
         role: 'user',
-        content: `Analyse ce brief de projet et génère une timeline réaliste et spécifique.
+        content: `Tu es un expert en gestion de projet. Analyse ce brief et génère une timeline adaptée à la COMPLEXITÉ RÉELLE du projet décrit.
 
 Brief du projet :
 ${project.brief}
 
-Type de projet : ${project.isTechnical ? 'technique (dev, code, infrastructure)' : 'libre (stratégie, marketing, contenu...)'}
+RÈGLE IMPORTANTE : calibre le nombre d'étapes selon la complexité :
+- Projet simple (page web, démo, document unique) : 3 à 4 étapes
+- Projet moyen (application simple, campagne marketing) : 4 à 6 étapes
+- Projet complexe (logiciel complet, plateforme multi-fonctions) : 6 à 10 étapes
 
-Génère entre 5 et 10 étapes chronologiques et spécifiques à CE projet.
+Ne surcharge JAMAIS un projet simple avec trop d'étapes.
+Chaque étape doit être directement actionnelle pour CE projet spécifique.
+Évite les étapes génériques qui pourraient s'appliquer à n'importe quel projet.
+
 Pour chaque étape :
-- title : titre court et actionnable (max 50 chars)
-- description : ce que cette étape accomplit concrètement (2-3 phrases)
-- type : "meeting" (réflexion/décision), "technical" (dev/code — seulement si projet technique), "stack_check" (vérif outils — seulement si projet technique), "milestone" (livraison/validation)
-- estimatedOrder : ordre chronologique (1, 2, 3...)
+- title : titre court et spécifique (max 50 chars)
+- description : ce que cette étape accomplit concrètement (1-2 phrases)
+- type : "synthesis" (réflexion/décision/compte-rendu) | "memory" (structurer des informations clés) | "claude_code" (développement/implémentation technique) | "timeline_steps" (définir les prochaines étapes) | "stack_check" (vérification outils/environnement) | "milestone" (livraison/validation externe)
+- estimatedOrder : ordre chronologique
 
-Sois spécifique au projet décrit — ne génère pas d'étapes génériques.
-
-Retourne UNIQUEMENT ce JSON :
-{"steps":[{"title":"...","description":"...","type":"meeting","estimatedOrder":1}]}`
+Retourne UNIQUEMENT du JSON valide sans markdown :
+{"steps":[{"title":"...","description":"...","type":"synthesis","estimatedOrder":1}]}`
       }]
     });
 
