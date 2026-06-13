@@ -121,7 +121,10 @@ export default function Dashboard() {
                   className="hover:bg-gray-50 cursor-pointer"
                 >
                   <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{project.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900">{project.name}</p>
+                      <span className="text-xs">{project.isTechnical ? '💻' : '💬'}</span>
+                    </div>
                     {project.description && (
                       <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{project.description}</p>
                     )}

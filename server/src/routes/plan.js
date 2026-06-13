@@ -62,7 +62,7 @@ router.get('/:id/plan', async (req, res) => {
       }
     }
 
-    res.json({ milestones, todos, milestoneSessions });
+    res.json({ milestones, todos, milestoneSessions, isTechnical: project.isTechnical ?? false });
   } catch (err) {
     console.error('[plan GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

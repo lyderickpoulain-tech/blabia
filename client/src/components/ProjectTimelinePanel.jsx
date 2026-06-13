@@ -259,7 +259,7 @@ function PanelBody({
   loading, showAdd, setShowAdd, onAdd, onMilestoneClick,
   detailMilestone, setDetailMilestone,
   sessionDrawer, setSessionDrawer,
-  onRefresh, navigate, isMobile,
+  onRefresh, navigate, isMobile, hiddenCount,
 }) {
   const [title, setTitle]           = useState('');
   const [type, setType]             = useState('meeting');
@@ -381,6 +381,13 @@ function PanelBody({
         )}
       </div>
 
+      {/* Notice étapes masquées */}
+      {hiddenCount > 0 && (
+        <div className="mx-2 mb-1 px-2 py-1.5 bg-gray-50 rounded-lg text-[10px] text-gray-400 text-center">
+          {hiddenCount} étape{hiddenCount > 1 ? 's' : ''} technique{hiddenCount > 1 ? 's' : ''} masquée{hiddenCount > 1 ? 's' : ''} — passer en mode technique pour les voir
+        </div>
+      )}
+
       {/* Bouton / formulaire "+ Ajouter une étape" */}
       <div className="shrink-0 border-t border-gray-100 px-2 py-2">
         {showAdd ? (
@@ -440,6 +447,8 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [techChoiceMilestone, setTechChoiceMilestone] = useState(null);
   const [quickExportMilestone, setQuickExportMilestone] = useState(null);
 
+  const [isTechnical, setIsTechnical] = useState(true); // défaut true pour ne pas masquer par erreur
+
   const loadMilestones = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
@@ -447,6 +456,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
       const { data } = await api.get(`/projects/${projectId}/plan`);
       setMilestones(data.milestones || []);
       setMilestoneSessions(data.milestoneSessions || {});
+      if (data.isTechnical !== undefined) setIsTechnical(data.isTechnical);
     } catch {}
     setLoading(false);
   }, [projectId]);
@@ -495,8 +505,16 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     }
   };
 
+  // Filtre : masquer stack_check et technical pour projets non techniques
+  const visibleMilestones = isTechnical
+    ? milestones
+    : milestones.filter(m => m.type !== 'stack_check' && m.type !== 'technical');
+  const hiddenCount = milestones.length - visibleMilestones.length;
+
+  const doneMilestones = milestones.filter(m => m.status === 'done').length;
+
   const panelBodyProps = {
-    projectId, milestones, milestoneSessions,
+    projectId, milestones: visibleMilestones, milestoneSessions,
     loading, showAdd, setShowAdd,
     onAdd: handleAdd,
     onMilestoneClick: handleMilestoneClick,
@@ -519,14 +537,23 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
         <div className={`transition-all duration-300 overflow-hidden ${isOpen ? 'w-64' : 'w-0'}`}>
           <div className="w-64 bg-white border border-gray-200 border-l-0 rounded-r-xl shadow-sm"
                style={{ minHeight: '320px', maxHeight: 'calc(100vh - 120px)' }}>
-            <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-100">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">
-                ⏱ Timeline
-              </span>
-              <span className="text-xs text-gray-400">{milestones.length}</span>
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">⏱ Timeline</span>
+                <span className="text-xs text-gray-400">{visibleMilestones.length}</span>
+              </div>
+              {milestones.length > 0 && (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex-1 bg-gray-100 rounded-full h-1 overflow-hidden">
+                    <div className="h-1 rounded-full bg-green-500 transition-all"
+                      style={{ width: `${Math.round((doneMilestones / milestones.length) * 100)}%` }} />
+                  </div>
+                  <span className="text-[10px] text-gray-400 shrink-0">{doneMilestones}/{milestones.length}</span>
+                </div>
+              )}
             </div>
             <div style={{ height: 'calc(100vh - 120px - 44px)', display: 'flex', flexDirection: 'column' }}>
-              <PanelBody {...panelBodyProps} isMobile={false} />
+              <PanelBody {...panelBodyProps} isMobile={false} hiddenCount={hiddenCount} />
             </div>
           </div>
         </div>
@@ -552,7 +579,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               </button>
             </div>
             <div className="flex-1 overflow-hidden relative">
-              <PanelBody {...panelBodyProps} isMobile={true} />
+              <PanelBody {...panelBodyProps} isMobile={true} hiddenCount={hiddenCount} />
             </div>
           </div>
         </div>

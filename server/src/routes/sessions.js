@@ -230,18 +230,18 @@ async function patchTimelineEntry(sessionId, entryId, patch) {
 }
 
 // Extrait jalons et tâches depuis le summary pour suggestions plan
-async function extractPlanSuggestions(summaryText) {
+async function extractPlanSuggestions(summaryText, sessionId = '?') {
   const TIMEOUT_MS = 30_000;
-  console.log('[extractPlanSuggestions] START — summaryText length:', summaryText?.length ?? 0);
+  console.log('[extractPlan] démarrage pour session', sessionId, '— longueur summary:', summaryText?.length ?? 0);
   if (!summaryText || summaryText.trim().length < 50) {
-    console.log('[extractPlanSuggestions] SKIP — summaryText trop court');
+    console.log('[extractPlan] SKIP — summary trop court');
     return null;
   }
   try {
     const extractPromise = anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: 'Tu extrais jalons et tâches depuis une restitution. Réponds UNIQUEMENT en JSON valide, sans markdown.',
+      system: 'Tu extrais jalons et tâches depuis une restitution. Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks.',
       messages: [{
         role: 'user',
         content: `À partir de cette restitution, extrais le plan d'actions en JSON.
@@ -254,7 +254,7 @@ Pour chaque jalon, détermine :
 Si la restitution ne contient pas de plan d'actions structuré : retourner {"milestones":[],"standalone_todos":[]}.
 Ne jamais inventer de jalons si la restitution n'en contient pas.
 
-Retourne UNIQUEMENT ce JSON valide :
+Retourne UNIQUEMENT ce JSON valide, sans backticks :
 {
   "milestones": [
     { "title": "...", "description": "...", "type": "meeting", "todos": [{ "title": "...", "priority": "high" }] }
@@ -268,34 +268,38 @@ ${summaryText.substring(0, 4000)}`
     });
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('extractPlanSuggestions timeout')), TIMEOUT_MS)
+      setTimeout(() => reject(new Error('timeout 30s')), TIMEOUT_MS)
     );
 
-    console.log('[extractPlanSuggestions] API call envoyée, attente réponse…');
+    console.log('[extractPlan] appel Anthropic envoyé…');
     const response = await Promise.race([extractPromise, timeoutPromise]);
     const rawText = response.content[0].text.trim();
-    console.log('[extractPlanSuggestions] réponse reçue, longueur:', rawText.length, '— début:', rawText.substring(0, 120));
+    console.log('[extractPlan] résultat brut:', rawText.substring(0, 300));
 
-    const match = rawText.match(/\{[\s\S]*\}/);
+    // Nettoyage backticks markdown éventuels
+    const clean = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    const match = clean.match(/\{[\s\S]*\}/);
     if (!match) {
-      console.log('[extractPlanSuggestions] FAIL — aucun JSON trouvé dans la réponse');
+      console.log('[extractPlan] FAIL — aucun objet JSON détecté dans:', clean.substring(0, 200));
       return null;
     }
     let parsed;
     try {
       parsed = JSON.parse(match[0]);
     } catch (parseErr) {
-      console.error('[extractPlanSuggestions] FAIL — JSON.parse error:', parseErr.message, '— texte:', match[0].substring(0, 200));
+      console.error('[extractPlan] FAIL — JSON.parse:', parseErr.message, '— texte:', match[0].substring(0, 200));
       return null;
     }
     const result = {
       milestones:       Array.isArray(parsed.milestones)       ? parsed.milestones       : [],
       standalone_todos: Array.isArray(parsed.standalone_todos) ? parsed.standalone_todos : []
     };
-    console.log('[extractPlanSuggestions] OK — milestones:', result.milestones.length, '/ standalone_todos:', result.standalone_todos.length);
+    console.log('[extractPlan] parsed:', JSON.stringify({ milestones: result.milestones.length, standalone_todos: result.standalone_todos.length }));
+    console.log('[extractPlan] sauvegarde en DB…');
     return result;
   } catch (err) {
-    console.error('[extractPlanSuggestions] ERREUR:', err.message);
+    console.error('[extractPlan] ERREUR:', err.message, err.stack);
     return null;
   }
 }
@@ -457,6 +461,18 @@ router.post('/', async (req, res) => {
       const briefBlock = project.brief
         ? `\n\nBrief du projet :\n${project.brief}`
         : '';
+
+      // Timeline du projet pour le coordinateur
+      const projectMilestones = await db('Milestone')
+        .select('title', 'type', 'status')
+        .where({ projectId })
+        .orderBy('displayOrder', 'asc');
+      const STATUS_EMOJI = { done: '✅', in_progress: '🔵', blocked: '🔴', pending: '⚪' };
+      const tlLines = projectMilestones.map(m => `${STATUS_EMOJI[m.status] || '⚪'} ${m.title}`);
+      const timelineBlock = tlLines.length > 0
+        ? `\n\nÉtat de la timeline du projet :\n${tlLines.join('\n')}\nTiens compte des étapes déjà terminées pour ne pas les proposer à nouveau. Concentre-toi sur les étapes en cours ou bloquées.`
+        : '';
+
       // Contexte tronqué à ~2000 tokens pour la formation d'équipe
       const ctxForTeam = project.context
         ? project.context.substring(0, 8000)
@@ -471,7 +487,7 @@ router.post('/', async (req, res) => {
         system: 'Tu es un coordinateur d\'agents IA. Tu réponds UNIQUEMENT en JSON valide, sans markdown, sans explication.',
         messages: [{
           role: 'user',
-          content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi ceux disponibles ci-dessous. Utilise UNIQUEMENT les noms exacts de la liste.${briefBlock}${contextBlock}
+          content: `Analyse cette tâche et sélectionne une équipe de 3 à 5 agents parmi ceux disponibles ci-dessous. Utilise UNIQUEMENT les noms exacts de la liste.${briefBlock}${timelineBlock}${contextBlock}
 
 Agents disponibles :
 ${agentsList}
@@ -570,6 +586,12 @@ router.post('/:sessionId/run', async (req, res) => {
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
     if (s.status === 'complete' && !humanInput?.trim()) return res.status(400).json({ error: 'Session déjà terminée' });
     session = s;
+
+    // ── Timeline du projet (mémoire active) ─────────────────────────────────
+    const projectMilestonesRun = await db('Milestone')
+      .select('title', 'type', 'status', 'description')
+      .where({ projectId })
+      .orderBy('displayOrder', 'asc');
 
     // ── 3 : Stack technique effective (projet surcharge utilisateur) ──────────
     const [userRecord] = await db('User').select(['techStack']).where({ id: req.user.id }).limit(1);
@@ -729,6 +751,19 @@ router.post('/:sessionId/run', async (req, res) => {
         ? `\nBrief du projet :\n${project.brief}\n`
         : '';
 
+      const TL_EMOJI = { done: '✅', in_progress: '🔵', blocked: '🔴', pending: '⚪' };
+      const tlForAgents = projectMilestonesRun.length > 0
+        ? (() => {
+            const all = projectMilestonesRun;
+            const list = all.length > 8 ? all.filter(m => m.status !== 'pending') : all;
+            if (list.length === 0) return null;
+            return list.map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n');
+          })()
+        : null;
+      const timelineSection = tlForAgents
+        ? `\nÉtat de la timeline du projet :\n${tlForAgents}\n`
+        : '';
+
       const contextSection = projectContext
         ? `\nContexte des sessions précédentes de ce projet :\n${projectContext}\n`
         : '';
@@ -746,7 +781,7 @@ router.post('/:sessionId/run', async (req, res) => {
 
       const systemPrompt =
         `${systemPromptBase}
-Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${contextSection}${parentExchangesBlock}${stackSection}${conversationNote}
+Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${timelineSection}${contextSection}${parentExchangesBlock}${stackSection}${conversationNote}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
 Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.`;
@@ -894,7 +929,7 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
       await saveSession(sessionId, exchanges, summaryText, 'complete');
       await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
       updateProjectContext(projectId, session.task, summaryText);
-      extractSuggestedTools(sessionId, summaryText, projectId);
+      if (project.isTechnical) extractSuggestedTools(sessionId, summaryText, projectId);
 
       // Mise à jour du statut du jalon lié
       if (session.milestoneId) {
@@ -909,9 +944,8 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
       send('complete', { sessionId });
 
       // Extraction jalons/tâches pour suggestions plan
-      console.log('[sessions/run] début extraction plan — sessionId:', sessionId, '— summaryText length:', summaryText?.length ?? 0);
       try {
-        const planSuggestions = await extractPlanSuggestions(summaryText);
+        const planSuggestions = await extractPlanSuggestions(summaryText, sessionId);
         console.log('[sessions/run] extractPlanSuggestions retour:', planSuggestions === null ? 'null' : `${planSuggestions.milestones?.length ?? 0} jalons`);
         if (planSuggestions && (planSuggestions.milestones.length > 0 || planSuggestions.standalone_todos.length > 0)) {
           try {
@@ -1037,9 +1071,8 @@ router.post('/:sessionId/synthesize', async (req, res) => {
     }
 
     // Suggestions plan (synthesize)
-    console.log('[sessions/synthesize] début extraction plan — sessionId:', sessionId);
     try {
-      const planSuggestions = await extractPlanSuggestions(summaryText);
+      const planSuggestions = await extractPlanSuggestions(summaryText, sessionId);
       console.log('[sessions/synthesize] extractPlanSuggestions retour:', planSuggestions === null ? 'null' : `${planSuggestions.milestones?.length ?? 0} jalons`);
       if (planSuggestions && (planSuggestions.milestones.length > 0 || planSuggestions.standalone_todos.length > 0)) {
         try {

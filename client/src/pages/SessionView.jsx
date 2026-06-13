@@ -216,6 +216,7 @@ export default function SessionView() {
   const [addingToPlan, setAddingToPlan]       = useState(false);
   const [addedToPlan, setAddedToPlan]         = useState(false);
   const [planIgnored, setPlanIgnored]         = useState(false);
+  const [projectMilestones, setProjectMilestones] = useState([]);
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
@@ -226,6 +227,11 @@ export default function SessionView() {
           setPlanSuggestions(data.planSuggestions);
         }
         setPlanAlreadyAdded(data.planAlreadyAdded || false);
+        // Milestones du projet pour résumé timeline
+        try {
+          const { data: planData } = await api.get(`/projects/${projectId}/plan`);
+          setProjectMilestones(planData.milestones || []);
+        } catch {}
         if (data.milestoneId) {
           try {
             const { data: ms } = await api.get(`/projects/${projectId}/milestones/${data.milestoneId}`);
@@ -386,6 +392,33 @@ export default function SessionView() {
                 );
               })}
             </div>
+
+            {/* Résumé timeline du projet */}
+            {projectMilestones.length > 0 && (() => {
+              const done = projectMilestones.filter(m => m.status === 'done').length;
+              const inProgress = projectMilestones.filter(m => m.status === 'in_progress').length;
+              const STATUS_DOT = { done: 'bg-green-500', in_progress: 'bg-blue-500', blocked: 'bg-red-400', pending: 'bg-gray-300' };
+              if (projectMilestones.length <= 3) {
+                return (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {projectMilestones.map((m, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-white/60 border border-white/40 px-2 py-0.5 rounded-full text-blue-700">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[m.status] || 'bg-gray-300'}`} />
+                        {m.title.length > 28 ? m.title.slice(0, 28) + '…' : m.title}
+                      </span>
+                    ))}
+                  </div>
+                );
+              }
+              return (
+                <div className="flex items-center gap-2 mt-2 text-xs text-blue-600">
+                  <span>{projectMilestones.length} étapes</span>
+                  {done > 0 && <span>· {done} terminée{done > 1 ? 's' : ''}</span>}
+                  {inProgress > 0 && <span>· {inProgress} en cours</span>}
+                  <Link to={`/projects/${projectId}/plan`} className="ml-1 font-medium hover:underline">Voir la timeline →</Link>
+                </div>
+              );
+            })()}
 
             {/* Badge statut code */}
             {session.hasCode && (

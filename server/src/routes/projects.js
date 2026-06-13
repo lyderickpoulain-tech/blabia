@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'brief', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
+  'id', 'name', 'description', 'brief', 'isTechnical', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
 ];
 
 // Trouve un projet accessible : propriétaire OU membre OU admin
@@ -42,6 +42,7 @@ router.get('/', async (req, res) => {
         'Project.id',
         'Project.name',
         'Project.description',
+        'Project.isTechnical',
         'Project.status',
         'Project.createdAt',
         'Project.updatedAt',
@@ -77,7 +78,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/projects
 router.post('/', async (req, res) => {
-  const { name, description, objectif, contexte, notes } = req.body;
+  const { name, description, objectif, contexte, notes, isTechnical } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -96,6 +97,7 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         description: description?.trim() || null,
         brief,
+        isTechnical: isTechnical === true || isTechnical === 'true',
         status: 'active',
         userId: req.user.id,
         createdAt: now,
@@ -147,10 +149,10 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PATCH /api/projects/:id — renommer (propriétaire ou admin uniquement)
+// PATCH /api/projects/:id — renommer + isTechnical (propriétaire ou admin uniquement)
 router.patch('/:id', async (req, res) => {
-  const { name, description } = req.body;
-  if (!name?.trim()) {
+  const { name, description, isTechnical } = req.body;
+  if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
   const isAdmin = req.user.role === 'admin';
@@ -161,13 +163,14 @@ router.patch('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Action réservée au propriétaire' });
     }
 
+    const updates = { updatedAt: new Date() };
+    if (name !== undefined)          updates.name        = name.trim();
+    if (description !== undefined)   updates.description = description?.trim() || null;
+    if (isTechnical !== undefined)   updates.isTechnical = isTechnical === true || isTechnical === 'true';
+
     const [updated] = await db('Project')
       .where({ id: req.params.id })
-      .update({
-        name: name.trim(),
-        description: description !== undefined ? (description?.trim() || null) : project.description,
-        updatedAt: new Date()
-      })
+      .update(updates)
       .returning(PROJECT_FIELDS);
     res.json(updated);
   } catch (err) {

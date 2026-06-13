@@ -681,6 +681,23 @@ export default function ProjectView() {
                   Archivé
                 </span>
               )}
+              {project.isTechnical
+                ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 shrink-0">💻 Projet technique</span>
+                : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 shrink-0">💬 Projet libre</span>
+              }
+              {(isAdmin || project.userId === user?.id) && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data } = await api.patch(`/projects/${id}`, { isTechnical: !project.isTechnical });
+                      setProject(prev => ({ ...prev, isTechnical: data.isTechnical }));
+                    } catch {}
+                  }}
+                  className="text-xs text-gray-400 hover:text-blue-500 transition underline underline-offset-2"
+                >
+                  {project.isTechnical ? 'Passer en projet libre' : 'Passer en projet technique'}
+                </button>
+              )}
             </div>
             {project.description && (
               <p className="text-gray-500 text-sm mt-1">{project.description}</p>
@@ -838,7 +855,7 @@ export default function ProjectView() {
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-1">
         {[
           { id: 'sessions', label: 'Sessions' },
-          { id: 'stack',    label: 'Stack' },
+          ...(project.isTechnical ? [{ id: 'stack', label: 'Stack' }] : []),
           { id: 'agents',   label: 'Agents' }
         ].map(tab => (
           <button
