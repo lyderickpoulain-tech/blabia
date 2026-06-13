@@ -423,6 +423,7 @@ router.delete('/:id/todos/:tid', async (req, res) => {
 
 router.post('/:id/plan/bulk', async (req, res) => {
   const { milestones = [], standalone_todos = [], sessionId, sourceSessionId } = req.body;
+  console.log('[plan/bulk] reçu — projectId:', req.params.id, '| milestones:', milestones.length, JSON.stringify(milestones.map(m => m.title)));
   const isAdmin = req.user.role === 'admin';
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
+import { useProjectPanel } from './ProjectLayout';
 
 const TYPE_ICON = {
   synthesis: '📄', memory: '🧠', claude_code: '💻',
@@ -8,6 +9,7 @@ const TYPE_ICON = {
 const TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
 
 export default function GenerateTimelineModal({ project, existingCount, onClose, onAdded }) {
+  const { refreshPanel } = useProjectPanel();
   const [steps, setSteps]       = useState([]);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
@@ -74,6 +76,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
     try {
       const { data } = await api.post(`/projects/${project.id}/plan/bulk`, payload);
       console.log('[GenerateTimeline] succès:', data);
+      refreshPanel();
       setDone(true);
       onAdded?.();
     } catch (err) {

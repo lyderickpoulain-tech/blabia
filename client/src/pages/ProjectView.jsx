@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
+import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getPricing, PRICING_CONFIG } from '../utils/techStack';
@@ -429,7 +429,6 @@ export default function ProjectView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const { refreshPanel } = useProjectPanel();
   const [project, setProject]           = useState(null);
   const [loading, setLoading]           = useState(true);
   const [sessions, setSessions]         = useState([]);
@@ -992,7 +991,7 @@ export default function ProjectView() {
           project={project}
           existingCount={0}
           onClose={() => setShowGenTimeline(false)}
-          onAdded={() => { setShowGenTimeline(false); refreshPanel(); }}
+          onAdded={() => setShowGenTimeline(false)}
         />
       )}
     </ProjectLayout>
