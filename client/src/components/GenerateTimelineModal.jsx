@@ -1,8 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 
-const TYPE_ICON = { meeting: '🤝', technical: '💻', stack_check: '🔧', milestone: '🎯' };
-const TYPES = ['meeting', 'technical', 'stack_check', 'milestone'];
+const TYPE_ICON = {
+  synthesis: '📄', memory: '🧠', claude_code: '💻',
+  timeline_steps: '📅', stack_check: '🔧', milestone: '🎯',
+};
+const TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
 
 export default function GenerateTimelineModal({ project, existingCount, onClose, onAdded }) {
   const [steps, setSteps]       = useState([]);
@@ -25,7 +28,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
   }, [project.id]);
 
   // Auto-generate on mount
-  useState(() => { generate(); }, []);
+  useEffect(() => { generate(); }, []);
 
   const updateStep = (i, field, value) => {
     setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));
@@ -57,19 +60,24 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
     const active = steps.filter(s => s.active && s.title?.trim());
     if (active.length === 0) return;
     setAdding(true);
+    setError('');
+    const payload = {
+      milestones: active.map(s => ({
+        title: s.title.trim(),
+        description: s.description?.trim() || '',
+        type: s.type || 'synthesis',
+        todos: []
+      })),
+      standalone_todos: []
+    };
+    console.log('[GenerateTimeline] POST /plan/bulk payload:', JSON.stringify(payload));
     try {
-      await api.post(`/projects/${project.id}/plan/bulk`, {
-        milestones: active.map(s => ({
-          title: s.title.trim(),
-          description: s.description?.trim() || '',
-          type: s.type || 'meeting',
-          todos: []
-        })),
-        standalone_todos: []
-      });
+      const { data } = await api.post(`/projects/${project.id}/plan/bulk`, payload);
+      console.log('[GenerateTimeline] succès:', data);
       setDone(true);
       onAdded?.();
     } catch (err) {
+      console.error('[GenerateTimeline] erreur:', err.response?.data || err.message);
       setError(err.response?.data?.error || 'Erreur lors de l\'ajout');
     }
     setAdding(false);
