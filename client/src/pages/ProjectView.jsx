@@ -4,6 +4,7 @@ import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getPricing, PRICING_CONFIG } from '../utils/techStack';
+import GenerateTimelineModal from '../components/GenerateTimelineModal';
 
 // ── Définition des catégories de stack (idem EnvironmentPage) ─────────────────
 const CATEGORIES = [
@@ -281,9 +282,13 @@ function DeleteProjectModal({ project, sessionCount, onClose, onConfirm, deletin
 }
 
 function SessionStatusBadge({ status }) {
-  return status === 'complete'
-    ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Complète</span>
-    : <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Interrompue</span>;
+  if (status === 'accepted' || status === 'complete')
+    return <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ Acceptée</span>;
+  if (status === 'open')
+    return <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">⚪ En cours</span>;
+  if (status === 'abandoned')
+    return <span className="inline-flex items-center gap-1 text-xs font-medium bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full line-through">🚫 Abandonnée</span>;
+  return <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Interrompue</span>;
 }
 
 function CodeStatusBadge({ session }) {
@@ -383,6 +388,7 @@ export default function ProjectView() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [showRename, setShowRename]     = useState(false);
   const [showBrief, setShowBrief]       = useState(false);
+  const [showGenTimeline, setShowGenTimeline] = useState(false);
   const [briefExpanded, setBriefExpanded] = useState(false);
   const [archiving, setArchiving]       = useState(false);
   const [memoryOpen, setMemoryOpen]     = useState(false);
@@ -743,6 +749,12 @@ export default function ProjectView() {
               </svg>
               Plan
             </Link>
+            {project.brief && (
+              <button onClick={() => setShowGenTimeline(true)}
+                className="text-sm border border-violet-200 text-violet-600 hover:bg-violet-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium">
+                📅 Timeline IA
+              </button>
+            )}
             <button
               onClick={() => setShowRename(true)}
               className="text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 px-3 py-2 rounded-lg transition min-h-[40px]"
@@ -1187,6 +1199,14 @@ export default function ProjectView() {
           onClose={() => setShowDelete(false)}
           onConfirm={handleDeleteProject}
           deleting={deleting}
+        />
+      )}
+      {showGenTimeline && (
+        <GenerateTimelineModal
+          project={project}
+          existingCount={0}
+          onClose={() => setShowGenTimeline(false)}
+          onAdded={() => { setShowGenTimeline(false); }}
         />
       )}
     </ProjectLayout>

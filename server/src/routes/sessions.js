@@ -318,9 +318,9 @@ function waitForAnswer(sessionId, timeoutMs = 300_000) {
   });
 }
 
-// Appel Anthropic en streaming avec auto-continuation sur max_tokens (max 3 tours)
-async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 2048, model = MODEL) {
-  const MAX_CONTINUATIONS = 3;
+// Appel Anthropic en streaming avec auto-continuation sur max_tokens (max 5 tours)
+async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500, model = MODEL) {
+  const MAX_CONTINUATIONS = 5;
   let fullText = '';
   let messages = [{ role: 'user', content: userMessage }];
 
@@ -350,14 +350,19 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 2048,
     if (stopReason !== 'max_tokens') break;
 
     if (attempt >= MAX_CONTINUATIONS) {
-      console.error(`[streamAgent] max_tokens atteint après ${MAX_CONTINUATIONS} continuations — texte tronqué.`);
-      const warning = '\n\n---\n> ⚠️ *La restitution a été interrompue — limite de génération atteinte après 3 continuations automatiques.*';
-      fullText += warning;
-      onChunk(warning);
+      // Tronquer proprement à la dernière phrase complète
+      const truncated = fullText.replace(/[^.!?]*$/, '').trim();
+      if (truncated && truncated.length < fullText.length) {
+        const delta = truncated.length - fullText.length;
+        fullText = truncated;
+        onChunk('\0'.repeat(Math.abs(delta))); // signal interne non visible
+      }
+      const note = '\n\n*[Synthèse condensée]*';
+      fullText += note;
+      onChunk(note);
       break;
     }
 
-    // Prépare le tour de continuation via multi-turn
     messages = [
       ...messages,
       { role: 'assistant', content: chunkText },
@@ -379,7 +384,9 @@ router.post('/', async (req, res) => {
     model: modelParam,
     fullContext: fullContextParam = false,
     forceNew = false,
-    cachedAgents = null
+    cachedAgents = null,
+    selectedAgents = null,
+    intention = []
   } = req.body;
   const { projectId } = req.params;
   const isAdmin = req.user.role === 'admin';
@@ -398,7 +405,7 @@ router.post('/', async (req, res) => {
 
     if (parentSessionId) {
       const [parent] = await db('Session').where({ id: parentSessionId, projectId }).limit(1);
-      if (!parent || parent.status !== 'complete') {
+      if (!parent || !['open', 'accepted'].includes(parent.status)) {
         return res.status(400).json({ error: 'Session parente invalide ou non terminée' });
       }
     }
@@ -406,7 +413,7 @@ router.post('/', async (req, res) => {
     // ── 2.3 : Cache de formation d'équipe ────────────────────────────────────
     if (!forceNew && !cachedAgents) {
       const [cachedSession] = await db('Session')
-        .where({ projectId, status: 'complete' })
+        .whereIn('status', ['open', 'accepted'])
         .whereRaw('LOWER(TRIM("task")) = LOWER(TRIM(?))', [task.trim()])
         .orderBy('createdAt', 'desc')
         .limit(1);
@@ -453,7 +460,10 @@ router.post('/', async (req, res) => {
     let enrichedAgents;
     let teamPlan;
 
-    if (cachedAgents && Array.isArray(cachedAgents) && cachedAgents.length > 0) {
+    if (selectedAgents && Array.isArray(selectedAgents) && selectedAgents.length > 0) {
+      enrichedAgents = selectedAgents;
+      teamPlan = 'Équipe sélectionnée manuellement.';
+    } else if (cachedAgents && Array.isArray(cachedAgents) && cachedAgents.length > 0) {
       enrichedAgents = cachedAgents;
       teamPlan = 'Équipe précédente réutilisée.';
     } else {
@@ -531,10 +541,11 @@ Tâche : ${task.trim()}`
         agents: JSON.stringify(enrichedAgents),
         exchanges: JSON.stringify(initialExchanges),
         summary: null,
-        status: 'incomplete',
+        status: 'open',
         mode,
         model: selectedModel,
         fullContext: fullContextEnabled,
+        intention: JSON.stringify(Array.isArray(intention) ? intention : []),
         projectId,
         parentSessionId: parentSessionId || null,
         milestoneId:     milestoneId     || null,
@@ -585,7 +596,7 @@ router.post('/:sessionId/run', async (req, res) => {
 
     const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
-    if (s.status === 'complete' && !humanInput?.trim()) return res.status(400).json({ error: 'Session déjà terminée' });
+    if (['accepted', 'abandoned'].includes(s.status)) return res.status(400).json({ error: 'Session déjà close' });
     session = s;
 
     // ── Timeline du projet (mémoire active) ─────────────────────────────────
@@ -661,7 +672,7 @@ router.post('/:sessionId/run', async (req, res) => {
   }, 15000);
 
   const isConversation = session.mode === 'conversation';
-  const isAdditionalPrompt = session.status === 'complete' && !!humanInput?.trim();
+  const isAdditionalPrompt = !!session.summary && !!humanInput?.trim();
   const agents = typeof session.agents === 'string' ? JSON.parse(session.agents) : session.agents;
   const exchanges = typeof session.exchanges === 'string' ? JSON.parse(session.exchanges) : session.exchanges;
 
@@ -679,7 +690,7 @@ router.post('/:sessionId/run', async (req, res) => {
   const additionalTurnNumber = isAdditionalPrompt ? existingSummaryCount + 1 : null;
 
   if (isAdditionalPrompt) {
-    await db('Session').where({ id: sessionId }).update({ status: 'in_progress' });
+    // session reste 'open' pendant le relaunch
   }
 
   // IDs des entrées timeline en cours pour ce run
@@ -784,6 +795,7 @@ router.post('/:sessionId/run', async (req, res) => {
         `${systemPromptBase}
 Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${timelineSection}${contextSection}${parentExchangesBlock}${stackSection}${conversationNote}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
+Contraintes de réponse : maximum 250 mots, va à l'essentiel avec des points clés, évite les introductions et conclusions génériques.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
 Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.`;
 
@@ -861,7 +873,7 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
           }
         } catch (timeoutErr) {
           send('error', { message: timeoutErr.message });
-          await saveSession(sessionId, exchanges, null, 'interrupted');
+          await saveSession(sessionId, exchanges, null, 'open');
           return res.end();
         }
       }
@@ -869,7 +881,7 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
 
     if (isConversation) {
       // ── Mode conversation : fin du tour, attente de l'intervention humaine ─
-      await saveSession(sessionId, exchanges, null, 'incomplete');
+      await saveSession(sessionId, exchanges, null, 'open');
       await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
       send('turn_complete', { sessionId, turn: turnNumber });
       res.end();
@@ -897,10 +909,10 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
         : session.task;
 
       const summaryRaw = await streamAgent(
-        'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.\nSi et seulement si la restitution implique une implémentation technique concrète (code, développement, configuration à effectuer), ajoute le marqueur exact [HAS_CODE] à la toute fin de ton texte, sur une nouvelle ligne.',
+        'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres ##, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.\nContraintes de synthèse : maximum 600 mots, structure claire avec titres de section (##), privilégie les points actionnables aux développements théoriques.\nSi et seulement si la restitution implique une implémentation technique concrète (code, développement, configuration à effectuer), ajoute le marqueur exact [HAS_CODE] à la toute fin de ton texte, sur une nouvelle ligne.',
         `Tâche originale : ${synthesisTask}\n\nContributions des agents :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
         (chunk) => send('summary_chunk', { text: chunk }),
-        8192,
+        4000,
         session.model || MODEL
       );
 
@@ -927,7 +939,7 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
 
       send('summary_done', { summary: summaryText });
 
-      await saveSession(sessionId, exchanges, summaryText, 'complete');
+      await saveSession(sessionId, exchanges, summaryText, 'open');
       await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
       updateProjectContext(projectId, session.task, summaryText);
       if (project.isTechnical) extractSuggestedTools(sessionId, summaryText, projectId);
@@ -970,7 +982,7 @@ Si tu identifies qu'un expert avec une compétence très spécifique manquante s
     console.error('[sessions/run] modèle=%s mode=%s erreur=%s', session.model, session.mode, err.message);
     try {
       send('error', { message: `Erreur d'orchestration : ${err.message}` });
-      await saveSession(sessionId, exchanges, null, 'interrupted');
+      await saveSession(sessionId, exchanges, null, 'open');
     } catch {}
     res.end();
   } finally {
@@ -992,7 +1004,7 @@ router.post('/:sessionId/synthesize', async (req, res) => {
 
     const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
-    if (s.status === 'complete') return res.status(400).json({ error: 'Session déjà terminée' });
+    if (['accepted', 'abandoned'].includes(s.status)) return res.status(400).json({ error: 'Session déjà close' });
     if (s.mode !== 'conversation') return res.status(400).json({ error: 'Réservé au mode conversation' });
     session = s;
   } catch {
@@ -1057,7 +1069,7 @@ router.post('/:sessionId/synthesize', async (req, res) => {
 
     send('summary_done', { summary: summaryText });
 
-    await saveSession(sessionId, exchanges, summaryText, 'complete');
+    await saveSession(sessionId, exchanges, summaryText, 'open');
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
     updateProjectContext(projectId, session.task, summaryText);
     extractSuggestedTools(sessionId, summaryText, projectId);
@@ -1110,10 +1122,10 @@ router.post('/:sessionId/close', async (req, res) => {
 
     const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
-    if (s.status === 'complete') return res.status(400).json({ error: 'Session déjà terminée' });
+    if (['accepted', 'abandoned'].includes(s.status)) return res.status(400).json({ error: 'Session déjà close' });
     if (s.mode !== 'conversation') return res.status(400).json({ error: 'Réservé au mode conversation' });
 
-    await db('Session').where({ id: sessionId }).update({ status: 'complete', summary: null });
+    await db('Session').where({ id: sessionId }).update({ status: 'open', summary: null });
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
 
     res.json({ message: 'Conversation terminée' });
@@ -1140,6 +1152,125 @@ router.post('/:sessionId/answer', async (req, res) => {
   res.json({ message: 'Réponse transmise aux agents' });
 });
 
+// ── PATCH statut session (accepted / abandoned) ───────────────────────────────
+
+router.patch('/:sessionId/status', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { status } = req.body;
+  if (!['accepted', 'abandoned'].includes(status)) {
+    return res.status(400).json({ error: 'Statut invalide (accepted | abandoned)' });
+  }
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    if (['accepted', 'abandoned'].includes(s.status)) {
+      return res.status(400).json({ error: 'Session déjà close' });
+    }
+    await db('Session').where({ id: sessionId }).update({ status });
+    res.json({ status });
+  } catch (err) {
+    console.error('[sessions/:id/status PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── Génération du souvenir projet (Évolution 3) ───────────────────────────────
+
+router.post('/:sessionId/generate-memory', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    const summary = s.summary || '';
+    if (!summary) return res.status(400).json({ error: 'Aucune restitution disponible' });
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 800,
+      system: 'Tu génères des souvenirs concis pour alimenter la mémoire d\'un projet IA. Réponds directement en français, sans introduction.',
+      messages: [{
+        role: 'user',
+        content: `À partir de cette session (tâche : "${s.task}"), génère un souvenir concis (max 200 mots) pour les agents des prochaines sessions.
+Format : points clés, décisions prises, éléments importants à retenir.
+
+Restitution :
+${summary.substring(0, 3000)}`
+      }]
+    });
+    res.json({ memory: response.content[0].text.trim() });
+  } catch (err) {
+    console.error('[generate-memory]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── Suggestion d'agents (Évolution 2) ────────────────────────────────────────
+
+router.post('/suggest-agents', async (req, res) => {
+  const { projectId } = req.params;
+  const { task, milestoneType } = req.body;
+  if (!task?.trim()) return res.status(400).json({ error: 'Tâche requise' });
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const agents = await db('Agent')
+      .select('id', 'name', 'role', 'emoji')
+      .where(function () {
+        this.where({ isDefault: true }).orWhere({ userId: req.user.id });
+      });
+
+    const agentsList = agents.map(a => `- ${a.name} (${a.role})`).join('\n');
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 10_000)
+    );
+    const apiPromise = anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 500,
+      system: 'Tu sélectionnes des agents IA pertinents. Réponds UNIQUEMENT en JSON valide.',
+      messages: [{
+        role: 'user',
+        content: `Tâche : "${task.trim()}"${milestoneType ? `\nType d'étape : ${milestoneType}` : ''}
+
+Agents disponibles :
+${agentsList}
+
+Sélectionne 2 à 4 agents pertinents. Retourne ce JSON :
+{"suggestions":[{"name":"NomExact","reason":"Courte raison (10 mots max)"}]}`
+      }]
+    });
+
+    const response = await Promise.race([apiPromise, timeoutPromise]);
+    const text = response.content[0].text.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
+    const agentMap = {};
+    agents.forEach(a => { agentMap[a.name.toLowerCase()] = a; });
+
+    const result = (parsed.suggestions || []).map(s => {
+      const a = agentMap[s.name.toLowerCase()];
+      return a ? { agentId: a.id, agentName: a.name, emoji: a.emoji, reason: s.reason } : null;
+    }).filter(Boolean);
+
+    res.json(result);
+  } catch {
+    // Fallback : 2 premiers agents défaut
+    try {
+      const fallback = await db('Agent').select('id', 'name', 'emoji').where({ isDefault: true }).limit(2);
+      res.json(fallback.map(a => ({ agentId: a.id, agentName: a.name, emoji: a.emoji, reason: 'Agent par défaut' })));
+    } catch (e) {
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  }
+});
+
 // ── Liste et détail des sessions ─────────────────────────────────────────────
 
 router.get('/', async (req, res) => {
@@ -1156,7 +1287,7 @@ router.get('/', async (req, res) => {
         db.raw('jsonb_array_length(agents) as "agentCount"')
       )
       .where({ projectId })
-      .whereIn('status', ['complete', 'interrupted'])
+      .whereIn('status', ['open', 'accepted', 'abandoned'])
       .orderBy('createdAt', 'desc');
 
     res.json(sessions);
@@ -1191,6 +1322,7 @@ router.get('/:sessionId', async (req, res) => {
       exchanges:       parseJson(session.exchanges, '[]'),
       timeline:        parseJson(session.timeline, '[]'),
       planSuggestions: parseJson(session.planSuggestions, 'null'),
+      intention:       parseJson(session.intention, '[]'),
       planAlreadyAdded: parseInt(planCount || 0) > 0,
     });
   } catch (err) {

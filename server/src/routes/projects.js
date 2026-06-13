@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { sendInvitation } = require('../services/email');
+const anthropic = require('../services/anthropic');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -265,6 +266,34 @@ router.patch('/:id/tech-stack', async (req, res) => {
     res.json({ message: 'Stack sauvegardée' });
   } catch (err) {
     console.error('[projects/:id/tech-stack PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/projects/:id/context — ajouter un souvenir à la mémoire projet
+router.patch('/:id/context', async (req, res) => {
+  const { memory, sessionTitle } = req.body;
+  if (!memory?.trim()) return res.status(400).json({ error: 'Souvenir requis' });
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const entry = `[${date}${sessionTitle ? ` — ${sessionTitle}` : ''}]\n${memory.trim()}`;
+    const current = project.context || '';
+    const separator = current ? '\n---\n' : '';
+    let newContext = current + separator + entry;
+    const MAX_CHARS = 10000;
+    if (newContext.length > MAX_CHARS) {
+      const parts = newContext.split('\n---\n');
+      while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) parts.shift();
+      newContext = parts.join('\n---\n');
+    }
+    await db('Project').where({ id: req.params.id }).update({ context: newContext, updatedAt: new Date() });
+    res.json({ message: 'Souvenir ajouté' });
+  } catch (err) {
+    console.error('[projects/:id/context PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -559,6 +588,53 @@ router.delete('/:id/agents/:agentId', async (req, res) => {
     res.json({ message: 'Agent retiré du projet' });
   } catch (err) {
     console.error('[projects/:id/agents/:agentId DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/generate-timeline — génère une timeline depuis le brief
+router.post('/:id/generate-timeline', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (!project.brief) return res.status(400).json({ error: 'Brief manquant — définissez un brief avant de générer une timeline' });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      system: 'Tu es un expert en gestion de projet. Tu génères des timelines spécifiques et actionnables. Réponds UNIQUEMENT en JSON valide, sans backticks ni markdown.',
+      messages: [{
+        role: 'user',
+        content: `Analyse ce brief de projet et génère une timeline réaliste et spécifique.
+
+Brief du projet :
+${project.brief}
+
+Type de projet : ${project.isTechnical ? 'technique (dev, code, infrastructure)' : 'libre (stratégie, marketing, contenu...)'}
+
+Génère entre 5 et 10 étapes chronologiques et spécifiques à CE projet.
+Pour chaque étape :
+- title : titre court et actionnable (max 50 chars)
+- description : ce que cette étape accomplit concrètement (2-3 phrases)
+- type : "meeting" (réflexion/décision), "technical" (dev/code — seulement si projet technique), "stack_check" (vérif outils — seulement si projet technique), "milestone" (livraison/validation)
+- estimatedOrder : ordre chronologique (1, 2, 3...)
+
+Sois spécifique au projet décrit — ne génère pas d'étapes génériques.
+
+Retourne UNIQUEMENT ce JSON :
+{"steps":[{"title":"...","description":"...","type":"meeting","estimatedOrder":1}]}`
+      }]
+    });
+
+    const rawText = response.content[0].text.trim()
+      .replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    const match = rawText.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(500).json({ error: 'Réponse invalide du modèle' });
+    const parsed = JSON.parse(match[0]);
+    res.json({ steps: parsed.steps || [] });
+  } catch (err) {
+    console.error('[generate-timeline]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

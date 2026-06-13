@@ -1,11 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import SessionRunner from '../components/SessionRunner';
 import ExportModal from '../components/ExportModal';
+import AcceptSessionModal from '../components/AcceptSessionModal';
 import api from '../utils/api';
+
+const INTENTIONS = [
+  { id: 'synthesis',      icon: '📄', label: 'Synthèse',      desc: 'Compte-rendu structuré archivé' },
+  { id: 'memory',         icon: '🧠', label: 'Souvenir',       desc: 'Résumé injecté dans la mémoire projet' },
+  { id: 'claude_code',    icon: '💻', label: 'Claude Code',    desc: 'Prompt pour développement' },
+  { id: 'timeline_steps', icon: '📅', label: 'Étapes',         desc: 'Nouvelles étapes dans la timeline' },
+];
 
 // Composants Markdown stylés Tailwind
 const MD = {
@@ -107,7 +115,7 @@ export default function NewSession() {
   const initialTask     = location.state?.initialTask     || '';
   const milestoneId     = location.state?.milestoneId     || null;
 
-  const [phase, setPhase]                 = useState('input');
+  const [phase, setPhase]                 = useState('intention');
   const [task, setTask]                   = useState(initialTask);
   const [mode, setMode]                   = useState('realtime');
   const [model, setModel]                 = useState('claude-sonnet-4-6');
@@ -129,6 +137,18 @@ export default function NewSession() {
   const [addedToPlan, setAddedToPlan]             = useState(false);
   const [planIgnored, setPlanIgnored]             = useState(false);
   const [addingToPlan, setAddingToPlan]           = useState(false);
+  // ── Évolution 2 : configurateur 3 étapes ──────────────────────────────────
+  const [intentions, setIntentions]               = useState(new Set(['synthesis']));
+  const [availableAgents, setAvailableAgents]     = useState([]);
+  const [selectedAgentIds, setSelectedAgentIds]   = useState(new Set());
+  const [agentsLoading, setAgentsLoading]         = useState(false);
+  const [suggestingAgents, setSuggestingAgents]   = useState(false);
+  const [newAgentForm, setNewAgentForm]           = useState({ open: false, name: '', role: '', systemPrompt: '' });
+  const [creatingAgent, setCreatingAgent]         = useState(false);
+  // ── Évolution 1 : statuts explicites ─────────────────────────────────────
+  const [showAcceptModal, setShowAcceptModal]     = useState(false);
+  const [sessionStatus, setSessionStatus]         = useState('open');
+  const [abandonConfirm, setAbandonConfirm]       = useState(false);
   const { refreshPanel } = useProjectPanel();
 
   // ── Construit le payload de base pour toutes les requêtes de session ──────
@@ -139,13 +159,66 @@ export default function NewSession() {
     return p;
   };
 
+  // ── Charger les agents disponibles (step B) ───────────────────────────────
+  useEffect(() => {
+    if (phase !== 'agents') return;
+    setAgentsLoading(true);
+    api.get(`/projects/${projectId}/agents`)
+      .then(({ data }) => {
+        const enabled = data.filter(a => a.enabled !== false);
+        setAvailableAgents(enabled);
+        // Pré-sélectionner les 2 premiers
+        setSelectedAgentIds(new Set(enabled.slice(0, 2).map(a => a.agentId || a.id)));
+      })
+      .catch(() => {})
+      .finally(() => setAgentsLoading(false));
+  }, [phase, projectId]);
+
+  const handleSuggestAgents = async () => {
+    if (!task.trim() || suggestingAgents) return;
+    setSuggestingAgents(true);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/sessions/suggest-agents`, { task });
+      if (data.length > 0) {
+        const ids = new Set(data.map(s => s.agentId));
+        setSelectedAgentIds(ids);
+      }
+    } catch {}
+    setSuggestingAgents(false);
+  };
+
+  const handleCreateAgent = async () => {
+    if (!newAgentForm.name.trim() || creatingAgent) return;
+    setCreatingAgent(true);
+    try {
+      const { data: agent } = await api.post('/agents', {
+        name: newAgentForm.name.trim(),
+        role: newAgentForm.role.trim(),
+        systemPrompt: newAgentForm.systemPrompt.trim()
+      });
+      await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'manual' });
+      setAvailableAgents(prev => [...prev, { ...agent, agentId: agent.id, enabled: true }]);
+      setSelectedAgentIds(prev => new Set([...prev, agent.id]));
+      setNewAgentForm({ open: false, name: '', role: '', systemPrompt: '' });
+    } catch {}
+    setCreatingAgent(false);
+  };
+
   // ── Phase 1 → 2 : formation de l'équipe (avec détection cache) ───────────
   const handleFormTeam = async () => {
     if (!task.trim()) return;
     setError('');
     setPhase('forming');
     try {
-      const { data } = await api.post(`/projects/${projectId}/sessions`, basePayload());
+      const agentsForSession = availableAgents
+        .filter(a => selectedAgentIds.has(a.agentId || a.id))
+        .map(a => ({ name: a.name, role: a.role, systemPrompt: a.systemPrompt || `Tu es ${a.name}. ${a.role}.`, emoji: a.emoji || '🤖' }));
+
+      const { data } = await api.post(`/projects/${projectId}/sessions`, {
+        ...basePayload(),
+        ...(agentsForSession.length > 0 ? { selectedAgents: agentsForSession } : {}),
+        intention: [...intentions],
+      });
       if (data.cached) {
         setCachedTeam({ agents: data.agents, plan: data.plan });
         setPhase('cached');
@@ -332,7 +405,12 @@ export default function NewSession() {
 
   // ── Réinitialiser pour une nouvelle session ────────────────────────────────
   const handleNewSession = () => {
-    setPhase('input');
+    setPhase('intention');
+    setIntentions(new Set(['synthesis']));
+    setSelectedAgentIds(new Set());
+    setSessionStatus('open');
+    setShowAcceptModal(false);
+    setAbandonConfirm(false);
     setTask('');
     setMode('realtime');
     setModel('claude-sonnet-4-6');
@@ -361,6 +439,124 @@ export default function NewSession() {
         >
           ← Retour au projet
         </Link>
+
+        {/* ── PHASE INTENTION (Étape A) ────────────────────────────────── */}
+        {phase === 'intention' && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-5">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Que doit produire cette session ?</h1>
+              <p className="text-gray-400 text-sm mt-1">Sélectionne une ou plusieurs intentions — au moins une requise.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {INTENTIONS.map(intent => {
+                const active = intentions.has(intent.id);
+                return (
+                  <button key={intent.id} type="button"
+                    onClick={() => setIntentions(prev => {
+                      const s = new Set(prev);
+                      s.has(intent.id) ? s.delete(intent.id) : s.add(intent.id);
+                      return s;
+                    })}
+                    className={`flex flex-col items-start gap-1.5 p-4 rounded-xl border-2 text-left transition ${
+                      active ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}>
+                    <span className="text-2xl">{intent.icon}</span>
+                    <p className={`font-semibold text-sm ${active ? 'text-blue-700' : 'text-gray-800'}`}>{intent.label}</p>
+                    <p className="text-xs text-gray-400 leading-snug">{intent.desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => setPhase('agents')} disabled={intentions.size === 0}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition disabled:opacity-50 text-sm">
+              Continuer → Choisir les agents
+            </button>
+          </div>
+        )}
+
+        {/* ── PHASE AGENTS (Étape B) ────────────────────────────────────── */}
+        {phase === 'agents' && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPhase('intention')} className="text-gray-400 hover:text-gray-600 text-sm">←</button>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Quels agents pour cette session ?</h1>
+                <p className="text-gray-400 text-sm mt-0.5">Sélectionne les agents qui interviendront.</p>
+              </div>
+            </div>
+
+            {agentsLoading ? (
+              <div className="flex justify-center py-6">
+                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {availableAgents.map(a => {
+                  const id = a.agentId || a.id;
+                  const active = selectedAgentIds.has(id);
+                  return (
+                    <div key={id} onClick={() => setSelectedAgentIds(prev => {
+                      const s = new Set(prev);
+                      s.has(id) ? s.delete(id) : s.add(id);
+                      return s;
+                    })}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition ${
+                        active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                      }`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${active ? 'bg-blue-600 text-white' : 'bg-gray-300 text-white'}`}>
+                        {(a.emoji || a.name?.[0] || '?')}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold ${active ? 'text-blue-800' : 'text-gray-700'}`}>{a.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{a.role}</p>
+                      </div>
+                      {active && <svg className="w-4 h-4 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
+                    </div>
+                  );
+                })}
+
+                {/* Créer un agent inline */}
+                {newAgentForm.open ? (
+                  <div className="border border-blue-200 bg-blue-50 rounded-xl p-4 space-y-2">
+                    <input autoFocus type="text" placeholder="Nom de l'agent" value={newAgentForm.name}
+                      onChange={e => setNewAgentForm(p => ({ ...p, name: e.target.value }))}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+                    <input type="text" placeholder="Rôle / spécialité" value={newAgentForm.role}
+                      onChange={e => setNewAgentForm(p => ({ ...p, role: e.target.value }))}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+                    <textarea placeholder="Prompt système (optionnel)" value={newAgentForm.systemPrompt}
+                      onChange={e => setNewAgentForm(p => ({ ...p, systemPrompt: e.target.value }))}
+                      rows={2} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+                    <div className="flex gap-2">
+                      <button onClick={handleCreateAgent} disabled={!newAgentForm.name.trim() || creatingAgent}
+                        className="flex-1 bg-blue-600 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50">
+                        {creatingAgent ? 'Création…' : 'Créer et sélectionner'}
+                      </button>
+                      <button onClick={() => setNewAgentForm(p => ({ ...p, open: false }))}
+                        className="text-sm text-gray-400 hover:text-gray-600 px-3">✕</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setNewAgentForm(p => ({ ...p, open: true }))}
+                    className="w-full py-2 border-2 border-dashed border-gray-200 hover:border-blue-300 rounded-xl text-xs text-gray-400 hover:text-blue-500 transition">
+                    + Créer un agent
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={handleSuggestAgents} disabled={suggestingAgents || !task.trim()}
+                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                {suggestingAgents ? 'Suggestion…' : '✨ Suggestion IA'}
+              </button>
+              <button onClick={() => setPhase('input')} disabled={selectedAgentIds.size === 0}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                Continuer ({selectedAgentIds.size}) →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── PHASE INPUT / FORMING ─────────────────────────────────────── */}
         {(phase === 'input' || phase === 'forming') && (
@@ -491,21 +687,29 @@ export default function NewSession() {
                 </div>
               )}
 
-              {/* Bouton lancer */}
-              <button
-                onClick={handleFormTeam}
-                disabled={!task.trim() || phase === 'forming'}
-                className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-              >
-                {phase === 'forming' ? (
-                  <>
-                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Formation de l'équipe en cours…
-                  </>
-                ) : (
-                  'Lancer les agents →'
+              {/* Navigation step C */}
+              <div className="flex gap-2">
+                {phase !== 'forming' && (
+                  <button type="button" onClick={() => setPhase('agents')}
+                    className="border border-gray-200 text-gray-500 hover:bg-gray-50 py-3 px-4 rounded-xl text-sm transition">
+                    ← Agents
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={handleFormTeam}
+                  disabled={!task.trim() || phase === 'forming'}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                >
+                  {phase === 'forming' ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Création de la session…
+                    </>
+                  ) : (
+                    'Lancer les agents →'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -808,7 +1012,7 @@ export default function NewSession() {
             )}
 
             {/* Zone d'approfondissement */}
-            {!isRelaunching && (
+            {!isRelaunching && sessionStatus === 'open' && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-3">
                 <p className="text-sm font-semibold text-gray-700">Approfondir ou compléter</p>
                 <textarea
@@ -818,21 +1022,54 @@ export default function NewSession() {
                   placeholder="Approfondir ce point ou ajouter un prompt complémentaire…"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none transition"
                 />
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleRelaunch}
-                    disabled={!additionalPrompt.trim()}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                  >
-                    Relancer les agents →
-                  </button>
-                  <button
-                    onClick={handleClore}
-                    className="border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium py-2.5 px-4 rounded-xl transition text-sm"
-                  >
-                    Clore la session
-                  </button>
-                </div>
+                <button
+                  onClick={handleRelaunch}
+                  disabled={!additionalPrompt.trim()}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  Relancer les agents →
+                </button>
+              </div>
+            )}
+
+            {/* Boutons de conclusion (Évolution 1) */}
+            {sessionStatus === 'open' && !isRelaunching && (
+              <div className="space-y-2">
+                {!abandonConfirm ? (
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowAcceptModal(true)}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2">
+                      ✅ Accepter cette session
+                    </button>
+                    <button onClick={() => setAbandonConfirm(true)}
+                      className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-3 px-4 rounded-xl text-sm transition">
+                      🚫 Abandonner
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                    <p className="text-sm text-gray-600">Cette session sera close sans impact sur le projet.</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setAbandonConfirm(false)}
+                        className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm">Annuler</button>
+                      <button onClick={async () => {
+                        await api.patch(`/projects/${projectId}/sessions/${session.id}/status`, { status: 'abandoned' }).catch(() => {});
+                        setSessionStatus('abandoned');
+                        setAbandonConfirm(false);
+                      }} className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-xl text-sm">
+                        Confirmer l'abandon
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(sessionStatus === 'accepted' || sessionStatus === 'abandoned') && (
+              <div className={`rounded-xl p-3 text-sm text-center font-medium ${
+                sessionStatus === 'accepted' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
+              }`}>
+                {sessionStatus === 'accepted' ? '✅ Session acceptée' : '🚫 Session abandonnée'}
               </div>
             )}
 
@@ -897,6 +1134,15 @@ export default function NewSession() {
 
       {showExport && summaries.length > 0 && (
         <ExportModal summary={summaries[summaries.length - 1]} projectId={projectId} onClose={() => setShowExport(false)} />
+      )}
+      {showAcceptModal && session && (
+        <AcceptSessionModal
+          session={{ ...session, intention: [...intentions], summary: summaries[summaries.length - 1] || '' }}
+          projectId={projectId}
+          planSuggestions={planSuggestions}
+          onClose={() => setShowAcceptModal(false)}
+          onAccepted={() => { setSessionStatus('accepted'); setShowAcceptModal(false); refreshPanel(); }}
+        />
       )}
     </ProjectLayout>
   );

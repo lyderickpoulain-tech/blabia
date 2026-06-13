@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import AcceptSessionModal from '../components/AcceptSessionModal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProjectLayout from '../components/ProjectLayout';
@@ -217,11 +218,15 @@ export default function SessionView() {
   const [addedToPlan, setAddedToPlan]         = useState(false);
   const [planIgnored, setPlanIgnored]         = useState(false);
   const [projectMilestones, setProjectMilestones] = useState([]);
+  const [sessionStatus, setSessionStatus]         = useState(null);
+  const [showAcceptModal, setShowAcceptModal]     = useState(false);
+  const [abandonConfirm, setAbandonConfirm]       = useState(false);
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
       .then(async ({ data }) => {
         setSession(data);
+        setSessionStatus(data.status);
         setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
         if (data.planSuggestions?.milestones?.length > 0) {
           setPlanSuggestions(data.planSuggestions);
@@ -322,7 +327,8 @@ export default function SessionView() {
 
   if (!session) return null;
 
-  const isComplete    = session.status === 'complete';
+  const currentStatus = sessionStatus || session.status;
+  const isComplete    = ['open', 'accepted', 'abandoned', 'complete'].includes(currentStatus) && session.summary;
   const isRealtime    = session.mode === 'realtime';
   const agents        = Array.isArray(session.agents)    ? session.agents    : [];
   const exchanges     = Array.isArray(session.exchanges) ? session.exchanges : [];
@@ -360,10 +366,12 @@ export default function SessionView() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   {isComplete
-                    ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-                        Complète
-                      </span>
+                    ? <>
+                        {currentStatus === 'accepted' && <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">✅ Acceptée</span>}
+                        {currentStatus === 'open' && <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full animate-pulse">⚪ En cours</span>}
+                        {currentStatus === 'abandoned' && <span className="inline-flex items-center gap-1 text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full line-through">🚫 Abandonnée</span>}
+                        {(currentStatus === 'complete' || !['open','accepted','abandoned'].includes(currentStatus)) && <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">✅ Acceptée</span>}
+                      </>
                     : <span className="text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">
                         ⚠ Interrompue
                       </span>
@@ -699,6 +707,39 @@ export default function SessionView() {
             </div>
           )}
 
+          {/* Boutons de conclusion (Évolution 1) */}
+          {isComplete && currentStatus === 'open' && (
+            <div className="space-y-2">
+              {!abandonConfirm ? (
+                <div className="flex gap-2">
+                  <button onClick={() => setShowAcceptModal(true)}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2">
+                    ✅ Accepter cette session
+                  </button>
+                  <button onClick={() => setAbandonConfirm(true)}
+                    className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-3 px-4 rounded-xl text-sm transition">
+                    🚫 Abandonner
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                  <p className="text-sm text-gray-600">Cette session sera close sans impact sur le projet.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setAbandonConfirm(false)}
+                      className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm">Annuler</button>
+                    <button onClick={async () => {
+                      await api.patch(`/projects/${projectId}/sessions/${sessionId}/status`, { status: 'abandoned' }).catch(() => {});
+                      setSessionStatus('abandoned');
+                      setAbandonConfirm(false);
+                    }} className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-xl text-sm">
+                      Confirmer l'abandon
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <Link
             to={`/projects/${projectId}`}
             className="flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition py-1"
@@ -724,6 +765,15 @@ export default function SessionView() {
           onClose={() => setShowDelete(false)}
           onConfirm={handleDeleteSession}
           deleting={deleting}
+        />
+      )}
+      {showAcceptModal && session && (
+        <AcceptSessionModal
+          session={session}
+          projectId={projectId}
+          planSuggestions={planSuggestions}
+          onClose={() => setShowAcceptModal(false)}
+          onAccepted={() => { setSessionStatus('accepted'); setShowAcceptModal(false); }}
         />
       )}
     </ProjectLayout>
