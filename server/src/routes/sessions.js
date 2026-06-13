@@ -578,6 +578,7 @@ router.post('/:sessionId/run', async (req, res) => {
   let projectContext = null;
   let parentExchangesBlock = '';
   let stackLines = [];
+  let projectMilestonesRun = [];
   try {
     project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -588,7 +589,7 @@ router.post('/:sessionId/run', async (req, res) => {
     session = s;
 
     // ── Timeline du projet (mémoire active) ─────────────────────────────────
-    const projectMilestonesRun = await db('Milestone')
+    projectMilestonesRun = await db('Milestone')
       .select('title', 'type', 'status', 'description')
       .where({ projectId })
       .orderBy('displayOrder', 'asc');
