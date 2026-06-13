@@ -97,7 +97,7 @@ router.post('/:id/milestones', async (req, res) => {
         description: description?.trim() || null,
         dueDate:     dueDate || null,
         status:      'pending',
-        type:        ['meeting', 'technical', 'stack_check', 'milestone'].includes(type) ? type : 'meeting',
+        type:        ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone', 'meeting', 'technical'].includes(type) ? type : 'synthesis',
         displayOrder: order,
         createdAt:   new Date(),
         createdBy:   req.user.id
@@ -148,7 +148,7 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
     if (description          !== undefined) updates.description  = description?.trim() || null;
     if (dueDate              !== undefined) updates.dueDate      = dueDate || null;
     if (status               !== undefined) updates.status       = status;
-    if (type                 !== undefined) updates.type         = ['meeting', 'technical', 'stack_check', 'milestone'].includes(type) ? type : 'meeting';
+    if (type                 !== undefined) updates.type         = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone', 'meeting', 'technical'].includes(type) ? type : 'synthesis';
     if (displayOrder         !== undefined) updates.displayOrder = displayOrder;
 
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Aucune modification' });
@@ -446,7 +446,7 @@ router.post('/:id/plan/bulk', async (req, res) => {
 
     for (const mData of milestones) {
       if (!mData.title?.trim()) continue;
-      const VALID_TYPES = ['meeting', 'technical', 'stack_check', 'milestone'];
+      const VALID_TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone', 'meeting', 'technical'];
       const titleKey = mData.title.trim().toLowerCase();
       let milestoneId;
 
@@ -463,7 +463,7 @@ router.post('/:id/plan/bulk', async (req, res) => {
             id: randomUUID(), projectId: req.params.id,
             title: mData.title.trim(), description: mData.description?.trim() || null,
             status: 'pending',
-            type: VALID_TYPES.includes(mData.type) ? mData.type : 'meeting',
+            type: VALID_TYPES.includes(mData.type) ? mData.type : 'synthesis',
             displayOrder: milestoneOrder++,
             createdFromSessionId: sourceSessionId || null,
             createdAt: new Date(), createdBy: req.user.id
