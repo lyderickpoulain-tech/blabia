@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import AcceptSessionModal from '../components/AcceptSessionModal';
+import MeetingCloseModal from '../components/MeetingCloseModal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProjectLayout from '../components/ProjectLayout';
@@ -194,6 +195,87 @@ function DeleteSessionModal({ onClose, onConfirm, deleting }) {
   );
 }
 
+// ── Format réunion v3.0 ───────────────────────────────────────────────────────
+
+const MEETING_COLORS = [
+  { bg: 'bg-blue-100',   text: 'text-blue-800',   avatar: 'bg-blue-500'   },
+  { bg: 'bg-purple-100', text: 'text-purple-800',  avatar: 'bg-purple-500' },
+  { bg: 'bg-green-100',  text: 'text-green-800',   avatar: 'bg-green-500'  },
+  { bg: 'bg-rose-100',   text: 'text-rose-800',    avatar: 'bg-rose-500'   },
+  { bg: 'bg-amber-100',  text: 'text-amber-800',   avatar: 'bg-amber-500'  },
+  { bg: 'bg-cyan-100',   text: 'text-cyan-800',    avatar: 'bg-cyan-500'   },
+];
+
+const INTENTION_META = {
+  synthesis:      { icon: '📄', label: 'Synthèse'         },
+  memory:         { icon: '🧠', label: 'Souvenir projet'  },
+  claude_code:    { icon: '💻', label: 'Prompt Claude Code'},
+  timeline_steps: { icon: '📅', label: 'Étapes timeline'  },
+};
+
+function MeetingFeed({ messages, activeAgents }) {
+  if (!messages || messages.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-8 text-gray-400 text-sm">
+        Aucun message dans cette réunion.
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-4 py-4 px-4">
+      {messages.map((msg, idx) => {
+        if (msg.role === 'system') {
+          return (
+            <div key={msg.id || idx} className="flex justify-center">
+              <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-3 py-1">
+                {msg.content}
+              </span>
+            </div>
+          );
+        }
+        if (msg.role === 'human') {
+          const isDecision = msg.type === 'decision' || msg.pinned;
+          return (
+            <div key={msg.id || idx} className="flex justify-end">
+              <div className="max-w-[75%]">
+                <div className={`px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap ${
+                  isDecision ? 'bg-amber-50 border border-amber-200 text-amber-900' : 'bg-blue-600 text-white'
+                }`}>
+                  {msg.content}
+                </div>
+                {isDecision && <p className="text-xs text-amber-600 text-right mt-1">📌 Décision</p>}
+              </div>
+            </div>
+          );
+        }
+        if (msg.role === 'agent') {
+          const agentIdx = (activeAgents || []).findIndex(a => a.name === msg.agentName);
+          const color    = MEETING_COLORS[(agentIdx >= 0 ? agentIdx : 0) % MEETING_COLORS.length];
+          const agent    = (activeAgents || []).find(a => a.name === msg.agentName);
+          const isDecision = msg.type === 'decision' || msg.pinned;
+          return (
+            <div key={msg.id || idx} className="flex items-start gap-3">
+              <div className={`w-8 h-8 rounded-full ${color.avatar} flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5`}>
+                {agent?.emoji || msg.agentName?.[0] || '?'}
+              </div>
+              <div className="max-w-[75%]">
+                <p className={`text-xs font-semibold mb-1 ${color.text}`}>{msg.agentName}</p>
+                <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed whitespace-pre-wrap ${
+                  isDecision ? 'bg-amber-50 border border-amber-200 text-amber-900' : `${color.bg} ${color.text}`
+                }`}>
+                  {msg.content}
+                </div>
+                {isDecision && <p className="text-xs text-amber-600 mt-1">📌 Décision</p>}
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })}
+    </div>
+  );
+}
+
 // ── Page principale ────────────────────────────────────────────────────────────
 export default function SessionView() {
   const { id: projectId, sid: sessionId } = useParams();
@@ -221,6 +303,9 @@ export default function SessionView() {
   const [sessionStatus, setSessionStatus]         = useState(null);
   const [showAcceptModal, setShowAcceptModal]     = useState(false);
   const [abandonConfirm, setAbandonConfirm]       = useState(false);
+  // Format meeting v3.0
+  const [showMeetingCloseModal, setShowMeetingCloseModal] = useState(false);
+  const [meetingAbandonConfirm, setMeetingAbandonConfirm] = useState(false);
 
   useEffect(() => {
     api.get(`/projects/${projectId}/sessions/${sessionId}`)
@@ -327,6 +412,155 @@ export default function SessionView() {
 
   if (!session) return null;
 
+  // ── Détection format réunion v3.0 ────────────────────────────────────────
+  const isMeetingFormat = Array.isArray(session.messages) && session.messages.length > 0;
+
+  if (isMeetingFormat) {
+    const currentStatus  = sessionStatus || session.status;
+    const activeAgents   = Array.isArray(session.activeAgents) ? session.activeAgents : [];
+    const messages       = session.messages;
+    const intention      = Array.isArray(session.intention) && session.intention.length > 0
+      ? session.intention[0] : 'synthesis';
+    const intentionMeta  = INTENTION_META[intention] || INTENTION_META.synthesis;
+    const statusBadge    = {
+      open:      { label: '🔵 En cours',    cls: 'bg-blue-100 text-blue-700 border-blue-200'   },
+      accepted:  { label: '✅ Acceptée',    cls: 'bg-green-100 text-green-700 border-green-200' },
+      abandoned: { label: '🚫 Abandonnée',  cls: 'bg-gray-100 text-gray-500 border-gray-200'   },
+    }[currentStatus] || { label: currentStatus, cls: 'bg-gray-100 text-gray-500 border-gray-200' };
+
+    const handleAbandonMeeting = async () => {
+      try {
+        await api.patch(`/projects/${projectId}/sessions/${sessionId}/status`, { status: 'abandoned' });
+        setSessionStatus('abandoned');
+        setMeetingAbandonConfirm(false);
+      } catch {}
+    };
+
+    return (
+      <ProjectLayout projectId={projectId}>
+        <div className="max-w-2xl mx-auto space-y-4">
+
+          <Link to={`/projects/${projectId}`} className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700">
+            ← Retour au projet
+          </Link>
+
+          {/* Carte principale : header + fil */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-100 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-gray-800 flex-1 leading-snug">🎯 {session.task}</p>
+                <span className={`text-xs font-medium px-2.5 py-1 rounded-full border shrink-0 ${statusBadge.cls}`}>
+                  {statusBadge.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-gray-400 shrink-0">Agents :</span>
+                {activeAgents.map((agent, i) => {
+                  const color = MEETING_COLORS[i % MEETING_COLORS.length];
+                  return (
+                    <span key={agent.id || i} className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${color.bg} ${color.text}`}>
+                      {agent.emoji || '🤖'} {agent.name}
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="text-xs text-gray-400">
+                {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+
+            {/* Fil de conversation (lecture seule) */}
+            <div className="max-h-[60vh] overflow-y-auto">
+              <MeetingFeed messages={messages} activeAgents={activeAgents} />
+            </div>
+          </div>
+
+          {/* Livrable si session acceptée */}
+          {currentStatus === 'accepted' && session.summary && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                {intentionMeta.icon} {intentionMeta.label}
+              </h3>
+              <div className={`text-sm text-gray-700 leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto rounded-xl p-4 ${
+                intention === 'claude_code' ? 'bg-gray-900 text-green-300 font-mono text-xs' : 'bg-gray-50 border border-gray-100'
+              }`}>
+                {session.summary}
+              </div>
+            </div>
+          )}
+
+          {/* Jalons si timeline_steps acceptée */}
+          {currentStatus === 'accepted' && intention === 'timeline_steps' && session.planSuggestions?.milestones?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-2">
+              <h3 className="text-sm font-semibold text-gray-700">📅 Étapes extraites</h3>
+              <ul className="space-y-1.5">
+                {session.planSuggestions.milestones.map((m, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-blue-400 shrink-0 mt-0.5">·</span>
+                    <span className="font-medium">{m.title}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Actions si open */}
+          {currentStatus === 'open' && (
+            <div className="space-y-2">
+              {!meetingAbandonConfirm ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowMeetingCloseModal(true)}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2"
+                  >
+                    ✅ Accepter cette réunion
+                  </button>
+                  <button
+                    onClick={() => setMeetingAbandonConfirm(true)}
+                    className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-3 px-4 rounded-xl text-sm transition"
+                  >
+                    🚫
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                  <p className="text-sm text-gray-600">La réunion sera close sans appliquer de livrable.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setMeetingAbandonConfirm(false)}
+                      className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm">Annuler</button>
+                    <button onClick={handleAbandonMeeting}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-xl text-sm">
+                      Confirmer l'abandon
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <Link to={`/projects/${projectId}`} className="flex items-center justify-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition py-1">
+            ← Retour au projet
+          </Link>
+        </div>
+
+        {showMeetingCloseModal && (
+          <MeetingCloseModal
+            session={session}
+            projectId={projectId}
+            onClose={() => setShowMeetingCloseModal(false)}
+            onClosed={(newStatus) => {
+              setSessionStatus(newStatus);
+              setShowMeetingCloseModal(false);
+            }}
+          />
+        )}
+      </ProjectLayout>
+    );
+  }
+
+  // ── Format legacy (v1/v2) — inchangé ────────────────────────────────────
   const currentStatus = sessionStatus || session.status;
   const isComplete    = ['open', 'accepted', 'abandoned', 'complete'].includes(currentStatus) && session.summary;
   const isRealtime    = session.mode === 'realtime';
