@@ -7,7 +7,7 @@ import ProjectView from './pages/ProjectView';
 import AdminInvitations from './pages/AdminInvitations';
 import ProtectedRoute from './components/ProtectedRoute';
 
-import NewSession from './pages/NewSession';
+import NewSessionLegacy from './pages/NewSessionLegacy';
 import SessionView from './pages/SessionView';
 import SummaryView from './pages/SummaryView';
 import AgentsPage from './pages/AgentsPage';
@@ -15,17 +15,6 @@ import EnvironmentPage from './pages/EnvironmentPage';
 import PlanView from './pages/PlanView';
 import StartMeeting from './pages/StartMeeting';
 import MeetingRoom from './pages/MeetingRoom';
-
-function PlaceholderPage({ title }) {
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-700 mb-2">{title}</h2>
-        <p className="text-gray-400 text-sm">Cette page sera disponible prochainement.</p>
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   useEffect(() => {
@@ -51,7 +40,7 @@ export default function App() {
           <ProtectedRoute><PlanView /></ProtectedRoute>
         } />
         <Route path="/projects/:id/session/new" element={
-          <ProtectedRoute><NewSession /></ProtectedRoute>
+          <ProtectedRoute><NewSessionLegacy /></ProtectedRoute>
         } />
         <Route path="/projects/:id/meeting/new" element={
           <ProtectedRoute><StartMeeting /></ProtectedRoute>
