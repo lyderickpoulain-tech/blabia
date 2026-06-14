@@ -1598,6 +1598,75 @@ router.post('/:sessionId/add-agent', async (req, res) => {
   }
 });
 
+// ── v3.0 : Évolution 2.3 — POST /:sessionId/pin-message ─────────────────────
+
+router.post('/:sessionId/pin-message', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { messageId, type } = req.body;
+  const isAdmin = req.user.role === 'admin';
+
+  const VALID_TYPES = ['decision', 'step_suggestion'];
+  if (!messageId) return res.status(400).json({ error: 'messageId requis' });
+  if (!VALID_TYPES.includes(type)) {
+    return res.status(400).json({ error: 'type invalide — valeurs acceptées : decision, step_suggestion' });
+  }
+
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+
+    // Charger session.messages et trouver le message ciblé
+    const messages = (() => {
+      const m = session.messages;
+      if (Array.isArray(m)) return m;
+      try { return JSON.parse(m || '[]'); } catch { return []; }
+    })();
+
+    const idx = messages.findIndex(m => m.id === messageId);
+    if (idx < 0) return res.status(404).json({ error: 'Message introuvable' });
+
+    // Mettre à jour pinned + type, réécrire le tableau
+    messages[idx] = { ...messages[idx], pinned: true, type };
+    await db('Session').where({ id: sessionId }).update({ messages: JSON.stringify(messages) });
+
+    let milestone = null;
+
+    // Si step_suggestion : créer un milestone dans la timeline du projet
+    if (type === 'step_suggestion') {
+      const msgContent = messages[idx].content || '';
+      const title = msgContent.length > 80
+        ? msgContent.substring(0, 80).trim() + '…'
+        : msgContent.trim();
+
+      const [{ maxOrder }] = await db('Milestone').max('displayOrder as maxOrder').where({ projectId });
+      const [created] = await db('Milestone')
+        .insert({
+          id: randomUUID(),
+          projectId,
+          title,
+          description: `Étape suggérée par ${messages[idx].agentName || 'un agent'} lors d'une réunion.`,
+          status: 'pending',
+          type: 'meeting',
+          displayOrder: (maxOrder ?? -1) + 1,
+          createdFromSessionId: sessionId,
+          createdAt: new Date(),
+          createdBy: req.user.id
+        })
+        .returning(['id', 'title', 'description', 'status', 'type', 'displayOrder', 'createdAt']);
+
+      milestone = created;
+    }
+
+    res.json({ message: messages[idx], milestone });
+  } catch (err) {
+    console.error('[sessions/pin-message]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── v3.0 : Évolution 2.1 — POST /:sessionId/chat (moteur de conversation SSE) ──
 
 router.post('/:sessionId/chat', async (req, res) => {
