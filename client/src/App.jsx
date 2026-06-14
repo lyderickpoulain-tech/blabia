@@ -13,6 +13,7 @@ import SummaryView from './pages/SummaryView';
 import AgentsPage from './pages/AgentsPage';
 import EnvironmentPage from './pages/EnvironmentPage';
 import PlanView from './pages/PlanView';
+import StartMeeting from './pages/StartMeeting';
 
 function PlaceholderPage({ title }) {
   return (
@@ -50,6 +51,9 @@ export default function App() {
         } />
         <Route path="/projects/:id/session/new" element={
           <ProtectedRoute><NewSession /></ProtectedRoute>
+        } />
+        <Route path="/projects/:id/meeting/new" element={
+          <ProtectedRoute><StartMeeting /></ProtectedRoute>
         } />
         <Route path="/projects/:id/session/:sid" element={
           <ProtectedRoute><SessionView /></ProtectedRoute>
