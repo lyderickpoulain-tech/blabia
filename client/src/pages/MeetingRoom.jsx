@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
+import MeetingCloseModal from '../components/MeetingCloseModal';
 import api from '../utils/api';
 
 // ── Palette agent (initiale + couleur de bulle) ───────────────────────────────
@@ -392,6 +393,15 @@ export default function MeetingRoom() {
   // États épinglage + suggestions d'étape SSE
   const [pinningMessageId, setPinningMessageId] = useState(null);
   const [stepSuggestions,  setStepSuggestions]  = useState([]);
+
+  // Modal de clôture
+  const [showCloseModal, setShowCloseModal] = useState(false);
+
+  const handleSessionClosed = useCallback((newStatus) => {
+    setSession(prev => prev ? { ...prev, status: newStatus } : prev);
+    setShowCloseModal(false);
+    refreshPanel();
+  }, [refreshPanel]);
 
   // Chargement des agents disponibles (non encore actifs) quand le dropdown s'ouvre
   const loadAvailableForAdd = useCallback(async (currentActive) => {
@@ -861,12 +871,13 @@ export default function MeetingRoom() {
                     : '▶'}
                 </button>
               </div>
-              {/* Bouton Clore — activé sous-étape 5 */}
+              {/* Bouton Clore la réunion */}
               <button
-                disabled
-                className="w-full text-xs text-gray-400 py-1 opacity-40 cursor-not-allowed"
+                onClick={() => setShowCloseModal(true)}
+                disabled={isStreaming}
+                className="w-full text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                🔴 Clore la réunion
+                🏁 Clore la réunion
               </button>
             </>
           )}
@@ -874,5 +885,15 @@ export default function MeetingRoom() {
 
       </div>
     </ProjectLayout>
+
+    {/* Modal de clôture v3.0 */}
+    {showCloseModal && session && (
+      <MeetingCloseModal
+        session={session}
+        projectId={projectId}
+        onClose={() => setShowCloseModal(false)}
+        onClosed={handleSessionClosed}
+      />
+    )}
   );
 }
