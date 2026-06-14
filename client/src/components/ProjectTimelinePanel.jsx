@@ -14,7 +14,7 @@ const TYPE_ICON = {
   stack_check:    '🔧',
   milestone:      '🎯',
   // rétrocompat
-  meeting:        '📄',
+  meeting:        '🤝',
   technical:      '💻',
 };
 const TYPE_LABEL = {
@@ -101,6 +101,19 @@ function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh }) {
 function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh }) {
   const [status, setStatus] = useState(milestone.status);
   const [saving, setSaving] = useState(false);
+  const [pinnedDecisions, setPinnedDecisions] = useState([]);
+
+  // Charger les décisions épinglées si la session liée est un meeting v3.0
+  useEffect(() => {
+    if (!linkedSession?.id) return;
+    api.get(`/projects/${projectId}/sessions/${linkedSession.id}`)
+      .then(({ data }) => {
+        if (Array.isArray(data.messages)) {
+          setPinnedDecisions(data.messages.filter(m => m.pinned && m.role === 'agent'));
+        }
+      })
+      .catch(() => {});
+  }, [linkedSession?.id, projectId]);
 
   const changeStatus = async (s) => {
     setStatus(s);
@@ -115,6 +128,20 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
   const sessionDate = linkedSession?.createdAt
     ? new Date(linkedSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
     : '';
+
+  // Navigation intelligente : réunion active → /meeting/:sid, sinon → /session/:sid
+  const openSessionPath = linkedSession
+    ? (linkedSession.mode === 'meeting' && linkedSession.status === 'open'
+        ? `/projects/${projectId}/meeting/${linkedSession.id}`
+        : `/projects/${projectId}/session/${linkedSession.id}`)
+    : null;
+
+  const SESSION_STATUS_LABEL = {
+    open:      '🔵 En cours',
+    accepted:  '✅ Acceptée',
+    abandoned: '🚫 Abandonnée',
+    complete:  '✅ Complète',
+  };
 
   return (
     <div className="absolute inset-0 bg-white z-10 flex flex-col rounded-r-xl">
@@ -151,19 +178,36 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
           </select>
         </div>
 
+        {/* Décisions épinglées (lecture seule) */}
+        {pinnedDecisions.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block">
+              📌 Décisions
+            </label>
+            {pinnedDecisions.map((msg, i) => (
+              <div key={msg.id || i} className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                <p className="text-[10px] font-semibold text-amber-700 mb-0.5">{msg.agentName}</p>
+                <p className="text-xs text-amber-900 leading-relaxed">{msg.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Action session */}
         {linkedSession ? (
           <div className="space-y-2 pt-1">
             <button
-              onClick={() => navigate(`/projects/${projectId}/session/${linkedSession.id}`)}
+              onClick={() => navigate(openSessionPath)}
               className="w-full bg-green-600 hover:bg-green-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
             >
-              ✓ Ouvrir la session
+              {linkedSession.mode === 'meeting' && linkedSession.status === 'open'
+                ? '🏁 Reprendre la réunion'
+                : '✓ Voir la réunion'}
             </button>
             <div className="text-xs text-gray-400 text-center">
               {sessionDate} ·{' '}
-              <span className={`font-medium ${linkedSession.status === 'complete' ? 'text-green-600' : 'text-orange-500'}`}>
-                {linkedSession.status === 'complete' ? 'Complète' : 'Interrompue'}
+              <span className="font-medium text-gray-500">
+                {SESSION_STATUS_LABEL[linkedSession.status] || linkedSession.status}
               </span>
             </div>
             <button onClick={onClose}
@@ -174,12 +218,16 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
         ) : (
           <div className="space-y-2 pt-1">
             <button
-              onClick={() => navigate(`/projects/${projectId}/session/new`, {
-                state: { milestoneId: milestone.id, initialTask: milestone.title, milestoneType: milestone.type }
+              onClick={() => navigate(`/projects/${projectId}/meeting/new`, {
+                state: {
+                  milestoneId:    milestone.id,
+                  milestoneTitle: milestone.title,
+                  milestoneType:  milestone.type
+                }
               })}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
             >
-              🤖 Créer une session
+              🚀 Démarrer une réunion
             </button>
             <button onClick={onClose}
               className="w-full border border-gray-200 text-gray-500 text-xs font-medium py-2 rounded-xl hover:bg-gray-50 transition">
@@ -363,8 +411,15 @@ function PanelBody({
                         </span>
                       )}
                     </span>
-                    {linked && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-300 shrink-0" title="Session liée" />
+                    {/* Statut de la réunion liée */}
+                    {linked ? (
+                      <span className="text-[10px] leading-none shrink-0" title={
+                        { open: '🔵 Réunion en cours', accepted: '✅ Réunion acceptée', abandoned: '🚫 Réunion abandonnée', complete: '✅ Réunion complète' }[linked.status] || 'Réunion liée'
+                      }>
+                        {{ open: '🔵', accepted: '✅', abandoned: '🚫', complete: '✅' }[linked.status] || '🔵'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] leading-none shrink-0 opacity-30" title="Pas encore de réunion">⚪</span>
                     )}
                     <span
                       className={`w-2 h-2 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`}
@@ -648,21 +703,22 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
 
             <button
               onClick={() => {
-                navigate(`/projects/${projectId}/session/new`, {
+                navigate(`/projects/${projectId}/meeting/new`, {
                   state: {
-                    milestoneId: techChoiceMilestone.id,
-                    initialTask: `Implémenter : ${techChoiceMilestone.title}`
+                    milestoneId:    techChoiceMilestone.id,
+                    milestoneTitle: `Implémenter : ${techChoiceMilestone.title}`,
+                    milestoneType:  techChoiceMilestone.type
                   }
                 });
                 setTechChoiceMilestone(null);
               }}
               className="w-full flex items-start gap-3 p-4 border-2 border-blue-200 bg-blue-50 hover:border-blue-400 hover:bg-blue-100 rounded-xl transition text-left"
             >
-              <span className="text-2xl shrink-0 mt-0.5">🤝</span>
+              <span className="text-2xl shrink-0 mt-0.5">🚀</span>
               <div>
-                <p className="text-sm font-semibold text-blue-900">Organiser une réunion d'abord</p>
+                <p className="text-sm font-semibold text-blue-900">Démarrer une réunion</p>
                 <p className="text-xs text-blue-600 mt-0.5 leading-snug">
-                  Lancer une session d'agents pour explorer la tâche et préparer l'implémentation
+                  Lancer une réunion d'agents pour explorer la tâche et préparer l'implémentation
                 </p>
               </div>
             </button>

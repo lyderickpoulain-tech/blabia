@@ -54,7 +54,7 @@ router.get('/:id/plan', async (req, res) => {
     let milestoneSessions = {};
     if (milestones.length > 0) {
       const linkedSessions = await db('Session')
-        .select(['id', 'milestoneId', 'status', 'hasCode', 'codeStatus', 'task', 'summary'])
+        .select(['id', 'milestoneId', 'status', 'mode', 'hasCode', 'codeStatus', 'task', 'summary'])
         .whereIn('milestoneId', milestones.map(m => m.id))
         .orderBy('createdAt', 'desc');
       for (const s of linkedSessions) {
