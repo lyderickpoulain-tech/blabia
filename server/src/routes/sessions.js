@@ -218,6 +218,14 @@ async function appendTimelineEntry(sessionId, entry) {
   );
 }
 
+// Ajoute un message dans session.messages (append atomique JSONB)
+async function appendMessageEntry(sessionId, message) {
+  await db.raw(
+    `UPDATE "Session" SET messages = COALESCE(messages, '[]'::jsonb) || ?::jsonb WHERE id = ?`,
+    [JSON.stringify([message]), sessionId]
+  );
+}
+
 // Met à jour une entrée existante dans la timeline (lecture + réécriture)
 async function patchTimelineEntry(sessionId, entryId, patch) {
   const [session] = await db('Session').select('timeline').where({ id: sessionId }).limit(1);
@@ -386,7 +394,8 @@ router.post('/', async (req, res) => {
     forceNew = false,
     cachedAgents = null,
     selectedAgents = null,
-    intention = []
+    intention = [],
+    activeAgents: activeAgentsParam = null
   } = req.body;
   const { projectId } = req.params;
   const isAdmin = req.user.role === 'admin';
@@ -396,7 +405,7 @@ router.post('/', async (req, res) => {
   const fullContextEnabled = !!fullContextParam;
 
   if (!task?.trim()) return res.status(400).json({ error: 'La tâche est requise' });
-  if (!['realtime', 'summary', 'conversation'].includes(mode)) return res.status(400).json({ error: 'Mode invalide' });
+  if (!['realtime', 'summary', 'conversation', 'meeting'].includes(mode)) return res.status(400).json({ error: 'Mode invalide' });
 
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
@@ -408,6 +417,42 @@ router.post('/', async (req, res) => {
       if (!parent || !['open', 'accepted'].includes(parent.status)) {
         return res.status(400).json({ error: 'Session parente invalide ou non terminée' });
       }
+    }
+
+    // ── Mode meeting v3.0 : création directe sans formation d'équipe ──────────
+    if (mode === 'meeting') {
+      if (!Array.isArray(activeAgentsParam) || activeAgentsParam.length === 0) {
+        return res.status(400).json({ error: 'Au moins un agent est requis pour démarrer une réunion' });
+      }
+      const now = new Date();
+      const agentsWithJoin = activeAgentsParam.map(a => ({ ...a, joinedAt: now.toISOString() }));
+      const [session] = await db('Session')
+        .insert({
+          id: randomUUID(),
+          task: task.trim(),
+          agents: JSON.stringify(agentsWithJoin),
+          exchanges: JSON.stringify([]),
+          messages: JSON.stringify([]),
+          activeAgents: JSON.stringify(agentsWithJoin),
+          summary: null,
+          status: 'open',
+          mode: 'meeting',
+          model: selectedModel,
+          fullContext: fullContextEnabled,
+          intention: JSON.stringify(Array.isArray(intention) ? intention : []),
+          projectId,
+          milestoneId: milestoneId || null,
+          createdAt: now
+        })
+        .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId']);
+      await db('Project').where({ id: projectId }).update({ updatedAt: now });
+      if (milestoneId) {
+        try { await db('Milestone').where({ id: milestoneId, projectId }).update({ status: 'in_progress' }); } catch {}
+      }
+      return res.status(201).json({
+        session: { ...session, activeAgents: agentsWithJoin, messages: [] },
+        plan: 'Réunion démarrée.'
+      });
     }
 
     // ── 2.3 : Cache de formation d'équipe ────────────────────────────────────
@@ -1331,6 +1376,8 @@ router.get('/:sessionId', async (req, res) => {
       timeline:        parseJson(session.timeline, '[]'),
       planSuggestions: parseJson(session.planSuggestions, 'null'),
       intention:       parseJson(session.intention, '[]'),
+      messages:        parseJson(session.messages, '[]'),
+      activeAgents:    parseJson(session.activeAgents, '[]'),
       planAlreadyAdded: parseInt(planCount || 0) > 0,
     });
   } catch (err) {
@@ -1478,6 +1525,225 @@ router.post('/:sessionId/timeline-event', async (req, res) => {
   } catch (err) {
     console.error('[timeline-event POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── v3.0 : Évolution 2.1 — POST /:sessionId/chat (moteur de conversation SSE) ──
+
+router.post('/:sessionId/chat', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { message: humanMessage, agentIds } = req.body;
+  const isAdmin = req.user.role === 'admin';
+
+  if (!humanMessage?.trim()) {
+    return res.status(400).json({ error: 'Message requis' });
+  }
+
+  // ── Validation pré-SSE ────────────────────────────────────────────────────
+  let session, project, activeAgents, projectMilestones;
+  try {
+    project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    if (['accepted', 'abandoned'].includes(s.status)) {
+      return res.status(400).json({ error: 'Session déjà close' });
+    }
+    session = s;
+
+    // Résoudre les agents actifs : agentIds (filtre optionnel) sinon session.activeAgents
+    const storedAgents = (() => {
+      const a = s.activeAgents;
+      if (Array.isArray(a)) return a;
+      try { return JSON.parse(a || '[]'); } catch { return []; }
+    })();
+
+    if (agentIds && Array.isArray(agentIds) && agentIds.length > 0) {
+      const agentMap = {};
+      storedAgents.forEach(a => { agentMap[a.id] = a; });
+      activeAgents = agentIds.map(id => agentMap[id]).filter(Boolean);
+    } else {
+      activeAgents = storedAgents;
+    }
+
+    if (activeAgents.length === 0) {
+      return res.status(400).json({ error: 'Aucun agent actif dans cette réunion' });
+    }
+
+    projectMilestones = await db('Milestone')
+      .select('title', 'status')
+      .where({ projectId })
+      .orderBy('displayOrder', 'asc');
+  } catch {
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+
+  // ── Ouvrir la connexion SSE ───────────────────────────────────────────────
+  if (req.socket) req.socket.setNoDelay(true);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (type, data = {}) => {
+    try { res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); } catch {}
+  };
+
+  const heartbeatInterval = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch { clearInterval(heartbeatInterval); }
+  }, 15000);
+
+  req.on('close', () => clearInterval(heartbeatInterval));
+
+  send('connected', { sessionId });
+
+  try {
+    // 1. Sauvegarder le message humain dans session.messages
+    const humanMsg = {
+      id: randomUUID(),
+      role: 'human',
+      agentName: null,
+      content: humanMessage.trim(),
+      timestamp: new Date().toISOString(),
+      type: 'message',
+      pinned: false
+    };
+    await appendMessageEntry(sessionId, humanMsg);
+
+    // Recharger l'historique complet (inclut le message qu'on vient d'ajouter)
+    const [freshSession] = await db('Session')
+      .select('messages', 'task', 'intention')
+      .where({ id: sessionId })
+      .limit(1);
+
+    const currentMessages = (() => {
+      const m = freshSession.messages;
+      if (Array.isArray(m)) return m;
+      try { return JSON.parse(m || '[]'); } catch { return []; }
+    })();
+
+    const intention = (() => {
+      const i = freshSession.intention;
+      if (Array.isArray(i)) return i;
+      try { return JSON.parse(i || '[]'); } catch { return []; }
+    })();
+
+    // Résumé de la timeline pour le contexte agent
+    const TL_EMOJI = { done: '✅', in_progress: '🔵', blocked: '🔴', pending: '⚪' };
+    const timelineText = projectMilestones.length > 0
+      ? projectMilestones.map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n')
+      : '';
+
+    // Historique de la réunion formaté pour le prompt
+    const historyLines = currentMessages
+      .filter(m => m.role !== 'system')
+      .map(m => m.role === 'human'
+        ? `Participant : ${m.content}`
+        : `${m.agentName} : ${m.content}`);
+    const historyText = historyLines.join('\n\n');
+
+    const intentionText = Array.isArray(intention) && intention.length > 0
+      ? intention.join(', ')
+      : 'non défini';
+
+    // 2. Tour de chaque agent actif
+    for (const agent of activeAgents) {
+      send('agent_start', { agentName: agent.name, agentRole: agent.role });
+
+      // Contexte projet injecté dans le system prompt
+      const briefSection = project.brief
+        ? `\nBrief du projet :\n${project.brief}\n`
+        : '';
+      const timelineSection = timelineText
+        ? `\nÉtat de la timeline :\n${timelineText}\n`
+        : '';
+      const memorySection = project.context
+        ? `\nMémoire du projet :\n${project.context.substring(0, 6000)}\n`
+        : '';
+
+      const systemPrompt =
+`Tu es ${agent.name}, ${agent.role}.
+${agent.systemPrompt || ''}
+${briefSection}${timelineSection}${memorySection}
+Objectif de cette réunion : ${session.task}
+Livrable attendu : ${intentionText}
+
+Réponds en français, de façon concise et structurée (max 250 mots).
+Apporte une contribution distincte et complémentaire des autres agents.
+Si tu identifies une décision importante à retenir, ajoute à la fin : [DECISION: résumé en 1 phrase].
+Si un agent spécialiste manquerait vraiment, ajoute : [SUGGEST_AGENT: nom, description du rôle].
+Si une étape concrète doit être ajoutée à la timeline, ajoute : [SUGGEST_STEP: titre de l'étape].
+Maximum un marqueur de chaque type par réponse.`;
+
+      const userMessage = historyText
+        ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
+        : `Objectif : ${session.task}\n\nC'est le début de la réunion. Donne ta première contribution.`;
+
+      const agentFullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
+        send('chunk', { agentName: agent.name, text: chunk });
+      }, 2048, MODEL);
+
+      // Détecter les marqueurs spéciaux
+      const decisionMatch   = agentFullText.match(/\[DECISION:\s*([\s\S]*?)\]/);
+      const suggestAgtMatch = agentFullText.match(/\[SUGGEST_AGENT:\s*([\s\S]*?)\]/);
+      const suggestStpMatch = agentFullText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
+
+      // Contenu nettoyé des marqueurs
+      const agentContent = agentFullText
+        .replace(/\[DECISION:[\s\S]*?\]/g, '')
+        .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/g, '')
+        .replace(/\[SUGGEST_STEP:[\s\S]*?\]/g, '')
+        .trim();
+
+      // Sauvegarder la réponse de l'agent (type 'decision' si marqueur détecté)
+      const agentMsg = {
+        id: randomUUID(),
+        role: 'agent',
+        agentName: agent.name,
+        content: agentContent,
+        timestamp: new Date().toISOString(),
+        type: decisionMatch ? 'decision' : 'message',
+        pinned: false
+      };
+      await appendMessageEntry(sessionId, agentMsg);
+
+      send('agent_done', { agentName: agent.name, messageId: agentMsg.id });
+
+      // Émettre les événements spéciaux
+      if (decisionMatch) {
+        send('decision', { text: decisionMatch[1].trim(), messageId: agentMsg.id });
+      }
+
+      if (suggestAgtMatch) {
+        const parts = suggestAgtMatch[1].split(',').map(p => p.trim());
+        const sugName = parts[0] || '';
+        const sugRole = parts.slice(1).join(', ') || '';
+        if (sugName) {
+          send('suggest_agent', { name: sugName, role: sugRole, reason: `Suggéré par ${agent.name}` });
+        }
+      }
+
+      if (suggestStpMatch) {
+        const stepTitle = suggestStpMatch[1].trim();
+        if (stepTitle) {
+          send('suggest_step', { title: stepTitle, type: 'meeting' });
+        }
+      }
+    }
+
+    // 3. Fin du tour : màj timestamp projet + signal turn_complete
+    await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+    send('turn_complete', { sessionId });
+    res.end();
+
+  } catch (err) {
+    console.error('[sessions/chat]', err.message, err.stack);
+    try { send('error', { message: `Erreur : ${err.message}` }); } catch {}
+    res.end();
+  } finally {
+    clearInterval(heartbeatInterval);
   }
 });
 

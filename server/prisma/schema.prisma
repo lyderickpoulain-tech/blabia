@@ -147,6 +147,9 @@ model Session {
   suggestedTools  Json?     // { suggestedTools: string[], missingTools: string[] }
   planSuggestions Json?     // { milestones: [...], standalone_todos: [...] }
   timeline        Json      @default("[]") // [ { id, type, label, status, timestamp, meta } ]
+  intention       Json?     @default("[]") // livrables attendus : synthesis | memory | claude_code | timeline_steps
+  messages        Json?     @default("[]") // v3.0 : fil de conversation [{ id, role, agentName, content, timestamp, type, pinned }]
+  activeAgents    Json?     @default("[]") // v3.0 : agents actifs [{ id, name, role, systemPrompt, emoji, joinedAt }]
   milestoneId     String?
   todos           TodoItem[]
   createdAt       DateTime  @default(now())
