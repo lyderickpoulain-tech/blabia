@@ -660,13 +660,6 @@ export default function MeetingRoom() {
                 createForm: { name: ev.name, role: ev.role, systemPrompt: '' }
               }]);
 
-            } else if (ev.type === 'error') {
-              setSendError(ev.message || 'Erreur inconnue');
-              setStreamingAgent(null);
-              streamingTextRef.current = '';
-              setStreamingText('');
-              setIsStreaming(false);
-            }
             } else if (ev.type === 'suggest_step') {
               setStepSuggestions(prev => [...prev, {
                 title:     ev.title || '',
@@ -675,6 +668,14 @@ export default function MeetingRoom() {
                 adding:    false,
                 added:     false,
               }]);
+
+            } else if (ev.type === 'error') {
+              setSendError(ev.message || 'Erreur inconnue');
+              setStreamingAgent(null);
+              streamingTextRef.current = '';
+              setStreamingText('');
+              setIsStreaming(false);
+            }
           } catch {}
         }
       }
@@ -721,6 +722,7 @@ export default function MeetingRoom() {
   }
 
   return (
+    <>
     <ProjectLayout projectId={projectId}>
       {/*
         Structure flex colonne qui remplit l'espace disponible dans le main
@@ -895,5 +897,6 @@ export default function MeetingRoom() {
         onClosed={handleSessionClosed}
       />
     )}
+    </>
   );
 }
