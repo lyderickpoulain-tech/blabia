@@ -27,6 +27,17 @@ const STATUS_BADGE = {
   abandoned: { label: 'Abandonnée', cls: 'bg-gray-100 text-gray-500'    },
 };
 
+// ── Types de jalons ──────────────────────────────────────────────────────────
+
+const MILESTONE_TYPES = [
+  { id: 'meeting',    icon: '🤝', label: 'Réunion'     },
+  { id: 'technical',  icon: '⚙️', label: 'Technique'   },
+  { id: 'milestone',  icon: '🎯', label: 'Jalon'       },
+  { id: 'stack_check',icon: '🔧', label: 'Stack check' },
+  { id: 'synthesis',  icon: '📄', label: 'Synthèse'    },
+  { id: 'claude_code',icon: '💻', label: 'Claude Code' },
+];
+
 // ── SuggestionAgentCard ───────────────────────────────────────────────────────
 
 function SuggestionAgentCard({ suggestion, idx, onInvite, onDismiss, onCreateAndInvite }) {
@@ -103,14 +114,112 @@ function SuggestionAgentCard({ suggestion, idx, onInvite, onDismiss, onCreateAnd
   );
 }
 
+// ── SuggestionStepCard ────────────────────────────────────────────────────────
+
+const POSITION_OPTIONS = [
+  { id: 'end',    label: 'À la fin de la timeline' },
+  { id: 'after',  label: 'Après l\'étape en cours' },
+];
+
+function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
+  const [form, setForm] = useState({
+    title:    suggestion.title || '',
+    type:     suggestion.type || 'meeting',
+    position: 'end',
+  });
+
+  if (suggestion.added) {
+    return (
+      <div className="flex justify-center mx-4">
+        <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-3 py-1">
+          ✅ Étape ajoutée à la timeline
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-4 bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold text-blue-700">📅 Étape timeline suggérée</p>
+        <button onClick={() => onDismiss(idx)} className="text-gray-300 hover:text-gray-500 text-xs shrink-0">✕</button>
+      </div>
+
+      {/* Titre éditable */}
+      <input
+        type="text"
+        value={form.title}
+        onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+        placeholder="Titre de l'étape"
+        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+      />
+
+      {/* Sélecteur de type (6 boutons) */}
+      <div className="grid grid-cols-3 gap-1">
+        {MILESTONE_TYPES.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setForm(p => ({ ...p, type: t.id }))}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition ${
+              form.type === t.id
+                ? 'bg-blue-600 text-white'
+                : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
+            }`}
+          >
+            <span>{t.icon}</span>
+            <span className="truncate">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Sélecteur de position */}
+      <div className="flex gap-1.5">
+        {POSITION_OPTIONS.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setForm(f => ({ ...f, position: p.id }))}
+            className={`flex-1 text-xs py-1.5 rounded-lg border transition ${
+              form.position === p.id
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => onAdd(idx, form)}
+          disabled={!form.title.trim() || suggestion.adding}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
+        >
+          {suggestion.adding
+            ? <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : '+ Ajouter à la timeline'}
+        </button>
+        <button
+          onClick={() => onDismiss(idx)}
+          className="border border-blue-300 text-blue-700 text-xs font-medium py-1.5 px-3 rounded-lg hover:bg-blue-100"
+        >
+          Ignorer
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
-function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite }) {
+function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, onPin, pinningMessageId }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText, agentSuggestions]);
+  }, [messages, streamingText, agentSuggestions, stepSuggestions]);
 
   if (messages.length === 0 && !streamingAgent) {
     return (
@@ -162,7 +271,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
           const isDecision = msg.type === 'decision' || msg.pinned;
 
           return (
-            <div key={msg.id} className="flex items-start gap-3">
+            <div key={msg.id} className="flex items-start gap-3 group">
               {/* Avatar */}
               <div className={`w-8 h-8 rounded-full ${color.avatar} flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5`}>
                 {agent?.emoji || msg.agentName?.[0] || '?'}
@@ -176,10 +285,20 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                 }`}>
                   {msg.content}
                 </div>
-                {isDecision && (
+                {isDecision ? (
                   <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                     📌 Décision
                   </p>
+                ) : (
+                  <button
+                    onClick={() => onPin(msg.id)}
+                    disabled={pinningMessageId === msg.id}
+                    className="opacity-0 group-hover:opacity-100 mt-1 text-xs text-gray-400 hover:text-amber-500 transition flex items-center gap-1 disabled:opacity-40"
+                  >
+                    {pinningMessageId === msg.id
+                      ? <span className="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                      : '📌 Épingler'}
+                  </button>
                 )}
               </div>
             </div>
@@ -218,6 +337,15 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
           onInvite={onInviteSuggested}
           onDismiss={onDismissSuggestion}
           onCreateAndInvite={onCreateAndInvite}
+        />
+      ))}
+
+      {/* Cartes suggestion étape timeline (non-bloquantes) */}
+      {stepSuggestions?.filter(s => !s.dismissed).map((s, i) => (
+        <SuggestionStepCard
+          key={i} suggestion={s} idx={i}
+          onAdd={onAddStep}
+          onDismiss={onDismissStep}
         />
       ))}
 
@@ -260,6 +388,10 @@ export default function MeetingRoom() {
 
   // États suggestions d'agent SSE
   const [agentSuggestions, setAgentSuggestions] = useState([]);
+
+  // États épinglage + suggestions d'étape SSE
+  const [pinningMessageId, setPinningMessageId] = useState(null);
+  const [stepSuggestions,  setStepSuggestions]  = useState([]);
 
   // Chargement des agents disponibles (non encore actifs) quand le dropdown s'ouvre
   const loadAvailableForAdd = useCallback(async (currentActive) => {
@@ -360,6 +492,43 @@ export default function MeetingRoom() {
       setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: false } : x));
     }
   }, [agentSuggestions, projectId, handleAddAgent]);
+
+  // Épingler un message comme décision
+  const handlePinMessage = useCallback(async (messageId) => {
+    if (pinningMessageId) return;
+    setPinningMessageId(messageId);
+    try {
+      await api.post(`/projects/${projectId}/sessions/${sessionId}/pin-message`, {
+        messageId,
+        type: 'decision'
+      });
+      setMessages(prev => prev.map(m =>
+        m.id === messageId ? { ...m, pinned: true, type: 'decision' } : m
+      ));
+    } catch {}
+    setPinningMessageId(null);
+  }, [pinningMessageId, projectId, sessionId]);
+
+  // Ajouter une étape timeline suggérée
+  const handleAddStep = useCallback(async (idx, form) => {
+    const s = stepSuggestions[idx];
+    if (!s || s.adding) return;
+    setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, adding: true } : x));
+    try {
+      await api.post(`/projects/${projectId}/milestones`, {
+        title: form.title.trim(),
+        type:  form.type,
+      });
+      setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, added: true, adding: false } : x));
+      refreshPanel();
+    } catch {
+      setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, adding: false } : x));
+    }
+  }, [stepSuggestions, projectId, refreshPanel]);
+
+  const handleDismissStep = useCallback((idx) => {
+    setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, dismissed: true } : x));
+  }, []);
 
   // Chargement initial de la session
   useEffect(() => {
@@ -488,7 +657,14 @@ export default function MeetingRoom() {
               setStreamingText('');
               setIsStreaming(false);
             }
-            // suggest_step → sous-étape 4
+            } else if (ev.type === 'suggest_step') {
+              setStepSuggestions(prev => [...prev, {
+                title:     ev.title || '',
+                type:      ev.milestoneType || 'meeting',
+                dismissed: false,
+                adding:    false,
+                added:     false,
+              }]);
           } catch {}
         }
       }
@@ -642,6 +818,11 @@ export default function MeetingRoom() {
             onInviteSuggested={handleInviteSuggested}
             onDismissSuggestion={handleDismissSuggestion}
             onCreateAndInvite={handleCreateAndInvite}
+            stepSuggestions={stepSuggestions}
+            onAddStep={handleAddStep}
+            onDismissStep={handleDismissStep}
+            onPin={handlePinMessage}
+            pinningMessageId={pinningMessageId}
           />
         </div>
 
