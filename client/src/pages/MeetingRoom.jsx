@@ -153,10 +153,17 @@ export default function MeetingRoom() {
   const [loading,      setLoading]      = useState(true);
   const [loadError,    setLoadError]    = useState('');
 
-  // États streaming (remplis aux sous-étapes suivantes)
+  // États saisie
+  const [inputText,  setInputText]  = useState('');
+  const [sendError,  setSendError]  = useState('');
+
+  // États streaming
   const [streamingAgent, setStreamingAgent] = useState(null);
   const [streamingText,  setStreamingText]  = useState('');
   const [isStreaming,    setIsStreaming]     = useState(false);
+
+  // Ref pour capturer streamingText dans la closure SSE sans dépendance stale
+  const streamingTextRef = useRef('');
 
   // Chargement initial de la session
   useEffect(() => {
@@ -173,6 +180,126 @@ export default function MeetingRoom() {
 
   const isClosed = session?.status === 'accepted' || session?.status === 'abandoned';
   const badge    = STATUS_BADGE[session?.status] || STATUS_BADGE.open;
+
+  // ── Envoi + streaming SSE ─────────────────────────────────────────────────
+
+  const handleSend = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text || isStreaming || isClosed) return;
+
+    setSendError('');
+
+    // Optimistic update : message humain affiché immédiatement
+    const humanMsg = {
+      id:        `temp-${Date.now()}`,
+      role:      'human',
+      agentName: null,
+      content:   text,
+      timestamp: new Date().toISOString(),
+      type:      'message',
+      pinned:    false
+    };
+    setMessages(prev => [...prev, humanMsg]);
+    setInputText('');
+    setIsStreaming(true);
+    setStreamingAgent(null);
+    streamingTextRef.current = '';
+    setStreamingText('');
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/sessions/${sessionId}/chat`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text })
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSendError(body.error || "Erreur lors de l'envoi");
+        setIsStreaming(false);
+        return;
+      }
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const ev = JSON.parse(line.slice(6));
+
+            if (ev.type === 'agent_start') {
+              setStreamingAgent(ev.agentName);
+              streamingTextRef.current = '';
+              setStreamingText('');
+
+            } else if (ev.type === 'chunk') {
+              streamingTextRef.current += ev.text;
+              setStreamingText(streamingTextRef.current);
+
+            } else if (ev.type === 'agent_done') {
+              const finalContent = streamingTextRef.current;
+              setMessages(prev => [...prev, {
+                id:        ev.messageId,
+                role:      'agent',
+                agentName: ev.agentName,
+                content:   finalContent,
+                timestamp: new Date().toISOString(),
+                type:      'message',
+                pinned:    false
+              }]);
+              setStreamingAgent(null);
+              streamingTextRef.current = '';
+              setStreamingText('');
+
+            } else if (ev.type === 'decision') {
+              // Mise à jour du type du message (sous-étape 4)
+              setMessages(prev => prev.map(m =>
+                m.id === ev.messageId ? { ...m, type: 'decision' } : m
+              ));
+
+            } else if (ev.type === 'turn_complete') {
+              setIsStreaming(false);
+
+            } else if (ev.type === 'error') {
+              setSendError(ev.message || 'Erreur inconnue');
+              setStreamingAgent(null);
+              streamingTextRef.current = '';
+              setStreamingText('');
+              setIsStreaming(false);
+            }
+            // suggest_agent / suggest_step → sous-étapes 3 et 4
+          } catch {}
+        }
+      }
+    } catch (err) {
+      setSendError('Connexion interrompue : ' + err.message);
+      setStreamingAgent(null);
+      streamingTextRef.current = '';
+      setStreamingText('');
+      setIsStreaming(false);
+    }
+  }, [inputText, isStreaming, isClosed, projectId, sessionId]);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      handleSend();
+    }
+    // Entrée seule = nouvelle ligne (comportement textarea par défaut)
+  }, [handleSend]);
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
 
@@ -275,27 +402,35 @@ export default function MeetingRoom() {
             </div>
           ) : (
             <>
+              {sendError && (
+                <p className="text-xs text-red-500 flex items-center gap-1">
+                  <span>⚠️</span> {sendError}
+                </p>
+              )}
               <div className="flex items-end gap-2">
                 <textarea
+                  value={inputText}
+                  onChange={e => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   disabled={isStreaming || isClosed}
-                  placeholder={isStreaming ? 'Les agents répondent…' : 'Tape ton message… (Ctrl+Entrée pour envoyer)'}
+                  placeholder={isStreaming ? '✍️ Les agents répondent…' : 'Tape ton message… (Ctrl+Entrée pour envoyer)'}
                   rows={2}
                   className="flex-1 resize-none px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-400 transition disabled:bg-gray-50 disabled:text-gray-400"
-                  readOnly
                 />
                 <button
-                  disabled
-                  className="shrink-0 w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white opacity-50 cursor-not-allowed"
-                  title="Disponible à la sous-étape 2"
+                  onClick={handleSend}
+                  disabled={!inputText.trim() || isStreaming || isClosed}
+                  className="shrink-0 w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  ▶
+                  {isStreaming
+                    ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : '▶'}
                 </button>
               </div>
-              {/* Bouton Clore — placeholder sous-étape 5 */}
+              {/* Bouton Clore — activé sous-étape 5 */}
               <button
                 disabled
-                className="w-full text-xs text-gray-400 hover:text-gray-600 py-1 opacity-50 cursor-not-allowed"
-                title="Disponible à la sous-étape 5"
+                className="w-full text-xs text-gray-400 py-1 opacity-40 cursor-not-allowed"
               >
                 🔴 Clore la réunion
               </button>
