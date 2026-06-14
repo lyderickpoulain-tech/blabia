@@ -1528,6 +1528,76 @@ router.post('/:sessionId/timeline-event', async (req, res) => {
   }
 });
 
+// ── v3.0 : Évolution 2.2 — POST /:sessionId/add-agent ───────────────────────
+
+router.post('/:sessionId/add-agent', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { agentId } = req.body;
+  const isAdmin = req.user.role === 'admin';
+
+  if (!agentId) return res.status(400).json({ error: 'agentId requis' });
+
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+    if (['accepted', 'abandoned'].includes(session.status)) {
+      return res.status(400).json({ error: 'Session déjà close' });
+    }
+
+    // Récupérer l'agent depuis la DB
+    const [agent] = await db('Agent').where({ id: agentId }).limit(1);
+    if (!agent) return res.status(404).json({ error: 'Agent introuvable' });
+
+    // Vérifier l'absence de doublon dans activeAgents
+    const currentActiveAgents = (() => {
+      const a = session.activeAgents;
+      if (Array.isArray(a)) return a;
+      try { return JSON.parse(a || '[]'); } catch { return []; }
+    })();
+
+    if (currentActiveAgents.some(a => a.id === agentId)) {
+      return res.status(409).json({ error: 'Cet agent est déjà dans la réunion' });
+    }
+
+    const joinedAt = new Date().toISOString();
+    const newAgent = {
+      id: agent.id,
+      name: agent.name,
+      role: agent.role,
+      systemPrompt: agent.systemPrompt,
+      emoji: agent.emoji || '🤖',
+      joinedAt
+    };
+
+    // Ajouter à activeAgents (append atomique JSONB)
+    await db.raw(
+      `UPDATE "Session" SET "activeAgents" = COALESCE("activeAgents", '[]'::jsonb) || ?::jsonb WHERE id = ?`,
+      [JSON.stringify([newAgent]), sessionId]
+    );
+
+    // Message système dans le fil de conversation
+    await appendMessageEntry(sessionId, {
+      id: randomUUID(),
+      role: 'system',
+      agentName: null,
+      content: `${agent.emoji || '🤖'} ${agent.name} a rejoint la réunion.`,
+      timestamp: joinedAt,
+      type: 'message',
+      pinned: false
+    });
+
+    await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+
+    res.json({ agent: newAgent });
+  } catch (err) {
+    console.error('[sessions/add-agent]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── v3.0 : Évolution 2.1 — POST /:sessionId/chat (moteur de conversation SSE) ──
 
 router.post('/:sessionId/chat', async (req, res) => {
