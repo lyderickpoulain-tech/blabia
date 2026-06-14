@@ -1667,6 +1667,139 @@ router.post('/:sessionId/pin-message', async (req, res) => {
   }
 });
 
+// ── v3.0 : Évolution 2.4 — POST /:sessionId/generate-deliverable ─────────────
+
+router.post('/:sessionId/generate-deliverable', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { deliverableType } = req.body;
+  const isAdmin = req.user.role === 'admin';
+
+  const VALID_TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps'];
+  if (!VALID_TYPES.includes(deliverableType)) {
+    return res.status(400).json({
+      error: 'deliverableType invalide — valeurs acceptées : synthesis, memory, claude_code, timeline_steps'
+    });
+  }
+
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+
+    // Charger et formater l'historique de la réunion
+    const messages = (() => {
+      const m = session.messages;
+      if (Array.isArray(m)) return m;
+      try { return JSON.parse(m || '[]'); } catch { return []; }
+    })();
+
+    if (messages.length === 0) {
+      return res.status(400).json({ error: 'Aucun message dans cette réunion' });
+    }
+
+    const historyText = messages
+      .filter(m => m.role !== 'system')
+      .map(m => m.role === 'human'
+        ? `Participant : ${m.content}`
+        : `${m.agentName} : ${m.content}`)
+      .join('\n\n');
+
+    const sessionContext = `Objectif de la réunion : ${session.task}\n\nTranscription :\n${historyText}`;
+
+    // ── Génération selon le type ──────────────────────────────────────────────
+
+    if (deliverableType === 'synthesis') {
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 4000,
+        system: 'Tu es un expert en synthèse de réunion d\'entreprise. Tu rédiges des comptes-rendus clairs et structurés. Réponds uniquement en français, sans introduction ni conclusion génériques.',
+        messages: [{
+          role: 'user',
+          content: `Génère un compte-rendu structuré de cette réunion.\n\nFormat :\n## Objectif\n## Points discutés\n## Décisions prises\n## Actions à mener\n\nMax 600 mots.\n\n${sessionContext}`
+        }]
+      });
+      const content = response.content[0].text.trim();
+      await db('Session').where({ id: sessionId }).update({ summary: content });
+      return res.json({ deliverableType, content });
+    }
+
+    if (deliverableType === 'memory') {
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 512,
+        system: 'Tu génères des résumés concis pour la mémoire d\'un projet IA. Réponds directement en français, sans introduction.',
+        messages: [{
+          role: 'user',
+          content: `Génère un résumé mémorisable de cette réunion (max 200 mots).\nInclure : décisions clés, points importants, éléments à retenir pour les prochaines sessions.\n\n${sessionContext}`
+        }]
+      });
+      const content = response.content[0].text.trim();
+      await db('Session').where({ id: sessionId }).update({ summary: content });
+
+      // Injecter dans la mémoire du projet (même logique que updateProjectContext)
+      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const entry = `[Réunion du ${date}]\n${content}`;
+      const current = project.context || '';
+      let newContext = (current ? current + '\n---\n' : '') + entry;
+      const MAX_CHARS = 10000;
+      if (newContext.length > MAX_CHARS) {
+        const parts = newContext.split('\n---\n');
+        while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) parts.shift();
+        newContext = parts.join('\n---\n');
+      }
+      await db('Project').where({ id: projectId }).update({ context: newContext, updatedAt: new Date() });
+
+      return res.json({ deliverableType, content });
+    }
+
+    if (deliverableType === 'claude_code') {
+      const briefSection = project.brief ? `Brief du projet :\n${project.brief}\n\n` : '';
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 4000,
+        system: 'Tu es un expert en rédaction de prompts techniques pour Claude Code. Tu génères des prompts précis et directement utilisables. Réponds uniquement en français.',
+        messages: [{
+          role: 'user',
+          content: `${briefSection}Génère un prompt Claude Code à partir de cette réunion.\n\nInclure :\n- Contexte technique du projet\n- Tâches concrètes à implémenter (liste numérotée)\n- Contraintes techniques mentionnées\n- Fichiers ou composants concernés si mentionnés\n\nLe prompt doit être prêt à être copié-collé dans Claude Code.\n\n${sessionContext}`
+        }]
+      });
+      const content = response.content[0].text.trim();
+      await db('Session').where({ id: sessionId }).update({ summary: content, hasCode: true });
+      return res.json({ deliverableType, content });
+    }
+
+    if (deliverableType === 'timeline_steps') {
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system: 'Tu extrais des jalons et tâches actionnables depuis une réunion. Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks.',
+        messages: [{
+          role: 'user',
+          content: `Extrais les étapes actionnables de cette réunion sous forme de jalons et tâches.\n\nRetourne UNIQUEMENT ce JSON :\n{\n  "milestones": [\n    { "title": "...", "description": "...", "type": "meeting", "todos": [{ "title": "...", "priority": "high" }] }\n  ],\n  "standalone_todos": [{ "title": "...", "priority": "medium" }]\n}\n\n${sessionContext}`
+        }]
+      });
+
+      const raw = response.content[0].text.trim()
+        .replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Réponse JSON invalide depuis Claude');
+      const parsed = JSON.parse(match[0]);
+      const content = {
+        milestones:       Array.isArray(parsed.milestones)       ? parsed.milestones       : [],
+        standalone_todos: Array.isArray(parsed.standalone_todos) ? parsed.standalone_todos : []
+      };
+      await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(content) });
+      return res.json({ deliverableType, content });
+    }
+
+  } catch (err) {
+    console.error('[sessions/generate-deliverable]', err.message);
+    res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });
+  }
+});
+
 // ── v3.0 : Évolution 2.1 — POST /:sessionId/chat (moteur de conversation SSE) ──
 
 router.post('/:sessionId/chat', async (req, res) => {
