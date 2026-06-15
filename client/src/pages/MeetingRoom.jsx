@@ -679,15 +679,21 @@ export default function MeetingRoom() {
       ));
     }
     setPendingDecisionId(null);
-    // Dépiler la prochaine décision en attente si elle existe
+    // Dépiler la prochaine décision ou relancer les agents si queue vide
+    let queueEmpty = false;
     setDecisionQueue(prev => {
       if (prev.length > 0) {
         setPendingDecisionId(prev[0].messageId);
         return prev.slice(1);
       }
+      queueEmpty = true;
       return prev;
     });
-  }, [projectId, sessionId]);
+    if (queueEmpty) {
+      // Relancer le tour des agents : ils verront la decision_answer dans l'historique
+      handleSend('', { resume: true });
+    }
+  }, [projectId, sessionId, handleSend]);
 
   // Reporter une décision
   const handleDeferDecision = useCallback(async (messageId) => {
@@ -766,40 +772,47 @@ export default function MeetingRoom() {
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
-  const handleSend = useCallback(async (overrideText) => {
+  const handleSend = useCallback(async (overrideText, { resume = false } = {}) => {
     const text              = (typeof overrideText === 'string' ? overrideText : inputText).trim();
     const currentAttachments = attachmentsRef.current;
-    if ((!text && currentAttachments.length === 0) || isStreaming || isClosed || pendingDecisionId) return;
+    // resume:true = reprise silencieuse après décision, bypass guards normaux
+    if (isStreaming || isClosed) return;
+    if (!resume && (!text && currentAttachments.length === 0)) return;
+    if (!resume && pendingDecisionId) return;
 
     setSendError('');
 
-    // Optimistic update : message humain affiché immédiatement
-    const humanMsg = {
-      id:          `temp-${Date.now()}`,
-      role:        'human',
-      agentName:   null,
-      content:     text,
-      timestamp:   new Date().toISOString(),
-      type:        'message',
-      pinned:      false,
-      attachments: currentAttachments.length > 0
-        ? currentAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage, dataUrl: a.isImage ? a.dataUrl : null }))
-        : undefined,
-    };
-    setMessages(prev => [...prev, humanMsg]);
-    if (typeof overrideText !== 'string') setInputText('');
-    setAttachments([]);
+    // Optimistic update : message humain visible seulement si ce n'est pas un resume
+    if (!resume) {
+      const humanMsg = {
+        id:          `temp-${Date.now()}`,
+        role:        'human',
+        agentName:   null,
+        content:     text,
+        timestamp:   new Date().toISOString(),
+        type:        'message',
+        pinned:      false,
+        attachments: currentAttachments.length > 0
+          ? currentAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage, dataUrl: a.isImage ? a.dataUrl : null }))
+          : undefined,
+      };
+      setMessages(prev => [...prev, humanMsg]);
+      if (typeof overrideText !== 'string') setInputText('');
+      setAttachments([]);
+    }
     setIsStreaming(true);
     setStreamingAgent(null);
     streamingTextRef.current = '';
     setStreamingText('');
 
-    // Sérialiser les pièces jointes pour l'API
-    const serializedAttachments = currentAttachments.map(a =>
-      a.isImage
-        ? { name: a.name, type: a.type, isImage: true,  base64: a.base64, mediaType: a.type }
-        : { name: a.name, type: a.type, isImage: false, text: a.text }
-    );
+    // Sérialiser les pièces jointes (seulement si pas un resume)
+    const serializedAttachments = (!resume && currentAttachments.length > 0)
+      ? currentAttachments.map(a =>
+          a.isImage
+            ? { name: a.name, type: a.type, isImage: true,  base64: a.base64, mediaType: a.type }
+            : { name: a.name, type: a.type, isImage: false, text: a.text }
+        )
+      : [];
 
     const token = localStorage.getItem('token');
     const ac = new AbortController();
@@ -814,6 +827,7 @@ export default function MeetingRoom() {
           body: JSON.stringify({
             message:     text,
             attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
+            ...(resume ? { resume: true } : {}),
           }),
           signal: ac.signal,
         }

@@ -1963,12 +1963,13 @@ ${historyText}`
 
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const { message: humanMessage, agentIds, attachments: rawAttachments } = req.body;
+  const { message: humanMessage, agentIds, attachments: rawAttachments, resume } = req.body;
   const isAdmin = req.user.role === 'admin';
 
   const hasText        = !!humanMessage?.trim();
   const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.length > 0;
-  if (!hasText && !hasAttachments) {
+  // resume:true = reprise après décision actée, message vide autorisé
+  if (!hasText && !hasAttachments && !resume) {
     return res.status(400).json({ error: 'Message ou pièce jointe requise' });
   }
 
@@ -2037,23 +2038,25 @@ router.post('/:sessionId/chat', async (req, res) => {
   send('connected', { sessionId });
 
   try {
-    // 1. Sauvegarder le message humain dans session.messages (références sans base64)
-    const attachmentRefs = hasAttachments
-      ? rawAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage }))
-      : undefined;
-    const humanMsg = {
-      id:        randomUUID(),
-      role:      'human',
-      agentName: null,
-      content:   hasText
-        ? humanMessage.trim()
-        : `[${rawAttachments.map(a => a.name).join(', ')}]`,
-      timestamp: new Date().toISOString(),
-      type:      'message',
-      pinned:    false,
-      ...(attachmentRefs ? { attachments: attachmentRefs } : {}),
-    };
-    await appendMessageEntry(sessionId, humanMsg);
+    // 1. Sauvegarder le message humain (skip si resume silencieux sans contenu)
+    if (hasText || hasAttachments) {
+      const attachmentRefs = hasAttachments
+        ? rawAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage }))
+        : undefined;
+      const humanMsg = {
+        id:        randomUUID(),
+        role:      'human',
+        agentName: null,
+        content:   hasText
+          ? humanMessage.trim()
+          : `[${rawAttachments.map(a => a.name).join(', ')}]`,
+        timestamp: new Date().toISOString(),
+        type:      'message',
+        pinned:    false,
+        ...(attachmentRefs ? { attachments: attachmentRefs } : {}),
+      };
+      await appendMessageEntry(sessionId, humanMsg);
+    }
 
     // Recharger l'historique complet (inclut le message qu'on vient d'ajouter)
     const [freshSession] = await db('Session')
