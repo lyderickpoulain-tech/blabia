@@ -7,12 +7,12 @@ import QuickExportModal from './QuickExportModal';
 
 // ── Configs types (alignés sur intentions v2.1) ───────────────────────────────
 const TYPE_ICON = {
-  synthesis:      '📄',
+  synthesis:      '📝',
   memory:         '🧠',
   claude_code:    '💻',
-  timeline_steps: '📅',
+  timeline_steps: '📋',
   stack_check:    '🔧',
-  milestone:      '🎯',
+  milestone:      '🏁',
   // rétrocompat
   meeting:        '🤝',
   technical:      '💻',

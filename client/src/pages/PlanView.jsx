@@ -14,14 +14,14 @@ const STATUSES = ['pending', 'in_progress', 'done', 'blocked'];
 
 // ── Types d'étapes ────────────────────────────────────────────────────────────
 const MILESTONE_TYPE_CONFIG = {
-  synthesis:      { label: 'Synthèse',      icon: '📄', borderColor: 'border-l-blue-400' },
+  synthesis:      { label: 'Synthèse',      icon: '📝', borderColor: 'border-l-blue-400' },
   memory:         { label: 'Souvenir',      icon: '🧠', borderColor: 'border-l-green-400' },
   claude_code:    { label: 'Claude Code',   icon: '💻', borderColor: 'border-l-violet-400' },
-  timeline_steps: { label: 'Étapes',        icon: '📅', borderColor: 'border-l-yellow-400' },
+  timeline_steps: { label: 'Étapes',        icon: '📋', borderColor: 'border-l-yellow-400' },
   stack_check:    { label: 'Vérif. stack',  icon: '🔧', borderColor: 'border-l-orange-400' },
-  milestone:      { label: 'Jalon',         icon: '🎯', borderColor: 'border-l-gray-300' },
+  milestone:      { label: 'Jalon',         icon: '🏁', borderColor: 'border-l-gray-300' },
   // rétrocompat
-  meeting:        { label: 'Synthèse',      icon: '📄', borderColor: 'border-l-blue-400' },
+  meeting:        { label: 'Synthèse',      icon: '📝', borderColor: 'border-l-blue-400' },
   technical:      { label: 'Claude Code',   icon: '💻', borderColor: 'border-l-violet-400' },
 };
 const MILESTONE_TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
@@ -136,7 +136,7 @@ function InlineAddTodo({ onSave, onCancel }) {
 function InsertMilestoneForm({ onSave, onCancel }) {
   const [title, setTitle]     = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [type, setType]       = useState('meeting');
+  const [type, setType]       = useState('synthesis');
   const [saving, setSaving]   = useState(false);
   const inputRef = useRef(null);
 
