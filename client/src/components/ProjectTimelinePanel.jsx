@@ -263,19 +263,16 @@ function InsertButton({ onClick, alwaysVisible }) {
 }
 
 // ── Formulaire d'insertion inline ─────────────────────────────────────────────
-function InsertForm({ displayOrder, projectId, onDone, onCancel }) {
+function InsertForm({ onSave, onCancel }) {
   const [title, setTitle]   = useState('');
-  const [type, setType]     = useState('meeting');
+  const [type, setType]     = useState('synthesis');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim() || saving) return;
     setSaving(true);
-    try {
-      await api.post(`/projects/${projectId}/milestones`, { title: title.trim(), type, displayOrder });
-      onDone();
-    } catch {}
+    await onSave({ title: title.trim(), type });
     setSaving(false);
   };
 
@@ -319,9 +316,9 @@ function PanelBody({
   onRefresh, navigate, isMobile, devDirectory,
 }) {
   const [title, setTitle]           = useState('');
-  const [type, setType]             = useState('meeting');
+  const [type, setType]             = useState('synthesis');
   const [saving, setSaving]         = useState(false);
-  const [insertingAt, setInsertingAt] = useState(null); // displayOrder for the insert form
+  const [insertingAt, setInsertingAt] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -329,9 +326,27 @@ function PanelBody({
     setSaving(true);
     await onAdd({ title: title.trim(), type });
     setTitle('');
-    setType('meeting');
+    setType('synthesis');
     setSaving(false);
     setShowAdd(false);
+  };
+
+  // Insertion entre deux étapes : insert + reorder pour conserver des entiers propres
+  const handleInsert = async ({ title, type }, targetDisplayOrder) => {
+    try {
+      const { data } = await api.post(`/projects/${projectId}/milestones`, {
+        title, type,
+        displayOrder: Math.round(targetDisplayOrder),
+      });
+      const newList = [...milestones, data].sort((a, b) => a.displayOrder - b.displayOrder);
+      await api.patch(`/projects/${projectId}/milestones/reorder`, {
+        order: newList.map(m => m.id),
+      });
+      setInsertingAt(null);
+      onRefresh();
+    } catch (err) {
+      console.error('[InsertForm] erreur insertion milestone:', err);
+    }
   };
 
   const openInsertForm = (order) => {
@@ -378,9 +393,7 @@ function PanelBody({
             {/* Bouton d'insertion AVANT le premier élément */}
             {insertingAt === 'before-first' ? (
               <InsertForm
-                displayOrder={(milestones[0]?.displayOrder ?? 1) - 1}
-                projectId={projectId}
-                onDone={() => { setInsertingAt(null); onRefresh(); }}
+                onSave={(data) => handleInsert(data, (milestones[0]?.displayOrder ?? 1) - 1)}
                 onCancel={() => setInsertingAt(null)}
               />
             ) : (
@@ -431,9 +444,7 @@ function PanelBody({
                   {nextM && (
                     insertingAt === m.id ? (
                       <InsertForm
-                        displayOrder={(m.displayOrder + nextM.displayOrder) / 2}
-                        projectId={projectId}
-                        onDone={() => { setInsertingAt(null); onRefresh(); }}
+                        onSave={(data) => handleInsert(data, (m.displayOrder + nextM.displayOrder) / 2)}
                         onCancel={() => setInsertingAt(null)}
                       />
                     ) : (
@@ -475,7 +486,7 @@ function PanelBody({
                 {saving ? '…' : 'Ajouter'}
               </button>
               <button type="button"
-                onClick={() => { setShowAdd(false); setTitle(''); setType('meeting'); }}
+                onClick={() => { setShowAdd(false); setTitle(''); setType('synthesis'); }}
                 className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition">
                 ✕
               </button>
