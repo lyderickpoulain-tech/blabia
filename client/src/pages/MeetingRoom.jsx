@@ -216,11 +216,6 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
 function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, onPin, pinningMessageId }) {
-  const bottomRef = useRef(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText, agentSuggestions, stepSuggestions]);
 
   if (messages.length === 0 && !streamingAgent) {
     return (
@@ -350,7 +345,6 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
         />
       ))}
 
-      <div ref={bottomRef} />
     </div>
   );
 }
@@ -380,6 +374,11 @@ export default function MeetingRoom() {
   // Ref pour capturer streamingText dans la closure SSE sans dépendance stale
   const streamingTextRef = useRef('');
 
+  // ── Scroll du feed ────────────────────────────────────────────────────────
+  const feedRef            = useRef(null);
+  const initialScrollDone  = useRef(false);
+  const [showNewMessage, setShowNewMessage] = useState(false);
+
   // ── États + ref pour le dropdown + Agent ─────────────────────────────────
   const dropdownRef                                 = useRef(null);
   const [showAgentDropdown,  setShowAgentDropdown]  = useState(false);
@@ -402,6 +401,38 @@ export default function MeetingRoom() {
     setShowCloseModal(false);
     refreshPanel();
   }, [refreshPanel]);
+
+  // Scroll initial vers le bas dès que le chargement est terminé
+  useEffect(() => {
+    if (!loading && !initialScrollDone.current) {
+      initialScrollDone.current = true;
+      const feed = feedRef.current;
+      if (feed) feed.scrollTop = feed.scrollHeight;
+    }
+  }, [loading]);
+
+  // Scroll conditionnel à chaque nouveau contenu : uniquement si déjà en bas
+  useEffect(() => {
+    if (!initialScrollDone.current) return;
+    const feed = feedRef.current;
+    if (!feed) return;
+    const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 100;
+    if (atBottom) {
+      feed.scrollTo({ top: feed.scrollHeight, behavior: isStreaming ? 'instant' : 'smooth' });
+      setShowNewMessage(false);
+    } else {
+      setShowNewMessage(true);
+    }
+  }, [messages, streamingText, agentSuggestions, stepSuggestions, isStreaming]);
+
+  // Masquer le bouton quand l'utilisateur scrolle jusqu'en bas manuellement
+  const handleFeedScroll = useCallback(() => {
+    const feed = feedRef.current;
+    if (!feed) return;
+    if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 100) {
+      setShowNewMessage(false);
+    }
+  }, []);
 
   // Chargement des agents disponibles (non encore actifs) quand le dropdown s'ouvre
   const loadAvailableForAdd = useCallback(async (currentActive) => {
@@ -820,7 +851,7 @@ export default function MeetingRoom() {
         </div>
 
         {/* ── Fil de conversation ─────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={feedRef} className="flex-1 overflow-y-auto" onScroll={handleFeedScroll}>
           <ConversationFeed
             messages={messages}
             activeAgents={activeAgents}
@@ -837,6 +868,21 @@ export default function MeetingRoom() {
             pinningMessageId={pinningMessageId}
           />
         </div>
+
+        {/* ── Bouton "Nouveau message" flottant ───────────────────────────── */}
+        {showNewMessage && (
+          <div className="shrink-0 flex justify-center py-1.5">
+            <button
+              onClick={() => {
+                feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' });
+                setShowNewMessage(false);
+              }}
+              className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 shadow-md px-3.5 py-1.5 rounded-full transition flex items-center gap-1.5"
+            >
+              ⬇ Nouveau message
+            </button>
+          </div>
+        )}
 
         {/* ── Barre de saisie ─────────────────────────────────────────────── */}
         <div className="shrink-0 border-t border-gray-100 p-3 space-y-2">
