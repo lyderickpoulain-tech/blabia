@@ -357,7 +357,7 @@ export default function SessionRunner({ session, projectId, onComplete, onConver
 
       // Stream fermé sans événement terminal (timeout Railway, coupure réseau, erreur Anthropic non transmise)
       if (!streamCompletedRef.current) {
-        setError('La connexion a été interrompue avant la fin de la session. Consultez les logs Railway pour le détail, puis relancez.');
+        setError('La connexion a été interrompue avant la fin de la réunion. Consultez les logs Railway pour le détail, puis relancez.');
         setActiveAgent(null);
         setStreamingText('');
       }

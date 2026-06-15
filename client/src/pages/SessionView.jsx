@@ -101,7 +101,7 @@ function SessionTimeline({ entries, onExportClick, onImplementationClick }) {
   if (!entries || entries.length === 0) {
     return (
       <div className="text-center py-10">
-        <p className="text-gray-400 text-sm">Aucune étape enregistrée pour cette session</p>
+        <p className="text-gray-400 text-sm">Aucune étape enregistrée pour cette réunion</p>
         <p className="text-xs text-gray-300 mt-1">La timeline se remplit automatiquement lors du run</p>
       </div>
     );
@@ -166,13 +166,13 @@ function DeleteSessionModal({ onClose, onConfirm, deleting }) {
             </svg>
           </div>
           <div>
-            <h2 className="text-base font-bold text-gray-900">Supprimer la session</h2>
+            <h2 className="text-base font-bold text-gray-900">Supprimer la réunion</h2>
             <p className="text-xs text-gray-500 mt-0.5">Cette action est irréversible</p>
           </div>
         </div>
 
         <p className="text-sm text-gray-600 mb-5">
-          Cette session sera définitivement supprimée. Les sessions de continuation créées depuis celle-ci resteront accessibles, sans lien parent.
+          Cette réunion sera définitivement supprimée. Les réunions de continuation créées depuis celle-ci resteront accessibles, sans lien parent.
         </p>
 
         <div className="flex gap-3">
@@ -721,9 +721,9 @@ export default function SessionView() {
                 </ReactMarkdown>
               ) : (
                 <div className="text-center py-6">
-                  <p className="text-orange-600 font-medium text-sm mb-1">⚠ Session interrompue</p>
+                  <p className="text-orange-600 font-medium text-sm mb-1">⚠ Réunion interrompue</p>
                   <p className="text-gray-400 text-xs">
-                    Cette session n'a pas été finalisée. Aucune restitution n'est disponible.
+                    Cette réunion n'a pas été finalisée. Aucune restitution n'est disponible.
                   </p>
                 </div>
               )}
@@ -779,14 +779,14 @@ export default function SessionView() {
         {/* Continuation de session */}
         {isComplete && showContinue && (
           <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-800 mb-1">Suite de cette session</h3>
-            <p className="text-xs text-gray-400 mb-3">Les agents reprendront avec le contexte complet de la session précédente.</p>
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">Suite de cette réunion</h3>
+            <p className="text-xs text-gray-400 mb-3">Les agents reprendront avec le contexte complet de la réunion précédente.</p>
             <textarea
               value={continueTask}
               onChange={e => setContinueTask(e.target.value)}
               rows={4}
               autoFocus
-              placeholder="Décrivez la suite à donner à cette session…"
+              placeholder="Décrivez la suite à donner à cette réunion…"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
             />
             <div className="flex gap-3 mt-3">
@@ -883,7 +883,7 @@ export default function SessionView() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                 </svg>
-                Continuer cette session
+                Continuer cette réunion
               </button>
             </div>
           )}
@@ -895,7 +895,7 @@ export default function SessionView() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Nouvelle session
+              Nouvelle réunion
             </Link>
           )}
 
@@ -948,7 +948,7 @@ export default function SessionView() {
                 <div className="flex gap-2">
                   <button onClick={() => setShowAcceptModal(true)}
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2">
-                    ✅ Accepter cette session
+                    ✅ Accepter cette réunion
                   </button>
                   <button onClick={() => setAbandonConfirm(true)}
                     className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-3 px-4 rounded-xl text-sm transition">
@@ -957,7 +957,7 @@ export default function SessionView() {
                 </div>
               ) : (
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                  <p className="text-sm text-gray-600">Cette session sera close sans impact sur le projet.</p>
+                  <p className="text-sm text-gray-600">Cette réunion sera close sans impact sur le projet.</p>
                   <div className="flex gap-2">
                     <button onClick={() => setAbandonConfirm(false)}
                       className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm">Annuler</button>
@@ -985,7 +985,7 @@ export default function SessionView() {
             onClick={() => setShowDelete(true)}
             className="text-xs text-red-400 hover:text-red-600 transition py-1"
           >
-            Supprimer cette session
+            Supprimer cette réunion
           </button>
         </div>
 

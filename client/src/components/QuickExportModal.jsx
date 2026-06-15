@@ -81,7 +81,7 @@ export default function QuickExportModal({ milestone, projectId, onClose, onRefr
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-bold text-gray-900">Générer un prompt Claude Code</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Mode rapide · sans session</p>
+            <p className="text-xs text-gray-500 mt-0.5">Mode rapide · sans réunion</p>
           </div>
           <button onClick={onClose}
             className="text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">

@@ -707,7 +707,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               <div>
                 <p className="text-sm font-semibold text-violet-900">Générer directement un prompt</p>
                 <p className="text-xs text-violet-600 mt-0.5 leading-snug">
-                  Créer un prompt Claude Code à partir du titre de l'étape — rapide, sans session
+                  Créer un prompt Claude Code à partir du titre de l'étape — rapide, sans réunion
                 </p>
               </div>
             </button>

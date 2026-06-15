@@ -108,7 +108,7 @@ export default function Dashboard() {
               <tr>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Projet</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Statut</th>
-                <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Sessions</th>
+                <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Réunions</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Créé le</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -220,7 +220,7 @@ export default function Dashboard() {
                 </div>
               )}
               <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-gray-400">{project.sessionCount ?? 0} session{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · {formatDate(project.createdAt)}</span>
+                <span className="text-xs text-gray-400">{project.sessionCount ?? 0} réunion{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · {formatDate(project.createdAt)}</span>
                 <button
                   onClick={e => handleArchive(e, project)}
                   disabled={archiving === project.id}

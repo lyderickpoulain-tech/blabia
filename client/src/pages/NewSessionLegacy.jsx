@@ -215,7 +215,7 @@ export default function NewSession() {
       setCachedTeam(null);
       setPhase('formed');
     } catch (err) {
-      setError(err.response?.data?.error || "Erreur lors de la création de la session");
+      setError(err.response?.data?.error || "Erreur lors de la création de la réunion");
       setPhase('input');
     }
   };
@@ -351,7 +351,7 @@ export default function NewSession() {
         {phase === 'intention' && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Que doit produire cette session ?</h1>
+              <h1 className="text-xl font-bold text-gray-900">Que doit produire cette réunion ?</h1>
               <p className="text-gray-400 text-sm mt-1">Sélectionne une ou plusieurs intentions — au moins une requise.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -387,7 +387,7 @@ export default function NewSession() {
             <div className="flex items-center gap-2">
               <button onClick={() => setPhase('intention')} className="text-gray-400 hover:text-gray-600 text-sm">←</button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Quels agents pour cette session ?</h1>
+                <h1 className="text-xl font-bold text-gray-900">Quels agents pour cette réunion ?</h1>
                 <p className="text-gray-400 text-sm mt-0.5">Sélectionne les agents qui interviendront.</p>
               </div>
             </div>
@@ -464,17 +464,17 @@ export default function NewSession() {
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
             {parentSessionId ? (
               <>
-                <h1 className="text-xl font-bold text-gray-900">Suite de session</h1>
+                <h1 className="text-xl font-bold text-gray-900">Suite de réunion</h1>
                 <div className="mt-2 mb-5 flex items-start gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
                   <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span>Les agents auront accès au contexte complet de la session précédente.</span>
+                  <span>Les agents auront accès au contexte complet de la réunion précédente.</span>
                 </div>
               </>
             ) : (
               <>
-                <h1 className="text-xl font-bold text-gray-900">Nouvelle session</h1>
+                <h1 className="text-xl font-bold text-gray-900">Nouvelle réunion</h1>
                 <p className="text-gray-500 text-sm mt-1 mb-6">Décrivez votre tâche — les agents IA vont collaborer pour vous.</p>
               </>
             )}
@@ -551,7 +551,7 @@ export default function NewSession() {
                 <button onClick={handleFormTeam} disabled={!task.trim() || phase === 'forming'}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm">
                   {phase === 'forming' ? (
-                    <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Création de la session…</>
+                    <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Création de la réunion…</>
                   ) : 'Lancer les agents →'}
                 </button>
               </div>
@@ -567,7 +567,7 @@ export default function NewSession() {
                 <span className="text-2xl shrink-0">♻️</span>
                 <div>
                   <p className="text-sm font-semibold text-amber-800">Tâche identique détectée</p>
-                  <p className="text-xs text-amber-600 mt-0.5 leading-relaxed">Une session précédente utilisait exactement cette tâche. Voulez-vous réutiliser la même équipe ?</p>
+                  <p className="text-xs text-amber-600 mt-0.5 leading-relaxed">Une réunion précédente utilisait exactement cette tâche. Voulez-vous réutiliser la même équipe ?</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
@@ -701,7 +701,7 @@ export default function NewSession() {
                   <div className="flex gap-2">
                     <button onClick={() => setShowAcceptModal(true)}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2">
-                      ✅ Accepter cette session
+                      ✅ Accepter cette réunion
                     </button>
                     <button onClick={() => setAbandonConfirm(true)}
                       className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-3 px-4 rounded-xl text-sm transition">
@@ -710,7 +710,7 @@ export default function NewSession() {
                   </div>
                 ) : (
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                    <p className="text-sm text-gray-600">Cette session sera close sans impact sur le projet.</p>
+                    <p className="text-sm text-gray-600">Cette réunion sera close sans impact sur le projet.</p>
                     <div className="flex gap-2">
                       <button onClick={() => setAbandonConfirm(false)} className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm">Annuler</button>
                       <button onClick={async () => {
@@ -729,7 +729,7 @@ export default function NewSession() {
               <div className={`rounded-xl p-3 text-sm text-center font-medium ${
                 sessionStatus === 'accepted' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
               }`}>
-                {sessionStatus === 'accepted' ? '✅ Session acceptée' : '🚫 Session abandonnée'}
+                {sessionStatus === 'accepted' ? '✅ Réunion acceptée' : '🚫 Réunion abandonnée'}
               </div>
             )}
             <Link to={`/projects/${projectId}/session/${session.id}/summary`}

@@ -244,7 +244,7 @@ export default function StackCheckModal({ milestone, projectId, onClose, onRefre
             <div className="text-center py-8">
               <p className="text-gray-400 text-sm">Aucun outil à vérifier</p>
               <p className="text-xs text-gray-300 mt-1">
-                La checklist se remplit depuis l'environnement et les sessions
+                La checklist se remplit depuis l'environnement et les réunions
               </p>
             </div>
           ) : catEntries.map(([category, catItems]) => (

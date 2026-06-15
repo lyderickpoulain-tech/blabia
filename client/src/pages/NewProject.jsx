@@ -71,7 +71,7 @@ export default function NewProject() {
             <div className="border-t border-gray-100 pt-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Brief projet</p>
               <p className="text-xs text-gray-400 mb-3 leading-relaxed">
-                Ce brief est transmis aux agents dès la première session — ils arrivent avec ce contexte dès le départ.
+                Ce brief est transmis aux agents dès la première réunion — ils arrivent avec ce contexte dès le départ.
               </p>
 
               <div className="space-y-3">

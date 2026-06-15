@@ -192,7 +192,7 @@ export default function AcceptSessionModal({ session, projectId, planSuggestions
         <div className="shrink-0 px-5 py-4 border-t border-gray-100">
           <button onClick={handleApply} disabled={applying}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition disabled:opacity-50 flex items-center justify-center gap-2">
-            {applying ? 'Application…' : '✅ Appliquer et clore la session'}
+            {applying ? 'Application…' : '✅ Appliquer et clore la réunion'}
           </button>
         </div>
       </div>

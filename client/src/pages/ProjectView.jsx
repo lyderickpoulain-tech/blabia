@@ -170,7 +170,7 @@ function BriefModal({ project, onSave, onClose }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Modifier le brief projet</h2>
-        <p className="text-xs text-gray-400 mb-5">Transmis aux agents dès le début de chaque session</p>
+        <p className="text-xs text-gray-400 mb-5">Transmis aux agents dès le début de chaque réunion</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Objectif principal</label>
@@ -243,7 +243,7 @@ function DeleteProjectModal({ project, sessionCount, onClose, onConfirm, deletin
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-700">
           Cette action supprimera définitivement le projet{' '}
           <strong>"{project.name}"</strong> et ses{' '}
-          <strong>{sessionCount} session{sessionCount !== 1 ? 's' : ''}</strong>.
+          <strong>{sessionCount} réunion{sessionCount !== 1 ? 's' : ''}</strong>.
         </div>
 
         <div className="mb-5">
@@ -364,7 +364,7 @@ function SessionRow({ session, projectId }) {
           <CodeStatusBadge session={session} />
         </div>
         <p className="text-xs text-gray-400">{session.agentCount ?? '–'} agents · {date}</p>
-        {isComplete && <p className="text-xs text-blue-600 font-medium mt-2">Relire la session →</p>}
+        {isComplete && <p className="text-xs text-blue-600 font-medium mt-2">Relire la réunion →</p>}
       </div>
     </>
   );
@@ -767,7 +767,7 @@ export default function ProjectView() {
             <DevDirectoryRow project={project} isOwner={isAdmin || project.userId === user?.id}
               onSave={d => setProject(prev => ({ ...prev, devDirectory: d }))} />
             <p className="text-xs text-gray-400 mt-1">
-              {project.sessionCount ?? 0} session{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · Créé le {new Date(project.createdAt).toLocaleDateString('fr-FR')}
+              {project.sessionCount ?? 0} réunion{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · Créé le {new Date(project.createdAt).toLocaleDateString('fr-FR')}
             </p>
           </div>
 
@@ -903,14 +903,14 @@ export default function ProjectView() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div>
-              <h2 className="font-semibold text-gray-900">Sessions</h2>
+              <h2 className="font-semibold text-gray-900">Réunions</h2>
               {!sessionsLoading && (
-                <p className="text-xs text-gray-400 mt-0.5">{sessions.length} session{sessions.length !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{sessions.length} réunion{sessions.length !== 1 ? 's' : ''}</p>
               )}
             </div>
             {project.status === 'active' && (
               <Link to={`/projects/${id}/session/new`} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition">
-                + Nouvelle session
+                + Nouvelle réunion
               </Link>
             )}
           </div>
@@ -940,10 +940,10 @@ export default function ProjectView() {
           )}
           {!sessionsLoading && sessions.length === 0 && (
             <div className="text-center py-10 px-5 text-gray-400">
-              <p className="text-sm">Aucune session pour l'instant.</p>
+              <p className="text-sm">Aucune réunion pour l'instant.</p>
               {project.status === 'active' && (
                 <Link to={`/projects/${id}/session/new`} className="inline-block mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium">
-                  Lancer votre première session →
+                  Lancer votre première réunion →
                 </Link>
               )}
             </div>

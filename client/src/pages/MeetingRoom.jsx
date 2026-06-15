@@ -549,7 +549,7 @@ export default function MeetingRoom() {
         setMessages(Array.isArray(data.messages) ? data.messages : []);
         setActiveAgents(Array.isArray(data.activeAgents) ? data.activeAgents : []);
       })
-      .catch(() => setLoadError('Session introuvable ou accès refusé.'))
+      .catch(() => setLoadError('Réunion introuvable ou accès refusé.'))
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
 
@@ -712,7 +712,7 @@ export default function MeetingRoom() {
     return (
       <ProjectLayout projectId={projectId}>
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
-          <p className="text-sm">{loadError || 'Session introuvable.'}</p>
+          <p className="text-sm">{loadError || 'Réunion introuvable.'}</p>
           <Link to={`/projects/${projectId}`} className="text-sm text-blue-600 hover:underline">
             ← Retour au projet
           </Link>

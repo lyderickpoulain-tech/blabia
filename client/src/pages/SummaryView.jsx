@@ -283,8 +283,8 @@ export default function SummaryView() {
                   <p className="font-medium text-gray-700 mb-1">Aucun compte-rendu disponible</p>
                   <p className="text-sm text-gray-400">
                     {session.status === 'interrupted'
-                      ? 'Cette session a été interrompue avant d\'être finalisée.'
-                      : 'La restitution de cette session n\'est pas disponible.'}
+                      ? 'Cette réunion a été interrompue avant d\'être finalisée.'
+                      : 'La restitution de cette réunion n\'est pas disponible.'}
                   </p>
                 </div>
               )}

@@ -35,7 +35,7 @@ const PRIORITY_CONFIG = {
 
 const SOURCE_CONFIG = {
   agent:   { label: 'Agent',   badge: 'bg-violet-100 text-violet-700 border-violet-200' },
-  session: { label: 'Session', badge: 'bg-blue-100 text-blue-700 border-blue-200' },
+  session: { label: 'Réunion', badge: 'bg-blue-100 text-blue-700 border-blue-200' },
   manual:  { label: 'Manuel',  badge: 'bg-gray-100 text-gray-500 border-gray-200' },
 };
 
