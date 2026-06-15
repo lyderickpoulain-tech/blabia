@@ -47,7 +47,7 @@ function trunc(str, n = 28) {
 }
 
 // ── Drawer pour type 'milestone' (détail + statut modifiable uniquement) ──────
-function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh }) {
+function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh, onDeleteMilestone }) {
   const [status, setStatus] = useState(milestone.status);
   const [saving, setSaving] = useState(false);
 
@@ -94,13 +94,23 @@ function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh }) {
             })}
           </p>
         )}
+        {onDeleteMilestone && (
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              onClick={() => onDeleteMilestone(milestone.id)}
+              className="w-full text-xs text-red-400 hover:text-red-600 py-1.5 rounded-lg hover:bg-red-50 transition"
+            >
+              🗑 Supprimer cette étape
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Drawer session (meeting / technical) ──────────────────────────────────────
-function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh }) {
+function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh, onShowPrompt, onDeleteMilestone }) {
   const [status, setStatus] = useState(milestone.status);
   const [saving, setSaving] = useState(false);
   const [pinnedDecisions, setPinnedDecisions] = useState([]);
@@ -131,9 +141,9 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
     ? new Date(linkedSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
     : '';
 
-  // Navigation intelligente : réunion active → /meeting/:sid, sinon → /session/:sid
+  // Navigation : mode meeting → /meeting/:sid, sinon → /session/:sid
   const openSessionPath = linkedSession
-    ? (linkedSession.mode === 'meeting' && linkedSession.status === 'open'
+    ? (linkedSession.mode === 'meeting'
         ? `/projects/${projectId}/meeting/${linkedSession.id}`
         : `/projects/${projectId}/session/${linkedSession.id}`)
     : null;
@@ -204,8 +214,18 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
             >
               {linkedSession.mode === 'meeting' && linkedSession.status === 'open'
                 ? '🏁 Reprendre la réunion'
-                : '✓ Voir la réunion'}
+                : linkedSession.mode === 'meeting'
+                ? '📋 Voir la réunion'
+                : '✓ Voir la session'}
             </button>
+            {linkedSession.hasCode && linkedSession.summary && onShowPrompt && (
+              <button
+                onClick={() => { onShowPrompt(linkedSession); onClose(); }}
+                className="w-full bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-xs font-semibold py-2 rounded-xl transition flex items-center justify-center gap-1.5"
+              >
+                💻 Voir le prompt généré
+              </button>
+            )}
             <div className="text-xs text-gray-400 text-center">
               {sessionDate} ·{' '}
               <span className="font-medium text-gray-500">
@@ -214,7 +234,7 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
             </div>
             <button onClick={onClose}
               className="w-full border border-gray-200 text-gray-500 text-xs font-medium py-2 rounded-xl hover:bg-gray-50 transition">
-              Annuler
+              Fermer
             </button>
           </div>
         ) : (
@@ -234,6 +254,16 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
             <button onClick={onClose}
               className="w-full border border-gray-200 text-gray-500 text-xs font-medium py-2 rounded-xl hover:bg-gray-50 transition">
               Annuler
+            </button>
+          </div>
+        )}
+        {onDeleteMilestone && (
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              onClick={() => onDeleteMilestone(milestone.id)}
+              className="w-full text-xs text-red-400 hover:text-red-600 py-1.5 rounded-lg hover:bg-red-50 transition"
+            >
+              🗑 Supprimer cette étape
             </button>
           </div>
         )}
@@ -315,12 +345,13 @@ function PanelBody({
   loading, showAdd, setShowAdd, onAdd, onMilestoneClick,
   detailMilestone, setDetailMilestone,
   sessionDrawer, setSessionDrawer,
-  onRefresh, navigate, isMobile, devDirectory,
+  onRefresh, onDeleteMilestone, onShowPrompt, navigate, isMobile, devDirectory,
 }) {
   const [title, setTitle]           = useState('');
   const [type, setType]             = useState('synthesis');
   const [saving, setSaving]         = useState(false);
   const [insertingAt, setInsertingAt] = useState(null);
+  const [reordering, setReordering] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -335,12 +366,16 @@ function PanelBody({
 
   // Insertion entre deux étapes : insert + reorder pour conserver des entiers propres
   const handleInsert = async ({ title, type }, targetDisplayOrder) => {
+    const intendedOrder = Math.round(targetDisplayOrder);
+    console.log('[handleInsert] displayOrder envoyé:', intendedOrder, '| entre:', targetDisplayOrder);
     try {
       const { data } = await api.post(`/projects/${projectId}/milestones`, {
         title, type,
-        displayOrder: Math.round(targetDisplayOrder),
+        displayOrder: intendedOrder,
       });
-      const newList = [...milestones, data].sort((a, b) => a.displayOrder - b.displayOrder);
+      // On force l'ordre prévu pour le tri, indépendamment de ce que le serveur a retourné
+      const newList = [...milestones, { ...data, displayOrder: intendedOrder }]
+        .sort((a, b) => a.displayOrder - b.displayOrder);
       await api.patch(`/projects/${projectId}/milestones/reorder`, {
         order: newList.map(m => m.id),
       });
@@ -349,6 +384,30 @@ function PanelBody({
     } catch (err) {
       console.error('[InsertForm] erreur insertion milestone:', err);
     }
+  };
+
+  const handleMoveUp = async (idx) => {
+    if (idx === 0 || reordering) return;
+    setReordering(true);
+    const newList = [...milestones];
+    [newList[idx - 1], newList[idx]] = [newList[idx], newList[idx - 1]];
+    try {
+      await api.patch(`/projects/${projectId}/milestones/reorder`, { order: newList.map(m => m.id) });
+      onRefresh();
+    } catch (err) { console.error('[reorder up]', err.message); }
+    setReordering(false);
+  };
+
+  const handleMoveDown = async (idx) => {
+    if (idx === milestones.length - 1 || reordering) return;
+    setReordering(true);
+    const newList = [...milestones];
+    [newList[idx], newList[idx + 1]] = [newList[idx + 1], newList[idx]];
+    try {
+      await api.patch(`/projects/${projectId}/milestones/reorder`, { order: newList.map(m => m.id) });
+      onRefresh();
+    } catch (err) { console.error('[reorder down]', err.message); }
+    setReordering(false);
   };
 
   const openInsertForm = (order) => {
@@ -365,6 +424,7 @@ function PanelBody({
           projectId={projectId}
           onClose={() => setDetailMilestone(null)}
           onRefresh={onRefresh}
+          onDeleteMilestone={onDeleteMilestone}
         />
       )}
 
@@ -377,6 +437,8 @@ function PanelBody({
           navigate={navigate}
           onClose={() => setSessionDrawer(null)}
           onRefresh={onRefresh}
+          onShowPrompt={onShowPrompt}
+          onDeleteMilestone={onDeleteMilestone}
         />
       )}
 
@@ -414,7 +476,7 @@ function PanelBody({
                 <div key={m.id}>
                   <div
                     onClick={() => onMilestoneClick(m, linked)}
-                    className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none"
+                    className="group flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none"
                     title={m.title}
                   >
                     <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🎯'}</span>
@@ -436,6 +498,21 @@ function PanelBody({
                     ) : (
                       <span className="text-[10px] leading-none shrink-0 opacity-30" title="Pas encore de réunion">⚪</span>
                     )}
+                    {/* Boutons réordonnancement ↑↓ */}
+                    <div className="flex flex-col gap-0 shrink-0 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        onClick={e => { e.stopPropagation(); handleMoveUp(idx); }}
+                        disabled={idx === 0 || reordering}
+                        className="w-3.5 h-3 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-0 text-[9px] leading-none transition"
+                        title="Déplacer vers le haut"
+                      >▲</button>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleMoveDown(idx); }}
+                        disabled={idx === milestones.length - 1 || reordering}
+                        className="w-3.5 h-3 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-0 text-[9px] leading-none transition"
+                        title="Déplacer vers le bas"
+                      >▼</button>
+                    </div>
                     <span
                       className={`w-2 h-2 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`}
                       title={sd.label}
@@ -553,6 +630,17 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     timeline_steps: 'timeline_steps',
   };
 
+  const handleDeleteMilestone = useCallback(async (milestoneId) => {
+    if (!window.confirm('Supprimer cette étape ? Cette action est irréversible.')) return;
+    try {
+      await api.delete(`/projects/${projectId}/milestones/${milestoneId}`);
+      loadMilestones();
+    } catch (err) {
+      console.error('[deleteM]', err.message);
+      alert('Erreur lors de la suppression de l\'étape');
+    }
+  }, [projectId, loadMilestones]);
+
   // ── Comportement au clic selon le type ──────────────────────────────────────
   const handleMilestoneClick = async (m, linked) => {
     const t = m.type;
@@ -561,14 +649,16 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
       setSessionDrawer({ milestone: m, linked: linked || null, intention: TYPE_TO_INTENTION[t] });
       return;
     }
-    // claude_code / technical : choix rapide vs session
+    // claude_code / technical : meeting → drawer, session rapide hasCode → ExportModal
     if (['claude_code', 'technical'].includes(t)) {
-      if (linked?.hasCode && linked?.summary) {
-        setExportSession(linked);
-      } else if (linked) {
-        setSessionDrawer({ milestone: m, linked, intention: 'claude_code' });
-      } else {
+      if (!linked) {
         setTechChoiceMilestone(m);
+      } else if (linked.mode === 'meeting') {
+        setSessionDrawer({ milestone: m, linked, intention: 'claude_code' });
+      } else if (linked.hasCode && linked.summary) {
+        setExportSession(linked);
+      } else {
+        setSessionDrawer({ milestone: m, linked, intention: 'claude_code' });
       }
       return;
     }
@@ -599,6 +689,8 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     detailMilestone, setDetailMilestone,
     sessionDrawer, setSessionDrawer,
     onRefresh: loadMilestones,
+    onDeleteMilestone: handleDeleteMilestone,
+    onShowPrompt: (session) => setExportSession(session),
     navigate, devDirectory,
   };
 

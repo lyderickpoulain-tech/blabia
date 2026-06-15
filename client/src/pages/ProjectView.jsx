@@ -326,14 +326,20 @@ function buildSessionThreads(sessions) {
 function SessionRow({ session, projectId }) {
   const truncated = session.task.length > 50 ? session.task.substring(0, 50) + '…' : session.task;
   const date = new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const isComplete = session.status === 'complete';
+  const isViewable = session.status === 'complete' || session.status === 'accepted';
+  const isOpen     = session.status === 'open';
+  const isMeeting  = session.mode === 'meeting';
+  const isClickable = isViewable || (isOpen && isMeeting);
   const depth = session.depth ?? 0;
   const isContinuation = depth > 0;
+  const sessionPath = isMeeting
+    ? `/projects/${projectId}/meeting/${session.id}`
+    : `/projects/${projectId}/session/${session.id}`;
 
   const inner = (
     <>
       {/* Desktop */}
-      <tr className={`hidden md:table-row ${isComplete ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-70'}`}>
+      <tr className={`hidden md:table-row ${isClickable ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-70'}`}>
         <td className="px-4 py-3 text-sm text-gray-800 max-w-xs">
           <div className="flex items-center gap-1.5" style={{ paddingLeft: depth * 16 }}>
             {isContinuation && <span className="text-gray-300 text-xs shrink-0">↳</span>}
@@ -344,15 +350,20 @@ function SessionRow({ session, projectId }) {
         <td className="px-4 py-3 text-sm text-gray-500">{session.agentCount ?? '–'} agents</td>
         <td className="px-4 py-3 text-sm text-gray-400">{date}</td>
         <td className="px-4 py-3 text-right">
-          {isComplete && (
-            <span className="text-xs text-blue-600 font-medium">Relire →</span>
+          {isViewable && (
+            <span className="text-xs text-blue-600 font-medium">
+              {isMeeting ? 'Voir la réunion →' : 'Relire →'}
+            </span>
+          )}
+          {isOpen && isMeeting && (
+            <span className="text-xs text-green-600 font-medium">Reprendre →</span>
           )}
         </td>
       </tr>
 
       {/* Mobile */}
       <div
-        className={`md:hidden bg-white rounded-xl border p-4 shadow-sm ${isComplete ? 'border-gray-200 hover:shadow-md' : 'border-orange-100 opacity-75'} transition`}
+        className={`md:hidden bg-white rounded-xl border p-4 shadow-sm ${isClickable ? 'border-gray-200 hover:shadow-md' : 'border-orange-100 opacity-75'} transition`}
         style={{ marginLeft: depth * 16 }}
       >
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -364,14 +375,15 @@ function SessionRow({ session, projectId }) {
           <CodeStatusBadge session={session} />
         </div>
         <p className="text-xs text-gray-400">{session.agentCount ?? '–'} agents · {date}</p>
-        {isComplete && <p className="text-xs text-blue-600 font-medium mt-2">Relire la réunion →</p>}
+        {isViewable && <p className="text-xs text-blue-600 font-medium mt-2">{isMeeting ? 'Voir la réunion →' : 'Relire →'}</p>}
+        {isOpen && isMeeting && <p className="text-xs text-green-600 font-medium mt-1">Reprendre →</p>}
       </div>
     </>
   );
 
-  if (!isComplete) return <>{inner}</>;
+  if (!isClickable) return <>{inner}</>;
   return (
-    <Link to={`/projects/${projectId}/session/${session.id}`} className="contents">
+    <Link to={sessionPath} className="contents">
       {inner}
     </Link>
   );
