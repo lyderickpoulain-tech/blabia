@@ -49,39 +49,50 @@ router.post('/claude-code', async (req, res) => {
 
     let effectiveStack = userStack;
     let devDirectory = null;
+    let projectBrief = null;
     if (projectId) {
-      const [project] = await db('Project').select(['techStack', 'devDirectory']).where({ id: projectId }).limit(1);
+      const [project] = await db('Project').select(['techStack', 'devDirectory', 'brief']).where({ id: projectId }).limit(1);
       if (project?.techStack) {
         const projectStack = typeof project.techStack === 'string'
           ? JSON.parse(project.techStack) : project.techStack;
         effectiveStack = projectStack;
       }
-      devDirectory = project?.devDirectory || null;
+      devDirectory  = project?.devDirectory?.trim() || null;
+      projectBrief  = project?.brief?.trim()        || null;
     }
 
     const techStack = effectiveStack;
     const stackLines = formatTechStack(techStack);
     const stackSection = stackLines.length > 0
-      ? `\n\nEnvironnement technique de l'utilisateur :\n${stackLines.join('\n')}\nAdapte toutes tes suggestions à cet environnement.\nNe propose pas d'alternatives sauf si l'outil choisi est inadapté à la tâche.`
+      ? `\nStack technique du projet :\n${stackLines.join('\n')}\nAdapte toutes tes suggestions à cet environnement. Ne propose pas d'alternatives sauf si l'outil choisi est inadapté à la tâche.\n`
       : '';
+    const briefSection = projectBrief
+      ? `\nBrief du projet :\n${projectBrief}\n`
+      : '';
+    const cdInstruction = devDirectory
+      ? `- Commencer IMPÉRATIVEMENT par la ligne : cd "${devDirectory}"`
+      : '- Préciser que l\'utilisateur doit naviguer manuellement vers son répertoire de projet';
 
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 2048,
       messages: [{
         role: 'user',
-        content: `Tu es un expert en prompting pour Claude Code.
-À partir de cette restitution d'agents IA, génère un prompt optimisé pour Claude Code qui permettra d'implémenter techniquement les décisions prises.${stackSection}
-
+        content:
+`Tu es un expert en prompting pour Claude Code.
+À partir de cette restitution, génère un prompt optimisé pour Claude Code qui permettra d'implémenter techniquement les décisions prises.
+${briefSection}${stackSection}
 Restitution :
 ${summary.trim()}
 
-Le prompt doit :
-${devDirectory ? `- Commencer par : cd "${devDirectory}"\n` : '- Mentionner que l\'utilisateur doit naviguer manuellement vers son répertoire de projet\n'}- Commencer par le contexte du projet
-- Lister les tâches techniques à implémenter dans l'ordre
+Le prompt généré doit :
+${cdInstruction}
+- Calibrer sa complexité sur l'objectif réel décrit dans la restitution (ne pas over-engineer)
+- Commencer par le contexte du projet
+- Lister les tâches techniques à implémenter dans l'ordre logique (numérotées)
 - Préciser la stack technique si mentionnée
 - Demander une validation étape par étape
-- Être en français`
+- Être rédigé en français`
       }]
     });
 

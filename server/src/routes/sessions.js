@@ -21,6 +21,33 @@ function extractJson(text) {
   return JSON.parse(match[0]);
 }
 
+const TECH_STACK_LABELS = {
+  hebergement: 'Hébergement',
+  bdd:         'Base de données',
+  frontend:    'Framework frontend',
+  backend:     'Framework backend',
+  auth:        'Authentification',
+  emails:      'Envoi d\'emails',
+  devtools:    'Outils de développement',
+  domaine:     'Domaine',
+};
+
+function formatTechStackForPrompt(raw) {
+  const ts = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+  const lines = [];
+  for (const [key, label] of Object.entries(TECH_STACK_LABELS)) {
+    const selected = ts[key] || [];
+    if (selected.length === 0) continue;
+    const items = selected.map(item => {
+      if (item === 'Autre' && ts[`${key}_autre`]) return ts[`${key}_autre`];
+      if (item === 'Autre') return null;
+      return item;
+    }).filter(Boolean);
+    if (items.length > 0) lines.push(`- ${label} : ${items.join(', ')}`);
+  }
+  return lines;
+}
+
 async function getProject(projectId, userId, isAdmin) {
   const query = db('Project').where('Project.id', projectId);
   if (!isAdmin) {
@@ -327,7 +354,7 @@ function waitForAnswer(sessionId, timeoutMs = 300_000) {
 }
 
 // Appel Anthropic en streaming avec auto-continuation sur max_tokens (max 5 tours)
-async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500, model = MODEL) {
+async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500, model = MODEL, signal = null) {
   const MAX_CONTINUATIONS = 5;
   let fullText = '';
   let messages = [{ role: 'user', content: userMessage }];
@@ -339,12 +366,13 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500,
       system: systemPrompt,
       messages,
       stream: true
-    });
+    }, signal ? { signal } : undefined);
 
     let chunkText = '';
     let stopReason = null;
 
     for await (const event of stream) {
+      if (signal?.aborted) break;
       if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
         chunkText += event.delta.text;
         fullText += event.delta.text;
@@ -355,6 +383,7 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500,
       }
     }
 
+    if (signal?.aborted) break;
     if (stopReason !== 'max_tokens') break;
 
     if (attempt >= MAX_CONTINUATIONS) {
@@ -1205,6 +1234,40 @@ router.post('/:sessionId/answer', async (req, res) => {
   res.json({ message: 'Réponse transmise aux agents' });
 });
 
+// ── PATCH tâche ou intention de session ──────────────────────────────────────
+
+router.patch('/:sessionId', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = req.user.role === 'admin';
+  const { task, intention } = req.body;
+
+  if (task === undefined && intention === undefined) {
+    return res.status(400).json({ error: 'Champ requis : task ou intention' });
+  }
+
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+    if (['accepted', 'abandoned'].includes(session.status)) {
+      return res.status(400).json({ error: 'Session déjà close' });
+    }
+
+    const updates = { updatedAt: new Date() };
+    if (task !== undefined)      updates.task      = task.trim();
+    if (intention !== undefined) updates.intention = JSON.stringify(Array.isArray(intention) ? intention : [intention]);
+
+    await db('Session').where({ id: sessionId }).update(updates);
+    const [updated] = await db('Session').where({ id: sessionId }).limit(1);
+    return res.json({ id: updated.id, task: updated.task, intention: updated.intention });
+  } catch (err) {
+    console.error('[sessions/patch]', err.message);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── PATCH statut session (accepted / abandoned) ───────────────────────────────
 
 router.patch('/:sessionId/status', async (req, res) => {
@@ -1667,6 +1730,69 @@ router.post('/:sessionId/pin-message', async (req, res) => {
   }
 });
 
+// ── v3.2 : Évolution 3 — POST /:sessionId/answer-decision ───────────────────
+
+router.post('/:sessionId/answer-decision', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { messageId, answer, status } = req.body;
+  const isAdmin = req.user.role === 'admin';
+
+  const VALID_STATUSES = ['answered', 'deferred'];
+  if (!messageId) return res.status(400).json({ error: 'messageId requis' });
+  if (!VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: 'status invalide — valeurs acceptées : answered, deferred' });
+  }
+  if (status === 'answered' && !answer?.trim()) {
+    return res.status(400).json({ error: 'answer requis pour status answered' });
+  }
+
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+
+    const messages = (() => {
+      const m = session.messages;
+      if (Array.isArray(m)) return m;
+      try { return JSON.parse(m || '[]'); } catch { return []; }
+    })();
+
+    const idx = messages.findIndex(m => m.id === messageId && m.type === 'decision');
+    if (idx < 0) return res.status(404).json({ error: 'Décision introuvable' });
+
+    const now = new Date().toISOString();
+    messages[idx] = {
+      ...messages[idx],
+      status,
+      answer:     status === 'answered' ? answer.trim() : null,
+      answeredAt: status === 'answered' ? now           : null,
+    };
+
+    // Si answered : ajouter un message système pour que les agents voient la décision dans leur historique
+    let systemMessage = null;
+    if (status === 'answered') {
+      systemMessage = {
+        id:        randomUUID(),
+        role:      'system',
+        type:      'decision_answer',
+        content:   `📌 Décision : ${messages[idx].question} → ${answer.trim()}`,
+        timestamp: now,
+      };
+      messages.push(systemMessage);
+    }
+
+    await db('Session').where({ id: sessionId }).update({ messages: JSON.stringify(messages) });
+    await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+
+    return res.json({ message: messages[idx], systemMessage });
+  } catch (err) {
+    console.error('[sessions/answer-decision]', err.message);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── v3.0 : Évolution 2.4 — POST /:sessionId/generate-deliverable ─────────────
 
 router.post('/:sessionId/generate-deliverable', async (req, res) => {
@@ -1755,14 +1881,49 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     }
 
     if (deliverableType === 'claude_code') {
-      const briefSection = project.brief ? `Brief du projet :\n${project.brief}\n\n` : '';
+      // Contexte projet
+      const devDir   = project.devDirectory?.trim() || null;
+      const stackLines = formatTechStackForPrompt(project.techStack);
+
+      // Décisions épinglées pendant la réunion
+      const decisions = messages.filter(m => m.pinned || m.type === 'decision');
+
+      // Sections injectées dans le prompt LLM
+      const briefSection = project.brief?.trim()
+        ? `Brief du projet :\n${project.brief.trim()}\n\n`
+        : '';
+      const stackSection = stackLines.length > 0
+        ? `Stack technique :\n${stackLines.join('\n')}\n\n`
+        : '';
+      const decisionsSection = decisions.length > 0
+        ? `Décisions prises pendant la réunion (contraintes obligatoires) :\n${decisions.map((m, i) => `${i + 1}. ${m.content}`).join('\n')}\n\n`
+        : '';
+      const cdInstruction = devDir
+        ? `- Commencer IMPÉRATIVEMENT par la ligne : cd "${devDir}"`
+        : '- Préciser que l\'utilisateur doit naviguer manuellement vers son répertoire de projet';
+
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 4000,
-        system: 'Tu es un expert en rédaction de prompts techniques pour Claude Code. Tu génères des prompts précis et directement utilisables. Réponds uniquement en français.',
+        system: 'Tu es un expert en rédaction de prompts techniques pour Claude Code. Tu génères des prompts précis, calibrés et directement utilisables. Réponds uniquement en français.',
         messages: [{
           role: 'user',
-          content: `${briefSection}Génère un prompt Claude Code à partir de cette réunion.\n\nInclure :\n- Contexte technique du projet\n- Tâches concrètes à implémenter (liste numérotée)\n- Contraintes techniques mentionnées\n- Fichiers ou composants concernés si mentionnés\n\nLe prompt doit être prêt à être copié-collé dans Claude Code.\n\n${sessionContext}`
+          content:
+`${briefSection}Objectif de la réunion : ${session.task}
+
+${stackSection}${decisionsSection}Génère un prompt Claude Code prêt à être copié dans Claude Code.
+
+Le prompt généré doit :
+${cdInstruction}
+- Calibrer sa complexité sur l'objectif réel (ne pas over-engineer : chaque tâche doit servir directement "${session.task}")
+- Lister les tâches concrètes à implémenter dans l'ordre logique (numérotées)
+- Préciser les fichiers ou composants concernés si identifiés dans la réunion
+- Intégrer les décisions prises comme contraintes non négociables
+- Demander une validation étape par étape avant de passer à la suivante
+- Être rédigé en français
+
+Conversation de la réunion :
+${historyText}`
         }]
       });
       const content = response.content[0].text.trim();
@@ -1804,11 +1965,13 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
 
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const { message: humanMessage, agentIds } = req.body;
+  const { message: humanMessage, agentIds, attachments: rawAttachments } = req.body;
   const isAdmin = req.user.role === 'admin';
 
-  if (!humanMessage?.trim()) {
-    return res.status(400).json({ error: 'Message requis' });
+  const hasText        = !!humanMessage?.trim();
+  const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.length > 0;
+  if (!hasText && !hasAttachments) {
+    return res.status(400).json({ error: 'Message ou pièce jointe requise' });
   }
 
   // ── Validation pré-SSE ────────────────────────────────────────────────────
@@ -1867,20 +2030,30 @@ router.post('/:sessionId/chat', async (req, res) => {
     try { res.write(': ping\n\n'); } catch { clearInterval(heartbeatInterval); }
   }, 15000);
 
-  req.on('close', () => clearInterval(heartbeatInterval));
+  const abortController = new AbortController();
+  req.on('close', () => {
+    clearInterval(heartbeatInterval);
+    abortController.abort();
+  });
 
   send('connected', { sessionId });
 
   try {
-    // 1. Sauvegarder le message humain dans session.messages
+    // 1. Sauvegarder le message humain dans session.messages (références sans base64)
+    const attachmentRefs = hasAttachments
+      ? rawAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage }))
+      : undefined;
     const humanMsg = {
-      id: randomUUID(),
-      role: 'human',
+      id:        randomUUID(),
+      role:      'human',
       agentName: null,
-      content: humanMessage.trim(),
+      content:   hasText
+        ? humanMessage.trim()
+        : `[${rawAttachments.map(a => a.name).join(', ')}]`,
       timestamp: new Date().toISOString(),
-      type: 'message',
-      pinned: false
+      type:      'message',
+      pinned:    false,
+      ...(attachmentRefs ? { attachments: attachmentRefs } : {}),
     };
     await appendMessageEntry(sessionId, humanMsg);
 
@@ -1909,11 +2082,14 @@ router.post('/:sessionId/chat', async (req, res) => {
       : '';
 
     // Historique de la réunion formaté pour le prompt
+    // Les decision_answer sont inclus pour que les agents voient les décisions prises
     const historyLines = currentMessages
-      .filter(m => m.role !== 'system')
-      .map(m => m.role === 'human'
-        ? `Participant : ${m.content}`
-        : `${m.agentName} : ${m.content}`);
+      .filter(m => m.role !== 'system' || m.type === 'decision_answer')
+      .map(m => {
+        if (m.role === 'human')                                  return `Participant : ${m.content}`;
+        if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
+        return `${m.agentName} : ${m.content}`;
+      });
     const historyText = historyLines.join('\n\n');
 
     const intentionText = Array.isArray(intention) && intention.length > 0
@@ -1922,6 +2098,8 @@ router.post('/:sessionId/chat', async (req, res) => {
 
     // 2. Tour de chaque agent actif
     for (const agent of activeAgents) {
+      if (abortController.signal.aborted) break;
+
       send('agent_start', { agentName: agent.name, agentRole: agent.role });
 
       // Contexte projet injecté dans le system prompt
@@ -1944,21 +2122,63 @@ Livrable attendu : ${intentionText}
 
 Réponds en français, de façon concise et structurée (max 250 mots).
 Apporte une contribution distincte et complémentaire des autres agents.
-Si tu identifies une décision importante à retenir, ajoute à la fin : [DECISION: résumé en 1 phrase].
-Si un agent spécialiste manquerait vraiment, ajoute : [SUGGEST_AGENT: nom, description du rôle].
+Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
+[DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
+Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, question compréhensible par un non-technicien, contexte en langage simple, une seule fois par contribution.
+Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
 Si une étape concrète doit être ajoutée à la timeline, ajoute : [SUGGEST_STEP: titre de l'étape].
 Maximum un marqueur de chaque type par réponse.`;
 
-      const userMessage = historyText
+      const baseText = historyText
         ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
         : `Objectif : ${session.task}\n\nC'est le début de la réunion. Donne ta première contribution.`;
 
-      const agentFullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
-        send('chunk', { agentName: agent.name, text: chunk });
-      }, 2048, MODEL);
+      let userMessage;
+      if (hasAttachments) {
+        const contentBlocks = [{ type: 'text', text: baseText }];
+        for (const att of rawAttachments) {
+          if (att.isImage && att.base64 && att.mediaType) {
+            contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: att.mediaType, data: att.base64 } });
+          } else if (!att.isImage && att.text) {
+            contentBlocks.push({ type: 'text', text: `[Fichier texte joint : ${att.name}]\n${att.text}` });
+          }
+        }
+        userMessage = contentBlocks;
+      } else {
+        userMessage = baseText;
+      }
+
+      let partialAgentText = '';
+      let agentFullText;
+      try {
+        agentFullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
+          partialAgentText += chunk;
+          send('chunk', { agentName: agent.name, text: chunk });
+        }, 2048, MODEL, abortController.signal);
+      } catch (agentErr) {
+        if (abortController.signal.aborted || agentErr.name === 'AbortError') {
+          // Sauvegarder le texte partiel si l'agent avait commencé à répondre
+          if (partialAgentText.trim()) {
+            const partialMsg = {
+              id: randomUUID(),
+              role: 'agent',
+              agentName: agent.name,
+              content: partialAgentText.trim(),
+              timestamp: new Date().toISOString(),
+              type: 'message',
+              pinned: false,
+              interrupted: true,
+            };
+            await appendMessageEntry(sessionId, partialMsg).catch(() => {});
+          }
+          res.end();
+          return;
+        }
+        throw agentErr;
+      }
 
       // Détecter les marqueurs spéciaux
-      const decisionMatch   = agentFullText.match(/\[DECISION:\s*([\s\S]*?)\]/);
+      const decisionMatch   = agentFullText.match(/\[DECISION:(\{[\s\S]*?\})\]/);
       const suggestAgtMatch = agentFullText.match(/\[SUGGEST_AGENT:\s*([\s\S]*?)\]/);
       const suggestStpMatch = agentFullText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
 
@@ -1969,23 +2189,47 @@ Maximum un marqueur de chaque type par réponse.`;
         .replace(/\[SUGGEST_STEP:[\s\S]*?\]/g, '')
         .trim();
 
-      // Sauvegarder la réponse de l'agent (type 'decision' si marqueur détecté)
+      // Sauvegarder la réponse de l'agent (toujours 'message' — les décisions sont des entrées séparées)
       const agentMsg = {
-        id: randomUUID(),
-        role: 'agent',
+        id:        randomUUID(),
+        role:      'agent',
         agentName: agent.name,
-        content: agentContent,
+        content:   agentContent,
         timestamp: new Date().toISOString(),
-        type: decisionMatch ? 'decision' : 'message',
-        pinned: false
+        type:      'message',
+        pinned:    false,
       };
       await appendMessageEntry(sessionId, agentMsg);
 
       send('agent_done', { agentName: agent.name, messageId: agentMsg.id });
 
-      // Émettre les événements spéciaux
+      // Émettre les événements spéciaux — décision structurée (JSON)
       if (decisionMatch) {
-        send('decision', { text: decisionMatch[1].trim(), messageId: agentMsg.id });
+        let decisionData = null;
+        try { decisionData = JSON.parse(decisionMatch[1]); } catch {}
+        if (decisionData?.question) {
+          const decisionMsg = {
+            id:         randomUUID(),
+            role:       'system',
+            type:       'decision',
+            question:   decisionData.question,
+            choices:    Array.isArray(decisionData.choices) ? decisionData.choices : [],
+            context:    decisionData.context || '',
+            status:     'pending',
+            answer:     null,
+            answeredAt: null,
+            agentName:  agent.name,
+            timestamp:  new Date().toISOString(),
+          };
+          await appendMessageEntry(sessionId, decisionMsg);
+          send('decision', {
+            messageId: decisionMsg.id,
+            question:  decisionMsg.question,
+            choices:   decisionMsg.choices,
+            context:   decisionMsg.context,
+            agentName: agent.name,
+          });
+        }
       }
 
       if (suggestAgtMatch) {
@@ -2011,6 +2255,10 @@ Maximum un marqueur de chaque type par réponse.`;
     res.end();
 
   } catch (err) {
+    if (abortController.signal.aborted || err.name === 'AbortError') {
+      res.end();
+      return;
+    }
     console.error('[sessions/chat]', err.message, err.stack);
     try { send('error', { message: `Erreur : ${err.message}` }); } catch {}
     res.end();

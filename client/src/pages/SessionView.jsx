@@ -477,6 +477,54 @@ export default function SessionView() {
             </div>
           </div>
 
+          {/* Décisions — EN PREMIER */}
+          {(() => {
+            const allDecisions = (Array.isArray(session.messages) ? session.messages : [])
+              .filter(m => m.type === 'decision');
+            const deferred = allDecisions.filter(m => m.status === 'deferred' || m.status === 'pending');
+            const answered = allDecisions.filter(m => m.status === 'answered');
+            if (allDecisions.length === 0) return null;
+            return (
+              <div className="space-y-2">
+                {deferred.length > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 space-y-3">
+                    <h3 className="text-sm font-semibold text-orange-700">
+                      ⏸ À traiter ({deferred.length})
+                    </h3>
+                    <ul className="space-y-2">
+                      {deferred.map((m, i) => (
+                        <li key={m.id || i} className="text-sm text-orange-900 flex items-start gap-2">
+                          <span className="text-orange-500 shrink-0 mt-0.5 font-bold">·</span>
+                          <span className="leading-relaxed">{m.question}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {answered.length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-2xl p-5 space-y-3">
+                    <h3 className="text-sm font-semibold text-green-700">
+                      ✅ Actées ({answered.length})
+                    </h3>
+                    <ul className="space-y-2">
+                      {answered.map((m, i) => (
+                        <li key={m.id || i} className="text-sm text-gray-700 flex items-start gap-2">
+                          <span className="text-green-500 shrink-0 mt-0.5 font-bold">·</span>
+                          <span className="leading-relaxed">
+                            <span className="text-gray-600">{m.question}</span>
+                            {m.answer && (
+                              <span className="font-semibold text-green-700"> → {m.answer}</span>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Livrable si session acceptée */}
           {currentStatus === 'accepted' && session.summary && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-3">

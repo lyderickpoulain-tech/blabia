@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import MeetingCloseModal from '../components/MeetingCloseModal';
+import DecisionCard from '../components/DecisionCard';
 import api from '../utils/api';
 
 // ── Palette agent (initiale + couleur de bulle) ───────────────────────────────
@@ -27,6 +28,13 @@ const STATUS_BADGE = {
   accepted:  { label: 'Acceptée',   cls: 'bg-green-100 text-green-700'  },
   abandoned: { label: 'Abandonnée', cls: 'bg-gray-100 text-gray-500'    },
 };
+
+const DELIVERABLE_TYPES = [
+  { id: 'synthesis',      icon: '📝', label: 'Synthèse'    },
+  { id: 'memory',         icon: '🧠', label: 'Souvenir'    },
+  { id: 'claude_code',    icon: '💻', label: 'Claude Code' },
+  { id: 'timeline_steps', icon: '📋', label: 'Étapes'      },
+];
 
 // ── Types de jalons ──────────────────────────────────────────────────────────
 
@@ -215,14 +223,43 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
 
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
-function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, onPin, pinningMessageId }) {
+function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, onPin, pinningMessageId, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision }) {
 
   if (messages.length === 0 && !streamingAgent) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-400 text-sm gap-2">
-        <span className="text-3xl">☕</span>
-        <p>La réunion vient de commencer.</p>
-        <p className="text-xs text-gray-300">Envoie ton premier message pour lancer les échanges.</p>
+      <div className="flex flex-col items-center justify-center h-full gap-6 px-6 py-10">
+        <div className="text-center">
+          <span className="text-4xl">☕</span>
+          <p className="mt-2 text-gray-500 text-sm font-medium">La réunion vient de commencer.</p>
+        </div>
+
+        {!isClosed && (
+          <div className="w-full max-w-md flex flex-col gap-3">
+            {/* Option 1 : lancement automatique */}
+            <button
+              onClick={onAutoLaunch}
+              disabled={!session || !project}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              🚀 Lancer automatiquement
+            </button>
+            <p className="text-xs text-gray-400 text-center -mt-1">
+              Construit le message d'intro depuis l'objectif et le brief du projet.
+            </p>
+
+            {/* Séparateur */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400">ou</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+
+            {/* Option 2 : message manuel */}
+            <p className="text-xs text-gray-400 text-center">
+              Écris ton premier message ci-dessous pour lancer les échanges.
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -230,6 +267,19 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
   return (
     <div className="flex flex-col gap-4 py-4 px-4">
       {messages.map((msg) => {
+        // Décision structurée v3.2
+        if (msg.role === 'system' && msg.type === 'decision') {
+          return (
+            <DecisionCard
+              key={msg.id}
+              message={msg}
+              onAnswer={onAnswerDecision}
+              onDefer={onDeferDecision}
+              disabled={!!pendingDecisionId && pendingDecisionId !== msg.id}
+            />
+          );
+        }
+
         if (msg.role === 'system') {
           return (
             <div key={msg.id} className="flex justify-center">
@@ -241,15 +291,33 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
         }
 
         if (msg.role === 'human') {
+          const hasAttachments = msg.attachments?.length > 0;
           return (
             <div key={msg.id} className="flex justify-end">
-              <div className="max-w-[75%]">
+              <div className="max-w-[75%] space-y-1.5">
+                {/* Pièces jointes */}
+                {hasAttachments && (
+                  <div className="flex gap-2 flex-wrap justify-end">
+                    {msg.attachments.map((a, i) => (
+                      a.isImage && a.dataUrl ? (
+                        <a key={i} href={a.dataUrl} target="_blank" rel="noopener noreferrer" title={a.name}>
+                          <img src={a.dataUrl} alt={a.name} className="w-20 h-20 rounded-xl object-cover border border-blue-200 hover:opacity-90 transition cursor-zoom-in" />
+                        </a>
+                      ) : (
+                        <div key={i} className="flex items-center gap-1.5 bg-blue-100 border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs text-blue-800 max-w-[160px]">
+                          <span>📄</span>
+                          <span className="truncate">{a.name}</span>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                )}
                 <div className={`px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed ${
                   msg.pinned
                     ? 'bg-amber-50 border border-amber-200 text-amber-900'
                     : 'bg-blue-600 text-white'
                 }`}>
-                  {msg.content}
+                  {msg.content || <span className="opacity-60 italic">— fichier joint —</span>}
                 </div>
                 {msg.pinned && (
                   <p className="text-xs text-amber-600 text-right mt-1 flex items-center justify-end gap-1">
@@ -281,7 +349,11 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                 }`}>
                   {msg.content}
                 </div>
-                {isDecision ? (
+                {msg.interrupted ? (
+                  <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+                    ⚠️ Interrompu
+                  </p>
+                ) : isDecision ? (
                   <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                     📌 Décision
                   </p>
@@ -357,6 +429,7 @@ export default function MeetingRoom() {
   const { refreshPanel } = useProjectPanel();
 
   const [session,      setSession]      = useState(null);
+  const [project,      setProject]      = useState(null);
   const [messages,     setMessages]     = useState([]);
   const [activeAgents, setActiveAgents] = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -371,13 +444,22 @@ export default function MeetingRoom() {
   const [streamingText,  setStreamingText]  = useState('');
   const [isStreaming,    setIsStreaming]     = useState(false);
 
+  // Pièces jointes (max 3 par message)
+  const [attachments, setAttachments] = useState([]);
+  const [isDragging,  setIsDragging]  = useState(false);
+  const fileInputRef    = useRef(null);
+  const attachmentsRef  = useRef([]);
+  attachmentsRef.current = attachments;
+
   // Ref pour capturer streamingText dans la closure SSE sans dépendance stale
-  const streamingTextRef = useRef('');
+  const streamingTextRef    = useRef('');
+  const abortControllerRef  = useRef(null);
 
   // ── Scroll du feed ────────────────────────────────────────────────────────
   const feedRef            = useRef(null);
   const initialScrollDone  = useRef(false);
-  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [showNewMessage,  setShowNewMessage]  = useState(false);
+  const [showDecisions,   setShowDecisions]   = useState(false);
 
   // ── États + ref pour le dropdown + Agent ─────────────────────────────────
   const dropdownRef                                 = useRef(null);
@@ -386,12 +468,26 @@ export default function MeetingRoom() {
   const [loadingAvailable,   setLoadingAvailable]   = useState(false);
   const [addingAgentId,      setAddingAgentId]      = useState(null);
 
+  // ── États édition inline objectif + livrable ──────────────────────────────
+  const intentionDropdownRef                            = useRef(null);
+  const [editingTask,           setEditingTask]           = useState(false);
+  const [taskDraft,             setTaskDraft]             = useState('');
+  const [savingTask,            setSavingTask]            = useState(false);
+  const [showIntentionDropdown, setShowIntentionDropdown] = useState(false);
+  const [savingIntention,       setSavingIntention]       = useState(false);
+
   // États suggestions d'agent SSE
-  const [agentSuggestions, setAgentSuggestions] = useState([]);
+  const [agentSuggestions,    setAgentSuggestions]    = useState([]);
+  const agentSuggestionsRef = useRef([]);
+  agentSuggestionsRef.current = agentSuggestions; // sync à chaque rendu pour éviter stale closures
 
   // États épinglage + suggestions d'étape SSE
   const [pinningMessageId, setPinningMessageId] = useState(null);
   const [stepSuggestions,  setStepSuggestions]  = useState([]);
+
+  // ID de la décision en attente (bloque la saisie jusqu'à réponse/report)
+  const [pendingDecisionId,       setPendingDecisionId]       = useState(null);
+  const [panelExpandedDecisionId, setPanelExpandedDecisionId] = useState(null);
 
   // Modal de clôture
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -462,6 +558,17 @@ export default function MeetingRoom() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showAgentDropdown]);
 
+  useEffect(() => {
+    if (!showIntentionDropdown) return;
+    const handler = (e) => {
+      if (intentionDropdownRef.current && !intentionDropdownRef.current.contains(e.target)) {
+        setShowIntentionDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showIntentionDropdown]);
+
   // Ajouter un agent à la session (partagé par dropdown + suggestion cards)
   const handleAddAgent = useCallback(async (agentId) => {
     if (addingAgentId) return;
@@ -492,7 +599,7 @@ export default function MeetingRoom() {
 
   // Inviter l'agent suggéré : cherche dans la lib par nom, sinon affiche formulaire
   const handleInviteSuggested = useCallback(async (idx) => {
-    const s = agentSuggestions[idx];
+    const s = agentSuggestionsRef.current[idx];
     if (!s || s.inviting) return;
     setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: true } : x));
     try {
@@ -507,7 +614,7 @@ export default function MeetingRoom() {
     } catch {
       setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: false } : x));
     }
-  }, [agentSuggestions, projectId, handleAddAgent]);
+  }, [projectId, handleAddAgent]);
 
   const handleDismissSuggestion = useCallback((idx) => {
     setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, dismissed: true } : x));
@@ -515,7 +622,7 @@ export default function MeetingRoom() {
 
   // Créer un nouvel agent depuis la carte de suggestion puis l'inviter
   const handleCreateAndInvite = useCallback(async (idx, form) => {
-    const s = agentSuggestions[idx];
+    const s = agentSuggestionsRef.current[idx];
     if (!s || s.inviting) return;
     setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: true } : x));
     try {
@@ -532,7 +639,7 @@ export default function MeetingRoom() {
     } catch {
       setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: false } : x));
     }
-  }, [agentSuggestions, projectId, handleAddAgent]);
+  }, [projectId, handleAddAgent]);
 
   // Épingler un message comme décision
   const handlePinMessage = useCallback(async (messageId) => {
@@ -549,6 +656,43 @@ export default function MeetingRoom() {
     } catch {}
     setPinningMessageId(null);
   }, [pinningMessageId, projectId, sessionId]);
+
+  // Répondre à une décision
+  const handleAnswerDecision = useCallback(async (messageId, answer) => {
+    try {
+      const { data } = await api.post(
+        `/projects/${projectId}/sessions/${sessionId}/answer-decision`,
+        { messageId, answer, status: 'answered' }
+      );
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === messageId ? { ...m, ...data.message } : m);
+        // Ajouter le message système decision_answer retourné par le serveur
+        return data.systemMessage ? [...updated, data.systemMessage] : updated;
+      });
+    } catch {
+      // Fallback local si l'API échoue
+      setMessages(prev => prev.map(m =>
+        m.id === messageId
+          ? { ...m, status: 'answered', answer, answeredAt: new Date().toISOString() }
+          : m
+      ));
+    }
+    setPendingDecisionId(null);
+  }, [projectId, sessionId]);
+
+  // Reporter une décision
+  const handleDeferDecision = useCallback(async (messageId) => {
+    try {
+      await api.post(
+        `/projects/${projectId}/sessions/${sessionId}/answer-decision`,
+        { messageId, answer: null, status: 'deferred' }
+      );
+    } catch {}
+    setMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, status: 'deferred' } : m
+    ));
+    setPendingDecisionId(null);
+  }, [projectId, sessionId]);
 
   // Ajouter une étape timeline suggérée
   const handleAddStep = useCallback(async (idx, form) => {
@@ -571,55 +715,90 @@ export default function MeetingRoom() {
     setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, dismissed: true } : x));
   }, []);
 
-  // Chargement initial de la session
+  // Chargement initial : session + projet en parallèle
   useEffect(() => {
     setLoading(true);
-    api.get(`/projects/${projectId}/sessions/${sessionId}`)
-      .then(({ data }) => {
-        setSession(data);
-        setMessages(Array.isArray(data.messages) ? data.messages : []);
-        setActiveAgents(Array.isArray(data.activeAgents) ? data.activeAgents : []);
+    Promise.all([
+      api.get(`/projects/${projectId}/sessions/${sessionId}`),
+      api.get(`/projects/${projectId}`),
+    ])
+      .then(([{ data: sessionData }, { data: projectData }]) => {
+        setSession(sessionData);
+        setProject(projectData);
+        setMessages(Array.isArray(sessionData.messages) ? sessionData.messages : []);
+        setActiveAgents(Array.isArray(sessionData.activeAgents) ? sessionData.activeAgents : []);
       })
       .catch(() => setLoadError('Réunion introuvable ou accès refusé.'))
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
 
-  const isClosed = session?.status === 'accepted' || session?.status === 'abandoned';
-  const badge    = STATUS_BADGE[session?.status] || STATUS_BADGE.open;
+  const isClosed       = session?.status === 'accepted' || session?.status === 'abandoned';
+  const badge          = STATUS_BADGE[session?.status] || STATUS_BADGE.open;
+  const decisions            = messages.filter(m => m.type === 'decision');
+  const pendingDecisionCount = decisions.filter(m => m.status === 'pending' || m.status === 'deferred').length;
+  const pendingDecisions     = decisions.filter(m => m.status === 'pending' || m.status === 'deferred');
+  const answeredDecisions    = decisions.filter(m => m.status === 'answered');
+
+  const currentIntention = (() => {
+    const i = session?.intention;
+    if (Array.isArray(i) && i.length > 0) return i[0];
+    try { const p = JSON.parse(i || '[]'); return Array.isArray(p) && p.length > 0 ? p[0] : 'synthesis'; }
+    catch { return 'synthesis'; }
+  })();
+  const intentionMeta = DELIVERABLE_TYPES.find(d => d.id === currentIntention) || DELIVERABLE_TYPES[0];
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
-  const handleSend = useCallback(async () => {
-    const text = inputText.trim();
-    if (!text || isStreaming || isClosed) return;
+  const handleSend = useCallback(async (overrideText) => {
+    const text              = (typeof overrideText === 'string' ? overrideText : inputText).trim();
+    const currentAttachments = attachmentsRef.current;
+    if ((!text && currentAttachments.length === 0) || isStreaming || isClosed || pendingDecisionId) return;
 
     setSendError('');
 
     // Optimistic update : message humain affiché immédiatement
     const humanMsg = {
-      id:        `temp-${Date.now()}`,
-      role:      'human',
-      agentName: null,
-      content:   text,
-      timestamp: new Date().toISOString(),
-      type:      'message',
-      pinned:    false
+      id:          `temp-${Date.now()}`,
+      role:        'human',
+      agentName:   null,
+      content:     text,
+      timestamp:   new Date().toISOString(),
+      type:        'message',
+      pinned:      false,
+      attachments: currentAttachments.length > 0
+        ? currentAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage, dataUrl: a.isImage ? a.dataUrl : null }))
+        : undefined,
     };
     setMessages(prev => [...prev, humanMsg]);
-    setInputText('');
+    if (typeof overrideText !== 'string') setInputText('');
+    setAttachments([]);
     setIsStreaming(true);
     setStreamingAgent(null);
     streamingTextRef.current = '';
     setStreamingText('');
 
+    // Sérialiser les pièces jointes pour l'API
+    const serializedAttachments = currentAttachments.map(a =>
+      a.isImage
+        ? { name: a.name, type: a.type, isImage: true,  base64: a.base64, mediaType: a.type }
+        : { name: a.name, type: a.type, isImage: false, text: a.text }
+    );
+
     const token = localStorage.getItem('token');
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
     try {
       const res = await fetch(
         `/api/projects/${projectId}/sessions/${sessionId}/chat`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
+          body: JSON.stringify({
+            message:     text,
+            attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
+          }),
+          signal: ac.signal,
         }
       );
 
@@ -671,10 +850,20 @@ export default function MeetingRoom() {
               setStreamingText('');
 
             } else if (ev.type === 'decision') {
-              // Mise à jour du type du message (sous-étape 4)
-              setMessages(prev => prev.map(m =>
-                m.id === ev.messageId ? { ...m, type: 'decision' } : m
-              ));
+              // Nouveau format v3.2 : décision structurée avec question + choix
+              setMessages(prev => [...prev, {
+                id:        ev.messageId,
+                role:      'system',
+                type:      'decision',
+                question:  ev.question  || '',
+                choices:   ev.choices   || [],
+                context:   ev.context   || '',
+                status:    'pending',
+                answer:    null,
+                agentName: ev.agentName || '',
+                timestamp: new Date().toISOString(),
+              }]);
+              setPendingDecisionId(ev.messageId);
 
             } else if (ev.type === 'turn_complete') {
               setIsStreaming(false);
@@ -711,13 +900,36 @@ export default function MeetingRoom() {
         }
       }
     } catch (err) {
+      if (err.name === 'AbortError') {
+        // Interruption volontaire : sauvegarder le texte partiel localement
+        const partialText    = streamingTextRef.current;
+        const partialAgent   = streamingAgent;
+        setStreamingAgent(null);
+        streamingTextRef.current = '';
+        setStreamingText('');
+        setIsStreaming(false);
+        setPendingDecisionId(null);
+        if (partialText.trim() && partialAgent) {
+          setMessages(prev => [...prev, {
+            id:          `interrupted-${Date.now()}`,
+            role:        'agent',
+            agentName:   partialAgent,
+            content:     partialText.trim(),
+            timestamp:   new Date().toISOString(),
+            type:        'message',
+            pinned:      false,
+            interrupted: true,
+          }]);
+        }
+        return;
+      }
       setSendError('Connexion interrompue : ' + err.message);
       setStreamingAgent(null);
       streamingTextRef.current = '';
       setStreamingText('');
       setIsStreaming(false);
     }
-  }, [inputText, isStreaming, isClosed, projectId, sessionId]);
+  }, [inputText, isStreaming, isClosed, streamingAgent, pendingDecisionId, projectId, sessionId]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && e.ctrlKey) {
@@ -726,6 +938,82 @@ export default function MeetingRoom() {
     }
     // Entrée seule = nouvelle ligne (comportement textarea par défaut)
   }, [handleSend]);
+
+  const handleAbort = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
+
+  const handleAutoLaunch = useCallback(() => {
+    const brief = project?.brief?.trim() ?? '';
+    const task  = session?.task?.trim()  ?? '';
+    const text  = [
+      `Voici le contexte du projet :\n${brief}`,
+      `Objectif de cette réunion : ${task}`,
+      'Lance la réunion et présente les points à traiter.',
+    ].join('\n\n');
+    handleSend(text);
+  }, [project, session, handleSend]);
+
+  const processFiles = useCallback((fileList) => {
+    const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const MAX = 3;
+    const remaining = MAX - attachmentsRef.current.length;
+    if (remaining <= 0) return;
+
+    const files = Array.from(fileList)
+      .filter(f => ACCEPTED_IMAGE_TYPES.includes(f.type) || f.type.startsWith('text/') || f.type === 'application/json')
+      .slice(0, remaining);
+
+    const promises = files.map(file => new Promise(resolve => {
+      const reader  = new FileReader();
+      const isImage = ACCEPTED_IMAGE_TYPES.includes(file.type);
+      reader.onload  = e => {
+        if (isImage) {
+          const dataUrl = e.target.result;
+          resolve({ name: file.name, type: file.type, size: file.size, isImage: true, dataUrl, base64: dataUrl.split(',')[1] });
+        } else {
+          resolve({ name: file.name, type: file.type, size: file.size, isImage: false, text: e.target.result });
+        }
+      };
+      reader.onerror = () => resolve(null);
+      if (isImage) reader.readAsDataURL(file);
+      else         reader.readAsText(file);
+    }));
+
+    Promise.all(promises).then(results => {
+      setAttachments(prev => [...prev, ...results.filter(Boolean)].slice(0, MAX));
+    });
+  }, []);
+
+  const handleDragOver  = useCallback((e) => { e.preventDefault(); setIsDragging(true);  }, []);
+  const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragging(false); }, []);
+  const handleDrop      = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    processFiles(e.dataTransfer.files);
+  }, [processFiles]);
+
+  const handleSaveTask = useCallback(async () => {
+    if (!taskDraft.trim() || savingTask) return;
+    setSavingTask(true);
+    try {
+      await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { task: taskDraft.trim() });
+      setSession(prev => ({ ...prev, task: taskDraft.trim() }));
+      setEditingTask(false);
+    } catch {}
+    setSavingTask(false);
+  }, [taskDraft, savingTask, projectId, sessionId]);
+
+  const handleSaveIntention = useCallback(async (newType) => {
+    if (savingIntention) return;
+    setSavingIntention(true);
+    setShowIntentionDropdown(false);
+    try {
+      await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { intention: [newType] });
+      setSession(prev => ({ ...prev, intention: [newType] }));
+    } catch {}
+    setSavingIntention(false);
+  }, [savingIntention, projectId, sessionId]);
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
 
@@ -759,24 +1047,178 @@ export default function MeetingRoom() {
         Structure flex colonne qui remplit l'espace disponible dans le main
         (100vh - header ~53px - py-6 top/bottom ~48px)
       */}
-      <div
-        className="flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
-        style={{ height: 'calc(100vh - 10rem)' }}
-      >
+      <div className="flex gap-3" style={{ height: 'calc(100vh - 10rem)' }}>
+
+        {/* ── Panneau Décisions ────────────────────────────────────────── */}
+        {showDecisions && (
+          <div className="w-[280px] shrink-0 flex flex-col bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="shrink-0 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-800">
+                📌 Décisions ({decisions.length})
+              </h2>
+              <button
+                onClick={() => setShowDecisions(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {decisions.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center mt-6">Aucune décision formelle dans cette réunion.</p>
+              ) : (
+                <>
+                  {/* ⏸ À traiter */}
+                  {pendingDecisions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide px-1">
+                        ⏸ À traiter ({pendingDecisions.length})
+                      </p>
+                      {pendingDecisions.map(d => (
+                        <div key={d.id} className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
+                          {panelExpandedDecisionId === d.id ? (
+                            <DecisionCard
+                              message={d}
+                              onAnswer={async (id, ans) => {
+                                await handleAnswerDecision(id, ans);
+                                setPanelExpandedDecisionId(null);
+                              }}
+                              onDefer={async (id) => {
+                                await handleDeferDecision(id);
+                                setPanelExpandedDecisionId(null);
+                              }}
+                            />
+                          ) : (
+                            <>
+                              {d.agentName && (
+                                <p className="text-[10px] text-orange-600 font-semibold">{d.agentName}</p>
+                              )}
+                              <p className="text-xs text-orange-900 leading-snug">{d.question}</p>
+                              {!isClosed && (
+                                <button
+                                  onClick={() => {
+                                    setPanelExpandedDecisionId(d.id);
+                                    setPendingDecisionId(d.id);
+                                  }}
+                                  className="text-xs text-orange-700 font-semibold hover:underline"
+                                >
+                                  Répondre maintenant →
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ✅ Actées */}
+                  {answeredDecisions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wide px-1">
+                        ✅ Actées ({answeredDecisions.length})
+                      </p>
+                      {answeredDecisions.map(d => (
+                        <div key={d.id} className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-1">
+                          {d.agentName && (
+                            <p className="text-[10px] text-green-700 font-semibold">{d.agentName}</p>
+                          )}
+                          <p className="text-xs text-gray-600 italic leading-snug">{d.question}</p>
+                          <p className="text-xs font-semibold text-green-700">→ {d.answer}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Chat principal ────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-w-0">
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="shrink-0 border-b border-gray-100 px-4 py-3 space-y-2">
-          {/* Ligne 1 : retour + titre + statut */}
-          <div className="flex items-center gap-3">
+          {/* Ligne 1 : retour + titre éditable + badges */}
+          <div className="flex items-center gap-2">
             <Link
               to={`/projects/${projectId}`}
               className="text-gray-400 hover:text-gray-600 transition text-sm shrink-0"
             >
               ←
             </Link>
-            <p className="text-sm font-semibold text-gray-800 truncate flex-1" title={session.task}>
-              🎯 {session.task}
-            </p>
+
+            {/* Titre / objectif — éditable si réunion ouverte */}
+            {editingTask ? (
+              <input
+                autoFocus
+                value={taskDraft}
+                onChange={e => setTaskDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter')  { e.preventDefault(); handleSaveTask(); }
+                  if (e.key === 'Escape') setEditingTask(false);
+                }}
+                disabled={savingTask}
+                className="flex-1 text-sm font-semibold text-gray-800 bg-gray-50 border border-blue-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-blue-400 min-w-0"
+              />
+            ) : (
+              <p
+                className={`text-sm font-semibold text-gray-800 truncate flex-1 min-w-0 ${!isClosed ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
+                title={isClosed ? session.task : `${session.task} — cliquer pour modifier`}
+                onClick={() => { if (!isClosed) { setTaskDraft(session.task); setEditingTask(true); } }}
+              >
+                🎯 {session.task}
+              </p>
+            )}
+
+            {/* Badge livrable — dropdown si réunion ouverte */}
+            <div className="relative shrink-0" ref={intentionDropdownRef}>
+              <button
+                onClick={() => { if (!isClosed) setShowIntentionDropdown(v => !v); }}
+                disabled={savingIntention}
+                className={`text-xs font-medium px-2.5 py-1 rounded-full border transition flex items-center gap-1 ${
+                  isClosed
+                    ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-default'
+                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 cursor-pointer'
+                }`}
+              >
+                {intentionMeta.icon} {intentionMeta.label}
+              </button>
+              {showIntentionDropdown && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+                  {DELIVERABLE_TYPES.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => handleSaveIntention(d.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition ${d.id === currentIntention ? 'font-semibold text-blue-600' : 'text-gray-700'}`}
+                    >
+                      <span>{d.icon}</span>
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Badge 📌 Décisions */}
+            <button
+              onClick={() => setShowDecisions(v => !v)}
+              className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border transition flex items-center gap-1.5 ${
+                showDecisions
+                  ? 'bg-amber-200 border-amber-300 text-amber-800'
+                  : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+              }`}
+            >
+              📌 {decisions.length > 0 ? `(${decisions.length})` : ''}
+              {pendingDecisionCount > 0 && (
+                <span className="text-[10px] bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full font-semibold leading-none">
+                  ⏸ {pendingDecisionCount}
+                </span>
+              )}
+            </button>
+
+            {/* Badge statut */}
             <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${badge.cls}`}>
               {badge.label}
             </span>
@@ -866,6 +1308,13 @@ export default function MeetingRoom() {
             onDismissStep={handleDismissStep}
             onPin={handlePinMessage}
             pinningMessageId={pinningMessageId}
+            session={session}
+            project={project}
+            onAutoLaunch={handleAutoLaunch}
+            isClosed={isClosed}
+            pendingDecisionId={pendingDecisionId}
+            onAnswerDecision={handleAnswerDecision}
+            onDeferDecision={handleDeferDecision}
           />
         </div>
 
@@ -899,30 +1348,91 @@ export default function MeetingRoom() {
                   <span>⚠️</span> {sendError}
                 </p>
               )}
-              <div className="flex items-end gap-2">
+              {/* Input fichier caché */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/gif,image/webp,text/*,application/json"
+                className="hidden"
+                onChange={e => { processFiles(e.target.files); e.target.value = ''; }}
+              />
+
+              {/* Bande de prévisualisation */}
+              {attachments.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {attachments.map((a, i) => (
+                    <div key={i} className="relative group">
+                      {a.isImage ? (
+                        <img src={a.dataUrl} alt={a.name} className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+                      ) : (
+                        <div className="flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-gray-700 max-w-[140px]">
+                          <span>📄</span>
+                          <span className="truncate">{a.name}</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gray-600 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Zone drag + saisie */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`flex items-end gap-2 rounded-xl transition-colors ${isDragging ? 'ring-2 ring-blue-400 bg-blue-50 p-1' : ''}`}
+              >
+                {/* Bouton 📎 */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || !!pendingDecisionId || attachments.length >= 3}
+                  title={attachments.length >= 3 ? 'Maximum 3 fichiers atteint' : 'Joindre une image ou un fichier texte'}
+                  className="shrink-0 w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  📎
+                </button>
                 <textarea
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={isStreaming || isClosed}
-                  placeholder={isStreaming ? '✍️ Les agents répondent…' : 'Tape ton message… (Ctrl+Entrée pour envoyer)'}
+                  disabled={isStreaming || !!pendingDecisionId}
+                  placeholder={
+                    isStreaming         ? '✍️ Les agents répondent…'
+                    : pendingDecisionId ? '🤔 Répondez à la décision ci-dessus pour continuer…'
+                    : 'Tape ton message… (Ctrl+Entrée pour envoyer)'
+                  }
                   rows={2}
                   className="flex-1 resize-none px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-400 transition disabled:bg-gray-50 disabled:text-gray-400"
                 />
-                <button
-                  onClick={handleSend}
-                  disabled={!inputText.trim() || isStreaming || isClosed}
-                  className="shrink-0 w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isStreaming
-                    ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : '▶'}
-                </button>
+                {isStreaming ? (
+                  <button
+                    onClick={handleAbort}
+                    className="shrink-0 px-3 h-10 bg-red-500 hover:bg-red-600 rounded-xl flex items-center justify-center text-white text-sm font-medium transition gap-1.5"
+                  >
+                    ⏹ Interrompre
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSend}
+                    disabled={(!inputText.trim() && attachments.length === 0) || !!pendingDecisionId}
+                    className="shrink-0 w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ▶
+                  </button>
+                )}
               </div>
               {/* Bouton Clore la réunion */}
               <button
                 onClick={() => setShowCloseModal(true)}
-                disabled={isStreaming}
+                disabled={isStreaming || !!pendingDecisionId}
                 className="w-full text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 🏁 Clore la réunion
@@ -931,7 +1441,11 @@ export default function MeetingRoom() {
           )}
         </div>
 
+        </div>
+        {/* ── fin chat principal ──────────────────────────────────────── */}
+
       </div>
+      {/* ── fin wrapper flex ────────────────────────────────────────────── */}
     </ProjectLayout>
 
     {/* Modal de clôture v3.0 */}

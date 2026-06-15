@@ -114,6 +114,54 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
         {/* Corps */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
+          {/* Décisions — EN PREMIER */}
+          {(() => {
+            const allDecisions = (Array.isArray(session.messages) ? session.messages : [])
+              .filter(m => m.type === 'decision');
+            const deferred = allDecisions.filter(m => m.status === 'deferred' || m.status === 'pending');
+            const answered = allDecisions.filter(m => m.status === 'answered');
+            if (allDecisions.length === 0) return null;
+            return (
+              <div className="space-y-2">
+                {deferred.length > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-2">
+                    <h3 className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
+                      ⏸ À traiter ({deferred.length})
+                    </h3>
+                    <ul className="space-y-1.5">
+                      {deferred.map((m, i) => (
+                        <li key={m.id || i} className="text-sm text-orange-900 flex items-start gap-2">
+                          <span className="text-orange-400 shrink-0 mt-0.5 font-bold">·</span>
+                          <span className="leading-snug">{m.question}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {answered.length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
+                    <h3 className="text-xs font-semibold text-green-700 uppercase tracking-wide">
+                      ✅ Actées ({answered.length})
+                    </h3>
+                    <ul className="space-y-1.5">
+                      {answered.map((m, i) => (
+                        <li key={m.id || i} className="text-sm text-gray-700 flex items-start gap-2">
+                          <span className="text-green-500 shrink-0 mt-0.5 font-bold">·</span>
+                          <span className="leading-snug">
+                            <span className="text-gray-600">{m.question}</span>
+                            {m.answer && (
+                              <span className="font-semibold text-green-700"> → {m.answer}</span>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Badge livrable + statut */}
           <div className="flex items-center gap-2">
             <span className="text-lg">{meta.icon}</span>
