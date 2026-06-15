@@ -7,10 +7,11 @@ import QuickExportModal from './QuickExportModal';
 
 // ── Configs types (alignés sur intentions v2.1) ───────────────────────────────
 const TYPE_ICON = {
-  synthesis:      '📝',
+  summary:        '📋',
+  synthesis:      '📋',
   memory:         '🧠',
   claude_code:    '💻',
-  timeline_steps: '📋',
+  timeline_steps: '📅',
   stack_check:    '🔧',
   milestone:      '🏁',
   // rétrocompat
@@ -18,17 +19,18 @@ const TYPE_ICON = {
   technical:      '💻',
 };
 const TYPE_LABEL = {
-  synthesis:      'Synthèse',
+  summary:        'Compte-rendu',
+  synthesis:      'Compte-rendu',
   memory:         'Souvenir',
   claude_code:    'Claude Code',
   timeline_steps: 'Étapes',
   stack_check:    'Vérif. stack',
   milestone:      'Jalon',
-  meeting:        'Synthèse',
+  meeting:        'Compte-rendu',
   technical:      'Claude Code',
 };
 
-const TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
+const TYPES = ['summary', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
 
 const STATUS_DOT = {
   pending:     { cls: 'bg-gray-300',  label: 'Pas commencé' },
@@ -545,8 +547,8 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
 
   // Mapping type → intention pour pré-sélection
   const TYPE_TO_INTENTION = {
-    synthesis: 'synthesis', meeting: 'synthesis',
-    memory: 'memory',
+    summary: 'summary', synthesis: 'summary', meeting: 'summary',
+    memory: 'summary',
     claude_code: 'claude_code', technical: 'claude_code',
     timeline_steps: 'timeline_steps',
   };
@@ -555,7 +557,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const handleMilestoneClick = async (m, linked) => {
     const t = m.type;
     // Types qui ouvrent un drawer session
-    if (['synthesis', 'memory', 'timeline_steps', 'meeting'].includes(t)) {
+    if (['summary', 'synthesis', 'memory', 'timeline_steps', 'meeting'].includes(t)) {
       setSessionDrawer({ milestone: m, linked: linked || null, intention: TYPE_TO_INTENTION[t] });
       return;
     }

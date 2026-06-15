@@ -4,15 +4,14 @@ import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import api from '../utils/api';
 
 const DELIVERABLES = [
-  { id: 'synthesis',      icon: '📄', label: 'Synthèse',        desc: 'Compte-rendu structuré de la réunion' },
-  { id: 'memory',         icon: '🧠', label: 'Souvenir',         desc: 'Résumé injecté dans la mémoire projet' },
-  { id: 'claude_code',    icon: '💻', label: 'Claude Code',      desc: 'Prompt prêt pour le développement' },
-  { id: 'timeline_steps', icon: '📅', label: 'Étapes timeline',  desc: 'Nouvelles étapes actionnables' },
+  { id: 'summary',        icon: '📋', label: 'Compte-rendu',    desc: 'Synthèse structurée + mémorisée dans le projet' },
+  { id: 'claude_code',    icon: '💻', label: 'Claude Code',     desc: 'Prompt prêt pour le développement' },
+  { id: 'timeline_steps', icon: '📅', label: 'Étapes timeline', desc: 'Nouvelles étapes actionnables' },
 ];
 
 const MT_MAP = {
-  synthesis: 'synthesis', meeting: 'synthesis',
-  memory: 'memory',
+  summary: 'summary', synthesis: 'summary', meeting: 'summary',
+  memory: 'summary',
   claude_code: 'claude_code', technical: 'claude_code',
   timeline_steps: 'timeline_steps',
 };
@@ -30,7 +29,7 @@ export default function StartMeeting() {
 
   const [task, setTask]               = useState(milestoneTitle);
   const [deliverable, setDeliverable] = useState(
-    () => milestoneType && MT_MAP[milestoneType] ? MT_MAP[milestoneType] : 'synthesis'
+    () => milestoneType && MT_MAP[milestoneType] ? MT_MAP[milestoneType] : 'summary'
   );
 
   const [availableAgents,   setAvailableAgents]   = useState([]);
@@ -87,16 +86,21 @@ export default function StartMeeting() {
     if (!newAgentForm.name.trim() || creatingAgent) return;
     setCreatingAgent(true);
     try {
+      console.log('[handleCreateAgent] POST /agents', { name: newAgentForm.name, role: newAgentForm.role });
       const { data: agent } = await api.post('/agents', {
         name:         newAgentForm.name.trim(),
         role:         newAgentForm.role.trim(),
         systemPrompt: newAgentForm.systemPrompt.trim()
       });
+      console.log('[handleCreateAgent] agent créé', agent.id, agent.name);
       await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'manual' });
+      console.log('[handleCreateAgent] agent lié au projet', projectId);
       setAvailableAgents(prev => [...prev, { ...agent, agentId: agent.id, enabled: true }]);
       setSelectedAgentIds(prev => new Set([...prev, agent.id]));
       setNewAgentForm({ open: false, name: '', role: '', systemPrompt: '' });
-    } catch {}
+    } catch (err) {
+      console.error('[handleCreateAgent] erreur', err.response?.data?.error || err.message);
+    }
     setCreatingAgent(false);
   };
 

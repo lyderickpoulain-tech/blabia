@@ -31,9 +31,10 @@ router.get('/', async (req, res) => {
 // POST /api/agents — créer un agent personnalisé
 router.post('/', async (req, res) => {
   const { name, role, systemPrompt, emoji = '🤖' } = req.body;
-  if (!name?.trim())         return res.status(400).json({ error: 'Le nom est requis' });
-  if (!role?.trim())         return res.status(400).json({ error: 'Le rôle est requis' });
-  if (!systemPrompt?.trim()) return res.status(400).json({ error: 'Le prompt système est requis' });
+  if (!name?.trim()) return res.status(400).json({ error: 'Le nom est requis' });
+  if (!role?.trim()) return res.status(400).json({ error: 'Le rôle est requis' });
+  // systemPrompt optionnel — génère un prompt par défaut si absent
+  const effectivePrompt = systemPrompt?.trim() || `Tu es ${name.trim()}, ${role.trim()}. Contribue de façon concise et pertinente.`;
 
   try {
     const [agent] = await db('Agent')
@@ -41,7 +42,7 @@ router.post('/', async (req, res) => {
         id: randomUUID(),
         name: name.trim(),
         role: role.trim(),
-        systemPrompt: systemPrompt.trim(),
+        systemPrompt: effectivePrompt,
         emoji: emoji.trim() || '🤖',
         isDefault: false,
         userId: req.user.id,

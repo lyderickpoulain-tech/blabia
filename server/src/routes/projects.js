@@ -463,7 +463,8 @@ router.get('/:id/agents', async (req, res) => {
             .andOn('ProjectAgent.projectId', '=', db.raw('?', [req.params.id]));
       })
       .where(function () {
-        this.where('Agent.isDefault', true).orWhere('Agent.userId', req.user.id);
+        // Agents défaut toujours visibles + agents personnels uniquement si rattachés à CE projet
+        this.where('Agent.isDefault', true).orWhereNotNull('ProjectAgent.id');
       })
       .orderByRaw('"ProjectAgent"."displayOrder" ASC NULLS LAST, "Agent"."isDefault" DESC, "Agent"."createdAt" ASC');
 
@@ -637,6 +638,31 @@ Retourne UNIQUEMENT du JSON valide sans markdown :
     res.json({ steps: parsed.steps || [] });
   } catch (err) {
     console.error('[generate-timeline]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/projects/:id/meeting-context
+router.get('/:id/meeting-context', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const pastCodePrompts = await db('Session')
+      .select(['task', 'summary'])
+      .where({ projectId: req.params.id, status: 'accepted', hasCode: true })
+      .whereNotNull('summary')
+      .orderBy('createdAt', 'desc')
+      .limit(3);
+
+    res.json({
+      brief:           project.brief   || '',
+      context:         project.context || '',
+      pastCodePrompts: pastCodePrompts.map(s => ({ task: s.task, summary: s.summary })),
+    });
+  } catch (err) {
+    console.error('[projects/:id/meeting-context]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

@@ -516,14 +516,12 @@ router.post('/', async (req, res) => {
       .where('ProjectAgent.enabled', true)
       .orderBy('ProjectAgent.displayOrder', 'asc');
 
-    // Fallback pour les projets sans configuration ProjectAgent
+    // Fallback : agents défaut uniquement si aucun agent rattaché au projet
     if (availableAgents.length === 0) {
       availableAgents = await db('Agent')
         .select(['id', 'name', 'role', 'systemPrompt', 'emoji', 'isDefault'])
-        .where(function () {
-          this.where({ isDefault: true }).orWhere({ userId: req.user.id });
-        })
-        .orderBy([{ column: 'isDefault', order: 'desc' }, { column: 'createdAt', order: 'asc' }]);
+        .where({ isDefault: true })
+        .orderBy('createdAt', 'asc');
     }
 
     if (availableAgents.length === 0) {
@@ -1337,13 +1335,19 @@ router.post('/suggest-agents', async (req, res) => {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
+    // Agents défaut + agents personnels rattachés à CE projet uniquement
     const agents = await db('Agent')
-      .select('id', 'name', 'role', 'emoji')
+      .select('Agent.id', 'Agent.name', 'Agent.role', 'Agent.emoji')
+      .leftJoin('ProjectAgent', function () {
+        this.on('ProjectAgent.agentId', '=', 'Agent.id')
+            .andOn('ProjectAgent.projectId', '=', db.raw('?', [projectId]));
+      })
       .where(function () {
-        this.where({ isDefault: true }).orWhere({ userId: req.user.id });
-      });
+        this.where('Agent.isDefault', true).orWhereNotNull('ProjectAgent.id');
+      })
+      .orderByRaw('"Agent"."isDefault" DESC, "Agent"."createdAt" ASC');
 
-    const agentsList = agents.map(a => `- ${a.name} (${a.role})`).join('\n');
+    const agentsList = agents.map(a => `- ${a.name} : ${a.role}`).join('\n');
 
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('timeout')), 10_000)
@@ -1351,15 +1355,21 @@ router.post('/suggest-agents', async (req, res) => {
     const apiPromise = anthropic.messages.create({
       model: MODEL,
       max_tokens: 500,
-      system: 'Tu sélectionnes des agents IA pertinents. Réponds UNIQUEMENT en JSON valide.',
+      system: 'Tu sélectionnes des agents IA pertinents pour une réunion. Réponds UNIQUEMENT en JSON valide.',
       messages: [{
         role: 'user',
-        content: `Tâche : "${task.trim()}"${milestoneType ? `\nType d'étape : ${milestoneType}` : ''}
+        content: `Tu dois suggérer des agents pertinents pour cette réunion spécifique.
 
-Agents disponibles :
+Projet : "${project.name}"
+Brief : "${project.brief?.trim() || 'non défini'}"
+Objectif de la réunion : "${task.trim()}"${milestoneType ? `\nType d'étape : ${milestoneType}` : ''}
+
+Agents disponibles pour CE projet :
 ${agentsList}
 
-Sélectionne 2 à 4 agents pertinents. Retourne ce JSON :
+Sélectionne 2 à 4 agents parmi la liste ci-dessus qui sont DIRECTEMENT utiles pour atteindre l'objectif de cette réunion.
+Ne sélectionne PAS un agent simplement parce qu'il existe.
+Retourne UNIQUEMENT ce JSON :
 {"suggestions":[{"name":"NomExact","reason":"Courte raison (10 mots max)"}]}`
       }]
     });
@@ -1800,10 +1810,10 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
   const { deliverableType } = req.body;
   const isAdmin = req.user.role === 'admin';
 
-  const VALID_TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps'];
+  const VALID_TYPES = ['synthesis', 'memory', 'summary', 'claude_code', 'timeline_steps'];
   if (!VALID_TYPES.includes(deliverableType)) {
     return res.status(400).json({
-      error: 'deliverableType invalide — valeurs acceptées : synthesis, memory, claude_code, timeline_steps'
+      error: 'deliverableType invalide — valeurs acceptées : summary, synthesis, memory, claude_code, timeline_steps'
     });
   }
 
@@ -1836,7 +1846,8 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
 
     // ── Génération selon le type ──────────────────────────────────────────────
 
-    if (deliverableType === 'synthesis') {
+    // ── Compte-rendu : synthesis (legacy) | memory (legacy) | summary (v3.3) ──
+    if (['synthesis', 'memory', 'summary'].includes(deliverableType)) {
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 4000,
@@ -1848,34 +1859,21 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       });
       const content = response.content[0].text.trim();
       await db('Session').where({ id: sessionId }).update({ summary: content });
-      return res.json({ deliverableType, content });
-    }
 
-    if (deliverableType === 'memory') {
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 512,
-        system: 'Tu génères des résumés concis pour la mémoire d\'un projet IA. Réponds directement en français, sans introduction.',
-        messages: [{
-          role: 'user',
-          content: `Génère un résumé mémorisable de cette réunion (max 200 mots).\nInclure : décisions clés, points importants, éléments à retenir pour les prochaines sessions.\n\n${sessionContext}`
-        }]
-      });
-      const content = response.content[0].text.trim();
-      await db('Session').where({ id: sessionId }).update({ summary: content });
-
-      // Injecter dans la mémoire du projet (même logique que updateProjectContext)
-      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const entry = `[Réunion du ${date}]\n${content}`;
-      const current = project.context || '';
-      let newContext = (current ? current + '\n---\n' : '') + entry;
-      const MAX_CHARS = 10000;
-      if (newContext.length > MAX_CHARS) {
-        const parts = newContext.split('\n---\n');
-        while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) parts.shift();
-        newContext = parts.join('\n---\n');
+      // Auto-injection dans project.context pour summary (et memory legacy)
+      if (deliverableType === 'summary' || deliverableType === 'memory') {
+        const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const entry = `[Réunion du ${date} — ${session.task}]\n${content}`;
+        const current = project.context || '';
+        let newContext = (current ? current + '\n---\n' : '') + entry;
+        const MAX_CHARS = 10000;
+        if (newContext.length > MAX_CHARS) {
+          const parts = newContext.split('\n---\n');
+          while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) parts.shift();
+          newContext = parts.join('\n---\n');
+        }
+        await db('Project').where({ id: projectId }).update({ context: newContext, updatedAt: new Date() });
       }
-      await db('Project').where({ id: projectId }).update({ context: newContext, updatedAt: new Date() });
 
       return res.json({ deliverableType, content });
     }
@@ -2097,6 +2095,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       : 'non défini';
 
     // 2. Tour de chaque agent actif
+    let decisionEmitted = false;
     for (const agent of activeAgents) {
       if (abortController.signal.aborted) break;
 
@@ -2135,15 +2134,22 @@ Maximum un marqueur de chaque type par réponse.`;
 
       let userMessage;
       if (hasAttachments) {
-        const contentBlocks = [{ type: 'text', text: baseText }];
-        for (const att of rawAttachments) {
-          if (att.isImage && att.base64 && att.mediaType) {
-            contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: att.mediaType, data: att.base64 } });
-          } else if (!att.isImage && att.text) {
-            contentBlocks.push({ type: 'text', text: `[Fichier texte joint : ${att.name}]\n${att.text}` });
+        try {
+          const contentBlocks = [{ type: 'text', text: baseText }];
+          for (const att of rawAttachments) {
+            if (att.isImage && att.base64 && att.mediaType) {
+              const data = att.base64.replace(/^data:[^;]+;base64,/, '');
+              contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: att.mediaType, data } });
+            } else if (!att.isImage && att.text) {
+              contentBlocks.push({ type: 'text', text: `[Fichier texte joint : ${att.name}]\n${att.text}` });
+            }
           }
+          userMessage = contentBlocks;
+        } catch (attErr) {
+          console.error('[sessions] erreur construction pièces jointes:', attErr.message);
+          send('error', { message: 'Erreur lors du traitement des pièces jointes.' });
+          userMessage = baseText;
         }
-        userMessage = contentBlocks;
       } else {
         userMessage = baseText;
       }
@@ -2229,8 +2235,11 @@ Maximum un marqueur de chaque type par réponse.`;
             context:   decisionMsg.context,
             agentName: agent.name,
           });
+          decisionEmitted = true;
         }
       }
+
+      if (decisionEmitted) break; // Un seul agent peut émettre une décision par tour
 
       if (suggestAgtMatch) {
         const parts = suggestAgtMatch[1].split(',').map(p => p.trim());
@@ -2251,7 +2260,7 @@ Maximum un marqueur de chaque type par réponse.`;
 
     // 3. Fin du tour : màj timestamp projet + signal turn_complete
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
-    send('turn_complete', { sessionId });
+    send('turn_complete', { sessionId, pendingDecision: decisionEmitted });
     res.end();
 
   } catch (err) {

@@ -223,7 +223,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
 
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
-function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, onPin, pinningMessageId, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision }) {
+function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision }) {
 
   if (messages.length === 0 && !streamingAgent) {
     return (
@@ -357,17 +357,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                   <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                     📌 Décision
                   </p>
-                ) : (
-                  <button
-                    onClick={() => onPin(msg.id)}
-                    disabled={pinningMessageId === msg.id}
-                    className="opacity-0 group-hover:opacity-100 mt-1 text-xs text-gray-400 hover:text-amber-500 transition flex items-center gap-1 disabled:opacity-40"
-                  >
-                    {pinningMessageId === msg.id
-                      ? <span className="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                      : '📌 Épingler'}
-                  </button>
-                )}
+                ) : null}
               </div>
             </div>
           );
@@ -467,6 +457,7 @@ export default function MeetingRoom() {
   const [availableForAdd,    setAvailableForAdd]    = useState([]);
   const [loadingAvailable,   setLoadingAvailable]   = useState(false);
   const [addingAgentId,      setAddingAgentId]      = useState(null);
+  const [dropdownCreateForm, setDropdownCreateForm] = useState({ open: false, name: '', role: '', creating: false, error: '' });
 
   // ── États édition inline objectif + livrable ──────────────────────────────
   const intentionDropdownRef                            = useRef(null);
@@ -481,13 +472,15 @@ export default function MeetingRoom() {
   const agentSuggestionsRef = useRef([]);
   agentSuggestionsRef.current = agentSuggestions; // sync à chaque rendu pour éviter stale closures
 
-  // États épinglage + suggestions d'étape SSE
-  const [pinningMessageId, setPinningMessageId] = useState(null);
-  const [stepSuggestions,  setStepSuggestions]  = useState([]);
+  // États suggestions d'étape SSE
+  const [stepSuggestions, setStepSuggestions] = useState([]);
 
   // ID de la décision en attente (bloque la saisie jusqu'à réponse/report)
   const [pendingDecisionId,       setPendingDecisionId]       = useState(null);
   const [panelExpandedDecisionId, setPanelExpandedDecisionId] = useState(null);
+  const [decisionQueue,           setDecisionQueue]           = useState([]);
+  const pendingDecisionIdRef = useRef(null);
+  pendingDecisionIdRef.current = pendingDecisionId; // sync pour accès dans les callbacks SSE
 
   // Modal de clôture
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -597,6 +590,26 @@ export default function MeetingRoom() {
     }
   }, [addingAgentId, projectId, sessionId]);
 
+  // Créer un agent depuis le dropdown + Agent et l'ajouter à la réunion
+  const handleDropdownCreateAgent = useCallback(async () => {
+    const { name, role } = dropdownCreateForm;
+    if (!name.trim() || !role.trim()) return;
+    setDropdownCreateForm(p => ({ ...p, creating: true, error: '' }));
+    try {
+      console.log('[dropdownCreate] POST /agents', { name, role });
+      const { data: agent } = await api.post('/agents', { name: name.trim(), role: role.trim() });
+      console.log('[dropdownCreate] agent créé', agent.id, agent.name);
+      await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'manual' });
+      console.log('[dropdownCreate] agent lié au projet', projectId);
+      await handleAddAgent(agent.id);
+      setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '' });
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Erreur';
+      console.error('[dropdownCreate] erreur', msg);
+      setDropdownCreateForm(p => ({ ...p, creating: false, error: msg }));
+    }
+  }, [dropdownCreateForm, projectId, handleAddAgent]);
+
   // Inviter l'agent suggéré : cherche dans la lib par nom, sinon affiche formulaire
   const handleInviteSuggested = useCallback(async (idx) => {
     const s = agentSuggestionsRef.current[idx];
@@ -626,36 +639,24 @@ export default function MeetingRoom() {
     if (!s || s.inviting) return;
     setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: true } : x));
     try {
+      console.log('[handleCreateAndInvite] POST /agents', { name: form.name, role: form.role });
       const { data: agent } = await api.post('/agents', {
         name:         form.name.trim(),
         role:         form.role.trim(),
         systemPrompt: form.systemPrompt.trim()
       });
+      console.log('[handleCreateAndInvite] agent créé', agent.id, agent.name);
       await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'suggestion' });
+      console.log('[handleCreateAndInvite] agent lié au projet', projectId);
       await handleAddAgent(agent.id);
       setAgentSuggestions(prev => prev.map((x, i) =>
         i === idx ? { ...x, invited: true, inviting: false, showCreate: false } : x
       ));
-    } catch {
+    } catch (err) {
+      console.error('[handleCreateAndInvite] erreur', err.response?.data?.error || err.message);
       setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: false } : x));
     }
   }, [projectId, handleAddAgent]);
-
-  // Épingler un message comme décision
-  const handlePinMessage = useCallback(async (messageId) => {
-    if (pinningMessageId) return;
-    setPinningMessageId(messageId);
-    try {
-      await api.post(`/projects/${projectId}/sessions/${sessionId}/pin-message`, {
-        messageId,
-        type: 'decision'
-      });
-      setMessages(prev => prev.map(m =>
-        m.id === messageId ? { ...m, pinned: true, type: 'decision' } : m
-      ));
-    } catch {}
-    setPinningMessageId(null);
-  }, [pinningMessageId, projectId, sessionId]);
 
   // Répondre à une décision
   const handleAnswerDecision = useCallback(async (messageId, answer) => {
@@ -678,6 +679,14 @@ export default function MeetingRoom() {
       ));
     }
     setPendingDecisionId(null);
+    // Dépiler la prochaine décision en attente si elle existe
+    setDecisionQueue(prev => {
+      if (prev.length > 0) {
+        setPendingDecisionId(prev[0].messageId);
+        return prev.slice(1);
+      }
+      return prev;
+    });
   }, [projectId, sessionId]);
 
   // Reporter une décision
@@ -692,6 +701,14 @@ export default function MeetingRoom() {
       m.id === messageId ? { ...m, status: 'deferred' } : m
     ));
     setPendingDecisionId(null);
+    // Dépiler la prochaine décision en attente si elle existe
+    setDecisionQueue(prev => {
+      if (prev.length > 0) {
+        setPendingDecisionId(prev[0].messageId);
+        return prev.slice(1);
+      }
+      return prev;
+    });
   }, [projectId, sessionId]);
 
   // Ajouter une étape timeline suggérée
@@ -863,7 +880,17 @@ export default function MeetingRoom() {
                 agentName: ev.agentName || '',
                 timestamp: new Date().toISOString(),
               }]);
-              setPendingDecisionId(ev.messageId);
+              // Interrompre les agents encore en streaming
+              abortControllerRef.current?.abort();
+              // File d'attente si une autre décision est déjà ouverte
+              if (pendingDecisionIdRef.current) {
+                setDecisionQueue(prev => [...prev, {
+                  messageId: ev.messageId, question: ev.question || '',
+                  choices: ev.choices || [], context: ev.context || '', agentName: ev.agentName || '',
+                }]);
+              } else {
+                setPendingDecisionId(ev.messageId);
+              }
 
             } else if (ev.type === 'turn_complete') {
               setIsStreaming(false);
@@ -943,16 +970,31 @@ export default function MeetingRoom() {
     abortControllerRef.current?.abort();
   }, []);
 
-  const handleAutoLaunch = useCallback(() => {
-    const brief = project?.brief?.trim() ?? '';
-    const task  = session?.task?.trim()  ?? '';
-    const text  = [
-      `Voici le contexte du projet :\n${brief}`,
-      `Objectif de cette réunion : ${task}`,
-      'Lance la réunion et présente les points à traiter.',
-    ].join('\n\n');
-    handleSend(text);
-  }, [project, session, handleSend]);
+  const handleAutoLaunch = useCallback(async () => {
+    const task = session?.task?.trim() ?? '';
+    try {
+      const { data } = await api.get(`/projects/${projectId}/meeting-context`);
+      const parts = [];
+      if (data.brief)   parts.push(`Brief du projet :\n${data.brief}`);
+      if (data.context) parts.push(`Contexte projet :\n${data.context}`);
+      if (data.pastCodePrompts?.length > 0) {
+        const prompts = data.pastCodePrompts
+          .map((p, i) => `Réunion précédente ${i + 1} — ${p.task} :\n${p.summary}`)
+          .join('\n\n');
+        parts.push(`Prompts Claude Code des dernières réunions :\n${prompts}`);
+      }
+      parts.push(`Objectif de cette réunion : ${task}`);
+      parts.push('Lance la réunion et présente les points à traiter.');
+      handleSend(parts.join('\n\n'));
+    } catch {
+      const brief = project?.brief?.trim() ?? '';
+      handleSend([
+        `Voici le contexte du projet :\n${brief}`,
+        `Objectif de cette réunion : ${task}`,
+        'Lance la réunion et présente les points à traiter.',
+      ].join('\n\n'));
+    }
+  }, [projectId, project, session, handleSend]);
 
   const processFiles = useCallback((fileList) => {
     const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -975,14 +1017,16 @@ export default function MeetingRoom() {
           resolve({ name: file.name, type: file.type, size: file.size, isImage: false, text: e.target.result });
         }
       };
-      reader.onerror = () => resolve(null);
+      reader.onerror = () => resolve({ name: file.name, error: true });
       if (isImage) reader.readAsDataURL(file);
       else         reader.readAsText(file);
     }));
 
     Promise.all(promises).then(results => {
-      setAttachments(prev => [...prev, ...results.filter(Boolean)].slice(0, MAX));
-    });
+      const failed = results.filter(r => r?.error);
+      if (failed.length > 0) setSendError(`Impossible de lire : ${failed.map(f => f.name).join(', ')}`);
+      setAttachments(prev => [...prev, ...results.filter(r => r && !r.error)].slice(0, MAX));
+    }).catch(() => setSendError('Erreur lors de la lecture des fichiers'));
   }, []);
 
   const handleDragOver  = useCallback((e) => { e.preventDefault(); setIsDragging(true);  }, []);
@@ -1259,31 +1303,79 @@ export default function MeetingRoom() {
                         Tous les agents du projet sont déjà dans la réunion.
                       </p>
                     ) : (
-                      <ul className="py-1 max-h-48 overflow-y-auto">
-                        {availableForAdd.map(a => {
-                          const id = a.agentId || a.id;
-                          return (
-                            <li key={id}>
-                              <button
-                                onClick={() => handleAddAgent(id)}
-                                disabled={addingAgentId === id}
-                                className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 text-left transition disabled:opacity-50"
-                              >
-                                <span className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-sm shrink-0">
-                                  {a.emoji || a.name?.[0] || '?'}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-800 truncate">{a.name}</p>
-                                  <p className="text-xs text-gray-400 truncate">{a.role}</p>
-                                </div>
-                                {addingAgentId === id && (
-                                  <span className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
-                                )}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                      <>
+                        <ul className="py-1 max-h-40 overflow-y-auto">
+                          {availableForAdd.map(a => {
+                            const id = a.agentId || a.id;
+                            return (
+                              <li key={id}>
+                                <button
+                                  onClick={() => handleAddAgent(id)}
+                                  disabled={addingAgentId === id}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 text-left transition disabled:opacity-50"
+                                >
+                                  <span className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-sm shrink-0">
+                                    {a.emoji || a.name?.[0] || '?'}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-800 truncate">{a.name}</p>
+                                    <p className="text-xs text-gray-400 truncate">{a.role}</p>
+                                  </div>
+                                  {addingAgentId === id && (
+                                    <span className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                                  )}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {/* Formulaire création inline */}
+                        <div className="border-t border-gray-100">
+                          {dropdownCreateForm.open ? (
+                            <div className="p-2 space-y-1.5">
+                              <input
+                                autoFocus
+                                type="text" placeholder="Nom de l'agent"
+                                value={dropdownCreateForm.name}
+                                onChange={e => setDropdownCreateForm(p => ({ ...p, name: e.target.value }))}
+                                className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+                              />
+                              <input
+                                type="text" placeholder="Rôle"
+                                value={dropdownCreateForm.role}
+                                onChange={e => setDropdownCreateForm(p => ({ ...p, role: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') handleDropdownCreateAgent(); }}
+                                className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+                              />
+                              {dropdownCreateForm.error && (
+                                <p className="text-[10px] text-red-500">{dropdownCreateForm.error}</p>
+                              )}
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={handleDropdownCreateAgent}
+                                  disabled={!dropdownCreateForm.name.trim() || !dropdownCreateForm.role.trim() || dropdownCreateForm.creating}
+                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
+                                >
+                                  {dropdownCreateForm.creating ? '…' : 'Créer et inviter'}
+                                </button>
+                                <button
+                                  onClick={() => setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '' })}
+                                  className="text-xs text-gray-400 hover:text-gray-600 px-2"
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDropdownCreateForm(p => ({ ...p, open: true }))}
+                              className="w-full text-xs text-gray-400 hover:text-blue-600 hover:bg-gray-50 py-2 px-3 text-left transition"
+                            >
+                              + Créer un agent…
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -1306,8 +1398,6 @@ export default function MeetingRoom() {
             stepSuggestions={stepSuggestions}
             onAddStep={handleAddStep}
             onDismissStep={handleDismissStep}
-            onPin={handlePinMessage}
-            pinningMessageId={pinningMessageId}
             session={session}
             project={project}
             onAutoLaunch={handleAutoLaunch}

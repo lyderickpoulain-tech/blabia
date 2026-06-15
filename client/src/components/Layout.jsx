@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { APP_VERSION, APP_BUILD } from '../version';
 
 export default function Layout({ children, wide = false }) {
   const { user, logout } = useAuth();
@@ -51,6 +52,10 @@ export default function Layout({ children, wide = false }) {
       <main className={`flex-1 w-full mx-auto px-4 py-6 ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
         {children}
       </main>
+
+      <footer className="text-center py-2 text-[10px] text-gray-300 select-none">
+        BlabIA v{APP_VERSION} — {APP_BUILD}
+      </footer>
     </div>
   );
 }

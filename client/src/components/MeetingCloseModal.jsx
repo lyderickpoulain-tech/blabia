@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import api from '../utils/api';
 
 const DELIVERABLE_META = {
-  synthesis:      { icon: '📄', label: 'Synthèse',          editable: false, code: false, list: false },
-  memory:         { icon: '🧠', label: 'Souvenir projet',    editable: true,  code: false, list: false },
+  summary:        { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
+  synthesis:      { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
+  memory:         { icon: '🧠', label: 'Souvenir projet',   editable: true,  code: false, list: false },
   claude_code:    { icon: '💻', label: 'Prompt Claude Code', editable: false, code: true,  list: false },
   timeline_steps: { icon: '📅', label: 'Étapes timeline',   editable: false, code: false, list: true  },
 };
@@ -11,8 +12,8 @@ const DELIVERABLE_META = {
 export default function MeetingCloseModal({ session, projectId, onClose, onClosed }) {
   const intention = Array.isArray(session.intention) && session.intention.length > 0
     ? session.intention[0]
-    : 'synthesis';
-  const meta = DELIVERABLE_META[intention] || DELIVERABLE_META.synthesis;
+    : 'summary';
+  const meta = DELIVERABLE_META[intention] || DELIVERABLE_META.summary;
 
   const [generating,     setGenerating]     = useState(false);
   const [generated,      setGenerated]      = useState(false);
