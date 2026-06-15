@@ -244,19 +244,22 @@ router.patch('/:id/milestones/:mid/checklist', async (req, res) => {
 // DELETE /api/projects/:id/milestones/:mid
 router.delete('/:id/milestones/:mid', async (req, res) => {
   const isAdmin = req.user.role === 'admin';
+  const { id: projectId, mid: milestoneId } = req.params;
+  console.log('[milestones DELETE] projectId:', projectId, 'milestoneId:', milestoneId, 'userId:', req.user.id);
   try {
-    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    const project = await findProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
-    const deleted = await db('Milestone')
-      .where({ id: req.params.mid, projectId: req.params.id })
-      .delete();
+    const [deleted] = await db('Milestone')
+      .where({ id: milestoneId, projectId })
+      .delete()
+      .returning(['id']);
     if (!deleted) return res.status(404).json({ error: 'Jalon introuvable' });
 
     res.json({ message: 'Jalon supprimé' });
   } catch (err) {
-    console.error('[milestones/:mid DELETE]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('[milestones/:mid DELETE] ERREUR:', err.message, '| code:', err.code, '| detail:', err.detail);
+    res.status(500).json({ error: err.message || 'Erreur serveur' });
   }
 });
 

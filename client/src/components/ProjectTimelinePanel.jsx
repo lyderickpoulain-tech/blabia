@@ -636,8 +636,9 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
       await api.delete(`/projects/${projectId}/milestones/${milestoneId}`);
       loadMilestones();
     } catch (err) {
-      console.error('[deleteM]', err.message);
-      alert('Erreur lors de la suppression de l\'étape');
+      const msg = err.response?.data?.error || err.message || 'Erreur inconnue';
+      console.error('[deleteM]', msg, err.response?.status);
+      alert(`Erreur lors de la suppression : ${msg}`);
     }
   }, [projectId, loadMilestones]);
 
