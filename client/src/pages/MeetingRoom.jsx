@@ -481,6 +481,7 @@ export default function MeetingRoom() {
   const [decisionQueue,           setDecisionQueue]           = useState([]);
   const pendingDecisionIdRef = useRef(null);
   pendingDecisionIdRef.current = pendingDecisionId; // sync pour accès dans les callbacks SSE
+  const handleSendRef = useRef(null); // ref pour éviter la TDZ (handleSend déclaré après)
 
   // Modal de clôture
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -690,10 +691,10 @@ export default function MeetingRoom() {
       return prev;
     });
     if (queueEmpty) {
-      // Relancer le tour des agents : ils verront la decision_answer dans l'historique
-      handleSend('', { resume: true });
+      // Relancer le tour des agents via ref (handleSend déclaré après → évite TDZ)
+      handleSendRef.current?.('', { resume: true });
     }
-  }, [projectId, sessionId, handleSend]);
+  }, [projectId, sessionId]);
 
   // Reporter une décision
   const handleDeferDecision = useCallback(async (messageId) => {
@@ -971,6 +972,7 @@ export default function MeetingRoom() {
       setIsStreaming(false);
     }
   }, [inputText, isStreaming, isClosed, streamingAgent, pendingDecisionId, projectId, sessionId]);
+  handleSendRef.current = handleSend; // toujours à jour après chaque render
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && e.ctrlKey) {
