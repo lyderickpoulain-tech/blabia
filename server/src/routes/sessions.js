@@ -2049,6 +2049,12 @@ async function orchestrate({ session, project, messages, activeAgents,
     ? agentsForSelection.find(a => a.id === lastAgentId)?.name
     : null;
 
+  const lastMsg      = messages[messages.length - 1];
+  const lastIsHuman  = lastMsg?.role === 'human';
+  const humanPriorityNote = lastIsHuman
+    ? `\n⚠️ PRIORITÉ ABSOLUE : Le dernier message dans l'historique est un message humain ("${(lastMsg.content || '').slice(0, 120)}"). L'agent le plus pertinent pour répondre directement à CE message doit prendre la parole en premier.\n`
+    : '';
+
   const prompt = `Tu es l'orchestrateur d'une réunion IA.
 
 Objectif de la réunion : "${session.task}"
@@ -2058,12 +2064,12 @@ Agents disponibles :
 ${agentList}
 
 ${blockedAgent ? `⚠️ ${blockedAgent} a déjà parlé ${consecutiveCount} fois de suite. Ne le sélectionne PAS.` : ''}
-
+${humanPriorityNote}
 Derniers échanges :
 ${recentMessages || '(début de réunion)'}
 
 Décide maintenant :
-1. Quel agent doit prendre la parole ? (numéro de 1 à ${activeAgents.length})
+1. Quel agent doit prendre la parole ? (numéro de 1 à ${agentsForSelection.length})
 2. Pourquoi ? (1 phrase courte)
 3. La réunion doit-elle se clore ? (oui/non) — seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points
 
@@ -2194,7 +2200,9 @@ router.post('/:sessionId/chat', async (req, res) => {
       await appendMessageEntry(sessionId, humanMsg);
     }
 
-    // Recharger l'historique complet (inclut le message qu'on vient d'ajouter)
+    // Recharger depuis la DB : inclut le message humain qu'on vient d'ajouter ET
+    // le message agent interrompu sauvegardé par l'AbortError catch du tour précédent.
+    // Ce rechargement doit impérativement précéder le premier appel à orchestrate().
     const [freshSession] = await db('Session')
       .select('messages', 'task', 'intention')
       .where({ id: sessionId })
