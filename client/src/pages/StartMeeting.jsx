@@ -16,6 +16,34 @@ const MT_MAP = {
   timeline_steps: 'timeline_steps',
 };
 
+function AgentScopeSelector({ scope, onChange, size = 'sm' }) {
+  return (
+    <div className="space-y-1">
+      <p className={`${size === 'xs' ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500`}>Disponibilité :</p>
+      <div className="flex flex-col gap-1">
+        {[
+          { value: 'project', label: 'Pour ce projet uniquement', desc: null },
+          { value: 'global',  label: 'Enregistrer dans BlabIA',   desc: 'Disponible dans tous vos projets' },
+        ].map(opt => (
+          <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              value={opt.value}
+              checked={scope === opt.value}
+              onChange={() => onChange(opt.value)}
+              className="mt-0.5 shrink-0 accent-blue-600"
+            />
+            <div>
+              <span className={`${size === 'xs' ? 'text-[11px]' : 'text-xs'} font-medium text-gray-700`}>{opt.label}</span>
+              {opt.desc && <p className="text-[10px] text-gray-400 leading-tight">{opt.desc}</p>}
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function StartMeeting() {
   const { id: projectId } = useParams();
   const location = useLocation();
@@ -36,7 +64,8 @@ export default function StartMeeting() {
   const [selectedAgentIds,  setSelectedAgentIds]  = useState(new Set());
   const [agentsLoading,     setAgentsLoading]     = useState(true);
   const [suggestingAgents,  setSuggestingAgents]  = useState(false);
-  const [newAgentForm,      setNewAgentForm]      = useState({ open: false, name: '', role: '', systemPrompt: '' });
+  const [suggestionReasons, setSuggestionReasons] = useState({});
+  const [newAgentForm,      setNewAgentForm]      = useState({ open: false, name: '', role: '', systemPrompt: '', scope: 'project' });
   const [creatingAgent,     setCreatingAgent]     = useState(false);
   const [starting,          setStarting]          = useState(false);
   const [error,             setError]             = useState('');
@@ -69,7 +98,10 @@ export default function StartMeeting() {
         task: taskValue,
         ...(milType ? { milestoneType: milType } : {})
       });
-      if (data.length > 0) setSelectedAgentIds(new Set(data.map(s => s.agentId)));
+      if (data.length > 0) {
+        setSelectedAgentIds(new Set(data.map(s => s.agentId)));
+        setSuggestionReasons(data.reduce((acc, s) => ({ ...acc, [s.agentId]: s.reason }), {}));
+      }
     } catch {}
     setSuggestingAgents(false);
   };
@@ -244,6 +276,9 @@ export default function StartMeeting() {
                           {a.name}
                         </p>
                         <p className="text-xs text-gray-400 truncate">{a.role}</p>
+                        {active && suggestionReasons[id] && (
+                          <p className="text-[10px] text-blue-500 italic mt-0.5 truncate">✨ {suggestionReasons[id]}</p>
+                        )}
                       </div>
                       {active && (
                         <svg className="w-4 h-4 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -272,6 +307,10 @@ export default function StartMeeting() {
                       onChange={e => setNewAgentForm(p => ({ ...p, systemPrompt: e.target.value }))}
                       rows={2}
                       className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 bg-white resize-none"
+                    />
+                    <AgentScopeSelector
+                      scope={newAgentForm.scope}
+                      onChange={scope => setNewAgentForm(p => ({ ...p, scope }))}
                     />
                     <div className="flex gap-2">
                       <button

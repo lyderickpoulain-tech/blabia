@@ -47,10 +47,41 @@ const MILESTONE_TYPES = [
   { id: 'claude_code',icon: '💻', label: 'Claude Code' },
 ];
 
+// ── AgentScopeSelector ────────────────────────────────────────────────────────
+
+function AgentScopeSelector({ scope, onChange, size = 'sm' }) {
+  return (
+    <div className="space-y-1">
+      <p className={`${size === 'xs' ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500`}>Disponibilité :</p>
+      <div className="flex flex-col gap-1">
+        {[
+          { value: 'project', label: 'Pour ce projet uniquement', desc: null },
+          { value: 'global',  label: 'Enregistrer dans BlabIA',   desc: 'Disponible dans tous vos projets' },
+        ].map(opt => (
+          <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              value={opt.value}
+              checked={scope === opt.value}
+              onChange={() => onChange(opt.value)}
+              className="mt-0.5 shrink-0 accent-blue-600"
+            />
+            <div>
+              <span className={`${size === 'xs' ? 'text-[11px]' : 'text-xs'} font-medium text-gray-700`}>{opt.label}</span>
+              {opt.desc && <p className="text-[10px] text-gray-400 leading-tight">{opt.desc}</p>}
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── SuggestionAgentCard ───────────────────────────────────────────────────────
 
 function SuggestionAgentCard({ suggestion, idx, onInvite, onDismiss, onCreateAndInvite }) {
-  const [form, setForm] = useState(suggestion.createForm || { name: suggestion.name, role: suggestion.role, systemPrompt: '' });
+  const [form,  setForm]  = useState(suggestion.createForm || { name: suggestion.name, role: suggestion.role, systemPrompt: '' });
+  const [scope, setScope] = useState('project');
 
   if (suggestion.invited) {
     return (
@@ -94,9 +125,10 @@ function SuggestionAgentCard({ suggestion, idx, onInvite, onDismiss, onCreateAnd
             onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))}
             rows={2} className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-amber-400 bg-white resize-none"
           />
+          <AgentScopeSelector scope={scope} onChange={setScope} size="xs" />
           <div className="flex gap-2">
             <button
-              onClick={() => onCreateAndInvite(idx, form)}
+              onClick={() => onCreateAndInvite(idx, form, scope)}
               disabled={!form.name.trim() || suggestion.inviting}
               className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
             >
@@ -468,7 +500,7 @@ export default function MeetingRoom() {
   const [availableForAdd,    setAvailableForAdd]    = useState([]);
   const [loadingAvailable,   setLoadingAvailable]   = useState(false);
   const [addingAgentId,      setAddingAgentId]      = useState(null);
-  const [dropdownCreateForm, setDropdownCreateForm] = useState({ open: false, name: '', role: '', creating: false, error: '' });
+  const [dropdownCreateForm, setDropdownCreateForm] = useState({ open: false, name: '', role: '', creating: false, error: '', scope: 'project' });
 
   // ── États édition inline objectif + livrable ──────────────────────────────
   const intentionDropdownRef                            = useRef(null);
@@ -619,7 +651,7 @@ export default function MeetingRoom() {
       await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'manual' });
       console.log('[dropdownCreate] agent lié au projet', projectId);
       await handleAddAgent(agent.id);
-      setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '' });
+      setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '', scope: 'project' });
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Erreur';
       console.error('[dropdownCreate] erreur', msg);
@@ -651,19 +683,19 @@ export default function MeetingRoom() {
   }, []);
 
   // Créer un nouvel agent depuis la carte de suggestion puis l'inviter
-  const handleCreateAndInvite = useCallback(async (idx, form) => {
+  const handleCreateAndInvite = useCallback(async (idx, form, scope = 'project') => {
     const s = agentSuggestionsRef.current[idx];
     if (!s || s.inviting) return;
     setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: true } : x));
     try {
-      console.log('[handleCreateAndInvite] POST /agents', { name: form.name, role: form.role });
+      console.log('[handleCreateAndInvite] POST /agents', { name: form.name, role: form.role, scope });
       const { data: agent } = await api.post('/agents', {
         name:         form.name.trim(),
         role:         form.role.trim(),
         systemPrompt: form.systemPrompt.trim()
       });
       console.log('[handleCreateAndInvite] agent créé', agent.id, agent.name);
-      await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'suggestion' });
+      await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: scope === 'global' ? 'global' : 'suggestion' });
       console.log('[handleCreateAndInvite] agent lié au projet', projectId);
       await handleAddAgent(agent.id);
       setAgentSuggestions(prev => prev.map((x, i) =>
@@ -1450,6 +1482,11 @@ export default function MeetingRoom() {
                               {dropdownCreateForm.error && (
                                 <p className="text-[10px] text-red-500">{dropdownCreateForm.error}</p>
                               )}
+                              <AgentScopeSelector
+                                scope={dropdownCreateForm.scope}
+                                onChange={scope => setDropdownCreateForm(p => ({ ...p, scope }))}
+                                size="xs"
+                              />
                               <div className="flex gap-1.5">
                                 <button
                                   onClick={handleDropdownCreateAgent}
@@ -1459,7 +1496,7 @@ export default function MeetingRoom() {
                                   {dropdownCreateForm.creating ? '…' : 'Créer et inviter'}
                                 </button>
                                 <button
-                                  onClick={() => setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '' })}
+                                  onClick={() => setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '', scope: 'project' })}
                                   className="text-xs text-gray-400 hover:text-gray-600 px-2"
                                 >
                                   Annuler
