@@ -9,7 +9,7 @@ import QuickExportModal from './QuickExportModal';
 const TYPE_ICON = {
   summary:        '📋',
   synthesis:      '📋',
-  memory:         '🧠',
+  memory:         '📋',
   claude_code:    '💻',
   timeline_steps: '📅',
   stack_check:    '🔧',
@@ -21,7 +21,7 @@ const TYPE_ICON = {
 const TYPE_LABEL = {
   summary:        'Compte-rendu',
   synthesis:      'Compte-rendu',
-  memory:         'Souvenir',
+  memory:         'Compte-rendu',
   claude_code:    'Claude Code',
   timeline_steps: 'Étapes',
   stack_check:    'Vérif. stack',
@@ -297,7 +297,7 @@ function InsertButton({ onClick, alwaysVisible }) {
 // ── Formulaire d'insertion inline ─────────────────────────────────────────────
 function InsertForm({ onSave, onCancel }) {
   const [title, setTitle]   = useState('');
-  const [type, setType]     = useState('synthesis');
+  const [type, setType]     = useState('summary');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -348,7 +348,7 @@ function PanelBody({
   onRefresh, onDeleteMilestone, onShowPrompt, navigate, isMobile, devDirectory,
 }) {
   const [title, setTitle]           = useState('');
-  const [type, setType]             = useState('synthesis');
+  const [type, setType]             = useState('summary');
   const [saving, setSaving]         = useState(false);
   const [insertingAt, setInsertingAt] = useState(null);
   const [reordering, setReordering] = useState(false);
@@ -359,7 +359,7 @@ function PanelBody({
     setSaving(true);
     await onAdd({ title: title.trim(), type });
     setTitle('');
-    setType('synthesis');
+    setType('summary');
     setSaving(false);
     setShowAdd(false);
   };
@@ -676,7 +676,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
       return;
     }
     // fallback
-    setSessionDrawer({ milestone: m, linked: linked || null, intention: 'synthesis' });
+    setSessionDrawer({ milestone: m, linked: linked || null, intention: 'summary' });
   };
 
   const visibleMilestones = milestones;

@@ -5,7 +5,8 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 const DELIVERABLE_META = {
   summary:        { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
   synthesis:      { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
-  memory:         { icon: '🧠', label: 'Souvenir projet',   editable: true,  code: false, list: false },
+  memory:         { icon: '📋', label: 'Compte-rendu',      editable: true,  code: false, list: false },
+  meeting:        { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
   claude_code:    { icon: '💻', label: 'Prompt Claude Code', editable: false, code: true,  list: false },
   timeline_steps: { icon: '📅', label: 'Étapes timeline',   editable: false, code: false, list: true  },
 };
