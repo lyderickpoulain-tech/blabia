@@ -223,7 +223,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
 
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
-function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision }) {
+function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, streamingReason, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision }) {
 
   if (messages.length === 0 && !streamingAgent) {
     return (
@@ -341,7 +341,10 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                 {agent?.emoji || msg.agentName?.[0] || '?'}
               </div>
               <div className="max-w-[75%]">
-                <p className={`text-xs font-semibold mb-1 ${color.text}`}>{msg.agentName}</p>
+                <p className={`text-xs font-semibold ${msg.reason ? 'mb-0.5' : 'mb-1'} ${color.text}`}>{msg.agentName}</p>
+                {msg.reason && (
+                  <p className="text-xs italic text-gray-400 mb-1">↳ {msg.reason}</p>
+                )}
                 <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed whitespace-pre-wrap ${
                   isDecision
                     ? 'bg-amber-50 border border-amber-200 text-amber-900'
@@ -373,7 +376,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
             {activeAgents.find(a => a.name === streamingAgent)?.emoji || streamingAgent?.[0] || '?'}
           </div>
           <div className="max-w-[75%]">
-            <p className={`text-xs font-semibold mb-1 ${agentColor(streamingAgent, activeAgents).text} flex items-center gap-1.5`}>
+            <p className={`text-xs font-semibold ${streamingReason ? 'mb-0.5' : 'mb-1'} ${agentColor(streamingAgent, activeAgents).text} flex items-center gap-1.5`}>
               {streamingAgent}
               <span className="inline-flex gap-0.5">
                 <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -381,6 +384,9 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                 <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </span>
             </p>
+            {streamingReason && (
+              <p className="text-xs italic text-gray-400 mb-1">↳ {streamingReason}</p>
+            )}
             <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed whitespace-pre-wrap ${agentColor(streamingAgent, activeAgents).bg} ${agentColor(streamingAgent, activeAgents).text}`}>
               {streamingText || <span className="opacity-50">Rédaction…</span>}
             </div>
@@ -430,9 +436,10 @@ export default function MeetingRoom() {
   const [sendError,  setSendError]  = useState('');
 
   // États streaming
-  const [streamingAgent, setStreamingAgent] = useState(null);
-  const [streamingText,  setStreamingText]  = useState('');
-  const [isStreaming,    setIsStreaming]     = useState(false);
+  const [streamingAgent,  setStreamingAgent]  = useState(null);
+  const [streamingText,   setStreamingText]   = useState('');
+  const [streamingReason, setStreamingReason] = useState('');
+  const [isStreaming,     setIsStreaming]      = useState(false);
 
   // Pièces jointes (max 3 par message)
   const [attachments, setAttachments] = useState([]);
@@ -441,8 +448,9 @@ export default function MeetingRoom() {
   const attachmentsRef  = useRef([]);
   attachmentsRef.current = attachments;
 
-  // Ref pour capturer streamingText dans la closure SSE sans dépendance stale
+  // Refs pour capturer text et reason dans la closure SSE sans dépendance stale
   const streamingTextRef    = useRef('');
+  const streamingReasonRef  = useRef('');
   const abortControllerRef  = useRef(null);
 
   // ── Scroll du feed ────────────────────────────────────────────────────────
@@ -858,6 +866,8 @@ export default function MeetingRoom() {
 
             if (ev.type === 'agent_start') {
               setStreamingAgent(ev.agentName);
+              streamingReasonRef.current = ev.reason || '';
+              setStreamingReason(ev.reason || '');
               streamingTextRef.current = '';
               setStreamingText('');
 
@@ -866,17 +876,21 @@ export default function MeetingRoom() {
               setStreamingText(streamingTextRef.current);
 
             } else if (ev.type === 'agent_done') {
-              const finalContent = streamingTextRef.current;
+              const finalContent  = streamingTextRef.current;
+              const finalReason   = streamingReasonRef.current;
               setMessages(prev => [...prev, {
                 id:        ev.messageId,
                 role:      'agent',
                 agentName: ev.agentName,
+                ...(finalReason ? { reason: finalReason } : {}),
                 content:   finalContent,
                 timestamp: new Date().toISOString(),
                 type:      'message',
                 pinned:    false
               }]);
               setStreamingAgent(null);
+              streamingReasonRef.current = '';
+              setStreamingReason('');
               streamingTextRef.current = '';
               setStreamingText('');
 
@@ -1442,6 +1456,7 @@ export default function MeetingRoom() {
             activeAgents={activeAgents}
             streamingAgent={streamingAgent}
             streamingText={streamingText}
+            streamingReason={streamingReason}
             agentSuggestions={agentSuggestions}
             onInviteSuggested={handleInviteSuggested}
             onDismissSuggestion={handleDismissSuggestion}
