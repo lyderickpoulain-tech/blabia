@@ -432,7 +432,10 @@ export default function MeetingRoom() {
   const [loadError,    setLoadError]    = useState('');
 
   // États saisie
-  const [inputText,  setInputText]  = useState('');
+  const [inputText,          setInputText]          = useState('');
+  const [mentionSuggestions,  setMentionSuggestions]  = useState([]);
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionSelectedIdx,  setMentionSelectedIdx]  = useState(0);
   const [sendError,  setSendError]  = useState('');
 
   // États streaming
@@ -994,13 +997,56 @@ export default function MeetingRoom() {
   }, [inputText, isStreaming, isClosed, streamingAgent, pendingDecisionId, projectId, sessionId]);
   handleSendRef.current = handleSend; // toujours à jour après chaque render
 
+  const handleSelectMention = useCallback((agent) => {
+    setInputText(prev => prev.replace(/@\w*$/, `@${agent.name} `));
+    setShowMentionDropdown(false);
+    setMentionSuggestions([]);
+  }, []);
+
+  const handleInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setInputText(value);
+    const atMatch = value.match(/@(\w*)$/);
+    if (atMatch) {
+      const search = atMatch[1].toLowerCase();
+      const filtered = activeAgents.filter(a => a.name.toLowerCase().startsWith(search));
+      setMentionSuggestions(filtered);
+      setShowMentionDropdown(filtered.length > 0);
+      setMentionSelectedIdx(0);
+    } else {
+      setShowMentionDropdown(false);
+      setMentionSuggestions([]);
+    }
+  }, [activeAgents]);
+
   const handleKeyDown = useCallback((e) => {
+    if (showMentionDropdown) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionSelectedIdx(i => Math.min(i + 1, mentionSuggestions.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionSelectedIdx(i => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        if (mentionSuggestions[mentionSelectedIdx]) handleSelectMention(mentionSuggestions[mentionSelectedIdx]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentionDropdown(false);
+        return;
+      }
+    }
     if (e.key === 'Enter' && e.ctrlKey) {
       e.preventDefault();
       handleSend();
     }
-    // Entrée seule = nouvelle ligne (comportement textarea par défaut)
-  }, [handleSend]);
+  }, [handleSend, showMentionDropdown, mentionSuggestions, mentionSelectedIdx, handleSelectMention]);
 
   const handleAbort = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -1490,7 +1536,7 @@ export default function MeetingRoom() {
         )}
 
         {/* ── Barre de saisie ─────────────────────────────────────────────── */}
-        <div className="shrink-0 border-t border-gray-100 p-3 space-y-2">
+        <div className="shrink-0 border-t border-gray-100 p-3 space-y-2 relative">
           {isClosed ? (
             <div className="flex items-center justify-center py-2">
               <p className={`text-sm font-medium ${session.status === 'accepted' ? 'text-green-600' : 'text-gray-400'}`}>
@@ -1538,6 +1584,28 @@ export default function MeetingRoom() {
                 </div>
               )}
 
+              {/* Dropdown @mention */}
+              {showMentionDropdown && mentionSuggestions.length > 0 && (
+                <div className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20 py-1">
+                  {mentionSuggestions.map((agent, i) => (
+                    <button
+                      key={agent.id || agent.name}
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); handleSelectMention(agent); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition text-left ${
+                        i === mentionSelectedIdx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${agentColor(agent.name, activeAgents).avatar}`}>
+                        {agent.name?.[0]?.toUpperCase()}
+                      </span>
+                      <span className="font-medium">@{agent.name}</span>
+                      <span className="text-xs text-gray-400 truncate">{agent.role}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Zone drag + saisie */}
               <div
                 onDragOver={handleDragOver}
@@ -1557,7 +1625,7 @@ export default function MeetingRoom() {
                 </button>
                 <textarea
                   value={inputText}
-                  onChange={e => setInputText(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                   disabled={isStreaming || !!pendingDecisionId}
                   placeholder={
