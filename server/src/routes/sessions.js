@@ -1959,6 +1959,98 @@ ${historyText}`
   }
 });
 
+// ── v3.4 : Orchestrateur IA ───────────────────────────────────────────────────
+
+const MAX_TURNS       = 12; // max de contributions par échange humain
+const MAX_CONSECUTIVE = 2;  // max de contributions consécutives du même agent
+
+async function loadMessages(sessionId) {
+  const [s] = await db('Session').select('messages').where({ id: sessionId }).limit(1);
+  const m = s?.messages;
+  if (Array.isArray(m)) return m;
+  try { return JSON.parse(m || '[]'); } catch { return []; }
+}
+
+async function orchestrate({ session, project, messages, activeAgents,
+  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision }) {
+
+  // Cas 1 : agent unique — pas besoin d'orchestrer
+  if (activeAgents.length === 1) {
+    return { agentId: activeAgents[0].id, reason: '', shouldClose: false };
+  }
+
+  // Cas 2 : reprise après décision → l'agent qui a posé la question reprend
+  if (resumeAfterDecision) {
+    const lastDecision = [...messages].reverse().find(m => m.type === 'decision');
+    if (lastDecision) {
+      const agent = activeAgents.find(a => a.name === lastDecision.agentName);
+      if (agent) return { agentId: agent.id, reason: 'Reprend après sa question', shouldClose: false };
+    }
+  }
+
+  // Cas 3 : @mention explicite dans le message humain
+  if (humanMessage) {
+    for (const agent of activeAgents) {
+      if (humanMessage.toLowerCase().includes(`@${agent.name.toLowerCase()}`)) {
+        return { agentId: agent.id, reason: 'Mentionné directement', shouldClose: false };
+      }
+    }
+  }
+
+  // Cas 4 : appel Claude pour décider dynamiquement
+  const agentList = activeAgents.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
+  const recentMessages = messages.slice(-6).map(m =>
+    `[${m.agentName || m.role}]: ${(m.content || '').slice(0, 200)}`
+  ).join('\n');
+  const blockedAgent = consecutiveCount >= MAX_CONSECUTIVE
+    ? activeAgents.find(a => a.id === lastAgentId)?.name
+    : null;
+
+  const prompt = `Tu es l'orchestrateur d'une réunion IA.
+
+Objectif de la réunion : "${session.task}"
+Livrable attendu : ${Array.isArray(session.intention) ? session.intention[0] : 'compte-rendu'}
+
+Agents disponibles :
+${agentList}
+
+${blockedAgent ? `⚠️ ${blockedAgent} a déjà parlé ${consecutiveCount} fois de suite. Ne le sélectionne PAS.` : ''}
+
+Derniers échanges :
+${recentMessages || '(début de réunion)'}
+
+Décide maintenant :
+1. Quel agent doit prendre la parole ? (numéro de 1 à ${activeAgents.length})
+2. Pourquoi ? (1 phrase courte)
+3. La réunion doit-elle se clore ? (oui/non) — seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points
+
+Réponds UNIQUEMENT avec ce JSON :
+{"agentIndex": 1, "reason": "...", "shouldClose": false}`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 150,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const text  = response.content[0].text.trim();
+    const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const match = clean.match(/\{[\s\S]*\}/);
+    const dec   = JSON.parse(match?.[0] || clean);
+    const idx   = Math.max(0, Math.min((dec.agentIndex ?? 1) - 1, activeAgents.length - 1));
+    return {
+      agentId:     activeAgents[idx].id,
+      reason:      dec.reason      || '',
+      shouldClose: dec.shouldClose === true,
+    };
+  } catch {
+    // Fallback round-robin si l'orchestrateur échoue
+    const lastIdx  = activeAgents.findIndex(a => a.id === lastAgentId);
+    const nextIdx  = (lastIdx + 1) % activeAgents.length;
+    return { agentId: activeAgents[nextIdx].id, reason: '', shouldClose: false };
+  }
+}
+
 // ── v3.0 : Évolution 2.1 — POST /:sessionId/chat (moteur de conversation SSE) ──
 
 router.post('/:sessionId/chat', async (req, res) => {
@@ -2065,7 +2157,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       .where({ id: sessionId })
       .limit(1);
 
-    const currentMessages = (() => {
+    let currentMessages = (() => {
       const m = freshSession.messages;
       if (Array.isArray(m)) return m;
       try { return JSON.parse(m || '[]'); } catch { return []; }
@@ -2083,38 +2175,59 @@ router.post('/:sessionId/chat', async (req, res) => {
       ? projectMilestones.map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n')
       : '';
 
-    // Historique de la réunion formaté pour le prompt
-    // Les decision_answer sont inclus pour que les agents voient les décisions prises
-    const historyLines = currentMessages
-      .filter(m => m.role !== 'system' || m.type === 'decision_answer')
-      .map(m => {
-        if (m.role === 'human')                                  return `Participant : ${m.content}`;
-        if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
-        return `${m.agentName} : ${m.content}`;
-      });
-    const historyText = historyLines.join('\n\n');
-
     const intentionText = Array.isArray(intention) && intention.length > 0
       ? intention.join(', ')
       : 'non défini';
 
-    // 2. Tour de chaque agent actif
-    let decisionEmitted = false;
-    for (const agent of activeAgents) {
+    // Contexte projet immuable sur toute la durée du tour
+    const briefSection    = project.brief
+      ? `\nBrief du projet :\n${project.brief}\n`   : '';
+    const timelineSection = timelineText
+      ? `\nÉtat de la timeline :\n${timelineText}\n` : '';
+    const memorySection   = project.context
+      ? `\nMémoire du projet :\n${project.context.substring(0, 6000)}\n` : '';
+
+    // 2. Boucle orchestrée v3.4
+    const resumeAfterDecision = !!resume;
+    let turnCount        = 0;
+    let lastAgentId      = null;
+    let consecutiveCount = 0;
+    let conversationDone = false;
+    let decisionEmitted  = false;
+
+    while (turnCount < MAX_TURNS && !conversationDone && !abortController.signal.aborted) {
+
+      // 2a. Orchestrateur décide qui parle
+      const next = await orchestrate({
+        session, project, messages: currentMessages, activeAgents,
+        lastAgentId, consecutiveCount,
+        humanMessage:         hasText ? humanMessage : null,
+        resumeAfterDecision:  turnCount === 0 && resumeAfterDecision,
+      });
+
+      if (next.shouldClose) {
+        send('suggest_close', { reason: next.reason });
+        conversationDone = true;
+        break;
+      }
+
+      const agent = activeAgents.find(a => a.id === next.agentId);
+      if (!agent) break;
       if (abortController.signal.aborted) break;
 
-      send('agent_start', { agentName: agent.name, agentRole: agent.role });
+      // 2b. L'agent prend la parole
+      send('agent_start', { agentName: agent.name, agentRole: agent.role, reason: next.reason || '' });
 
-      // Contexte projet injecté dans le system prompt
-      const briefSection = project.brief
-        ? `\nBrief du projet :\n${project.brief}\n`
-        : '';
-      const timelineSection = timelineText
-        ? `\nÉtat de la timeline :\n${timelineText}\n`
-        : '';
-      const memorySection = project.context
-        ? `\nMémoire du projet :\n${project.context.substring(0, 6000)}\n`
-        : '';
+      // Historique reconstruit depuis les messages courants (mis à jour à chaque tour)
+      const historyLines = currentMessages
+        .filter(m => m.role !== 'system' || m.type === 'decision_answer')
+        .map(m => {
+          if (m.role === 'human')                                  return `Participant : ${m.content}`;
+          if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
+          return `${m.agentName} : ${m.content}`;
+        });
+      const historyText  = historyLines.join('\n\n');
+      const reasonLine   = next.reason ? `\nRaison de ta prise de parole : ${next.reason}\n` : '';
 
       const systemPrompt =
 `Tu es ${agent.name}, ${agent.role}.
@@ -2122,9 +2235,12 @@ ${agent.systemPrompt || ''}
 ${briefSection}${timelineSection}${memorySection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
-
-Réponds en français, de façon concise et structurée (max 250 mots).
-Apporte une contribution distincte et complémentaire des autres agents.
+${reasonLine}
+Tu participes à une réunion collaborative avec d'autres agents.
+Tu peux rebondir sur ce qu'un autre agent vient de dire, lui poser une question directement, ou demander une précision à l'humain.
+Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarque.
+Ne répète PAS ce que les autres agents ont déjà dit.
+Sois concis (150 mots max par contribution). Si tu n'as rien de nouveau à apporter, dis-le en 1 phrase.
 Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
 [DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
 Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, question compréhensible par un non-technicien, contexte en langage simple, une seule fois par contribution.
@@ -2136,8 +2252,9 @@ Maximum un marqueur de chaque type par réponse.`;
         ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
         : `Objectif : ${session.task}\n\nC'est le début de la réunion. Donne ta première contribution.`;
 
+      // Pièces jointes uniquement au premier tour
       let userMessage;
-      if (hasAttachments) {
+      if (hasAttachments && turnCount === 0) {
         try {
           const contentBlocks = [{ type: 'text', text: baseText }];
           for (const att of rawAttachments) {
@@ -2167,17 +2284,11 @@ Maximum un marqueur de chaque type par réponse.`;
         }, 2048, MODEL, abortController.signal);
       } catch (agentErr) {
         if (abortController.signal.aborted || agentErr.name === 'AbortError') {
-          // Sauvegarder le texte partiel si l'agent avait commencé à répondre
           if (partialAgentText.trim()) {
             const partialMsg = {
-              id: randomUUID(),
-              role: 'agent',
-              agentName: agent.name,
-              content: partialAgentText.trim(),
-              timestamp: new Date().toISOString(),
-              type: 'message',
-              pinned: false,
-              interrupted: true,
+              id: randomUUID(), role: 'agent', agentName: agent.name,
+              content: partialAgentText.trim(), timestamp: new Date().toISOString(),
+              type: 'message', pinned: false, interrupted: true,
             };
             await appendMessageEntry(sessionId, partialMsg).catch(() => {});
           }
@@ -2192,18 +2303,17 @@ Maximum un marqueur de chaque type par réponse.`;
       const suggestAgtMatch = agentFullText.match(/\[SUGGEST_AGENT:\s*([\s\S]*?)\]/);
       const suggestStpMatch = agentFullText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
 
-      // Contenu nettoyé des marqueurs
       const agentContent = agentFullText
         .replace(/\[DECISION:[\s\S]*?\]/g, '')
         .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/g, '')
         .replace(/\[SUGGEST_STEP:[\s\S]*?\]/g, '')
         .trim();
 
-      // Sauvegarder la réponse de l'agent (toujours 'message' — les décisions sont des entrées séparées)
       const agentMsg = {
         id:        randomUUID(),
         role:      'agent',
         agentName: agent.name,
+        ...(next.reason ? { reason: next.reason } : {}),
         content:   agentContent,
         timestamp: new Date().toISOString(),
         type:      'message',
@@ -2213,7 +2323,7 @@ Maximum un marqueur de chaque type par réponse.`;
 
       send('agent_done', { agentName: agent.name, messageId: agentMsg.id });
 
-      // Émettre les événements spéciaux — décision structurée (JSON)
+      // Décision structurée
       if (decisionMatch) {
         let decisionData = null;
         try { decisionData = JSON.parse(decisionMatch[1]); } catch {}
@@ -2243,23 +2353,25 @@ Maximum un marqueur de chaque type par réponse.`;
         }
       }
 
-      if (decisionEmitted) break; // Un seul agent peut émettre une décision par tour
+      if (decisionEmitted) { conversationDone = true; break; }
 
       if (suggestAgtMatch) {
         const parts = suggestAgtMatch[1].split(',').map(p => p.trim());
         const sugName = parts[0] || '';
         const sugRole = parts.slice(1).join(', ') || '';
-        if (sugName) {
-          send('suggest_agent', { name: sugName, role: sugRole, reason: `Suggéré par ${agent.name}` });
-        }
+        if (sugName) send('suggest_agent', { name: sugName, role: sugRole, reason: `Suggéré par ${agent.name}` });
       }
 
       if (suggestStpMatch) {
         const stepTitle = suggestStpMatch[1].trim();
-        if (stepTitle) {
-          send('suggest_step', { title: stepTitle, type: 'meeting' });
-        }
+        if (stepTitle) send('suggest_step', { title: stepTitle, type: 'meeting' });
       }
+
+      // 2c. Mettre à jour les compteurs et recharger l'historique
+      consecutiveCount = next.agentId === lastAgentId ? consecutiveCount + 1 : 1;
+      lastAgentId      = next.agentId;
+      turnCount++;
+      currentMessages  = await loadMessages(sessionId);
     }
 
     // 3. Fin du tour : màj timestamp projet + signal turn_complete
