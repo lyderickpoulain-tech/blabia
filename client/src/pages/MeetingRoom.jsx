@@ -787,9 +787,18 @@ export default function MeetingRoom() {
     const text              = (typeof overrideText === 'string' ? overrideText : inputText).trim();
     const currentAttachments = attachmentsRef.current;
     // resume:true = reprise silencieuse après décision, bypass guards normaux
-    if (isStreaming || isClosed) return;
-    if (!resume && (!text && currentAttachments.length === 0)) return;
+    if (isClosed) return;
+    if (!resume && !isStreaming && (!text && currentAttachments.length === 0)) return;
     if (!resume && pendingDecisionId) return;
+
+    // Si streaming en cours — interrompre avant d'envoyer
+    if (isStreaming && !resume) {
+      abortControllerRef.current?.abort();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Après abort éventuel : si pas de contenu à envoyer, on s'arrête là
+    if (!resume && !text && currentAttachments.length === 0) return;
 
     setSendError('');
 
@@ -1642,31 +1651,25 @@ export default function MeetingRoom() {
                   value={inputText}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  disabled={isStreaming || !!pendingDecisionId}
+                  disabled={!!pendingDecisionId}
                   placeholder={
-                    isStreaming         ? '✍️ Les agents répondent…'
+                    isStreaming         ? '✍️ Les agents répondent… (tape pour interrompre)'
                     : pendingDecisionId ? '🤔 Répondez à la décision ci-dessus pour continuer…'
                     : 'Tape ton message… (Ctrl+Entrée pour envoyer)'
                   }
                   rows={2}
                   className="flex-1 resize-none px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-400 transition disabled:bg-gray-50 disabled:text-gray-400"
                 />
-                {isStreaming ? (
-                  <button
-                    onClick={handleAbort}
-                    className="shrink-0 px-3 h-10 bg-red-500 hover:bg-red-600 rounded-xl flex items-center justify-center text-white text-sm font-medium transition gap-1.5"
-                  >
-                    ⏹ Interrompre
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSend}
-                    disabled={(!inputText.trim() && attachments.length === 0) || !!pendingDecisionId}
-                    className="shrink-0 w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    ▶
-                  </button>
-                )}
+                <button
+                  onClick={handleSend}
+                  disabled={(!isStreaming && !inputText.trim() && attachments.length === 0) || !!pendingDecisionId}
+                  title={isStreaming ? 'Envoyer (interrompt les agents en cours)' : undefined}
+                  className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                    isStreaming ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  ▶
+                </button>
               </div>
               {/* Bouton Clore la réunion */}
               <button
