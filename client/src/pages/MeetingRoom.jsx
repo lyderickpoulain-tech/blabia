@@ -1052,6 +1052,15 @@ export default function MeetingRoom() {
     abortControllerRef.current?.abort();
   }, []);
 
+  const handleReopen = useCallback(async () => {
+    try {
+      await api.post(`/projects/${projectId}/sessions/${sessionId}/reopen`);
+      setSession(prev => ({ ...prev, status: 'open' }));
+    } catch (err) {
+      console.error('[reopen]', err.message);
+    }
+  }, [projectId, sessionId]);
+
   const handleAutoLaunch = useCallback(async () => {
     const task = session?.task?.trim() ?? '';
     try {
@@ -1538,10 +1547,16 @@ export default function MeetingRoom() {
         {/* ── Barre de saisie ─────────────────────────────────────────────── */}
         <div className="shrink-0 border-t border-gray-100 p-3 space-y-2 relative">
           {isClosed ? (
-            <div className="flex items-center justify-center py-2">
+            <div className="flex items-center justify-between gap-3 py-1.5 px-1">
               <p className={`text-sm font-medium ${session.status === 'accepted' ? 'text-green-600' : 'text-gray-400'}`}>
                 {session.status === 'accepted' ? '✅ Réunion acceptée' : '🚫 Réunion abandonnée'}
               </p>
+              <button
+                onClick={handleReopen}
+                className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition"
+              >
+                🔁 Reprendre
+              </button>
             </div>
           ) : (
             <>

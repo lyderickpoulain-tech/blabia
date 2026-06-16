@@ -1291,6 +1291,26 @@ router.patch('/:sessionId/status', async (req, res) => {
   }
 });
 
+// ── Réouvrir une réunion terminée ────────────────────────────────────────────
+
+router.post('/:sessionId/reopen', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    if (s.status === 'open') return res.json(s);
+    await db('Session').where({ id: sessionId }).update({ status: 'open' });
+    const [updated] = await db('Session').where({ id: sessionId }).limit(1);
+    res.json(updated);
+  } catch (err) {
+    console.error('[sessions/:id/reopen POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── Génération du souvenir projet (Évolution 3) ───────────────────────────────
 
 router.post('/:sessionId/generate-memory', async (req, res) => {

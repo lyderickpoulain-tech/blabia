@@ -436,6 +436,13 @@ export default function SessionView() {
       } catch {}
     };
 
+    const handleReopenMeeting = async () => {
+      try {
+        await api.post(`/projects/${projectId}/sessions/${sessionId}/reopen`);
+        navigate(`/projects/${projectId}/meeting/${sessionId}`);
+      } catch {}
+    };
+
     return (
       <ProjectLayout projectId={projectId}>
         <div className="max-w-2xl mx-auto space-y-4">
@@ -551,6 +558,18 @@ export default function SessionView() {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Actions si terminée */}
+          {(currentStatus === 'accepted' || currentStatus === 'abandoned') && (
+            <div className="flex justify-center">
+              <button
+                onClick={handleReopenMeeting}
+                className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:bg-blue-50 px-4 py-2.5 rounded-xl transition"
+              >
+                🔁 Reprendre cette réunion
+              </button>
             </div>
           )}
 
