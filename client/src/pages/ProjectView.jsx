@@ -324,17 +324,34 @@ function buildSessionThreads(sessions) {
 }
 
 function SessionRow({ session, projectId }) {
+  const navigate   = useNavigate();
+  const [reopening, setReopening] = useState(false);
+
   const truncated = session.task.length > 50 ? session.task.substring(0, 50) + '…' : session.task;
   const date = new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const isViewable = session.status === 'complete' || session.status === 'accepted';
-  const isOpen     = session.status === 'open';
   const isMeeting  = session.mode === 'meeting';
+  const isFinished = isMeeting && (session.status === 'accepted' || session.status === 'abandoned');
+  const isOpen     = session.status === 'open';
+  const isViewable = session.status === 'complete' || session.status === 'accepted' || isFinished;
   const isClickable = isViewable || (isOpen && isMeeting);
   const depth = session.depth ?? 0;
   const isContinuation = depth > 0;
   const sessionPath = isMeeting
     ? `/projects/${projectId}/meeting/${session.id}`
     : `/projects/${projectId}/session/${session.id}`;
+
+  const handleReopen = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (reopening) return;
+    setReopening(true);
+    try {
+      await api.post(`/projects/${projectId}/sessions/${session.id}/reopen`);
+      navigate(`/projects/${projectId}/meeting/${session.id}`);
+    } catch {
+      setReopening(false);
+    }
+  };
 
   const inner = (
     <>
@@ -350,13 +367,28 @@ function SessionRow({ session, projectId }) {
         <td className="px-4 py-3 text-sm text-gray-500">{session.agentCount ?? '–'} agents</td>
         <td className="px-4 py-3 text-sm text-gray-400">{date}</td>
         <td className="px-4 py-3 text-right">
-          {isViewable && (
-            <span className="text-xs text-blue-600 font-medium">
-              {isMeeting ? 'Voir la réunion →' : 'Relire →'}
-            </span>
-          )}
-          {isOpen && isMeeting && (
-            <span className="text-xs text-green-600 font-medium">Reprendre →</span>
+          {isFinished ? (
+            <div className="inline-flex items-center gap-2">
+              <span className="text-xs text-blue-600 font-medium">Voir →</span>
+              <button
+                onClick={handleReopen}
+                disabled={reopening}
+                className="text-xs text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-0.5 rounded-lg transition disabled:opacity-50"
+              >
+                {reopening ? '…' : '🔁 Reprendre'}
+              </button>
+            </div>
+          ) : (
+            <>
+              {isViewable && (
+                <span className="text-xs text-blue-600 font-medium">
+                  {isMeeting ? 'Voir la réunion →' : 'Relire →'}
+                </span>
+              )}
+              {isOpen && isMeeting && (
+                <span className="text-xs text-green-600 font-medium">Reprendre →</span>
+              )}
+            </>
           )}
         </td>
       </tr>
@@ -375,8 +407,23 @@ function SessionRow({ session, projectId }) {
           <CodeStatusBadge session={session} />
         </div>
         <p className="text-xs text-gray-400">{session.agentCount ?? '–'} agents · {date}</p>
-        {isViewable && <p className="text-xs text-blue-600 font-medium mt-2">{isMeeting ? 'Voir la réunion →' : 'Relire →'}</p>}
-        {isOpen && isMeeting && <p className="text-xs text-green-600 font-medium mt-1">Reprendre →</p>}
+        {isFinished ? (
+          <div className="flex items-center gap-2 mt-2">
+            <p className="text-xs text-blue-600 font-medium flex-1">Voir la réunion →</p>
+            <button
+              onClick={handleReopen}
+              disabled={reopening}
+              className="text-xs text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded-lg transition disabled:opacity-50 shrink-0"
+            >
+              {reopening ? '…' : '🔁 Reprendre'}
+            </button>
+          </div>
+        ) : (
+          <>
+            {isViewable && <p className="text-xs text-blue-600 font-medium mt-2">{isMeeting ? 'Voir la réunion →' : 'Relire →'}</p>}
+            {isOpen && isMeeting && <p className="text-xs text-green-600 font-medium mt-1">Reprendre →</p>}
+          </>
+        )}
       </div>
     </>
   );
