@@ -1968,6 +1968,7 @@ router.post('/:sessionId/chat', async (req, res) => {
 
   const hasText        = !!humanMessage?.trim();
   const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.length > 0;
+  console.log(`[chat] session=${sessionId} resume=${!!resume} hasText=${hasText} hasAtt=${hasAttachments}`);
   // resume:true = reprise après décision actée, message vide autorisé
   if (!hasText && !hasAttachments && !resume) {
     return res.status(400).json({ error: 'Message ou pièce jointe requise' });

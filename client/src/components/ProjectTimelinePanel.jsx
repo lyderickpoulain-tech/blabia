@@ -592,7 +592,8 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [loading, setLoading]                   = useState(true);
   const [showAdd, setShowAdd]                   = useState(false);
   const [mobileOpen, setMobileOpen]             = useState(false);
-  const [exportSession, setExportSession]             = useState(null);
+  const [exportSession,     setExportSession]     = useState(null); // réunion → ExportModal (régénère)
+  const [promptViewSession, setPromptViewSession] = useState(null); // prompt stocké → ExportModal (lecture seule)
   const [detailMilestone, setDetailMilestone]         = useState(null);
   const [sessionDrawer, setSessionDrawer]             = useState(null); // { milestone, linked }
   const [stackCheckMilestone, setStackCheckMilestone] = useState(null);
@@ -691,7 +692,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     sessionDrawer, setSessionDrawer,
     onRefresh: loadMilestones,
     onDeleteMilestone: handleDeleteMilestone,
-    onShowPrompt: (session) => setExportSession(session),
+    onShowPrompt: (session) => setPromptViewSession(session),
     navigate, devDirectory,
   };
 
@@ -762,6 +763,15 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
           summary={exportSession.summary}
           projectId={projectId}
           onClose={() => setExportSession(null)}
+        />
+      )}
+
+      {/* ── ExportModal lecture seule (prompt déjà stocké dans session.summary) ── */}
+      {promptViewSession && (
+        <ExportModal
+          directContent={promptViewSession.summary}
+          projectId={projectId}
+          onClose={() => setPromptViewSession(null)}
         />
       )}
 

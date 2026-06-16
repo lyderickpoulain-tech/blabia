@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
+import SummaryDisplayModal from './SummaryDisplayModal';
 
 const DELIVERABLE_META = {
   summary:        { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
@@ -23,9 +24,10 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
   const [addingToPlan,   setAddingToPlan]   = useState(false);
   const [addedToPlan,    setAddedToPlan]    = useState(false);
   const [copied,         setCopied]         = useState(false);
-  const [applying,       setApplying]       = useState(false);
-  const [abandonConfirm, setAbandonConfirm] = useState(false);
-  const [abandoning,     setAbandoning]     = useState(false);
+  const [applying,        setApplying]        = useState(false);
+  const [abandonConfirm,  setAbandonConfirm]  = useState(false);
+  const [abandoning,      setAbandoning]      = useState(false);
+  const [showFullContent, setShowFullContent] = useState(false);
 
   // Génération automatique à l'ouverture
   useEffect(() => { generate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -100,6 +102,7 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] flex flex-col">
 
@@ -280,10 +283,19 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
                 </div>
               )}
 
-              {/* synthesis → texte formaté en lecture seule */}
+              {/* synthesis → aperçu + bouton plein écran */}
               {!meta.editable && !meta.code && !meta.list && (
-                <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto">
-                  {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
+                <div className="space-y-2">
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-32 overflow-hidden relative">
+                    {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
+                    <div className="absolute bottom-0 inset-x-0 h-8 bg-gradient-to-t from-gray-50 to-transparent rounded-b-xl" />
+                  </div>
+                  <button
+                    onClick={() => setShowFullContent(true)}
+                    className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-1.5 rounded-lg border border-blue-100 hover:bg-blue-50 transition"
+                  >
+                    Lire le compte-rendu complet →
+                  </button>
                 </div>
               )}
             </>
@@ -336,5 +348,17 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
 
       </div>
     </div>
+
+    {showFullContent && (
+      <SummaryDisplayModal
+        title={session.task}
+        date={session.createdAt
+          ? new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+          : undefined}
+        content={content}
+        onClose={() => setShowFullContent(false)}
+      />
+    )}
+    </>
   );
 }

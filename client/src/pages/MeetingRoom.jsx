@@ -479,9 +479,12 @@ export default function MeetingRoom() {
   const [pendingDecisionId,       setPendingDecisionId]       = useState(null);
   const [panelExpandedDecisionId, setPanelExpandedDecisionId] = useState(null);
   const [decisionQueue,           setDecisionQueue]           = useState([]);
-  const pendingDecisionIdRef = useRef(null);
-  pendingDecisionIdRef.current = pendingDecisionId; // sync pour accès dans les callbacks SSE
-  const handleSendRef = useRef(null); // ref pour éviter la TDZ (handleSend déclaré après)
+  const pendingDecisionIdRef       = useRef(null);
+  pendingDecisionIdRef.current     = pendingDecisionId; // sync pour accès dans les callbacks SSE
+  const handleSendRef              = useRef(null);  // évite TDZ (handleSend déclaré après)
+  const decisionQueueRef           = useRef([]);    // accès synchrone sans closure stale
+  decisionQueueRef.current         = decisionQueue;
+  const decisionJustEmittedRef     = useRef(false); // empêche AbortError d'effacer pendingDecisionId
 
   // Modal de clôture
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -680,18 +683,12 @@ export default function MeetingRoom() {
       ));
     }
     setPendingDecisionId(null);
-    // Dépiler la prochaine décision ou relancer les agents si queue vide
-    let queueEmpty = false;
-    setDecisionQueue(prev => {
-      if (prev.length > 0) {
-        setPendingDecisionId(prev[0].messageId);
-        return prev.slice(1);
-      }
-      queueEmpty = true;
-      return prev;
-    });
-    if (queueEmpty) {
-      // Relancer le tour des agents via ref (handleSend déclaré après → évite TDZ)
+    // Lire la queue via ref (synchrone, pas de closure stale ni de side-effect dans un updater)
+    const queue = decisionQueueRef.current;
+    if (queue.length > 0) {
+      setPendingDecisionId(queue[0].messageId);
+      setDecisionQueue(queue.slice(1));
+    } else {
       handleSendRef.current?.('', { resume: true });
     }
   }, [projectId, sessionId]);
@@ -883,6 +880,7 @@ export default function MeetingRoom() {
 
             } else if (ev.type === 'decision') {
               // Nouveau format v3.2 : décision structurée avec question + choix
+              decisionJustEmittedRef.current = true; // signaler avant abort pour protéger pendingDecisionId
               setMessages(prev => [...prev, {
                 id:        ev.messageId,
                 role:      'system',
@@ -946,11 +944,14 @@ export default function MeetingRoom() {
         // Interruption volontaire : sauvegarder le texte partiel localement
         const partialText    = streamingTextRef.current;
         const partialAgent   = streamingAgent;
+        const wasDecision    = decisionJustEmittedRef.current;
+        decisionJustEmittedRef.current = false;
         setStreamingAgent(null);
         streamingTextRef.current = '';
         setStreamingText('');
         setIsStreaming(false);
-        setPendingDecisionId(null);
+        // Ne pas effacer pendingDecisionId si l'abort a été déclenché par une décision
+        if (!wasDecision) setPendingDecisionId(null);
         if (partialText.trim() && partialAgent) {
           setMessages(prev => [...prev, {
             id:          `interrupted-${Date.now()}`,

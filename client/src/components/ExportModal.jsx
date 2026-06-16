@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
 
-export default function ExportModal({ summary, projectId, onClose }) {
-  const [prompt,  setPrompt]  = useState('');
-  const [loading, setLoading] = useState(true);
+// directContent : affiche le prompt déjà généré sans appel API
+export default function ExportModal({ summary, projectId, onClose, directContent = null }) {
+  const [prompt,  setPrompt]  = useState(directContent || '');
+  const [loading, setLoading] = useState(!directContent);
   const [error,   setError]   = useState('');
   const [copied,  setCopied]  = useState(false);
 
   useEffect(() => {
+    if (directContent) return; // ne pas régénérer si le prompt est déjà fourni
     api.post('/export/claude-code', { summary, ...(projectId ? { projectId } : {}) })
       .then(({ data }) => setPrompt(data.prompt))
       .catch((err)     => setError(err.response?.data?.error || 'Erreur lors de la génération'))
