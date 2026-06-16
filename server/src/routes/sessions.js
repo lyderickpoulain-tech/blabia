@@ -1991,6 +1991,14 @@ async function loadMessages(sessionId) {
   try { return JSON.parse(m || '[]'); } catch { return []; }
 }
 
+function areSimilar(q1, q2) {
+  const words1 = new Set(q1.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+  const words2 = new Set(q2.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+  const intersection = [...words1].filter(w => words2.has(w));
+  const union = new Set([...words1, ...words2]);
+  return union.size > 0 && intersection.length / union.size > 0.6;
+}
+
 async function orchestrate({ session, project, messages, activeAgents,
   lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision }) {
 
@@ -2018,12 +2026,27 @@ async function orchestrate({ session, project, messages, activeAgents,
   }
 
   // Cas 4 : appel Claude pour décider dynamiquement
-  const agentList = activeAgents.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
+  // Exclure les agents avec questions répétitives
+  const excludedAgentIds = new Set();
+  for (const agent of activeAgents) {
+    const recentDecisions = messages
+      .filter(m => m.type === 'decision' && m.agentName === agent.name)
+      .slice(-3);
+    if (recentDecisions.length >= 2) {
+      const lastQ = recentDecisions[recentDecisions.length - 1].question;
+      const prevQ = recentDecisions[recentDecisions.length - 2].question;
+      if (areSimilar(lastQ, prevQ)) excludedAgentIds.add(agent.id);
+    }
+  }
+  const candidateAgents  = activeAgents.filter(a => !excludedAgentIds.has(a.id));
+  const agentsForSelection = candidateAgents.length > 0 ? candidateAgents : activeAgents;
+
+  const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
   const recentMessages = messages.slice(-6).map(m =>
     `[${m.agentName || m.role}]: ${(m.content || '').slice(0, 200)}`
   ).join('\n');
   const blockedAgent = consecutiveCount >= MAX_CONSECUTIVE
-    ? activeAgents.find(a => a.id === lastAgentId)?.name
+    ? agentsForSelection.find(a => a.id === lastAgentId)?.name
     : null;
 
   const prompt = `Tu es l'orchestrateur d'une réunion IA.
@@ -2057,17 +2080,17 @@ Réponds UNIQUEMENT avec ce JSON :
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const match = clean.match(/\{[\s\S]*\}/);
     const dec   = JSON.parse(match?.[0] || clean);
-    const idx   = Math.max(0, Math.min((dec.agentIndex ?? 1) - 1, activeAgents.length - 1));
+    const idx   = Math.max(0, Math.min((dec.agentIndex ?? 1) - 1, agentsForSelection.length - 1));
     return {
-      agentId:     activeAgents[idx].id,
+      agentId:     agentsForSelection[idx].id,
       reason:      dec.reason      || '',
       shouldClose: dec.shouldClose === true,
     };
   } catch {
     // Fallback round-robin si l'orchestrateur échoue
-    const lastIdx  = activeAgents.findIndex(a => a.id === lastAgentId);
-    const nextIdx  = (lastIdx + 1) % activeAgents.length;
-    return { agentId: activeAgents[nextIdx].id, reason: '', shouldClose: false };
+    const lastIdx  = agentsForSelection.findIndex(a => a.id === lastAgentId);
+    const nextIdx  = (lastIdx + 1) % agentsForSelection.length;
+    return { agentId: agentsForSelection[nextIdx].id, reason: '', shouldClose: false };
   }
 }
 
@@ -2214,6 +2237,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     let consecutiveCount = 0;
     let conversationDone = false;
     let decisionEmitted  = false;
+    const decisionCountPerAgent = {};
 
     while (turnCount < MAX_TURNS && !conversationDone && !abortController.signal.aborted) {
 
@@ -2264,6 +2288,7 @@ Sois concis (150 mots max par contribution). Si tu n'as rien de nouveau à appor
 Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
 [DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
 Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, question compréhensible par un non-technicien, contexte en langage simple, une seule fois par contribution.
+RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (même partiellement, même de façon imprécise), tu DOIS accepter cette réponse et avancer. Ne repose JAMAIS la même question ou une variante de la même question. Si la réponse est insuffisante, reformule en une phrase et passe à autre chose.
 Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
 Si une étape concrète doit être ajoutée à la timeline, ajoute : [SUGGEST_STEP: titre de l'étape].
 Maximum un marqueur de chaque type par réponse.`;
@@ -2318,12 +2343,21 @@ Maximum un marqueur de chaque type par réponse.`;
         throw agentErr;
       }
 
-      // Détecter les marqueurs spéciaux
-      const decisionMatch   = agentFullText.match(/\[DECISION:(\{[\s\S]*?\})\]/);
-      const suggestAgtMatch = agentFullText.match(/\[SUGGEST_AGENT:\s*([\s\S]*?)\]/);
-      const suggestStpMatch = agentFullText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
+      // Anti-boucle : limite d'une seule décision par agent par tour humain
+      let processedText = agentFullText;
+      if (/\[DECISION:/.test(agentFullText)) {
+        if ((decisionCountPerAgent[agent.name] || 0) >= 1) {
+          processedText = agentFullText.replace(/\[DECISION:\{[\s\S]*?\}\]/gs, '').trim();
+        }
+        decisionCountPerAgent[agent.name] = (decisionCountPerAgent[agent.name] || 0) + 1;
+      }
 
-      const agentContent = agentFullText
+      // Détecter les marqueurs spéciaux
+      const decisionMatch   = processedText.match(/\[DECISION:(\{[\s\S]*?\})\]/);
+      const suggestAgtMatch = processedText.match(/\[SUGGEST_AGENT:\s*([\s\S]*?)\]/);
+      const suggestStpMatch = processedText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
+
+      const agentContent = processedText
         .replace(/\[DECISION:[\s\S]*?\]/g, '')
         .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/g, '')
         .replace(/\[SUGGEST_STEP:[\s\S]*?\]/g, '')
