@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import ExportModal from './ExportModal';
+import SummaryDisplayModal from './SummaryDisplayModal';
+import TimelineStepsModal from './TimelineStepsModal';
 import StackCheckModal from './StackCheckModal';
 import QuickExportModal from './QuickExportModal';
 
@@ -109,8 +111,15 @@ function MilestoneDetailDrawer({ milestone, projectId, onClose, onRefresh, onDel
   );
 }
 
+const DELIVERABLE_LABEL = {
+  summary: '📋 Voir le compte-rendu', synthesis: '📋 Voir le compte-rendu',
+  memory: '📋 Voir le compte-rendu', meeting: '📋 Voir le compte-rendu',
+  claude_code: '💻 Voir le prompt', technical: '💻 Voir le prompt',
+  timeline_steps: '📅 Voir les étapes',
+};
+
 // ── Drawer session (meeting / technical) ──────────────────────────────────────
-function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh, onShowPrompt, onDeleteMilestone }) {
+function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh, onShowPrompt, onShowDeliverable, onDeleteMilestone }) {
   const [status, setStatus] = useState(milestone.status);
   const [saving, setSaving] = useState(false);
   const [pinnedDecisions, setPinnedDecisions] = useState([]);
@@ -218,12 +227,12 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
                 ? '📋 Voir la réunion'
                 : '✓ Voir la session'}
             </button>
-            {linkedSession.hasCode && linkedSession.summary && onShowPrompt && (
+            {linkedSession.status === 'accepted' && onShowDeliverable && (
               <button
-                onClick={() => { onShowPrompt(linkedSession); onClose(); }}
+                onClick={() => { onShowDeliverable(linkedSession, milestone.type); onClose(); }}
                 className="w-full bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-xs font-semibold py-2 rounded-xl transition flex items-center justify-center gap-1.5"
               >
-                💻 Voir le prompt généré
+                {DELIVERABLE_LABEL[milestone.type] || '📄 Voir le livrable'}
               </button>
             )}
             <div className="text-xs text-gray-400 text-center">
@@ -345,7 +354,7 @@ function PanelBody({
   loading, showAdd, setShowAdd, onAdd, onMilestoneClick,
   detailMilestone, setDetailMilestone,
   sessionDrawer, setSessionDrawer,
-  onRefresh, onDeleteMilestone, onShowPrompt, navigate, isMobile, devDirectory,
+  onRefresh, onDeleteMilestone, onShowPrompt, onShowDeliverable, navigate, isMobile, devDirectory,
 }) {
   const [title, setTitle]           = useState('');
   const [type, setType]             = useState('summary');
@@ -438,6 +447,7 @@ function PanelBody({
           onClose={() => setSessionDrawer(null)}
           onRefresh={onRefresh}
           onShowPrompt={onShowPrompt}
+          onShowDeliverable={onShowDeliverable}
           onDeleteMilestone={onDeleteMilestone}
         />
       )}
@@ -592,8 +602,10 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [loading, setLoading]                   = useState(true);
   const [showAdd, setShowAdd]                   = useState(false);
   const [mobileOpen, setMobileOpen]             = useState(false);
-  const [exportSession,     setExportSession]     = useState(null); // réunion → ExportModal (régénère)
-  const [promptViewSession, setPromptViewSession] = useState(null); // prompt stocké → ExportModal (lecture seule)
+  const [exportSession,          setExportSession]          = useState(null); // réunion → ExportModal (régénère)
+  const [promptViewSession,      setPromptViewSession]      = useState(null); // prompt stocké → ExportModal (lecture seule)
+  const [summaryViewSession,     setSummaryViewSession]     = useState(null); // compte-rendu → SummaryDisplayModal
+  const [timelineStepsSession,   setTimelineStepsSession]   = useState(null); // étapes → TimelineStepsModal
   const [detailMilestone, setDetailMilestone]         = useState(null);
   const [sessionDrawer, setSessionDrawer]             = useState(null); // { milestone, linked }
   const [stackCheckMilestone, setStackCheckMilestone] = useState(null);
@@ -683,6 +695,17 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const hiddenCount = 0;
   const doneMilestones = milestones.filter(m => m.status === 'done').length;
 
+  const handleShowDeliverable = (session, type) => {
+    const t = type || '';
+    if (['summary', 'synthesis', 'memory', 'meeting'].includes(t)) {
+      setSummaryViewSession(session);
+    } else if (['claude_code', 'technical'].includes(t)) {
+      setPromptViewSession(session);
+    } else if (t === 'timeline_steps') {
+      setTimelineStepsSession(session);
+    }
+  };
+
   const panelBodyProps = {
     projectId, milestones: visibleMilestones, milestoneSessions,
     loading, showAdd, setShowAdd,
@@ -693,6 +716,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     onRefresh: loadMilestones,
     onDeleteMilestone: handleDeleteMilestone,
     onShowPrompt: (session) => setPromptViewSession(session),
+    onShowDeliverable: handleShowDeliverable,
     navigate, devDirectory,
   };
 
@@ -772,6 +796,28 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
           directContent={promptViewSession.summary}
           projectId={projectId}
           onClose={() => setPromptViewSession(null)}
+        />
+      )}
+
+      {/* ── SummaryDisplayModal (type summary/compte-rendu) ──────────────── */}
+      {summaryViewSession && (
+        <SummaryDisplayModal
+          title={summaryViewSession.task}
+          date={summaryViewSession.createdAt
+            ? new Date(summaryViewSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+            : ''}
+          content={summaryViewSession.summary}
+          onClose={() => setSummaryViewSession(null)}
+        />
+      )}
+
+      {/* ── TimelineStepsModal (type timeline_steps) ─────────────────────── */}
+      {timelineStepsSession && (
+        <TimelineStepsModal
+          session={timelineStepsSession}
+          projectId={projectId}
+          onClose={() => setTimelineStepsSession(null)}
+          onRefresh={loadMilestones}
         />
       )}
 

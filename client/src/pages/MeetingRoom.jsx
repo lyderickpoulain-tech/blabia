@@ -3,6 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import MeetingCloseModal from '../components/MeetingCloseModal';
 import DecisionCard from '../components/DecisionCard';
+import SummaryDisplayModal from '../components/SummaryDisplayModal';
+import ExportModal from '../components/ExportModal';
+import TimelineStepsModal from '../components/TimelineStepsModal';
 import api from '../utils/api';
 
 // ── Palette agent (initiale + couleur de bulle) ───────────────────────────────
@@ -532,6 +535,8 @@ export default function MeetingRoom() {
 
   // Modal de clôture
   const [showCloseModal,  setShowCloseModal]  = useState(false);
+  // Modal livrable (section isClosed)
+  const [showDeliverable, setShowDeliverable] = useState(false);
   // Bannière suggest_close émise par l'orchestrateur
   const [suggestClose,    setSuggestClose]    = useState(null); // { reason: string } | null
   // Tokens consommés (cumulés par les turn_complete SSE)
@@ -1656,16 +1661,29 @@ export default function MeetingRoom() {
         {/* ── Barre de saisie ─────────────────────────────────────────────── */}
         <div className="shrink-0 border-t border-gray-100 p-3 space-y-2 relative">
           {isClosed ? (
-            <div className="flex items-center justify-between gap-3 py-1.5 px-1">
-              <p className={`text-sm font-medium ${session.status === 'accepted' ? 'text-green-600' : 'text-gray-400'}`}>
-                {session.status === 'accepted' ? '✅ Réunion acceptée' : '🚫 Réunion abandonnée'}
-              </p>
-              <button
-                onClick={handleReopen}
-                className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition"
-              >
-                🔁 Reprendre
-              </button>
+            <div className="space-y-2 py-1 px-1">
+              <div className="flex items-center justify-between gap-3">
+                <p className={`text-sm font-medium ${session.status === 'accepted' ? 'text-green-600' : 'text-gray-400'}`}>
+                  {session.status === 'accepted' ? '✅ Réunion acceptée' : '🚫 Réunion abandonnée'}
+                </p>
+                <button
+                  onClick={handleReopen}
+                  className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition"
+                >
+                  🔁 Reprendre
+                </button>
+              </div>
+              {session.status === 'accepted' && (session.summary || currentIntention === 'timeline_steps') && (
+                <button
+                  onClick={() => setShowDeliverable(true)}
+                  className="w-full bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-xs font-semibold py-2 rounded-xl transition flex items-center justify-center gap-1.5"
+                >
+                  {currentIntention === 'summary' ? '📋 Voir le compte-rendu'
+                    : currentIntention === 'claude_code' ? '💻 Voir le prompt'
+                    : currentIntention === 'timeline_steps' ? '📅 Voir les étapes'
+                    : '📄 Voir le livrable'}
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -1797,6 +1815,32 @@ export default function MeetingRoom() {
         projectId={projectId}
         onClose={() => setShowCloseModal(false)}
         onClosed={handleSessionClosed}
+      />
+    )}
+
+    {/* ── Modaux livrables ────────────────────────────────────────────── */}
+    {showDeliverable && session?.status === 'accepted' && currentIntention === 'summary' && (
+      <SummaryDisplayModal
+        title={session.task}
+        date={session.createdAt
+          ? new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+          : ''}
+        content={session.summary}
+        onClose={() => setShowDeliverable(false)}
+      />
+    )}
+    {showDeliverable && session?.status === 'accepted' && currentIntention === 'claude_code' && (
+      <ExportModal
+        directContent={session.summary}
+        projectId={projectId}
+        onClose={() => setShowDeliverable(false)}
+      />
+    )}
+    {showDeliverable && session?.status === 'accepted' && currentIntention === 'timeline_steps' && (
+      <TimelineStepsModal
+        session={session}
+        projectId={projectId}
+        onClose={() => setShowDeliverable(false)}
       />
     )}
     </>

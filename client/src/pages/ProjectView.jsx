@@ -5,6 +5,9 @@ import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getPricing, PRICING_CONFIG } from '../utils/techStack';
 import GenerateTimelineModal from '../components/GenerateTimelineModal';
+import SummaryDisplayModal from '../components/SummaryDisplayModal';
+import ExportModal from '../components/ExportModal';
+import TimelineStepsModal from '../components/TimelineStepsModal';
 
 // ── Définition des catégories de stack (idem EnvironmentPage) ─────────────────
 const CATEGORIES = [
@@ -291,6 +294,18 @@ function SessionStatusBadge({ status }) {
   return <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Interrompue</span>;
 }
 
+function getIntentionKey(session) {
+  const i = session?.intention;
+  if (Array.isArray(i) && i.length) return i[0];
+  try { const p = JSON.parse(i || '[]'); return p[0] || ''; } catch { return ''; }
+}
+
+const DELIVERABLE_ICON = {
+  summary: '📋', synthesis: '📋', memory: '📋', meeting: '📋',
+  claude_code: '💻', technical: '💻',
+  timeline_steps: '📅',
+};
+
 function CodeStatusBadge({ session }) {
   if (!session.hasCode) return null;
   if (session.codeStatus === 'implemented')
@@ -323,7 +338,7 @@ function buildSessionThreads(sessions) {
   return roots.flatMap(root => flattenNode(root, 0));
 }
 
-function SessionRow({ session, projectId }) {
+function SessionRow({ session, projectId, onViewDeliverable }) {
   const navigate   = useNavigate();
   const [reopening, setReopening] = useState(false);
 
@@ -369,6 +384,15 @@ function SessionRow({ session, projectId }) {
         <td className="px-4 py-3 text-right">
           {isFinished ? (
             <div className="inline-flex items-center gap-2">
+              {session.status === 'accepted' && onViewDeliverable && DELIVERABLE_ICON[getIntentionKey(session)] && (
+                <button
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); onViewDeliverable(session); }}
+                  title="Voir le livrable"
+                  className="text-base leading-none hover:scale-110 transition"
+                >
+                  {DELIVERABLE_ICON[getIntentionKey(session)]}
+                </button>
+              )}
               <span className="text-xs text-blue-600 font-medium">Voir →</span>
               <button
                 onClick={handleReopen}
@@ -410,6 +434,15 @@ function SessionRow({ session, projectId }) {
         {isFinished ? (
           <div className="flex items-center gap-2 mt-2">
             <p className="text-xs text-blue-600 font-medium flex-1">Voir la réunion →</p>
+            {session.status === 'accepted' && onViewDeliverable && DELIVERABLE_ICON[getIntentionKey(session)] && (
+              <button
+                onClick={e => { e.preventDefault(); e.stopPropagation(); onViewDeliverable(session); }}
+                title="Voir le livrable"
+                className="text-base leading-none hover:scale-110 transition shrink-0"
+              >
+                {DELIVERABLE_ICON[getIntentionKey(session)]}
+              </button>
+            )}
             <button
               onClick={handleReopen}
               disabled={reopening}
@@ -495,6 +528,7 @@ export default function ProjectView() {
   const [showRename, setShowRename]     = useState(false);
   const [showBrief, setShowBrief]       = useState(false);
   const [showGenTimeline, setShowGenTimeline] = useState(false);
+  const [deliverableSession, setDeliverableSession] = useState(null);
   const [briefExpanded, setBriefExpanded] = useState(false);
   const [archiving, setArchiving]       = useState(false);
   const [memoryOpen, setMemoryOpen]     = useState(false);
@@ -988,13 +1022,13 @@ export default function ProjectView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {buildSessionThreads(sessions).map(s => <SessionRow key={s.id} session={s} projectId={id} />)}
+                {buildSessionThreads(sessions).map(s => <SessionRow key={s.id} session={s} projectId={id} onViewDeliverable={setDeliverableSession} />)}
               </tbody>
             </table>
           )}
           {!sessionsLoading && sessions.length > 0 && (
             <div className="md:hidden p-4 space-y-3">
-              {buildSessionThreads(sessions).map(s => <SessionRow key={s.id} session={s} projectId={id} />)}
+              {buildSessionThreads(sessions).map(s => <SessionRow key={s.id} session={s} projectId={id} onViewDeliverable={setDeliverableSession} />)}
             </div>
           )}
           {!sessionsLoading && sessions.length === 0 && (
@@ -1053,6 +1087,38 @@ export default function ProjectView() {
           onAdded={() => setShowGenTimeline(false)}
         />
       )}
+
+      {/* ── Modaux livrables depuis SessionRow ───────────────────────── */}
+      {(() => {
+        if (!deliverableSession) return null;
+        const ik = getIntentionKey(deliverableSession);
+        const dateStr = deliverableSession.createdAt
+          ? new Date(deliverableSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '';
+        if (['summary','synthesis','memory','meeting'].includes(ik)) return (
+          <SummaryDisplayModal
+            title={deliverableSession.task}
+            date={dateStr}
+            content={deliverableSession.summary}
+            onClose={() => setDeliverableSession(null)}
+          />
+        );
+        if (['claude_code','technical'].includes(ik)) return (
+          <ExportModal
+            directContent={deliverableSession.summary}
+            projectId={id}
+            onClose={() => setDeliverableSession(null)}
+          />
+        );
+        if (ik === 'timeline_steps') return (
+          <TimelineStepsModal
+            session={deliverableSession}
+            projectId={id}
+            onClose={() => setDeliverableSession(null)}
+          />
+        );
+        return null;
+      })()}
     </ProjectLayout>
   );
 }
