@@ -30,6 +30,12 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
   const [abandoning,      setAbandoning]      = useState(false);
   const [showFullContent, setShowFullContent] = useState(false);
 
+  // Étapes suggérées hors-contexte (intention != timeline_steps)
+  const rawPending = Array.isArray(session.pendingStepSuggestions) ? session.pendingStepSuggestions : [];
+  const [pendingSteps,   setPendingSteps]   = useState(rawPending);
+  const [addingStepIdx,  setAddingStepIdx]  = useState(null);
+  const [addedStepIdxs,  setAddedStepIdxs] = useState(new Set());
+
   // Génération automatique à l'ouverture
   useEffect(() => { generate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -102,6 +108,33 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
     }
   };
 
+  const handleAddPendingStep = async (step, idx) => {
+    if (addingStepIdx !== null || addedStepIdxs.has(idx)) return;
+    setAddingStepIdx(idx);
+    try {
+      await api.post(`/projects/${projectId}/milestones`, { title: step.title, type: step.type || 'summary' });
+      setAddedStepIdxs(prev => new Set([...prev, idx]));
+    } catch {}
+    setAddingStepIdx(null);
+  };
+
+  const handleDismissPendingStep = (idx) => {
+    setPendingSteps(prev => prev.filter((_, i) => i !== idx));
+    setAddedStepIdxs(prev => { const next = new Set(prev); next.delete(idx); return next; });
+  };
+
+  const handleAddAllPendingSteps = async () => {
+    const toAdd = pendingSteps.filter((_, i) => !addedStepIdxs.has(i));
+    for (let i = 0; i < toAdd.length; i++) {
+      const step = toAdd[i];
+      const origIdx = pendingSteps.indexOf(step);
+      try {
+        await api.post(`/projects/${projectId}/milestones`, { title: step.title, type: step.type || 'summary' });
+        setAddedStepIdxs(prev => new Set([...prev, origIdx]));
+      } catch {}
+    }
+  };
+
   return (
     <>
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
@@ -166,6 +199,55 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
               </div>
             );
           })()}
+
+          {/* Étapes suggérées hors-contexte */}
+          {pendingSteps.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+              <h3 className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+                💡 Nouvelles étapes suggérées ({pendingSteps.length})
+              </h3>
+              <ul className="space-y-2">
+                {pendingSteps.map((step, idx) => (
+                  <li key={idx} className="flex items-center gap-2 text-sm">
+                    <span className="flex-1 text-gray-800 leading-snug">{step.title}</span>
+                    {addedStepIdxs.has(idx) ? (
+                      <span className="text-xs text-green-600 font-medium shrink-0">✓ Ajoutée</span>
+                    ) : (
+                      <button
+                        onClick={() => handleAddPendingStep(step, idx)}
+                        disabled={addingStepIdx !== null}
+                        className="text-xs text-blue-600 hover:text-blue-800 border border-blue-300 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition disabled:opacity-50 shrink-0"
+                      >
+                        {addingStepIdx === idx ? '…' : 'Ajouter'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDismissPendingStep(idx)}
+                      className="text-gray-400 hover:text-gray-600 text-xs px-1 shrink-0"
+                      title="Ignorer"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleAddAllPendingSteps}
+                  disabled={addingStepIdx !== null || pendingSteps.every((_, i) => addedStepIdxs.has(i))}
+                  className="flex-1 text-xs text-blue-700 border border-blue-300 hover:bg-blue-100 py-1.5 rounded-lg transition disabled:opacity-50"
+                >
+                  Tout ajouter à la timeline
+                </button>
+                <button
+                  onClick={() => setPendingSteps([])}
+                  className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition"
+                >
+                  Tout ignorer
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Badge livrable + statut */}
           <div className="flex items-center gap-2">

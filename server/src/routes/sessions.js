@@ -253,6 +253,14 @@ async function appendMessageEntry(sessionId, message) {
   );
 }
 
+// Stocke silencieusement une suggestion d'étape hors-contexte (intention != timeline_steps)
+async function appendPendingStepSuggestion(sessionId, suggestion) {
+  await db.raw(
+    `UPDATE "Session" SET "pendingStepSuggestions" = COALESCE("pendingStepSuggestions", '[]'::jsonb) || ?::jsonb WHERE id = ?`,
+    [JSON.stringify([suggestion]), sessionId]
+  );
+}
+
 // Met à jour une entrée existante dans la timeline (lecture + réécriture)
 async function patchTimelineEntry(sessionId, entryId, patch) {
   const [session] = await db('Session').select('timeline').where({ id: sessionId }).limit(1);
@@ -922,7 +930,17 @@ Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : 
         });
       }
       if (suggestedStepTitle) {
-        send('suggest_step', { title: suggestedStepTitle, agentName: agent.name });
+        const sessionIntention = Array.isArray(session.intention) ? session.intention : [];
+        if (sessionIntention.includes('timeline_steps')) {
+          send('suggest_step', { title: suggestedStepTitle, agentName: agent.name });
+        } else {
+          await appendPendingStepSuggestion(sessionId, {
+            title: suggestedStepTitle,
+            type: 'summary',
+            agentName: agent.name,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
 
       if (questionMatch) {
@@ -2440,7 +2458,19 @@ Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : 
 
       if (suggestStpMatch) {
         const stepTitle = suggestStpMatch[1].trim();
-        if (stepTitle) send('suggest_step', { title: stepTitle, type: 'meeting' });
+        if (stepTitle) {
+          const meetingIntention = Array.isArray(session.intention) ? session.intention : [];
+          if (meetingIntention.includes('timeline_steps')) {
+            send('suggest_step', { title: stepTitle, type: 'summary' });
+          } else {
+            await appendPendingStepSuggestion(sessionId, {
+              title: stepTitle,
+              type: 'summary',
+              agentName: agent.name,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
       }
 
       // 2c. Mettre à jour les compteurs et recharger l'historique
