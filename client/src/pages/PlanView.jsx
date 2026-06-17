@@ -27,42 +27,7 @@ const MILESTONE_TYPE_CONFIG = {
 };
 const MILESTONE_TYPES = ['summary', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
 
-// ── Configs priorité et source ────────────────────────────────────────────────
-const PRIORITY_CONFIG = {
-  high:   { dot: 'bg-red-500',   label: 'Haute',   badge: 'bg-red-100 text-red-700 border-red-200' },
-  medium: { dot: 'bg-amber-400', label: 'Moyenne', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
-  low:    { dot: 'bg-gray-300',  label: 'Basse',   badge: 'bg-gray-100 text-gray-500 border-gray-200' },
-};
-
-const SOURCE_CONFIG = {
-  agent:   { label: 'Agent',   badge: 'bg-violet-100 text-violet-700 border-violet-200' },
-  session: { label: 'Réunion', badge: 'bg-blue-100 text-blue-700 border-blue-200' },
-  manual:  { label: 'Manuel',  badge: 'bg-gray-100 text-gray-500 border-gray-200' },
-};
-
-const TODO_STATUS_CONFIG = {
-  todo:        { label: 'À faire',    color: 'text-gray-500' },
-  in_progress: { label: 'En cours',   color: 'text-blue-600' },
-  done:        { label: 'Terminée',   color: 'text-green-600' },
-  cancelled:   { label: 'Annulée',    color: 'text-gray-400' },
-};
-
 // ── Composants helpers ─────────────────────────────────────────────────────────
-
-function StatusBadge({ status }) {
-  const c = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${c.badge}`}>
-      {c.icon} {c.label}
-    </span>
-  );
-}
-
-function StatusDot({ status, size = 'md' }) {
-  const c = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-  const sz = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4';
-  return <span className={`inline-block ${sz} rounded-full ${c.dot}`} />;
-}
 
 function StatusSelector({ value, onChange }) {
   return (
@@ -79,65 +44,11 @@ function StatusSelector({ value, onChange }) {
   );
 }
 
-function PriorityDot({ priority }) {
-  const c = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.medium;
-  return <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${c.dot}`} title={c.label} />;
-}
-
-function SourceBadge({ source }) {
-  const c = SOURCE_CONFIG[source];
-  if (!c) return null;
-  return (
-    <span className={`inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full border ${c.badge}`}>
-      {c.label}
-    </span>
-  );
-}
-
-// Formulaire inline "Ajouter une tâche" dans un groupe
-function InlineAddTodo({ onSave, onCancel }) {
-  const [title, setTitle] = useState('');
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef(null);
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!title.trim() || saving) return;
-    setSaving(true);
-    await onSave(title.trim());
-    setSaving(false);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 mt-2">
-      <span className="text-gray-300 text-xs shrink-0">+</span>
-      <input
-        ref={inputRef}
-        type="text"
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        placeholder="Titre de la tâche…"
-        className="flex-1 text-sm bg-transparent outline-none text-gray-800 placeholder-gray-400"
-      />
-      <button type="submit" disabled={!title.trim() || saving}
-        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
-        {saving ? '…' : 'Ajouter'}
-      </button>
-      <button type="button" onClick={onCancel}
-        className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition">
-        ✕
-      </button>
-    </form>
-  );
-}
-
 // ── Formulaire d'insertion de jalon ───────────────────────────────────────────
 function InsertMilestoneForm({ onSave, onCancel }) {
   const [title, setTitle]     = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [type, setType]       = useState('synthesis');
+  const [type, setType]       = useState('summary');
   const [saving, setSaving]   = useState(false);
   const inputRef = useRef(null);
 
@@ -219,20 +130,20 @@ function InsertButton({ onClick }) {
 
 // ── Carte d'un jalon ──────────────────────────────────────────────────────────
 function MilestoneCard({
-  milestone, todoCount,
+  milestone,
   onStatusChange, onSave, onDelete,
   isEditing, onStartEdit, onCancelEdit,
   isDragOver, draggable,
   onDragStart, onDragOver, onDrop, onDragEnd,
 }) {
   const typeConfig = MILESTONE_TYPE_CONFIG[milestone.type] || MILESTONE_TYPE_CONFIG.meeting;
-  const [form, setForm]   = useState({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'synthesis' });
+  const [form, setForm]   = useState({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'summary' });
   const [saving, setSaving] = useState(false);
   const titleRef = useRef(null);
 
   useEffect(() => {
     if (isEditing) {
-      setForm({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'meeting' });
+      setForm({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'summary' });
       setTimeout(() => titleRef.current?.focus(), 50);
     }
   }, [isEditing, milestone]);
@@ -338,8 +249,8 @@ function MilestoneCard({
             <p className="text-xs text-gray-500 mb-2 leading-relaxed line-clamp-2">{milestone.description}</p>
           )}
 
-          <div className="flex items-center gap-3 flex-wrap">
-            {formattedDate && (
+          {formattedDate && (
+            <div className="flex items-center gap-3 flex-wrap">
               <span className="inline-flex items-center gap-1 text-xs text-gray-400">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -347,516 +258,16 @@ function MilestoneCard({
                 </svg>
                 {formattedDate}
               </span>
-            )}
-            {todoCount > 0 && (
-              <span className="text-xs text-gray-400">{todoCount} tâche{todoCount > 1 ? 's' : ''}</span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── TodoDrawer : panel latéral ────────────────────────────────────────────────
-function TodoDrawer({ todo, milestones, onSave, onDelete, onClose }) {
-  const [form, setForm] = useState({
-    title:       todo.title,
-    description: todo.description || '',
-    status:      todo.status,
-    priority:    todo.priority,
-    dueDate:     todo.dueDate ? todo.dueDate.substring(0, 10) : '',
-    milestoneId: todo.milestoneId || '',
-  });
-  const [saving,   setSaving]   = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const update = (field, value) => setForm(p => ({ ...p, [field]: value }));
-
-  const handleSave = async () => {
-    if (!form.title.trim() || saving) return;
-    setSaving(true);
-    await onSave({
-      title:       form.title.trim(),
-      description: form.description.trim() || null,
-      status:      form.status,
-      priority:    form.priority,
-      dueDate:     form.dueDate || null,
-      milestoneId: form.milestoneId || null,
-    });
-    setSaving(false);
-  };
-
-  const handleDelete = async () => {
-    if (!confirm('Supprimer cette tâche ?')) return;
-    setDeleting(true);
-    await onDelete();
-    setDeleting(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
-      <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Panneau */}
-      <div className="w-full max-w-sm bg-white shadow-2xl flex flex-col animate-slide-in">
-        {/* En-tête */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-bold text-gray-900">Détails de la tâche</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">×</button>
-        </div>
-
-        {/* Corps */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Titre */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Titre</label>
-            <input type="text" value={form.title} onChange={e => update('title', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Description</label>
-            <textarea value={form.description} onChange={e => update('description', e.target.value)}
-              rows={3} placeholder="Détails optionnels…"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
-          </div>
-
-          {/* Statut + Priorité */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Statut</label>
-              <select value={form.status} onChange={e => update('status', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                {Object.entries(TODO_STATUS_CONFIG).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Priorité</label>
-              <select value={form.priority} onChange={e => update('priority', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                {Object.entries(PRIORITY_CONFIG).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Échéance */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date d'échéance</label>
-            <input type="date" value={form.dueDate} onChange={e => update('dueDate', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
-          </div>
-
-          {/* Jalon */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Jalon</label>
-            <select value={form.milestoneId} onChange={e => update('milestoneId', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-              <option value="">Non assignée</option>
-              {milestones.map(m => (
-                <option key={m.id} value={m.id}>{m.title}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Source (display only) */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Source</label>
-            <SourceBadge source={todo.source} />
-          </div>
-        </div>
-
-        {/* Pied */}
-        <div className="shrink-0 px-5 py-4 border-t border-gray-100 space-y-2">
-          <button onClick={handleSave} disabled={!form.title.trim() || saving}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-50">
-            {saving ? 'Sauvegarde…' : 'Sauvegarder les modifications'}
-          </button>
-          <button onClick={handleDelete} disabled={deleting}
-            className="w-full border border-red-200 text-red-500 hover:bg-red-50 py-2.5 rounded-xl text-sm font-medium transition disabled:opacity-50">
-            {deleting ? 'Suppression…' : 'Supprimer la tâche'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Ligne todo ────────────────────────────────────────────────────────────────
-function TodoItemRow({ todo, onToggle, onClick, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd }) {
-  const isDone      = todo.status === 'done';
-  const isCancelled = todo.status === 'cancelled';
-  const faded       = isDone || isCancelled;
-
-  const dueLabel = todo.dueDate
-    ? new Date(todo.dueDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
-    : null;
-
-  const isOverdue = todo.dueDate && !isDone && !isCancelled
-    && new Date(todo.dueDate) < new Date();
-
-  return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      onClick={onClick}
-      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition cursor-pointer select-none ${
-        isDragOver
-          ? 'border-blue-300 bg-blue-50'
-          : faded
-          ? 'bg-gray-50 border-transparent opacity-60 hover:opacity-80'
-          : 'bg-white border-transparent hover:border-gray-200 hover:shadow-sm'
-      }`}
-    >
-      {/* Checkbox */}
-      <button
-        onClick={e => { e.stopPropagation(); onToggle(); }}
-        className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition ${
-          isDone
-            ? 'bg-green-500 border-green-500 text-white'
-            : 'border-gray-300 hover:border-blue-400 bg-white'
-        }`}
-      >
-        {isDone && (
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        )}
-      </button>
-
-      {/* Priority dot */}
-      <PriorityDot priority={todo.priority} />
-
-      {/* Title */}
-      <span className={`flex-1 text-sm leading-snug truncate ${
-        faded ? 'line-through text-gray-400' : 'text-gray-800'
-      }`}>
-        {todo.title}
-      </span>
-
-      {/* Due date */}
-      {dueLabel && (
-        <span className={`text-xs shrink-0 ${isOverdue ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-          {dueLabel}
-        </span>
-      )}
-
-      {/* Source badge (agent/session seulement) */}
-      {todo.source !== 'manual' && (
-        <SourceBadge source={todo.source} />
-      )}
-    </div>
-  );
-}
-
-// ── Groupe de todos (par jalon ou "Non assignées") ────────────────────────────
-function TodoGroup({
-  groupId, label, milestoneStatus,
-  todos,
-  onToggleTodo, onClickTodo,
-  onAddTodo,
-  dragState, onDragStart, onDragOver, onDragOverGroup, onDrop, onDropGroup, onDragEnd,
-}) {
-  const [addingHere, setAddingHere] = useState(false);
-  const { draggedId, dragOverTodoId, dragOverGroupId } = dragState;
-  const isGroupOver = dragOverGroupId === groupId && !dragOverTodoId;
-
-  const handleAddTodo = async (title) => {
-    await onAddTodo(groupId === 'unassigned' ? null : groupId, title);
-    setAddingHere(false);
-  };
-
-  return (
-    <div
-      className={`rounded-2xl border transition-all mb-4 overflow-hidden ${
-        isGroupOver ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'
-      }`}
-      onDragOver={e => { e.preventDefault(); onDragOverGroup(groupId); }}
-      onDrop={e => onDropGroup(e, groupId)}
-    >
-      {/* En-tête du groupe */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2 min-w-0">
-          {milestoneStatus && <StatusDot status={milestoneStatus} size="sm" />}
-          <h3 className="text-sm font-semibold text-gray-800 truncate">{label}</h3>
-          <span className="text-xs text-gray-400 shrink-0">{todos.length}</span>
-        </div>
-        <button
-          onClick={() => setAddingHere(v => !v)}
-          className="text-xs text-blue-600 hover:text-blue-800 font-medium transition shrink-0"
-        >
-          + Ajouter
-        </button>
-      </div>
-
-      {/* Liste des todos */}
-      <div className={`p-2 space-y-0.5 ${todos.length === 0 && !addingHere ? 'min-h-[40px]' : ''}`}>
-        {todos.map(todo => (
-          <TodoItemRow
-            key={todo.id}
-            todo={todo}
-            onToggle={() => onToggleTodo(todo)}
-            onClick={() => onClickTodo(todo)}
-            isDragOver={dragOverTodoId === todo.id && draggedId !== todo.id}
-            onDragStart={() => onDragStart(todo.id, groupId)}
-            onDragOver={e => { e.preventDefault(); e.stopPropagation(); onDragOver(todo.id); }}
-            onDrop={e => { e.preventDefault(); e.stopPropagation(); onDrop(e, todo.id, groupId); }}
-            onDragEnd={onDragEnd}
-          />
-        ))}
-
-        {/* État vide */}
-        {todos.length === 0 && !addingHere && (
-          <p className="text-xs text-gray-300 italic px-3 py-2">Aucune tâche</p>
-        )}
-
-        {/* Formulaire inline */}
-        {addingHere && (
-          <InlineAddTodo
-            onSave={handleAddTodo}
-            onCancel={() => setAddingHere(false)}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── TodoColumn : liste groupée avec DnD, filtres, drawer ─────────────────────
-function TodoColumn({ projectId, milestones, todos, onUpdate }) {
-  const [filter, setFilter]             = useState('all');
-  const [selectedTodo, setSelectedTodo] = useState(null);
-  const [draggedId, setDraggedId]       = useState(null);
-  const [draggedGroupId, setDraggedGroupId] = useState(null);
-  const [dragOverTodoId, setDragOverTodoId] = useState(null);
-  const [dragOverGroupId, setDragOverGroupId] = useState(null);
-
-  // ── Filtrage ────────────────────────────────────────────────────────────────
-  const filtered = todos.filter(t => {
-    if (filter === 'todo')        return t.status === 'todo';
-    if (filter === 'in_progress') return t.status === 'in_progress';
-    if (filter === 'done')        return t.status === 'done';
-    return t.status !== 'cancelled';
-  });
-
-  // ── Groupes ─────────────────────────────────────────────────────────────────
-  const buildGroups = () => {
-    const byMilestone = milestones.map(m => ({
-      id:              m.id,
-      label:           m.title,
-      milestoneStatus: m.status,
-      todos:           filtered.filter(t => t.milestoneId === m.id)
-                               .sort((a, b) => a.displayOrder - b.displayOrder)
-    }));
-    const unassigned = {
-      id:    'unassigned',
-      label: 'Non assignées',
-      milestoneStatus: null,
-      todos: filtered.filter(t => !t.milestoneId)
-                     .sort((a, b) => a.displayOrder - b.displayOrder)
-    };
-    return [...byMilestone, unassigned];
-  };
-
-  const groups = buildGroups();
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  const handleToggle = async (todo) => {
-    const newStatus = todo.status === 'done' ? 'todo' : 'done';
-    try {
-      await api.patch(`/projects/${projectId}/todos/${todo.id}`, { status: newStatus });
-      if (selectedTodo?.id === todo.id) setSelectedTodo(prev => ({ ...prev, status: newStatus }));
-      onUpdate();
-    } catch {}
-  };
-
-  const handleSaveDrawer = async (data) => {
-    if (!selectedTodo) return;
-    try {
-      await api.patch(`/projects/${projectId}/todos/${selectedTodo.id}`, data);
-      setSelectedTodo(prev => ({ ...prev, ...data }));
-      onUpdate();
-    } catch {}
-  };
-
-  const handleDeleteDrawer = async () => {
-    if (!selectedTodo) return;
-    try {
-      await api.delete(`/projects/${projectId}/todos/${selectedTodo.id}`);
-      setSelectedTodo(null);
-      onUpdate();
-    } catch {}
-  };
-
-  const handleAddTodo = async (milestoneId, title) => {
-    try {
-      await api.post(`/projects/${projectId}/todos`, {
-        title,
-        milestoneId: milestoneId || null,
-        source: 'manual'
-      });
-      onUpdate();
-    } catch {}
-  };
-
-  // ── Drag & Drop ─────────────────────────────────────────────────────────────
-
-  const handleDragStart  = (todoId, groupId) => {
-    setDraggedId(todoId);
-    setDraggedGroupId(groupId);
-  };
-  const handleDragOver   = (todoId) => setDragOverTodoId(todoId);
-  const handleDragOverGroup = (groupId) => {
-    setDragOverGroupId(groupId);
-    if (dragOverTodoId) setDragOverTodoId(null);
-  };
-  const handleDragEnd    = () => {
-    setDraggedId(null); setDraggedGroupId(null);
-    setDragOverTodoId(null); setDragOverGroupId(null);
-  };
-
-  const applyDrop = async (targetTodoId, targetGroupId) => {
-    if (!draggedId) return;
-
-    const sourceMilestoneId = draggedGroupId === 'unassigned' ? null : draggedGroupId;
-    const targetMilestoneId = targetGroupId  === 'unassigned' ? null : targetGroupId;
-    const groupChanged = sourceMilestoneId !== targetMilestoneId;
-
-    // Construire le nouvel ordre dans le groupe cible
-    const targetTodos = todos
-      .filter(t => (t.milestoneId || 'unassigned') === targetGroupId && t.id !== draggedId)
-      .sort((a, b) => a.displayOrder - b.displayOrder);
-
-    if (targetTodoId) {
-      const idx = targetTodos.findIndex(t => t.id === targetTodoId);
-      const draggedTodo = todos.find(t => t.id === draggedId);
-      if (draggedTodo) targetTodos.splice(idx, 0, draggedTodo);
-    } else {
-      const draggedTodo = todos.find(t => t.id === draggedId);
-      if (draggedTodo) targetTodos.push(draggedTodo);
-    }
-
-    try {
-      if (groupChanged) {
-        await api.patch(`/projects/${projectId}/todos/${draggedId}`, {
-          milestoneId: targetMilestoneId
-        });
-      }
-      if (targetTodos.length > 1) {
-        await api.patch(`/projects/${projectId}/todos/reorder`, {
-          order: targetTodos.map(t => t.id)
-        });
-      }
-      onUpdate();
-    } catch {}
-  };
-
-  const handleDrop = (e, todoId, groupId) => {
-    e.preventDefault();
-    applyDrop(todoId, groupId);
-    handleDragEnd();
-  };
-
-  const handleDropGroup = (e, groupId) => {
-    e.preventDefault();
-    if (draggedId) applyDrop(null, groupId);
-    handleDragEnd();
-  };
-
-  const filters = [
-    { id: 'all',        label: 'Toutes' },
-    { id: 'in_progress',label: 'En cours' },
-    { id: 'todo',       label: 'À faire' },
-    { id: 'done',       label: 'Terminées' },
-  ];
-
-  const totalAll = todos.filter(t => t.status !== 'cancelled').length;
-  const totalDone = todos.filter(t => t.status === 'done').length;
-
-  return (
-    <div>
-      {/* Barre de stats + filtres */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs text-gray-400">
-            {totalDone}/{totalAll} tâche{totalAll !== 1 ? 's' : ''} terminée{totalDone !== 1 ? 's' : ''}
-          </p>
-          {totalAll > 0 && (
-            <span className="text-xs font-medium text-gray-500">
-              {Math.round(totalDone / totalAll * 100)}%
-            </span>
           )}
         </div>
-        {totalAll > 0 && (
-          <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mb-3">
-            <div
-              className="h-1.5 rounded-full bg-green-500 transition-all duration-500"
-              style={{ width: `${Math.round(totalDone / totalAll * 100)}%` }}
-            />
-          </div>
-        )}
-        <div className="flex gap-1">
-          {filters.map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition ${
-                filter === f.id ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Groupes */}
-      {groups.map(group => (
-        <TodoGroup
-          key={group.id}
-          groupId={group.id}
-          label={group.label}
-          milestoneStatus={group.milestoneStatus}
-          todos={group.todos}
-          onToggleTodo={handleToggle}
-          onClickTodo={setSelectedTodo}
-          onAddTodo={handleAddTodo}
-          dragState={{ draggedId, dragOverTodoId, dragOverGroupId }}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragOverGroup={handleDragOverGroup}
-          onDrop={handleDrop}
-          onDropGroup={handleDropGroup}
-          onDragEnd={handleDragEnd}
-        />
-      ))}
-
-      {/* Drawer */}
-      {selectedTodo && (
-        <TodoDrawer
-          todo={selectedTodo}
-          milestones={milestones}
-          onSave={handleSaveDrawer}
-          onDelete={handleDeleteDrawer}
-          onClose={() => setSelectedTodo(null)}
-        />
       )}
     </div>
   );
 }
 
 // ── Composant Timeline principal ──────────────────────────────────────────────
-function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
+function MilestoneTimeline({ projectId, milestones, onUpdate }) {
   const [insertingAfter, setInsertingAfter] = useState(null); // null | 'start' | milestoneId
   const [editingId, setEditingId]           = useState(null);
   const [mode, setMode]                     = useState(() =>
@@ -875,12 +286,6 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
       })
     : [...milestones].sort((a, b) => a.displayOrder - b.displayOrder);
 
-  // Comptage des tâches par jalon
-  const todoCountByMilestone = todos.reduce((acc, t) => {
-    if (t.milestoneId) acc[t.milestoneId] = (acc[t.milestoneId] || 0) + 1;
-    return acc;
-  }, {});
-
   // Progression
   const done  = milestones.filter(m => m.status === 'done').length;
   const total = milestones.length;
@@ -890,7 +295,6 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
 
   const handleInsert = async ({ title, dueDate, type }, afterId) => {
     try {
-      // Calculer le displayOrder pour l'insertion
       let targetOrder;
       if (afterId === 'start') {
         targetOrder = sorted.length > 0 ? sorted[0].displayOrder - 1 : 0;
@@ -905,10 +309,9 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
       const { data } = await api.post(`/projects/${projectId}/milestones`, {
         title,
         dueDate,
-        type: type || 'meeting',
+        type: type || 'summary',
         displayOrder: targetOrder
       });
-      // Normaliser les ordres après insertion
       const newList = [...sorted, data].sort((a, b) => a.displayOrder - b.displayOrder);
       await api.patch(`/projects/${projectId}/milestones/reorder`, {
         order: newList.map(m => m.id)
@@ -934,7 +337,7 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
   };
 
   const handleDelete = async (milestoneId) => {
-    if (!confirm('Supprimer ce jalon ? Les tâches associées ne seront pas supprimées.')) return;
+    if (!confirm('Supprimer ce jalon ?')) return;
     try {
       await api.delete(`/projects/${projectId}/milestones/${milestoneId}`);
       onUpdate();
@@ -1005,13 +408,11 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
 
       {/* Timeline */}
       <div className="relative">
-        {/* Ligne verticale centrale */}
         {sorted.length > 0 && (
           <div className="absolute left-4 top-6 bottom-6 w-0.5 bg-gray-200 z-0" />
         )}
 
         <div className="relative z-10">
-          {/* Bouton insertion avant le premier */}
           {insertingAfter === 'start' ? (
             <div className="pl-10">
               <InsertMilestoneForm
@@ -1023,20 +424,15 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
             <InsertButton onClick={() => { setInsertingAfter('start'); setEditingId(null); }} />
           )}
 
-          {sorted.map((m, i) => (
+          {sorted.map((m) => (
             <div key={m.id}>
-              {/* Ligne de milestone */}
               <div className="flex items-start gap-3">
-                {/* Dot sur la ligne */}
                 <div className="shrink-0 w-8 flex flex-col items-center pt-4">
                   <div className={`w-4 h-4 rounded-full border-2 border-white ring-2 z-10 ${STATUS_CONFIG[m.status]?.dot || 'bg-gray-300'} ${STATUS_CONFIG[m.status]?.ring || 'ring-gray-300'}`} />
                 </div>
-
-                {/* Carte */}
                 <div className="flex-1 mb-3">
                   <MilestoneCard
                     milestone={m}
-                    todoCount={todoCountByMilestone[m.id] || 0}
                     onStatusChange={(s) => handleStatusChange(m.id, s)}
                     onSave={(data) => handleSave(m.id, data)}
                     onDelete={() => handleDelete(m.id)}
@@ -1053,7 +449,6 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
                 </div>
               </div>
 
-              {/* Bouton insertion entre jalons */}
               {insertingAfter === m.id ? (
                 <div className="pl-10">
                   <InsertMilestoneForm
@@ -1067,7 +462,6 @@ function MilestoneTimeline({ projectId, milestones, todos, onUpdate }) {
             </div>
           ))}
 
-          {/* État vide */}
           {sorted.length === 0 && insertingAfter !== 'start' && (
             <div className="text-center py-10 text-gray-400">
               <p className="text-4xl mb-3">🗓</p>
@@ -1086,7 +480,6 @@ export default function PlanView() {
   const { id: projectId } = useParams();
   const [project,    setProject]    = useState(null);
   const [milestones, setMilestones] = useState([]);
-  const [todos,      setTodos]      = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState('');
 
@@ -1098,7 +491,6 @@ export default function PlanView() {
       ]);
       setProject(projRes.data);
       setMilestones(planRes.data.milestones || []);
-      setTodos(planRes.data.todos || []);
     } catch {
       setError('Impossible de charger le plan du projet.');
     } finally {
@@ -1110,7 +502,7 @@ export default function PlanView() {
 
   return (
     <ProjectLayout projectId={projectId}>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         {/* Navigation */}
         <div className="flex items-center gap-3 mb-5">
           <Link to={`/projects/${projectId}`} className="text-sm text-gray-500 hover:text-gray-700">
@@ -1150,36 +542,18 @@ export default function PlanView() {
           </div>
         )}
 
-        {/* Contenu — deux colonnes desktop, une colonne mobile */}
+        {/* Contenu — timeline full-width */}
         {!loading && !error && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Colonne gauche : Timeline des jalons */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jalons</h2>
-                <span className="text-xs text-gray-400">{milestones.length} jalon{milestones.length !== 1 ? 's' : ''}</span>
-              </div>
-              <MilestoneTimeline
-                projectId={projectId}
-                milestones={milestones}
-                todos={todos}
-                onUpdate={loadPlan}
-              />
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jalons</h2>
+              <span className="text-xs text-gray-400">{milestones.length} jalon{milestones.length !== 1 ? 's' : ''}</span>
             </div>
-
-            {/* Colonne droite : Todo list */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Tâches</h2>
-                <span className="text-xs text-gray-400">{todos.filter(t => t.status !== 'cancelled').length} tâche{todos.length !== 1 ? 's' : ''}</span>
-              </div>
-              <TodoColumn
-                projectId={projectId}
-                milestones={milestones}
-                todos={todos}
-                onUpdate={loadPlan}
-              />
-            </div>
+            <MilestoneTimeline
+              projectId={projectId}
+              milestones={milestones}
+              onUpdate={loadPlan}
+            />
           </div>
         )}
       </div>

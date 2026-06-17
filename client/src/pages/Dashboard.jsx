@@ -127,36 +127,13 @@ export default function Dashboard() {
                     {project.description && (
                       <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{project.description}</p>
                     )}
-                    {/* Indicateur plan */}
-                    {project.todoTotal > 0 ? (
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden shrink-0">
-                          <div
-                            className="h-1.5 rounded-full bg-green-500 transition-all"
-                            style={{ width: `${Math.round((project.todoDone / project.todoTotal) * 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-gray-400">{Math.round((project.todoDone / project.todoTotal) * 100)}%</span>
-                        {project.todoInProgress > 0 && (
-                          <span className="text-xs text-blue-600 font-medium">{project.todoInProgress} en cours</span>
-                        )}
-                        <Link
-                          to={`/projects/${project.id}/plan`}
-                          onClick={e => e.stopPropagation()}
-                          className="text-xs text-blue-500 hover:text-blue-700 font-medium transition ml-auto"
-                        >
-                          Plan →
-                        </Link>
-                      </div>
-                    ) : (
-                      <Link
-                        to={`/projects/${project.id}/plan`}
-                        onClick={e => e.stopPropagation()}
-                        className="text-xs text-gray-300 hover:text-blue-500 mt-1 inline-block transition"
-                      >
-                        + Démarrer le plan
-                      </Link>
-                    )}
+                    <Link
+                      to={`/projects/${project.id}/plan`}
+                      onClick={e => e.stopPropagation()}
+                      className="text-xs text-gray-300 hover:text-blue-500 mt-1 inline-block transition"
+                    >
+                      Plan →
+                    </Link>
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={project.status} /></td>
                   <td className="px-4 py-3">
@@ -194,30 +171,6 @@ export default function Dashboard() {
               </div>
               {project.description && (
                 <p className="text-xs text-gray-400 mb-2 line-clamp-2">{project.description}</p>
-              )}
-              {/* Indicateur plan mobile */}
-              {project.todoTotal > 0 && (
-                <div className="mt-2 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className="h-1.5 rounded-full bg-green-500"
-                        style={{ width: `${Math.round((project.todoDone / project.todoTotal) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-400 shrink-0">{project.todoDone}/{project.todoTotal} tâches</span>
-                    {project.todoInProgress > 0 && (
-                      <span className="text-xs text-blue-600 font-medium shrink-0">{project.todoInProgress} en cours</span>
-                    )}
-                  </div>
-                  <Link
-                    to={`/projects/${project.id}/plan`}
-                    onClick={e => e.stopPropagation()}
-                    className="text-xs text-blue-500 font-medium"
-                  >
-                    Voir le plan →
-                  </Link>
-                </div>
               )}
               <div className="flex items-center justify-between mt-2">
                 <span className="text-xs text-gray-400">{project.sessionCount ?? 0} réunion{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · {formatDate(project.createdAt)}</span>
