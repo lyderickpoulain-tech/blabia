@@ -529,6 +529,7 @@ export default function ProjectView() {
   const [showBrief, setShowBrief]       = useState(false);
   const [showGenTimeline, setShowGenTimeline] = useState(false);
   const [deliverableSession, setDeliverableSession] = useState(null);
+  const [stats, setStats]                           = useState(null);
   const [briefExpanded, setBriefExpanded] = useState(false);
   const [archiving, setArchiving]       = useState(false);
   const [memoryOpen, setMemoryOpen]     = useState(false);
@@ -622,6 +623,10 @@ export default function ProjectView() {
       .then(({ data }) => setSessions(data))
       .catch(() => {})
       .finally(() => setSessionsLoading(false));
+
+    api.get(`/projects/${id}/stats`)
+      .then(({ data }) => setStats(data))
+      .catch(() => {});
 
     setAgentsLoading(true);
     api.get(`/projects/${id}/agents`)
@@ -1041,6 +1046,16 @@ export default function ProjectView() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Encart stats tokens ────────────────────────────────────────────── */}
+      {activeTab === 'sessions' && stats && stats.totalTokens > 0 && (
+        <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 flex flex-wrap gap-4 items-center text-xs text-gray-500">
+          <span>🔢 <strong className="text-gray-700">{stats.totalTokens.toLocaleString('fr-FR')}</strong> tokens consommés</span>
+          <span>💬 <strong className="text-gray-700">{stats.sessionCount}</strong> réunion{stats.sessionCount !== 1 ? 's' : ''} avec données</span>
+          <span>💶 Coût estimé : <strong className="text-gray-700">~€{stats.estimatedCost.toFixed(4)}</strong></span>
+          <span className="text-gray-400 text-[10px] ml-auto">(sonnet-4-6 : $3/1M input · $15/1M output)</span>
         </div>
       )}
 

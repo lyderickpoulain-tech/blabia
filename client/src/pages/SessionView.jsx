@@ -482,7 +482,7 @@ export default function SessionView() {
                   if (!tu || !tu.total) return null;
                   return (
                     <span className="text-xs text-gray-400" title={`Input : ${tu.input.toLocaleString('fr-FR')} · Output : ${tu.output.toLocaleString('fr-FR')}`}>
-                      🔢 {tu.total.toLocaleString('fr-FR')} tokens
+                      🔢 {tu.total.toLocaleString('fr-FR')} tokens · ~€{((tu.input * 3 + tu.output * 15) / 1_000_000).toFixed(4)}
                     </span>
                   );
                 })()}

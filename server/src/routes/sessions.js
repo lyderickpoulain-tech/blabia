@@ -913,7 +913,7 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
 
       const { text: fullText } = await streamAgent(systemPrompt, userMessage, (chunk) => {
         send('chunk', { agent: agent.name, text: chunk });
-      }, 2048, session.model || MODEL);
+      }, 800, session.model || MODEL);
 
       // Détecter question, suggestion agent, suggestion étape
       const questionMatch = fullText.match(/\[QUESTION:\s*([\s\S]*?)\]/);
@@ -1041,7 +1041,7 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
         'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres ##, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.\nContraintes de synthèse : maximum 600 mots, structure claire avec titres de section (##), privilégie les points actionnables aux développements théoriques.\nSi et seulement si la restitution implique une implémentation technique concrète (code, développement, configuration à effectuer), ajoute le marqueur exact [HAS_CODE] à la toute fin de ton texte, sur une nouvelle ligne.',
         `Tâche originale : ${synthesisTask}\n\nContributions des agents :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
         (chunk) => send('summary_chunk', { text: chunk }),
-        4000,
+        2000,
         session.model || MODEL
       );
 
@@ -1173,7 +1173,7 @@ router.post('/:sessionId/synthesize', async (req, res) => {
       'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.\nSi et seulement si la restitution implique une implémentation technique concrète (code, développement, configuration à effectuer), ajoute le marqueur exact [HAS_CODE] à la toute fin de ton texte, sur une nouvelle ligne.',
       `Tâche originale : ${session.task}\n\nConversation complète :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
       (chunk) => send('summary_chunk', { text: chunk }),
-      8192,
+      2000,
       session.model || MODEL
     );
 
@@ -1816,10 +1816,10 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
   const { messageId, answer, status } = req.body;
   const isAdmin = req.user.role === 'admin';
 
-  const VALID_STATUSES = ['answered', 'deferred'];
+  const VALID_STATUSES = ['answered', 'deferred', 'delegated'];
   if (!messageId) return res.status(400).json({ error: 'messageId requis' });
   if (!VALID_STATUSES.includes(status)) {
-    return res.status(400).json({ error: 'status invalide — valeurs acceptées : answered, deferred' });
+    return res.status(400).json({ error: 'status invalide — valeurs acceptées : answered, deferred, delegated' });
   }
   if (status === 'answered' && !answer?.trim()) {
     return res.status(400).json({ error: 'answer requis pour status answered' });
@@ -1845,11 +1845,11 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
     messages[idx] = {
       ...messages[idx],
       status,
-      answer:     status === 'answered' ? answer.trim() : null,
-      answeredAt: status === 'answered' ? now           : null,
+      answer:     status === 'answered' ? answer.trim() : (status === 'delegated' ? 'delegated' : null),
+      answeredAt: (status === 'answered' || status === 'delegated') ? now : null,
     };
 
-    // Si answered : ajouter un message système pour que les agents voient la décision dans leur historique
+    // Si answered ou delegated : injecter un message système dans l'historique agents
     let systemMessage = null;
     if (status === 'answered') {
       systemMessage = {
@@ -1857,6 +1857,15 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
         role:      'system',
         type:      'decision_answer',
         content:   `📌 Décision : ${messages[idx].question} → ${answer.trim()}`,
+        timestamp: now,
+      };
+      messages.push(systemMessage);
+    } else if (status === 'delegated') {
+      systemMessage = {
+        id:        randomUUID(),
+        role:      'system',
+        type:      'decision_answer',
+        content:   `💬 Décision déléguée : "${messages[idx].question}" → L'humain demande aux agents de débattre et de proposer la meilleure option.`,
         timestamp: now,
       };
       messages.push(systemMessage);
@@ -2049,7 +2058,7 @@ function areSimilar(q1, q2) {
 }
 
 async function orchestrate({ session, project, messages, activeAgents,
-  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision }) {
+  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false }) {
 
   // Cas 1 : agent unique — pas besoin d'orchestrer
   if (activeAgents.length === 1) {
@@ -2115,7 +2124,7 @@ ${agentList}
 ${blockedAgent ? `⚠️ ${blockedAgent} a déjà parlé ${consecutiveCount} fois de suite. Ne le sélectionne PAS.` : ''}
 ${humanPriorityNote}
 Si la dernière contribution contient beaucoup de jargon technique ou est difficile à comprendre pour un non-expert, donne la priorité à un agent qui peut reformuler ou vulgariser ce qui vient d'être dit.
-Derniers échanges :
+${delegated ? `⚡ L'humain a délégué une décision aux agents. Les agents doivent débattre entre eux, argumenter leurs positions et converger vers une recommandation claire. L'agent le plus pertinent propose une conclusion en dernier.\n` : ''}Derniers échanges :
 ${recentMessages || '(début de réunion)'}
 
 Décide maintenant :
@@ -2158,7 +2167,7 @@ Réponds UNIQUEMENT avec ce JSON :
 
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const { message: humanMessage, agentIds, attachments: rawAttachments, resume } = req.body;
+  const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated } = req.body;
   const isAdmin = req.user.role === 'admin';
 
   const hasText        = !!humanMessage?.trim();
@@ -2285,7 +2294,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     // Résumé de la timeline pour le contexte agent
     const TL_EMOJI = { done: '✅', in_progress: '🔵', blocked: '🔴', pending: '⚪' };
     const timelineText = projectMilestones.length > 0
-      ? projectMilestones.map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n')
+      ? projectMilestones.filter(m => m.status !== 'done').slice(0, 5).map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n')
       : '';
 
     const intentionText = Array.isArray(intention) && intention.length > 0
@@ -2298,7 +2307,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     const timelineSection = timelineText
       ? `\nÉtat de la timeline :\n${timelineText}\n` : '';
     const memorySection   = project.context
-      ? `\nMémoire du projet :\n${project.context.substring(0, 6000)}\n` : '';
+      ? `\nMémoire du projet :\n${project.context.substring(0, 1500)}\n` : '';
 
     // 2. Boucle orchestrée v3.4
     const resumeAfterDecision = !!resume;
@@ -2319,6 +2328,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         lastAgentId, consecutiveCount,
         humanMessage:         hasText ? humanMessage : null,
         resumeAfterDecision:  turnCount === 0 && resumeAfterDecision,
+        delegated:            turnCount === 0 && !!delegated,
       });
 
       turnInputTokens  += next.usage?.inputTokens  || 0;
@@ -2339,6 +2349,7 @@ router.post('/:sessionId/chat', async (req, res) => {
 
       // Historique reconstruit depuis les messages courants (mis à jour à chaque tour)
       const historyLines = currentMessages
+        .slice(-10)
         .filter(m => m.role !== 'system' || m.type === 'decision_answer')
         .map(m => {
           if (m.role === 'human')                                  return `Participant : ${m.content}`;
@@ -2367,7 +2378,7 @@ Tu participes à une réunion collaborative avec d'autres agents.
 Tu peux rebondir sur ce qu'un autre agent vient de dire, lui poser une question directement, ou demander une précision à l'humain.
 Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarque.
 Ne répète PAS ce que les autres agents ont déjà dit.
-Sois concis (150 mots max par contribution). Si tu n'as rien de nouveau à apporter, dis-le en 1 phrase.
+Sois concis (100 mots max par contribution). Si tu n'as rien de nouveau à apporter, dis-le en 1 phrase.
 Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
 [DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
 Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, question compréhensible par un non-technicien, contexte en langage simple, une seule fois par contribution.

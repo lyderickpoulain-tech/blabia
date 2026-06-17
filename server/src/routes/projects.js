@@ -148,6 +148,41 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /api/projects/:id/stats — tokens cumulés et coût estimé
+router.get('/:id/stats', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const result = await db.raw(`
+      SELECT
+        COUNT(*)::int AS "sessionCount",
+        COALESCE(SUM(CAST("tokensUsed"->>'input'  AS BIGINT)), 0)::bigint AS "totalInput",
+        COALESCE(SUM(CAST("tokensUsed"->>'output' AS BIGINT)), 0)::bigint AS "totalOutput",
+        COALESCE(SUM(CAST("tokensUsed"->>'total'  AS BIGINT)), 0)::bigint AS "totalTokens"
+      FROM "Session"
+      WHERE "projectId" = ? AND "tokensUsed" IS NOT NULL AND "tokensUsed" != '{}'::jsonb
+    `, [req.params.id]);
+
+    const row         = result.rows[0];
+    const totalInput  = parseInt(row.totalInput)  || 0;
+    const totalOutput = parseInt(row.totalOutput) || 0;
+    const estimatedCost = (totalInput * 3 + totalOutput * 15) / 1_000_000;
+
+    res.json({
+      sessionCount:   parseInt(row.sessionCount) || 0,
+      totalTokens:    parseInt(row.totalTokens)  || 0,
+      totalInput,
+      totalOutput,
+      estimatedCost,
+    });
+  } catch (err) {
+    console.error('[projects/:id/stats GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // PATCH /api/projects/:id — mettre à jour les champs du projet (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
   const { name, description, devDirectory } = req.body;
