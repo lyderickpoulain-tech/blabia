@@ -255,7 +255,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
 
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
-function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, streamingReason, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision }) {
+function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, streamingReason, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision }) {
 
   if (messages.length === 0 && !streamingAgent) {
     return (
@@ -307,6 +307,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
               message={msg}
               onAnswer={onAnswerDecision}
               onDefer={onDeferDecision}
+              onDelegate={onDelegateDecision}
               disabled={!!pendingDecisionId && pendingDecisionId !== msg.id}
             />
           );
@@ -762,6 +763,34 @@ export default function MeetingRoom() {
     });
   }, [projectId, sessionId]);
 
+  // Déléguer une décision aux agents
+  const handleDelegateDecision = useCallback(async (messageId) => {
+    try {
+      const { data } = await api.post(
+        `/projects/${projectId}/sessions/${sessionId}/answer-decision`,
+        { messageId, answer: 'delegated', status: 'delegated' }
+      );
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === messageId ? { ...m, ...data.message } : m);
+        return data.systemMessage ? [...updated, data.systemMessage] : updated;
+      });
+    } catch {
+      setMessages(prev => prev.map(m =>
+        m.id === messageId
+          ? { ...m, status: 'delegated', answer: 'delegated', answeredAt: new Date().toISOString() }
+          : m
+      ));
+    }
+    setPendingDecisionId(null);
+    const queue = decisionQueueRef.current;
+    if (queue.length > 0) {
+      setPendingDecisionId(queue[0].messageId);
+      setDecisionQueue(queue.slice(1));
+    } else {
+      handleSendRef.current?.('', { resume: true, delegated: true });
+    }
+  }, [projectId, sessionId]);
+
   // Ajouter une étape timeline suggérée
   const handleAddStep = useCallback(async (idx, form) => {
     const s = stepSuggestions[idx];
@@ -806,6 +835,7 @@ export default function MeetingRoom() {
   const pendingDecisionCount = decisions.filter(m => m.status === 'pending' || m.status === 'deferred').length;
   const pendingDecisions     = decisions.filter(m => m.status === 'pending' || m.status === 'deferred');
   const answeredDecisions    = decisions.filter(m => m.status === 'answered');
+  const delegatedDecisions   = decisions.filter(m => m.status === 'delegated');
 
   const currentIntention = (() => {
     const i = session?.intention;
@@ -817,7 +847,7 @@ export default function MeetingRoom() {
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
-  const handleSend = useCallback(async (overrideText, { resume = false } = {}) => {
+  const handleSend = useCallback(async (overrideText, { resume = false, delegated = false } = {}) => {
     const text              = (typeof overrideText === 'string' ? overrideText : inputText).trim();
     const currentAttachments = attachmentsRef.current;
     // resume:true = reprise silencieuse après décision, bypass guards normaux
@@ -881,7 +911,8 @@ export default function MeetingRoom() {
           body: JSON.stringify({
             message:     text,
             attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
-            ...(resume ? { resume: true } : {}),
+            ...(resume    ? { resume: true }    : {}),
+            ...(delegated ? { delegated: true } : {}),
           }),
           signal: ac.signal,
         }
@@ -1308,6 +1339,24 @@ export default function MeetingRoom() {
                       ))}
                     </div>
                   )}
+
+                  {/* 💬 En débat */}
+                  {delegatedDecisions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide px-1">
+                        💬 En débat ({delegatedDecisions.length})
+                      </p>
+                      {delegatedDecisions.map(d => (
+                        <div key={d.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1">
+                          {d.agentName && (
+                            <p className="text-[10px] text-blue-600 font-semibold">{d.agentName}</p>
+                          )}
+                          <p className="text-xs text-gray-600 italic leading-snug">{d.question}</p>
+                          <p className="text-xs text-blue-500">Débat en cours entre les agents…</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1585,6 +1634,7 @@ export default function MeetingRoom() {
             pendingDecisionId={pendingDecisionId}
             onAnswerDecision={handleAnswerDecision}
             onDeferDecision={handleDeferDecision}
+            onDelegateDecision={handleDelegateDecision}
           />
         </div>
 
