@@ -473,8 +473,19 @@ export default function SessionView() {
                   );
                 })}
               </div>
-              <div className="text-xs text-gray-400">
-                {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs text-gray-400">
+                  {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                {(() => {
+                  const tu = session.tokensUsed;
+                  if (!tu || !tu.total) return null;
+                  return (
+                    <span className="text-xs text-gray-400" title={`Input : ${tu.input.toLocaleString('fr-FR')} · Output : ${tu.output.toLocaleString('fr-FR')}`}>
+                      🔢 {tu.total.toLocaleString('fr-FR')} tokens
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 

@@ -249,6 +249,18 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
             </div>
           )}
 
+          {/* Tokens consommés */}
+          {(() => {
+            const tu = session.tokensUsed;
+            if (!tu || !tu.total) return null;
+            return (
+              <p className="text-xs text-gray-400">
+                🔢 Tokens consommés : {tu.total.toLocaleString('fr-FR')}
+                <span className="ml-1 text-gray-300">(input : {tu.input.toLocaleString('fr-FR')} · output : {tu.output.toLocaleString('fr-FR')})</span>
+              </p>
+            );
+          })()}
+
           {/* Badge livrable + statut */}
           <div className="flex items-center gap-2">
             <span className="text-lg">{meta.icon}</span>

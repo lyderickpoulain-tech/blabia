@@ -150,7 +150,8 @@ model Session {
   intention       Json?     @default("[]") // livrables attendus : synthesis | memory | claude_code | timeline_steps
   messages        Json?     @default("[]") // v3.0 : fil de conversation [{ id, role, agentName, content, timestamp, type, pinned }]
   activeAgents           Json?     @default("[]") // v3.0 : agents actifs [{ id, name, role, systemPrompt, emoji, joinedAt }]
-  pendingStepSuggestions Json?     @default("[]") // v3.6 : étapes suggérées hors-contexte [{ title, type, agentName, timestamp }]
+  pendingStepSuggestions Json?     @default("[]")                                      // v3.6 : étapes suggérées hors-contexte [{ title, type, agentName, timestamp }]
+  tokensUsed             Json?     @default("{\"input\":0,\"output\":0,\"total\":0}")  // v3.6 : tokens Anthropic cumulés { input, output, total }
   milestoneId     String?
   todos           TodoItem[]
   createdAt       DateTime  @default(now())

@@ -533,6 +533,8 @@ export default function MeetingRoom() {
   const [showCloseModal,  setShowCloseModal]  = useState(false);
   // Bannière suggest_close émise par l'orchestrateur
   const [suggestClose,    setSuggestClose]    = useState(null); // { reason: string } | null
+  // Tokens consommés (cumulés par les turn_complete SSE)
+  const [tokensUsed,      setTokensUsed]      = useState(null); // { input, output, total } | null
 
   const handleSessionClosed = useCallback((newStatus) => {
     setSession(prev => prev ? { ...prev, status: newStatus } : prev);
@@ -970,6 +972,7 @@ export default function MeetingRoom() {
 
             } else if (ev.type === 'turn_complete') {
               setIsStreaming(false);
+              if (ev.tokensUsed) setTokensUsed(ev.tokensUsed);
 
             } else if (ev.type === 'suggest_agent') {
               setAgentSuggestions(prev => [...prev, {
@@ -1393,6 +1396,16 @@ export default function MeetingRoom() {
                 </span>
               )}
             </button>
+
+            {/* Badge tokens consommés */}
+            {tokensUsed && (
+              <span
+                className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border bg-gray-50 border-gray-200 text-gray-500 cursor-default"
+                title={`Input : ${tokensUsed.input.toLocaleString('fr-FR')} tokens · Output : ${tokensUsed.output.toLocaleString('fr-FR')} tokens`}
+              >
+                🔢 {tokensUsed.total.toLocaleString('fr-FR')}
+              </span>
+            )}
 
             {/* Badge statut */}
             <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${badge.cls}`}>

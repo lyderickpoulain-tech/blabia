@@ -362,10 +362,13 @@ function waitForAnswer(sessionId, timeoutMs = 300_000) {
 }
 
 // Appel Anthropic en streaming avec auto-continuation sur max_tokens (max 5 tours)
+// Retourne { text, usage: { inputTokens, outputTokens } }
 async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500, model = MODEL, signal = null) {
   const MAX_CONTINUATIONS = 5;
   let fullText = '';
   let messages = [{ role: 'user', content: userMessage }];
+  let totalInputTokens  = 0;
+  let totalOutputTokens = 0;
 
   for (let attempt = 0; attempt <= MAX_CONTINUATIONS; attempt++) {
     const stream = await anthropic.messages.create({
@@ -381,13 +384,17 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500,
 
     for await (const event of stream) {
       if (signal?.aborted) break;
+      if (event.type === 'message_start' && event.message?.usage) {
+        totalInputTokens += event.message.usage.input_tokens || 0;
+      }
       if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
         chunkText += event.delta.text;
         fullText += event.delta.text;
         onChunk(event.delta.text);
       }
-      if (event.type === 'message_delta' && event.delta?.stop_reason) {
-        stopReason = event.delta.stop_reason;
+      if (event.type === 'message_delta') {
+        if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+        if (event.usage) totalOutputTokens += event.usage.output_tokens || 0;
       }
     }
 
@@ -415,7 +422,7 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500,
     ];
   }
 
-  return fullText;
+  return { text: fullText, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens } };
 }
 
 // ── SOUS-ÉTAPE 1 : Création de session + formation d'équipe ──────────────────
@@ -887,7 +894,7 @@ RÈGLE DE COMMUNICATION :
 - Tes contributions doivent être compréhensibles par quelqu'un qui découvre le sujet
 Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
 
-      const fullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
+      const { text: fullText } = await streamAgent(systemPrompt, userMessage, (chunk) => {
         send('chunk', { agent: agent.name, text: chunk });
       }, 2048, session.model || MODEL);
 
@@ -1013,7 +1020,7 @@ Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : 
         ? `${session.task}\n\nPrompt complémentaire : ${humanInput.trim()}`
         : session.task;
 
-      const summaryRaw = await streamAgent(
+      const { text: summaryRaw } = await streamAgent(
         'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres ##, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.\nContraintes de synthèse : maximum 600 mots, structure claire avec titres de section (##), privilégie les points actionnables aux développements théoriques.\nSi et seulement si la restitution implique une implémentation technique concrète (code, développement, configuration à effectuer), ajoute le marqueur exact [HAS_CODE] à la toute fin de ton texte, sur une nouvelle ligne.',
         `Tâche originale : ${synthesisTask}\n\nContributions des agents :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
         (chunk) => send('summary_chunk', { text: chunk }),
@@ -1145,7 +1152,7 @@ router.post('/:sessionId/synthesize', async (req, res) => {
         : `**Utilisateur** : ${e.content}`)
       .join('\n\n');
 
-    const summaryRawConv = await streamAgent(
+    const { text: summaryRawConv } = await streamAgent(
       'Tu es un Synthésiseur expert. Tu rédiges une restitution finale claire, bien structurée (titres, listes), avec des recommandations concrètes et actionnables. Tu réponds en français.\nSi et seulement si la restitution implique une implémentation technique concrète (code, développement, configuration à effectuer), ajoute le marqueur exact [HAS_CODE] à la toute fin de ton texte, sur une nouvelle ligne.',
       `Tâche originale : ${session.task}\n\nConversation complète :\n${contextFull}\n\nRédige une restitution finale structurée qui synthétise tout et donne des recommandations concrètes.`,
       (chunk) => send('summary_chunk', { text: chunk }),
@@ -2117,12 +2124,16 @@ Réponds UNIQUEMENT avec ce JSON :
       agentId:     agentsForSelection[idx].id,
       reason:      dec.reason      || '',
       shouldClose: dec.shouldClose === true,
+      usage: {
+        inputTokens:  response.usage?.input_tokens  || 0,
+        outputTokens: response.usage?.output_tokens || 0,
+      },
     };
   } catch {
     // Fallback round-robin si l'orchestrateur échoue
     const lastIdx  = agentsForSelection.findIndex(a => a.id === lastAgentId);
     const nextIdx  = (lastIdx + 1) % agentsForSelection.length;
-    return { agentId: agentsForSelection[nextIdx].id, reason: '', shouldClose: false };
+    return { agentId: agentsForSelection[nextIdx].id, reason: '', shouldClose: false, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 }
 
@@ -2272,6 +2283,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     let conversationDone = false;
     let decisionEmitted  = false;
     const decisionCountPerAgent = {};
+    let turnInputTokens  = 0;
+    let turnOutputTokens = 0;
 
     while (turnCount < MAX_TURNS && !conversationDone && !abortController.signal.aborted) {
 
@@ -2282,6 +2295,9 @@ router.post('/:sessionId/chat', async (req, res) => {
         humanMessage:         hasText ? humanMessage : null,
         resumeAfterDecision:  turnCount === 0 && resumeAfterDecision,
       });
+
+      turnInputTokens  += next.usage?.inputTokens  || 0;
+      turnOutputTokens += next.usage?.outputTokens || 0;
 
       if (next.shouldClose) {
         send('suggest_close', { reason: next.reason });
@@ -2362,11 +2378,14 @@ Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : 
 
       let partialAgentText = '';
       let agentFullText;
+      let agentUsage = { inputTokens: 0, outputTokens: 0 };
       try {
-        agentFullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
+        const agentResult = await streamAgent(systemPrompt, userMessage, (chunk) => {
           partialAgentText += chunk;
           send('chunk', { agentName: agent.name, text: chunk });
         }, 2048, MODEL, abortController.signal);
+        agentFullText = agentResult.text;
+        agentUsage    = agentResult.usage;
       } catch (agentErr) {
         if (abortController.signal.aborted || agentErr.name === 'AbortError') {
           if (partialAgentText.trim()) {
@@ -2382,6 +2401,9 @@ Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : 
         }
         throw agentErr;
       }
+
+      turnInputTokens  += agentUsage.inputTokens  || 0;
+      turnOutputTokens += agentUsage.outputTokens || 0;
 
       // Anti-boucle : limite d'une seule décision par agent par tour humain
       let processedText = agentFullText;
@@ -2480,9 +2502,22 @@ Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : 
       currentMessages  = await loadMessages(sessionId);
     }
 
-    // 3. Fin du tour : màj timestamp projet + signal turn_complete
-    await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
-    send('turn_complete', { sessionId, pendingDecision: decisionEmitted });
+    // 3. Fin du tour : màj tokens DB + timestamp projet + signal turn_complete
+    try {
+      const [sessionRow] = await db('Session').select('tokensUsed').where({ id: sessionId }).limit(1);
+      const existing = sessionRow?.tokensUsed || { input: 0, output: 0, total: 0 };
+      const updatedTokens = {
+        input:  (existing.input  || 0) + turnInputTokens,
+        output: (existing.output || 0) + turnOutputTokens,
+        total:  (existing.total  || 0) + turnInputTokens + turnOutputTokens,
+      };
+      await db('Session').where({ id: sessionId }).update({ tokensUsed: JSON.stringify(updatedTokens) });
+      await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
+      send('turn_complete', { sessionId, pendingDecision: decisionEmitted, tokensUsed: updatedTokens });
+    } catch {
+      await db('Project').where({ id: projectId }).update({ updatedAt: new Date() }).catch(() => {});
+      send('turn_complete', { sessionId, pendingDecision: decisionEmitted });
+    }
     res.end();
 
   } catch (err) {
