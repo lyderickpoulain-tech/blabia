@@ -375,7 +375,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
               <div className="max-w-[75%]">
                 <p className={`text-xs font-semibold ${msg.reason ? 'mb-0.5' : 'mb-1'} ${color.text}`}>{msg.agentName}</p>
                 {msg.reason && (
-                  <p className="text-xs italic text-gray-400 mb-1">↳ {msg.reason}</p>
+                  <p className={`text-xs italic mb-1 ${/vulgarise|reformule/i.test(msg.reason) ? 'text-blue-400' : 'text-gray-400'}`}>↳ {msg.reason}</p>
                 )}
                 <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed whitespace-pre-wrap ${
                   isDecision

@@ -870,7 +870,14 @@ Réponds en français, de façon concise et structurée. Apporte une contributio
 Contraintes de réponse : maximum 250 mots, va à l'essentiel avec des points clés, évite les introductions et conclusions génériques.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
 Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.
-Si tu identifies une étape future importante et concrète pour ce projet (action à mener après cette session), tu peux la signaler avec : [SUGGEST_STEP: titre de l'étape]. Une seule suggestion par contribution.`;
+Si tu identifies une étape future importante et concrète pour ce projet (action à mener après cette session), tu peux la signaler avec : [SUGGEST_STEP: titre de l'étape]. Une seule suggestion par contribution.
+RÈGLE DE COMMUNICATION :
+- Adapte ton langage à un interlocuteur qui n'est PAS expert dans ton domaine
+- Évite le jargon technique et les acronymes non expliqués
+- Si tu dois utiliser un terme technique, explique-le en une phrase simple
+- Préfère des exemples concrets aux abstractions
+- Tes contributions doivent être compréhensibles par quelqu'un qui découvre le sujet
+Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
 
       const fullText = await streamAgent(systemPrompt, userMessage, (chunk) => {
         send('chunk', { agent: agent.name, text: chunk });
@@ -2065,6 +2072,7 @@ ${agentList}
 
 ${blockedAgent ? `⚠️ ${blockedAgent} a déjà parlé ${consecutiveCount} fois de suite. Ne le sélectionne PAS.` : ''}
 ${humanPriorityNote}
+Si la dernière contribution contient beaucoup de jargon technique ou est difficile à comprendre pour un non-expert, donne la priorité à un agent qui peut reformuler ou vulgariser ce qui vient d'être dit.
 Derniers échanges :
 ${recentMessages || '(début de réunion)'}
 
@@ -2299,7 +2307,13 @@ Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme d
 RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (même partiellement, même de façon imprécise), tu DOIS accepter cette réponse et avancer. Ne repose JAMAIS la même question ou une variante de la même question. Si la réponse est insuffisante, reformule en une phrase et passe à autre chose.
 Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
 Si une étape concrète doit être ajoutée à la timeline, ajoute : [SUGGEST_STEP: titre de l'étape].
-Maximum un marqueur de chaque type par réponse.`;
+Maximum un marqueur de chaque type par réponse.
+RÈGLE DE COMMUNICATION :
+- Adapte ton langage à un interlocuteur qui n'est PAS expert dans ton domaine
+- Évite le jargon technique et les acronymes non expliqués
+- Si tu dois utiliser un terme technique, explique-le en une phrase simple
+- Préfère des exemples concrets aux abstractions
+Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
 
       const baseText = historyText
         ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
