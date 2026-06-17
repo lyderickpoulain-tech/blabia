@@ -892,7 +892,7 @@ RÈGLE DE COMMUNICATION :
 - Si tu dois utiliser un terme technique, explique-le en une phrase simple
 - Préfère des exemples concrets aux abstractions
 - Tes contributions doivent être compréhensibles par quelqu'un qui découvre le sujet
-Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
+Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."`;
 
       const { text: fullText } = await streamAgent(systemPrompt, userMessage, (chunk) => {
         send('chunk', { agent: agent.name, text: chunk });
@@ -2347,7 +2347,7 @@ RÈGLE DE COMMUNICATION :
 - Évite le jargon technique et les acronymes non expliqués
 - Si tu dois utiliser un terme technique, explique-le en une phrase simple
 - Préfère des exemples concrets aux abstractions
-Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
+Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."`;
 
       const baseText = historyText
         ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
