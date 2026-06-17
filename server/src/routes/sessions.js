@@ -878,6 +878,19 @@ router.post('/:sessionId/run', async (req, res) => {
         ? `\n\nStack technique du projet :\n${stackLines.join('\n')}\nAdapte tes recommandations à cet environnement.`
         : '';
 
+      const intentionGuard0 = (() => {
+        const i = session.intention;
+        const arr = Array.isArray(i) ? i : (typeof i === 'string' ? (() => { try { return JSON.parse(i || '[]'); } catch { return []; } })() : []);
+        return arr[0] || '';
+      })();
+      const intentionInstruction0 = intentionGuard0 === 'claude_code'
+        ? '\nINTENTION DE CETTE SESSION : Préparer un prompt pour Claude Code.\n- Tu NE dois PAS écrire de code pendant les échanges\n- Tu NE dois PAS générer le prompt Claude Code maintenant\n- Concentre-toi sur : clarifier les besoins, définir les fonctionnalités, préciser les contraintes\n- Le prompt sera généré automatiquement à la clôture'
+        : intentionGuard0 === 'summary'
+        ? '\nINTENTION DE CETTE SESSION : Produire un compte-rendu à la clôture.\n- Tu NE dois PAS rédiger le compte-rendu pendant les échanges\n- Contribue, apporte tes analyses et suggestions\n- Le compte-rendu sera généré automatiquement à la clôture'
+        : intentionGuard0 === 'timeline_steps'
+        ? '\nINTENTION DE CETTE SESSION : Identifier des étapes pour la timeline.\n- Tu NE dois PAS lister les étapes finales toi-même\n- Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges\n- Le plan final sera consolidé à la clôture'
+        : '';
+
       const systemPrompt =
         `${systemPromptBase}
 Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${timelineSection}${contextSection}${parentExchangesBlock}${stackSection}${conversationNote}
@@ -892,7 +905,11 @@ RÈGLE DE COMMUNICATION :
 - Si tu dois utiliser un terme technique, explique-le en une phrase simple
 - Préfère des exemples concrets aux abstractions
 - Tes contributions doivent être compréhensibles par quelqu'un qui découvre le sujet
-Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."`;
+Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
+RÈGLE ABSOLUE SUR LES DÉCISIONS :
+- Tu ne peux JAMAIS prendre une décision à la place de l'humain
+- Si une décision tarde, signale-le en une phrase : "J'attends la réponse de l'humain avant de continuer."
+- N'avance JAMAIS sans la réponse de l'humain sur une décision posée${intentionInstruction0}`;
 
       const { text: fullText } = await streamAgent(systemPrompt, userMessage, (chunk) => {
         send('chunk', { agent: agent.name, text: chunk });
@@ -2251,6 +2268,14 @@ router.post('/:sessionId/chat', async (req, res) => {
       try { return JSON.parse(m || '[]'); } catch { return []; }
     })();
 
+    // Fix v3.7 : si resume, attendre 200ms que le decision_answer soit bien persisté en base
+    if (resume) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      currentMessages = await loadMessages(sessionId);
+      const lastMsg = currentMessages[currentMessages.length - 1];
+      console.log('[resume] dernier message:', lastMsg?.type, lastMsg?.content?.slice(0, 50));
+    }
+
     const intention = (() => {
       const i = freshSession.intention;
       if (Array.isArray(i)) return i;
@@ -2323,6 +2348,14 @@ router.post('/:sessionId/chat', async (req, res) => {
       const historyText  = historyLines.join('\n\n');
       const reasonLine   = next.reason ? `\nRaison de ta prise de parole : ${next.reason}\n` : '';
 
+      const intentionInstruction = intention[0] === 'claude_code'
+        ? '\nINTENTION DE CETTE RÉUNION : Préparer un prompt pour Claude Code.\n- Tu NE dois PAS écrire de code pendant la réunion\n- Tu NE dois PAS générer le prompt Claude Code maintenant\n- Concentre-toi sur : clarifier les besoins, définir les fonctionnalités, préciser les contraintes techniques\n- Le prompt sera généré automatiquement à la clôture de la réunion'
+        : intention[0] === 'summary'
+        ? '\nINTENTION DE CETTE RÉUNION : Produire un compte-rendu à la clôture.\n- Tu NE dois PAS rédiger le compte-rendu pendant les échanges\n- Contribue à la conversation, apporte tes analyses et suggestions\n- Le compte-rendu sera généré automatiquement à la clôture'
+        : intention[0] === 'timeline_steps'
+        ? '\nINTENTION DE CETTE RÉUNION : Identifier des étapes pour la timeline.\n- Tu NE dois PAS lister les étapes finales toi-même\n- Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges\n- Le plan final sera consolidé à la clôture'
+        : '';
+
       const systemPrompt =
 `Tu es ${agent.name}, ${agent.role}.
 ${agent.systemPrompt || ''}
@@ -2347,7 +2380,11 @@ RÈGLE DE COMMUNICATION :
 - Évite le jargon technique et les acronymes non expliqués
 - Si tu dois utiliser un terme technique, explique-le en une phrase simple
 - Préfère des exemples concrets aux abstractions
-Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."`;
+Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
+RÈGLE ABSOLUE SUR LES DÉCISIONS :
+- Tu ne peux JAMAIS prendre une décision à la place de l'humain
+- Si une décision tarde, signale-le en une phrase : "J'attends la réponse de l'humain avant de continuer."
+- N'avance JAMAIS sans la réponse de l'humain sur une décision posée${intentionInstruction}`;
 
       const baseText = historyText
         ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
