@@ -1,4 +1,4 @@
-// Lookup pricing par nom d'outil (insensible à la casse)
+﻿// Lookup pricing par nom d'outil (insensible à la casse)
 const TOOL_PRICING = {
   // Hébergement
   'railway':        'freemium',
@@ -135,7 +135,7 @@ export function getCategoryKey(toolName) {
 export const PRICING_CONFIG = {
   gratuit:      { label: 'Gratuit',    color: 'bg-green-100 text-green-700',   dot: '🟢' },
   freemium:     { label: 'Freemium',   color: 'bg-yellow-100 text-yellow-700', dot: '🟡' },
-  payant:       { label: 'Payant',     color: 'bg-blue-100 text-blue-700',     dot: '🔵' },
+  payant:       { label: 'Payant',     color: 'bg-blue-100 text-blabia-blue',     dot: '🔵' },
   subscription: { label: 'Abonnement', color: 'bg-orange-100 text-orange-700', dot: '🟠' },
 };
 

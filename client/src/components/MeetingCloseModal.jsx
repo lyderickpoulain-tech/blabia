@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import SummaryDisplayModal from './SummaryDisplayModal';
 
@@ -203,7 +203,7 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
           {/* Étapes suggérées hors-contexte */}
           {pendingSteps.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-              <h3 className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+              <h3 className="text-xs font-semibold text-blabia-blue uppercase tracking-wide">
                 💡 Nouvelles étapes suggérées ({pendingSteps.length})
               </h3>
               <ul className="space-y-2">
@@ -216,7 +216,7 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
                       <button
                         onClick={() => handleAddPendingStep(step, idx)}
                         disabled={addingStepIdx !== null}
-                        className="text-xs text-blue-600 hover:text-blue-800 border border-blue-300 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition disabled:opacity-50 shrink-0"
+                        className="text-xs text-blabia-blue hover:text-blue-800 border border-blue-300 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition disabled:opacity-50 shrink-0"
                       >
                         {addingStepIdx === idx ? '…' : 'Ajouter'}
                       </button>
@@ -235,7 +235,7 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
                 <button
                   onClick={handleAddAllPendingSteps}
                   disabled={addingStepIdx !== null || pendingSteps.every((_, i) => addedStepIdxs.has(i))}
-                  className="flex-1 text-xs text-blue-700 border border-blue-300 hover:bg-blue-100 py-1.5 rounded-lg transition disabled:opacity-50"
+                  className="flex-1 text-xs text-blabia-blue border border-blue-300 hover:bg-blue-100 py-1.5 rounded-lg transition disabled:opacity-50"
                 >
                   Tout ajouter à la timeline
                 </button>
@@ -368,7 +368,7 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
                     <button
                       onClick={handleAddToPlan}
                       disabled={addingToPlan || (content.milestones || []).length === 0}
-                      className="w-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium py-2 rounded-xl transition disabled:opacity-50"
+                      className="w-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blabia-blue text-sm font-medium py-2 rounded-xl transition disabled:opacity-50"
                     >
                       {addingToPlan ? 'Ajout…' : '+ Ajouter à la timeline'}
                     </button>
@@ -387,7 +387,7 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
                   </div>
                   <button
                     onClick={() => setShowFullContent(true)}
-                    className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-1.5 rounded-lg border border-blue-100 hover:bg-blue-50 transition"
+                    className="w-full text-xs text-blabia-blue hover:text-blabia-blue font-medium py-1.5 rounded-lg border border-blue-100 hover:bg-blue-50 transition"
                   >
                     Lire le compte-rendu complet →
                   </button>

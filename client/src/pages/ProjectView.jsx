@@ -31,7 +31,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
         <span className="text-lg">{category.icon}</span>
         <h3 className="font-semibold text-gray-900 text-sm">{category.label}</h3>
         {selected.length > 0 && (
-          <span className="ml-auto text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+          <span className="ml-auto text-xs font-medium bg-blue-100 text-blabia-blue px-2 py-0.5 rounded-full">
             {selected.filter(x => x !== 'Autre').length + (autreChecked && autreText ? 1 : 0)}
           </span>
         )}
@@ -41,7 +41,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
           <label key={option} className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition select-none text-xs font-medium ${
             selected.includes(option) ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
           }`}>
-            <input type="checkbox" checked={selected.includes(option)} onChange={() => onToggle(category.id, option)} className="w-3 h-3 accent-blue-600 shrink-0" />
+            <input type="checkbox" checked={selected.includes(option)} onChange={() => onToggle(category.id, option)} className="w-3 h-3 accent-blabia-blue shrink-0" />
             <span className="flex-1 truncate">{option}</span>
             {(() => {
               const p = getPricing(option);
@@ -54,7 +54,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
           <label className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition select-none text-xs font-medium ${
             autreChecked ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
           }`}>
-            <input type="checkbox" checked={autreChecked} onChange={() => onToggle(category.id, 'Autre')} className="w-3 h-3 accent-blue-600 shrink-0" />
+            <input type="checkbox" checked={autreChecked} onChange={() => onToggle(category.id, 'Autre')} className="w-3 h-3 accent-blabia-blue shrink-0" />
             Autre
           </label>
         )}
@@ -62,7 +62,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
       {category.hasAutre && autreChecked && (
         <input type="text" value={autreText} onChange={e => onAutreChange(category.id, e.target.value)}
           placeholder={category.autrePlaceholder}
-          className="mt-2 w-full px-3 py-1.5 text-xs border border-blue-200 bg-blue-50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
+          className="mt-2 w-full px-3 py-1.5 text-xs border border-blue-200 bg-blue-50 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none" />
       )}
     </div>
   );
@@ -109,7 +109,7 @@ function RenameModal({ project, onSave, onClose }) {
               required
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none"
               autoFocus
             />
           </div>
@@ -119,7 +119,7 @@ function RenameModal({ project, onSave, onClose }) {
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none"
             />
           </div>
           {error && (
@@ -131,7 +131,7 @@ function RenameModal({ project, onSave, onClose }) {
               Annuler
             </button>
             <button type="submit" disabled={loading || !name.trim()}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50">
+              className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50">
               {loading ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </div>
@@ -182,7 +182,7 @@ function BriefModal({ project, onSave, onClose }) {
               onChange={e => setObjectif(e.target.value)}
               rows={3}
               placeholder="Quel est l'objectif de ce projet ? Que cherchez-vous à accomplir ?"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-sm"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none text-sm"
             />
           </div>
           <div>
@@ -192,7 +192,7 @@ function BriefModal({ project, onSave, onClose }) {
               onChange={e => setContexte(e.target.value)}
               rows={3}
               placeholder="Quel est le contexte ? Qui sont les utilisateurs ? Quelles contraintes ?"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-sm"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none text-sm"
             />
           </div>
           <div>
@@ -202,7 +202,7 @@ function BriefModal({ project, onSave, onClose }) {
               onChange={e => setNotes(e.target.value)}
               rows={2}
               placeholder="Idées, inspirations, références, contraintes techniques…"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-sm"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none text-sm"
             />
           </div>
           {error && (
@@ -214,7 +214,7 @@ function BriefModal({ project, onSave, onClose }) {
               Annuler
             </button>
             <button type="submit" disabled={loading}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50">
+              className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50">
               {loading ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </div>
@@ -288,7 +288,7 @@ function SessionStatusBadge({ status }) {
   if (status === 'accepted' || status === 'complete')
     return <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ Acceptée</span>;
   if (status === 'open')
-    return <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">⚪ En cours</span>;
+    return <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-100 text-blabia-blue px-2 py-0.5 rounded-full">⚪ En cours</span>;
   if (status === 'abandoned')
     return <span className="inline-flex items-center gap-1 text-xs font-medium bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full line-through">🚫 Abandonnée</span>;
   return <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Interrompue</span>;
@@ -312,7 +312,7 @@ function CodeStatusBadge({ session }) {
     return <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full ml-1">✅ Implémenté</span>;
   if (session.codeStatus === 'not_generated')
     return <span className="inline-flex items-center gap-1 text-xs font-medium bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full ml-1">❌ Non généré</span>;
-  return <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200 px-2 py-0.5 rounded-full ml-1">⏳ En attente</span>;
+  return <span className="inline-flex items-center gap-1 text-xs font-medium bg-orange-50 text-blabia-orange border border-orange-200 px-2 py-0.5 rounded-full ml-1">⏳ En attente</span>;
 }
 
 // Aplatit la liste de sessions en fil indenté (roots → enfants → petits-enfants)
@@ -393,11 +393,11 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
                   {DELIVERABLE_ICON[getIntentionKey(session)]}
                 </button>
               )}
-              <span className="text-xs text-blue-600 font-medium">Voir →</span>
+              <span className="text-xs text-blabia-blue font-medium">Voir →</span>
               <button
                 onClick={handleReopen}
                 disabled={reopening}
-                className="text-xs text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-0.5 rounded-lg transition disabled:opacity-50"
+                className="text-xs text-blabia-blue border border-blue-200 hover:bg-blue-50 px-2 py-0.5 rounded-lg transition disabled:opacity-50"
               >
                 {reopening ? '…' : '🔁 Reprendre'}
               </button>
@@ -405,7 +405,7 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
           ) : (
             <>
               {isViewable && (
-                <span className="text-xs text-blue-600 font-medium">
+                <span className="text-xs text-blabia-blue font-medium">
                   {isMeeting ? 'Voir la réunion →' : 'Relire →'}
                 </span>
               )}
@@ -433,7 +433,7 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
         <p className="text-xs text-gray-400">{session.agentCount ?? '–'} agents · {date}</p>
         {isFinished ? (
           <div className="flex items-center gap-2 mt-2">
-            <p className="text-xs text-blue-600 font-medium flex-1">Voir la réunion →</p>
+            <p className="text-xs text-blabia-blue font-medium flex-1">Voir la réunion →</p>
             {session.status === 'accepted' && onViewDeliverable && DELIVERABLE_ICON[getIntentionKey(session)] && (
               <button
                 onClick={e => { e.preventDefault(); e.stopPropagation(); onViewDeliverable(session); }}
@@ -446,14 +446,14 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
             <button
               onClick={handleReopen}
               disabled={reopening}
-              className="text-xs text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded-lg transition disabled:opacity-50 shrink-0"
+              className="text-xs text-blabia-blue border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded-lg transition disabled:opacity-50 shrink-0"
             >
               {reopening ? '…' : '🔁 Reprendre'}
             </button>
           </div>
         ) : (
           <>
-            {isViewable && <p className="text-xs text-blue-600 font-medium mt-2">{isMeeting ? 'Voir la réunion →' : 'Relire →'}</p>}
+            {isViewable && <p className="text-xs text-blabia-blue font-medium mt-2">{isMeeting ? 'Voir la réunion →' : 'Relire →'}</p>}
             {isOpen && isMeeting && <p className="text-xs text-green-600 font-medium mt-1">Reprendre →</p>}
           </>
         )}
@@ -492,7 +492,7 @@ function DevDirectoryRow({ project, isOwner, onSave }) {
         className="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400 font-mono"
         onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
       />
-      <button onClick={handleSave} disabled={saving} className="text-xs bg-blue-600 text-white px-2 py-1 rounded-lg">
+      <button onClick={handleSave} disabled={saving} className="text-xs bg-blabia-blue text-white px-2 py-1 rounded-lg">
         {saving ? '…' : '✓'}
       </button>
       <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
@@ -803,7 +803,7 @@ export default function ProjectView() {
     return (
       <ProjectLayout projectId={id}>
         <div className="flex items-center justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
         </div>
       </ProjectLayout>
     );
@@ -843,7 +843,7 @@ export default function ProjectView() {
                 </p>
                 <div className="flex items-center gap-3 mt-1">
                   <button onClick={() => setBriefExpanded(v => !v)}
-                    className="text-xs text-blue-500 hover:text-blue-700 font-medium transition">
+                    className="text-xs text-blue-500 hover:text-blabia-blue font-medium transition">
                     {briefExpanded ? 'Réduire' : 'Voir tout'}
                   </button>
                   {(isAdmin || project.userId === user?.id) && (
@@ -872,7 +872,7 @@ export default function ProjectView() {
           <div className="flex items-center gap-2 shrink-0 self-start flex-wrap">
             <Link
               to={`/projects/${id}/plan`}
-              className="text-sm border border-blue-200 text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
+              className="text-sm border border-blue-200 text-blabia-blue hover:bg-blue-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -950,12 +950,12 @@ export default function ProjectView() {
                 value={inviteEmail}
                 onChange={e => { setInviteEmail(e.target.value); setInviteResult(null); }}
                 placeholder="email@exemple.com"
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none"
               />
               <button
                 type="submit"
                 disabled={inviting || !inviteEmail.trim()}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50 shrink-0"
+                className="bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50 shrink-0"
               >
                 {inviting ? '…' : 'Inviter'}
               </button>
@@ -1007,13 +1007,13 @@ export default function ProjectView() {
               )}
             </div>
             {project.status === 'active' && (
-              <Link to={`/projects/${id}/session/new`} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition">
+              <Link to={`/projects/${id}/session/new`} className="bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-medium px-3 py-1.5 rounded-lg transition">
                 + Nouvelle réunion
               </Link>
             )}
           </div>
 
-          {sessionsLoading && <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>}
+          {sessionsLoading && <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blabia-blue" /></div>}
 
           {!sessionsLoading && sessions.length > 0 && (
             <table className="hidden md:table w-full">
@@ -1040,7 +1040,7 @@ export default function ProjectView() {
             <div className="text-center py-10 px-5 text-gray-400">
               <p className="text-sm">Aucune réunion pour l'instant.</p>
               {project.status === 'active' && (
-                <Link to={`/projects/${id}/session/new`} className="inline-block mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium">
+                <Link to={`/projects/${id}/session/new`} className="inline-block mt-2 text-blabia-blue hover:text-blabia-blue text-sm font-medium">
                   Lancer votre première réunion →
                 </Link>
               )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import MeetingCloseModal from '../components/MeetingCloseModal';
@@ -27,7 +27,7 @@ function agentColor(name, activeAgents) {
 // ── Statut badge ─────────────────────────────────────────────────────────────
 
 const STATUS_BADGE = {
-  open:      { label: 'En cours',   cls: 'bg-blue-100 text-blue-700'   },
+  open:      { label: 'En cours',   cls: 'bg-blue-100 text-blabia-blue'   },
   accepted:  { label: 'Acceptée',   cls: 'bg-green-100 text-green-700'  },
   abandoned: { label: 'Abandonnée', cls: 'bg-gray-100 text-gray-500'    },
 };
@@ -67,7 +67,7 @@ function AgentScopeSelector({ scope, onChange, size = 'sm' }) {
               value={opt.value}
               checked={scope === opt.value}
               onChange={() => onChange(opt.value)}
-              className="mt-0.5 shrink-0 accent-blue-600"
+              className="mt-0.5 shrink-0 accent-blabia-blue"
             />
             <div>
               <span className={`${size === 'xs' ? 'text-[11px]' : 'text-xs'} font-medium text-gray-700`}>{opt.label}</span>
@@ -185,7 +185,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
   return (
     <div className="mx-4 bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2.5">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-blue-700">📅 Étape timeline suggérée</p>
+        <p className="text-xs font-semibold text-blabia-blue">📅 Étape timeline suggérée</p>
         <button onClick={() => onDismiss(idx)} className="text-gray-300 hover:text-gray-500 text-xs shrink-0">✕</button>
       </div>
 
@@ -207,7 +207,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
             onClick={() => setForm(p => ({ ...p, type: t.id }))}
             className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition ${
               form.type === t.id
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blabia-blue text-white'
                 : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
             }`}
           >
@@ -226,7 +226,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
             onClick={() => setForm(f => ({ ...f, position: p.id }))}
             className={`flex-1 text-xs py-1.5 rounded-lg border transition ${
               form.position === p.id
-                ? 'bg-blue-600 text-white border-blue-600'
+                ? 'bg-blabia-blue text-white border-blabia-blue'
                 : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
             }`}
           >
@@ -239,7 +239,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
         <button
           onClick={() => onAdd(idx, form)}
           disabled={!form.title.trim() || suggestion.adding}
-          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
+          className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
         >
           {suggestion.adding
             ? <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -247,7 +247,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
         </button>
         <button
           onClick={() => onDismiss(idx)}
-          className="border border-blue-300 text-blue-700 text-xs font-medium py-1.5 px-3 rounded-lg hover:bg-blue-100"
+          className="border border-blue-300 text-blabia-blue text-xs font-medium py-1.5 px-3 rounded-lg hover:bg-blue-100"
         >
           Ignorer
         </button>
@@ -274,7 +274,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
             <button
               onClick={onAutoLaunch}
               disabled={!session || !project}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               🚀 Lancer automatiquement
             </button>
@@ -351,7 +351,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                 <div className={`px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed ${
                   msg.pinned
                     ? 'bg-amber-50 border border-amber-200 text-amber-900'
-                    : 'bg-blue-600 text-white'
+                    : 'bg-blabia-blue text-white'
                 }`}>
                   {msg.content || <span className="opacity-60 italic">— fichier joint —</span>}
                 </div>
@@ -389,7 +389,7 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                   {msg.content}
                 </div>
                 {msg.interrupted ? (
-                  <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-blabia-orange mt-1 flex items-center gap-1">
                     ⚠️ Interrompu
                   </p>
                 ) : isDecision ? (
@@ -1236,7 +1236,7 @@ export default function MeetingRoom() {
     return (
       <ProjectLayout projectId={projectId}>
         <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
         </div>
       </ProjectLayout>
     );
@@ -1247,7 +1247,7 @@ export default function MeetingRoom() {
       <ProjectLayout projectId={projectId}>
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
           <p className="text-sm">{loadError || 'Réunion introuvable.'}</p>
-          <Link to={`/projects/${projectId}`} className="text-sm text-blue-600 hover:underline">
+          <Link to={`/projects/${projectId}`} className="text-sm text-blabia-blue hover:underline">
             ← Retour au projet
           </Link>
         </div>
@@ -1286,7 +1286,7 @@ export default function MeetingRoom() {
                   {/* ⏸ À traiter */}
                   {pendingDecisions.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide px-1">
+                      <p className="text-[10px] font-semibold text-blabia-orange uppercase tracking-wide px-1">
                         ⏸ À traiter ({pendingDecisions.length})
                       </p>
                       {pendingDecisions.map(d => (
@@ -1306,7 +1306,7 @@ export default function MeetingRoom() {
                           ) : (
                             <>
                               {d.agentName && (
-                                <p className="text-[10px] text-orange-600 font-semibold">{d.agentName}</p>
+                                <p className="text-[10px] text-blabia-orange font-semibold">{d.agentName}</p>
                               )}
                               <p className="text-xs text-orange-900 leading-snug">{d.question}</p>
                               {!isClosed && (
@@ -1348,13 +1348,13 @@ export default function MeetingRoom() {
                   {/* 💬 En débat */}
                   {delegatedDecisions.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide px-1">
+                      <p className="text-[10px] font-semibold text-blabia-blue uppercase tracking-wide px-1">
                         💬 En débat ({delegatedDecisions.length})
                       </p>
                       {delegatedDecisions.map(d => (
                         <div key={d.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1">
                           {d.agentName && (
-                            <p className="text-[10px] text-blue-600 font-semibold">{d.agentName}</p>
+                            <p className="text-[10px] text-blabia-blue font-semibold">{d.agentName}</p>
                           )}
                           <p className="text-xs text-gray-600 italic leading-snug">{d.question}</p>
                           <p className="text-xs text-blue-500">Débat en cours entre les agents…</p>
@@ -1397,7 +1397,7 @@ export default function MeetingRoom() {
               />
             ) : (
               <p
-                className={`text-sm font-semibold text-gray-800 truncate flex-1 min-w-0 ${!isClosed ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
+                className={`text-sm font-semibold text-gray-800 truncate flex-1 min-w-0 ${!isClosed ? 'cursor-pointer hover:text-blabia-blue transition' : ''}`}
                 title={isClosed ? session.task : `${session.task} — cliquer pour modifier`}
                 onClick={() => { if (!isClosed) { setTaskDraft(session.task); setEditingTask(true); } }}
               >
@@ -1424,7 +1424,7 @@ export default function MeetingRoom() {
                     <button
                       key={d.id}
                       onClick={() => handleSaveIntention(d.id)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition ${d.id === currentIntention ? 'font-semibold text-blue-600' : 'text-gray-700'}`}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition ${d.id === currentIntention ? 'font-semibold text-blabia-blue' : 'text-gray-700'}`}
                     >
                       <span>{d.icon}</span>
                       {d.label}
@@ -1486,7 +1486,7 @@ export default function MeetingRoom() {
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setShowAgentDropdown(v => !v)}
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-full transition"
+                  className="inline-flex items-center gap-1 text-xs text-blabia-blue border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-full transition"
                 >
                   + Agent
                 </button>
@@ -1558,7 +1558,7 @@ export default function MeetingRoom() {
                                 <button
                                   onClick={handleDropdownCreateAgent}
                                   disabled={!dropdownCreateForm.name.trim() || !dropdownCreateForm.role.trim() || dropdownCreateForm.creating}
-                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
+                                  className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
                                 >
                                   {dropdownCreateForm.creating ? '…' : 'Créer et inviter'}
                                 </button>
@@ -1573,7 +1573,7 @@ export default function MeetingRoom() {
                           ) : (
                             <button
                               onClick={() => setDropdownCreateForm(p => ({ ...p, open: true }))}
-                              className="w-full text-xs text-gray-400 hover:text-blue-600 hover:bg-gray-50 py-2 px-3 text-left transition"
+                              className="w-full text-xs text-gray-400 hover:text-blabia-blue hover:bg-gray-50 py-2 px-3 text-left transition"
                             >
                               + Créer un agent…
                             </button>
@@ -1651,7 +1651,7 @@ export default function MeetingRoom() {
                 feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' });
                 setShowNewMessage(false);
               }}
-              className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 shadow-md px-3.5 py-1.5 rounded-full transition flex items-center gap-1.5"
+              className="text-xs font-medium text-white bg-blue-500 hover:bg-blabia-blue shadow-md px-3.5 py-1.5 rounded-full transition flex items-center gap-1.5"
             >
               ⬇ Nouveau message
             </button>
@@ -1668,7 +1668,7 @@ export default function MeetingRoom() {
                 </p>
                 <button
                   onClick={handleReopen}
-                  className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition"
+                  className="shrink-0 text-xs font-medium text-blabia-blue hover:text-blabia-blue border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition"
                 >
                   🔁 Reprendre
                 </button>
@@ -1735,7 +1735,7 @@ export default function MeetingRoom() {
                       type="button"
                       onMouseDown={e => { e.preventDefault(); handleSelectMention(agent); }}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition text-left ${
-                        i === mentionSelectedIdx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                        i === mentionSelectedIdx ? 'bg-blue-50 text-blabia-blue' : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${agentColor(agent.name, activeAgents).avatar}`}>
@@ -1761,7 +1761,7 @@ export default function MeetingRoom() {
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isStreaming || !!pendingDecisionId || attachments.length >= 3}
                   title={attachments.length >= 3 ? 'Maximum 3 fichiers atteint' : 'Joindre une image ou un fichier texte'}
-                  className="shrink-0 w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="shrink-0 w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blabia-blue hover:bg-blue-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   📎
                 </button>
@@ -1783,7 +1783,7 @@ export default function MeetingRoom() {
                   disabled={(!isStreaming && !inputText.trim() && attachments.length === 0) || !!pendingDecisionId}
                   title={isStreaming ? 'Envoyer (interrompt les agents en cours)' : undefined}
                   className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40 disabled:cursor-not-allowed ${
-                    isStreaming ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'
+                    isStreaming ? 'bg-blabia-orange hover:bg-blabia-orange' : 'bg-blabia-blue hover:bg-blabia-blue'
                   }`}
                 >
                   ▶

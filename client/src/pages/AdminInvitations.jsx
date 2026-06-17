@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import api from '../utils/api';
 
@@ -21,7 +21,7 @@ function CopyButton({ token }) {
   return (
     <button
       onClick={copy}
-      className="text-xs text-blue-600 hover:text-blue-800 transition"
+      className="text-xs text-blabia-blue hover:text-blue-800 transition"
       title={link}
     >
       {copied ? '✓ Copié' : 'Copier le lien'}
@@ -114,7 +114,7 @@ export default function AdminInvitations() {
           </button>
           <button
             onClick={() => { setShowModal(true); setError(''); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition text-sm min-h-[40px]"
+            className="bg-blabia-blue hover:bg-blabia-blue text-white font-medium px-4 py-2 rounded-lg transition text-sm min-h-[40px]"
           >
             + Inviter quelqu'un
           </button>
@@ -227,7 +227,7 @@ export default function AdminInvitations() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="invite@example.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none"
                   autoFocus
                 />
               </div>
@@ -250,7 +250,7 @@ export default function AdminInvitations() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50"
+                  className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50"
                 >
                   {submitting ? 'Envoi…' : 'Envoyer l\'invitation'}
                 </button>

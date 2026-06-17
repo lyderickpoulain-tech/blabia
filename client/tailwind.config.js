@@ -13,6 +13,10 @@ export default {
           500: '#3b82f6',
           600: '#2563eb',
           700: '#1d4ed8'
+        },
+        blabia: {
+          blue:   '#5B6FE8',
+          orange: '#F27B2C',
         }
       }
     }

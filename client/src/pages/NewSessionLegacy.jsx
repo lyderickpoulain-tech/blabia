@@ -1,4 +1,4 @@
-// Sessions legacy v1/v2 — moteur SSE multi-tours avec formation d'équipe automatique.
+﻿// Sessions legacy v1/v2 — moteur SSE multi-tours avec formation d'équipe automatique.
 // Conservé pour les sessions existantes. Nouvelles sessions → StartMeeting + MeetingRoom (v3.0).
 import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
@@ -52,7 +52,7 @@ const MD = {
 const AGENT_PALETTE = {
   Analyste:     { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-800',    dot: 'bg-blue-500' },
   Créatif:      { bg: 'bg-purple-50',  border: 'border-purple-200',  text: 'text-purple-800',  dot: 'bg-purple-500' },
-  Critique:     { bg: 'bg-orange-50',  border: 'border-orange-200',  text: 'text-orange-800',  dot: 'bg-orange-500' },
+  Critique:     { bg: 'bg-orange-50',  border: 'border-orange-200',  text: 'text-orange-800',  dot: 'bg-blabia-orange' },
   Expert:       { bg: 'bg-green-50',   border: 'border-green-200',   text: 'text-green-800',   dot: 'bg-green-500' },
   Synthésiseur: { bg: 'bg-indigo-50',  border: 'border-indigo-200',  text: 'text-indigo-800',  dot: 'bg-indigo-500' },
   Chercheur:    { bg: 'bg-cyan-50',    border: 'border-cyan-200',    text: 'text-cyan-800',    dot: 'bg-cyan-500' },
@@ -365,17 +365,17 @@ export default function NewSession() {
                       return s;
                     })}
                     className={`flex flex-col items-start gap-1.5 p-4 rounded-xl border-2 text-left transition ${
-                      active ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                      active ? 'border-blabia-blue bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}>
                     <span className="text-2xl">{intent.icon}</span>
-                    <p className={`font-semibold text-sm ${active ? 'text-blue-700' : 'text-gray-800'}`}>{intent.label}</p>
+                    <p className={`font-semibold text-sm ${active ? 'text-blabia-blue' : 'text-gray-800'}`}>{intent.label}</p>
                     <p className="text-xs text-gray-400 leading-snug">{intent.desc}</p>
                   </button>
                 );
               })}
             </div>
             <button onClick={() => setPhase('agents')} disabled={intentions.size === 0}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition disabled:opacity-50 text-sm">
+              className="w-full bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-3 rounded-xl transition disabled:opacity-50 text-sm">
               Continuer → Choisir les agents
             </button>
           </div>
@@ -393,7 +393,7 @@ export default function NewSession() {
             </div>
             {agentsLoading ? (
               <div className="flex justify-center py-6">
-                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-6 h-6 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
               <div className="space-y-2">
@@ -407,7 +407,7 @@ export default function NewSession() {
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition ${
                         active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
                       }`}>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${active ? 'bg-blue-600 text-white' : 'bg-gray-300 text-white'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${active ? 'bg-blabia-blue text-white' : 'bg-gray-300 text-white'}`}>
                         {(a.emoji || a.name?.[0] || '?')}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -431,7 +431,7 @@ export default function NewSession() {
                       rows={2} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
                     <div className="flex gap-2">
                       <button onClick={handleCreateAgent} disabled={!newAgentForm.name.trim() || creatingAgent}
-                        className="flex-1 bg-blue-600 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50">
+                        className="flex-1 bg-blabia-blue text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50">
                         {creatingAgent ? 'Création…' : 'Créer et sélectionner'}
                       </button>
                       <button onClick={() => setNewAgentForm(p => ({ ...p, open: false }))}
@@ -452,7 +452,7 @@ export default function NewSession() {
                 {suggestingAgents ? 'Suggestion…' : '✨ Suggestion IA'}
               </button>
               <button onClick={() => setPhase('input')} disabled={selectedAgentIds.size === 0}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
                 Continuer ({selectedAgentIds.size}) →
               </button>
             </div>
@@ -483,7 +483,7 @@ export default function NewSession() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Votre tâche ou idée <span className="text-red-400">*</span></label>
                 <textarea value={task} onChange={e => setTask(e.target.value)} disabled={phase === 'forming'} rows={5}
                   placeholder="Ex : Rédiger une stratégie de lancement pour notre nouveau produit…"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none disabled:bg-gray-50 disabled:text-gray-400" autoFocus />
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none disabled:bg-gray-50 disabled:text-gray-400" autoFocus />
                 <p className="text-xs text-gray-400 mt-1 text-right">{task.length} caractère{task.length !== 1 ? 's' : ''}</p>
               </div>
               <div>
@@ -495,9 +495,9 @@ export default function NewSession() {
                   ].map(opt => (
                     <button key={opt.value} type="button" onClick={() => setMode(opt.value)}
                       className={`flex flex-col items-start gap-1 p-3.5 rounded-xl border-2 text-left transition ${
-                        mode === opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                        mode === opt.value ? 'border-blabia-blue bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
                       }`}>
-                      <span className={`text-sm font-semibold ${mode === opt.value ? 'text-blue-700' : 'text-gray-700'}`}>{opt.label}</span>
+                      <span className={`text-sm font-semibold ${mode === opt.value ? 'text-blabia-blue' : 'text-gray-700'}`}>{opt.label}</span>
                       <span className="text-xs text-gray-400 leading-snug">{opt.desc}</span>
                     </button>
                   ))}
@@ -515,7 +515,7 @@ export default function NewSession() {
                       <button key={m.id} type="button" onClick={() => setModel(m.id)}
                         className={`flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm transition ${
                           active
-                            ? m.color === 'blue' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-purple-500 bg-purple-50 text-purple-700'
+                            ? m.color === 'blue' ? 'border-blabia-blue bg-blue-50 text-blabia-blue' : 'border-purple-500 bg-purple-50 text-purple-700'
                             : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
                         }`}>
                         <span className="font-semibold">{m.label}</span>
@@ -549,7 +549,7 @@ export default function NewSession() {
                   </button>
                 )}
                 <button onClick={handleFormTeam} disabled={!task.trim() || phase === 'forming'}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm">
+                  className="flex-1 bg-blabia-blue hover:bg-blabia-blue active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm">
                   {phase === 'forming' ? (
                     <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Création de la réunion…</>
                   ) : 'Lancer les agents →'}
@@ -612,7 +612,7 @@ export default function NewSession() {
               </div>
             </div>
             <button onClick={handleStartRun}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow-sm">
+              className="w-full bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-3.5 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow-sm">
               Démarrer les échanges →
             </button>
           </div>
@@ -622,7 +622,7 @@ export default function NewSession() {
         {phase === 'running' && session && (
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3">
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${session.mode === 'realtime' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${session.mode === 'realtime' ? 'bg-blue-100 text-blabia-blue' : 'bg-emerald-100 text-emerald-700'}`}>
                 {session.mode === 'realtime' ? '⚡ Synthèse' : '💬 Conversation'}
               </span>
               <p className="text-sm text-gray-600 truncate flex-1">{session.task}</p>
@@ -675,7 +675,7 @@ export default function NewSession() {
                 <h3 className="text-sm font-semibold text-gray-800">📋 Plan généré par les agents</h3>
                 <div className="flex gap-2 pt-1">
                   <button onClick={handleAddToPlan} disabled={addingToPlan}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                    className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
                     {addingToPlan ? 'Ajout…' : '+ Ajouter à la timeline'}
                   </button>
                   <button onClick={() => setPlanIgnored(true)}
@@ -688,9 +688,9 @@ export default function NewSession() {
                 <p className="text-sm font-semibold text-gray-700">Approfondir ou compléter</p>
                 <textarea value={additionalPrompt} onChange={e => setAdditionalPrompt(e.target.value)} rows={3}
                   placeholder="Approfondir ce point ou ajouter un prompt complémentaire…"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none transition" />
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none transition" />
                 <button onClick={handleRelaunch} disabled={!additionalPrompt.trim()}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                  className="w-full bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                   Relancer les agents →
                 </button>
               </div>
@@ -733,7 +733,7 @@ export default function NewSession() {
               </div>
             )}
             <Link to={`/projects/${projectId}/session/${session.id}/summary`}
-              className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition text-sm shadow-sm">
+              className="flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-3 rounded-xl transition text-sm shadow-sm">
               Voir le compte-rendu
             </Link>
             {sessionHasCode && (

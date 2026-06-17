@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
@@ -49,7 +49,7 @@ export default function NewProject() {
                 onChange={e => setName(e.target.value)}
                 placeholder="Ex : Stratégie de communication Q3"
                 maxLength={100}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition"
                 autoFocus
               />
             </div>
@@ -64,7 +64,7 @@ export default function NewProject() {
                 placeholder="Quelques mots sur le contexte de ce projet…"
                 rows={2}
                 maxLength={500}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none"
               />
             </div>
 
@@ -84,7 +84,7 @@ export default function NewProject() {
                     onChange={e => setObjectif(e.target.value)}
                     placeholder="Quel est l'objectif de ce projet ? Que cherchez-vous à accomplir ?"
                     rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none text-sm"
                   />
                 </div>
 
@@ -97,7 +97,7 @@ export default function NewProject() {
                     onChange={e => setContexte(e.target.value)}
                     placeholder="Quel est le contexte ? Qui sont les utilisateurs ? Quelles contraintes ?"
                     rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none text-sm"
                   />
                 </div>
 
@@ -110,7 +110,7 @@ export default function NewProject() {
                     onChange={e => setNotes(e.target.value)}
                     placeholder="Idées, inspirations, références, contraintes techniques…"
                     rows={2}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none text-sm"
                   />
                 </div>
               </div>
@@ -132,7 +132,7 @@ export default function NewProject() {
               <button
                 type="submit"
                 disabled={loading || !name.trim()}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Création…' : 'Créer le projet'}
               </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
@@ -82,7 +82,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
         <span className="text-xl">{category.icon}</span>
         <h2 className="font-semibold text-gray-900 text-sm">{category.label}</h2>
         {selected.length > 0 && (
-          <span className="ml-auto text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+          <span className="ml-auto text-xs font-medium bg-blue-100 text-blabia-blue px-2 py-0.5 rounded-full">
             {selected.filter(x => x !== 'Autre').length + (autreChecked && autreText ? 1 : 0)} sélectionné{selected.length > 1 ? 's' : ''}
           </span>
         )}
@@ -102,7 +102,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
               type="checkbox"
               checked={selected.includes(option)}
               onChange={() => onToggle(category.id, option)}
-              className="w-3.5 h-3.5 accent-blue-600 shrink-0"
+              className="w-3.5 h-3.5 accent-blabia-blue shrink-0"
             />
             <span className="text-xs font-medium leading-snug flex-1">{option}</span>
             {(() => {
@@ -127,7 +127,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
               type="checkbox"
               checked={autreChecked}
               onChange={() => onToggle(category.id, 'Autre')}
-              className="w-3.5 h-3.5 accent-blue-600 shrink-0"
+              className="w-3.5 h-3.5 accent-blabia-blue shrink-0"
             />
             <span className="text-xs font-medium">Autre</span>
           </label>
@@ -140,7 +140,7 @@ function CategoryCard({ category, stack, onToggle, onAutreChange }) {
           value={autreText}
           onChange={e => onAutreChange(category.id, e.target.value)}
           placeholder={category.autrePlaceholder}
-          className="mt-2 w-full px-3 py-2 text-sm border border-blue-200 bg-blue-50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition"
+          className="mt-2 w-full px-3 py-2 text-sm border border-blue-200 bg-blue-50 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none transition"
         />
       )}
     </div>
@@ -213,7 +213,7 @@ export default function EnvironmentPage() {
     return (
       <Layout>
         <div className="flex items-center justify-center py-20">
-          <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
         </div>
       </Layout>
     );
@@ -257,7 +257,7 @@ export default function EnvironmentPage() {
           </div>
 
           {totalSelected > 0 && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-blue-600">
+            <div className="mt-3 flex items-center gap-2 text-xs text-blabia-blue">
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
               </svg>

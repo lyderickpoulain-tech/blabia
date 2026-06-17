@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import AcceptSessionModal from '../components/AcceptSessionModal';
 import MeetingCloseModal from '../components/MeetingCloseModal';
@@ -13,7 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 const PALETTE = {
   Analyste:     { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-800',   dot: 'bg-blue-500' },
   Créatif:      { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-800', dot: 'bg-purple-500' },
-  Critique:     { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-500' },
+  Critique:     { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-blabia-orange' },
   Expert:       { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800',  dot: 'bg-green-500' },
   Synthésiseur: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', dot: 'bg-indigo-500' },
   Chercheur:    { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-800',   dot: 'bg-cyan-500' },
@@ -71,7 +71,7 @@ function AgentBubble({ agentName, content }) {
 function HumanBubble({ content }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3">
+      <div className="max-w-[80%] bg-blabia-blue text-white rounded-2xl rounded-tr-sm px-4 py-3">
         <p className="text-xs font-semibold text-blue-200 mb-1">Vous</p>
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
       </div>
@@ -92,7 +92,7 @@ const TL_TYPE = {
 
 const TL_STATUS = {
   pending:     { dot: 'bg-gray-300',  badge: 'bg-gray-100 text-gray-500 border-gray-200',    label: 'Pas commencé', pulse: false },
-  in_progress: { dot: 'bg-blue-500',  badge: 'bg-blue-100 text-blue-600 border-blue-200',    label: 'En cours',     pulse: true  },
+  in_progress: { dot: 'bg-blue-500',  badge: 'bg-blue-100 text-blabia-blue border-blue-200',    label: 'En cours',     pulse: true  },
   done:        { dot: 'bg-green-500', badge: 'bg-green-100 text-green-700 border-green-200', label: 'Terminé',      pulse: false },
   blocked:     { dot: 'bg-red-500',   badge: 'bg-red-100 text-red-700 border-red-200',       label: 'Bloqué',       pulse: false },
 };
@@ -133,7 +133,7 @@ function SessionTimeline({ entries, onExportClick, onImplementationClick }) {
                 }}
               >
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <p className={`text-sm font-medium leading-snug ${isClickable ? 'text-blue-700 group-hover:underline' : 'text-gray-800'}`}>
+                  <p className={`text-sm font-medium leading-snug ${isClickable ? 'text-blabia-blue group-hover:underline' : 'text-gray-800'}`}>
                     {label}
                     {isClickable && <span className="ml-1 text-xs text-blue-400">→</span>}
                   </p>
@@ -239,7 +239,7 @@ function MeetingFeed({ messages, activeAgents }) {
             <div key={msg.id || idx} className="flex justify-end">
               <div className="max-w-[75%]">
                 <div className={`px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed whitespace-pre-wrap ${
-                  isDecision ? 'bg-amber-50 border border-amber-200 text-amber-900' : 'bg-blue-600 text-white'
+                  isDecision ? 'bg-amber-50 border border-amber-200 text-amber-900' : 'bg-blabia-blue text-white'
                 }`}>
                   {msg.content}
                 </div>
@@ -404,7 +404,7 @@ export default function SessionView() {
     return (
       <ProjectLayout projectId={projectId}>
         <div className="flex items-center justify-center min-h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
         </div>
       </ProjectLayout>
     );
@@ -423,7 +423,7 @@ export default function SessionView() {
       ? session.intention[0] : 'synthesis';
     const intentionMeta  = INTENTION_META[intention] || INTENTION_META.synthesis;
     const statusBadge    = {
-      open:      { label: '🔵 En cours',    cls: 'bg-blue-100 text-blue-700 border-blue-200'   },
+      open:      { label: '🔵 En cours',    cls: 'bg-blue-100 text-blabia-blue border-blue-200'   },
       accepted:  { label: '✅ Acceptée',    cls: 'bg-green-100 text-green-700 border-green-200' },
       abandoned: { label: '🚫 Abandonnée',  cls: 'bg-gray-100 text-gray-500 border-gray-200'   },
     }[currentStatus] || { label: currentStatus, cls: 'bg-gray-100 text-gray-500 border-gray-200' };
@@ -512,7 +512,7 @@ export default function SessionView() {
                     <ul className="space-y-2">
                       {deferred.map((m, i) => (
                         <li key={m.id || i} className="text-sm text-orange-900 flex items-start gap-2">
-                          <span className="text-orange-500 shrink-0 mt-0.5 font-bold">·</span>
+                          <span className="text-blabia-orange shrink-0 mt-0.5 font-bold">·</span>
                           <span className="leading-relaxed">{m.question}</span>
                         </li>
                       ))}
@@ -577,7 +577,7 @@ export default function SessionView() {
             <div className="flex justify-center">
               <button
                 onClick={handleReopenMeeting}
-                className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:bg-blue-50 px-4 py-2.5 rounded-xl transition"
+                className="flex items-center gap-2 text-sm font-medium text-blabia-blue hover:text-blabia-blue border border-blue-200 hover:bg-blue-50 px-4 py-2.5 rounded-xl transition"
               >
                 🔁 Reprendre cette réunion
               </button>
@@ -680,7 +680,7 @@ export default function SessionView() {
                   {isComplete
                     ? <>
                         {currentStatus === 'accepted' && <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">✅ Acceptée</span>}
-                        {currentStatus === 'open' && <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full animate-pulse">⚪ En cours</span>}
+                        {currentStatus === 'open' && <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-100 text-blabia-blue border border-blue-200 px-2 py-0.5 rounded-full animate-pulse">⚪ En cours</span>}
                         {currentStatus === 'abandoned' && <span className="inline-flex items-center gap-1 text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full line-through">🚫 Abandonnée</span>}
                         {(currentStatus === 'complete' || !['open','accepted','abandoned'].includes(currentStatus)) && <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">✅ Acceptée</span>}
                       </>
@@ -689,7 +689,7 @@ export default function SessionView() {
                       </span>
                   }
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                    isRealtime ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                    isRealtime ? 'bg-blue-100 text-blabia-blue border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'
                   }`}>
                     {isRealtime ? '⚡ Temps réel' : '📋 Résumé'}
                   </span>
@@ -722,7 +722,7 @@ export default function SessionView() {
                 return (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {projectMilestones.map((m, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-white/60 border border-white/40 px-2 py-0.5 rounded-full text-blue-700">
+                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-white/60 border border-white/40 px-2 py-0.5 rounded-full text-blabia-blue">
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[m.status] || 'bg-gray-300'}`} />
                         {m.title.length > 28 ? m.title.slice(0, 28) + '…' : m.title}
                       </span>
@@ -731,7 +731,7 @@ export default function SessionView() {
                 );
               }
               return (
-                <div className="flex items-center gap-2 mt-2 text-xs text-blue-600">
+                <div className="flex items-center gap-2 mt-2 text-xs text-blabia-blue">
                   <span>{projectMilestones.length} étapes</span>
                   {done > 0 && <span>· {done} terminée{done > 1 ? 's' : ''}</span>}
                   {inProgress > 0 && <span>· {inProgress} en cours</span>}
@@ -768,7 +768,7 @@ export default function SessionView() {
               onClick={() => setActiveTab('restitution')}
               className={`flex-1 py-3 text-sm font-medium transition border-b-2 -mb-px ${
                 activeTab === 'restitution'
-                  ? 'border-blue-500 text-blue-700'
+                  ? 'border-blabia-blue text-blabia-blue'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -778,7 +778,7 @@ export default function SessionView() {
               onClick={() => setActiveTab('timeline')}
               className={`flex-1 py-3 text-sm font-medium transition border-b-2 -mb-px flex items-center justify-center gap-1.5 ${
                 activeTab === 'timeline'
-                  ? 'border-blue-500 text-blue-700'
+                  ? 'border-blabia-blue text-blabia-blue'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -799,7 +799,7 @@ export default function SessionView() {
                 </ReactMarkdown>
               ) : (
                 <div className="text-center py-6">
-                  <p className="text-orange-600 font-medium text-sm mb-1">⚠ Réunion interrompue</p>
+                  <p className="text-blabia-orange font-medium text-sm mb-1">⚠ Réunion interrompue</p>
                   <p className="text-gray-400 text-xs">
                     Cette réunion n'a pas été finalisée. Aucune restitution n'est disponible.
                   </p>
@@ -865,7 +865,7 @@ export default function SessionView() {
               rows={4}
               autoFocus
               placeholder="Décrivez la suite à donner à cette réunion…"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none"
             />
             <div className="flex gap-3 mt-3">
               <button
@@ -879,7 +879,7 @@ export default function SessionView() {
                 onClick={() => navigate(`/projects/${projectId}/session/new`, {
                   state: { parentSessionId: sessionId, initialTask: continueTask.trim() }
                 })}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
+                className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
               >
                 Lancer la suite →
               </button>
@@ -910,7 +910,7 @@ export default function SessionView() {
               <button
                 onClick={handleAddToPlan}
                 disabled={addingToPlan}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
+                className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
               >
                 {addingToPlan ? 'Ajout…' : '+ Ajouter à la timeline'}
               </button>
@@ -947,7 +947,7 @@ export default function SessionView() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Link
                 to={`/projects/${projectId}/session/${sessionId}/summary`}
-                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition text-sm"
+                className="flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-3 rounded-xl transition text-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -956,7 +956,7 @@ export default function SessionView() {
               </Link>
               <button
                 onClick={() => setShowContinue(v => !v)}
-                className="flex items-center justify-center gap-2 border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 font-semibold py-3 rounded-xl transition text-sm"
+                className="flex items-center justify-center gap-2 border border-blue-300 text-blabia-blue bg-blue-50 hover:bg-blue-100 font-semibold py-3 rounded-xl transition text-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />

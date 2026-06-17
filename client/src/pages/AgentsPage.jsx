@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
@@ -45,7 +45,7 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
             value={emoji}
             onChange={e => setEmoji(e.target.value)}
             maxLength={2}
-            className="w-14 text-center text-2xl px-1 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-14 text-center text-2xl px-1 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none"
           />
         </div>
         <div className="flex-1">
@@ -59,7 +59,7 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
             maxLength={100}
             placeholder="Ex : Juriste, Data Scientist, Coach…"
             autoFocus={!isEdit}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none text-sm"
           />
         </div>
       </div>
@@ -76,7 +76,7 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
           onChange={e => setRole(e.target.value)}
           maxLength={200}
           placeholder="Ex : Analyse les aspects légaux et identifie les risques juridiques"
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+          className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none text-sm"
         />
       </div>
 
@@ -90,7 +90,7 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
           onChange={e => setSystemPrompt(e.target.value)}
           rows={5}
           placeholder="Ex : Tu es un expert en droit des affaires. Tu analyses les aspects légaux, identifies les risques juridiques et proposes des solutions conformes à la réglementation en vigueur. Tu réponds en français de façon précise et structurée."
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none text-sm resize-none"
         />
         <p className="text-xs text-gray-400 mt-1">
           Définit le comportement de l'agent pendant les sessions. Commence par "Tu es…"
@@ -116,7 +116,7 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
         <button
           type="submit"
           disabled={!isValid || loading}
-          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl transition text-sm font-medium disabled:opacity-50"
+          className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white py-2.5 rounded-xl transition text-sm font-medium disabled:opacity-50"
         >
           {loading ? 'Enregistrement…' : isEdit ? 'Enregistrer les modifications' : 'Créer l\'agent'}
         </button>
@@ -178,7 +178,7 @@ function AgentCard({ agent, onEdit, onDelete }) {
               {agent.systemPrompt.length > 100 && (
                 <button
                   onClick={() => setExpanded(v => !v)}
-                  className="text-xs text-blue-500 hover:text-blue-700 mt-0.5"
+                  className="text-xs text-blue-500 hover:text-blabia-blue mt-0.5"
                 >
                   {expanded ? 'Réduire' : 'Voir plus'}
                 </button>
@@ -192,7 +192,7 @@ function AgentCard({ agent, onEdit, onDelete }) {
           <div className="flex items-center gap-1 shrink-0 -mt-0.5">
             <button
               onClick={() => onEdit(agent)}
-              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+              className="p-2 text-gray-400 hover:text-blabia-blue hover:bg-blue-50 rounded-lg transition"
               title="Modifier"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -316,7 +316,7 @@ export default function AgentsPage() {
           {!showCreate && (
             <button
               onClick={() => setShowCreate(true)}
-              className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition"
+              className="shrink-0 bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-medium px-4 py-2 rounded-xl transition"
             >
               + Créer un agent
             </button>
@@ -334,7 +334,7 @@ export default function AgentsPage() {
         {/* Chargement */}
         {loading && (
           <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
           </div>
         )}
 
@@ -362,13 +362,13 @@ export default function AgentsPage() {
             {/* Empty state agents personnels */}
             {personalAgents.length === 0 && !showCreate && (
               <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 mb-8 text-center">
-                <p className="text-sm font-medium text-blue-700 mb-1">Aucun agent personnalisé</p>
+                <p className="text-sm font-medium text-blabia-blue mb-1">Aucun agent personnalisé</p>
                 <p className="text-xs text-blue-500 mb-4">
                   Créez vos propres agents pour enrichir vos sessions.
                 </p>
                 <button
                   onClick={() => setShowCreate(true)}
-                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl transition font-medium"
+                  className="text-sm bg-blabia-blue hover:bg-blabia-blue text-white px-4 py-2 rounded-xl transition font-medium"
                 >
                   Créer mon premier agent
                 </button>

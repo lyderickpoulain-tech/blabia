@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
@@ -67,7 +67,7 @@ export default function Dashboard() {
         </div>
         <Link
           to="/projects/new"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-3 sm:px-4 py-2 rounded-lg transition text-sm whitespace-nowrap"
+          className="bg-blabia-blue hover:bg-blabia-blue text-white font-medium px-3 sm:px-4 py-2 rounded-lg transition text-sm whitespace-nowrap"
         >
           <span className="sm:hidden">+ Projet</span>
           <span className="hidden sm:inline">+ Nouveau projet</span>
@@ -81,7 +81,7 @@ export default function Dashboard() {
           placeholder="Rechercher un projet…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none"
         />
         <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
           {STATUS_TABS.map(tab => (
@@ -190,7 +190,7 @@ export default function Dashboard() {
       {/* États vides */}
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
         </div>
       )}
       {!loading && filtered.length === 0 && (
@@ -198,7 +198,7 @@ export default function Dashboard() {
           {projects.length === 0 ? (
             <>
               <p className="text-gray-400 text-lg mb-2">Aucun projet pour l'instant</p>
-              <Link to="/projects/new" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+              <Link to="/projects/new" className="text-blabia-blue hover:text-blabia-blue text-sm font-medium">
                 Créer votre premier projet →
               </Link>
             </>

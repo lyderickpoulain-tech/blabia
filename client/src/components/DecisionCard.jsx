@@ -1,13 +1,27 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 
 const CUSTOM_OPTION = 'Autre (précise)';
 
-export default function DecisionCard({ message, onAnswer, onDefer, disabled }) {
+export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, disabled }) {
   const [selected,    setSelected]    = useState(null);
   const [customText,  setCustomText]  = useState('');
   const [submitting,  setSubmitting]  = useState(false);
 
   // ── Carte compacte après réponse ────────────────────────────────────────────
+  if (message.status === 'delegated') {
+    return (
+      <div className="mx-4 flex items-start gap-2.5 py-1">
+        <span className="text-blue-500 text-base shrink-0 mt-0.5">💬</span>
+        <div className="min-w-0">
+          <p className="text-xs text-gray-400 font-medium mb-0.5">
+            Décision déléguée aux agents · {message.agentName}
+          </p>
+          <p className="text-sm text-gray-500 italic truncate">{message.question}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (message.status === 'answered') {
     return (
       <div className="mx-4 flex items-start gap-2.5 py-1">
@@ -52,6 +66,13 @@ export default function DecisionCard({ message, onAnswer, onDefer, disabled }) {
     if (submitting) return;
     setSubmitting(true);
     await onDefer(message.id);
+    setSubmitting(false);
+  };
+
+  const handleDelegate = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    await onDelegate?.(message.id);
     setSubmitting(false);
   };
 
@@ -132,6 +153,17 @@ export default function DecisionCard({ message, onAnswer, onDefer, disabled }) {
           ⏸ Plus tard
         </button>
       </div>
+
+      {/* Déléguer aux agents */}
+      {onDelegate && (
+        <button
+          onClick={handleDelegate}
+          disabled={submitting || disabled}
+          className="w-full border border-blue-200 text-blabia-blue hover:bg-blue-50 text-sm font-medium py-2 px-4 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          💬 Laisser les agents en débattre
+        </button>
+      )}
     </div>
   );
 }

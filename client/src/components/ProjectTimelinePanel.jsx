@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import ExportModal from './ExportModal';
@@ -256,7 +256,7 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
                   milestoneType:  milestone.type
                 }
               })}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
+              className="w-full bg-blabia-blue hover:bg-blabia-blue text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
             >
               🚀 Démarrer une réunion
             </button>
@@ -328,7 +328,7 @@ function InsertForm({ onSave, onCancel }) {
         {TYPES.map(t => (
           <button key={t} type="button" onClick={() => setType(t)} title={t}
             className={`flex-1 text-sm py-1 rounded-lg border transition ${
-              type === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+              type === t ? 'bg-blabia-blue border-blabia-blue text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
             }`}>
             {TYPE_ICON[t]}
           </button>
@@ -336,7 +336,7 @@ function InsertForm({ onSave, onCancel }) {
       </div>
       <div className="flex gap-1">
         <button type="submit" disabled={!title.trim() || saving}
-          className="flex-1 text-xs bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50">
+          className="flex-1 text-xs bg-blabia-blue hover:bg-blabia-blue text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50">
           {saving ? '…' : 'Insérer'}
         </button>
         <button type="button" onClick={onCancel}
@@ -456,7 +456,7 @@ function PanelBody({
       <div className="flex-1 overflow-y-auto py-1 px-1">
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
           </div>
         ) : milestones.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-8 px-3">
@@ -563,7 +563,7 @@ function PanelBody({
               {TYPES.map(t => (
                 <button key={t} type="button" onClick={() => setType(t)} title={t}
                   className={`flex-1 text-sm py-1 rounded-lg border transition ${
-                    type === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+                    type === t ? 'bg-blabia-blue border-blabia-blue text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
                   }`}>
                   {TYPE_ICON[t]}
                 </button>
@@ -571,7 +571,7 @@ function PanelBody({
             </div>
             <div className="flex gap-1">
               <button type="submit" disabled={!title.trim() || saving}
-                className="flex-1 text-xs bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50">
+                className="flex-1 text-xs bg-blabia-blue hover:bg-blabia-blue text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50">
                 {saving ? '…' : 'Ajouter'}
               </button>
               <button type="button"
@@ -583,7 +583,7 @@ function PanelBody({
           </form>
         ) : (
           <button onClick={() => setShowAdd(true)}
-            className="w-full flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 py-2 rounded-lg border border-dashed border-gray-200 hover:border-blue-300 transition font-medium">
+            className="w-full flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-blabia-blue hover:bg-blue-50 py-2 rounded-lg border border-dashed border-gray-200 hover:border-blue-300 transition font-medium">
             + Ajouter une étape
           </button>
         )}
@@ -757,7 +757,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
 
       {/* ── Mobile : bouton flottant ─────────────────────────────────────── */}
       <button onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-6 right-6 z-40 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center text-lg transition"
+        className="lg:hidden fixed bottom-6 right-6 z-40 w-12 h-12 bg-blabia-blue hover:bg-blabia-blue text-white rounded-full shadow-lg flex items-center justify-center text-lg transition"
         title="Timeline du projet">
         ⏱
       </button>
@@ -879,7 +879,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               <span className="text-2xl shrink-0 mt-0.5">🚀</span>
               <div>
                 <p className="text-sm font-semibold text-blue-900">Démarrer une réunion</p>
-                <p className="text-xs text-blue-600 mt-0.5 leading-snug">
+                <p className="text-xs text-blabia-blue mt-0.5 leading-snug">
                   Lancer une réunion d'agents pour explorer la tâche et préparer l'implémentation
                 </p>
               </div>

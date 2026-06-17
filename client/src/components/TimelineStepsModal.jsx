@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import api from '../utils/api';
 
 const TYPE_ICON = {
@@ -89,7 +89,7 @@ export default function TimelineStepsModal({ session, projectId, onClose, onRefr
                   <button
                     onClick={() => handleAdd(step, idx)}
                     disabled={singleAdding !== null || addingAll}
-                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50 shrink-0"
+                    className="text-xs bg-blabia-blue hover:bg-blabia-blue text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50 shrink-0"
                   >
                     {isAdding ? '…' : 'Ajouter'}
                   </button>
@@ -105,7 +105,7 @@ export default function TimelineStepsModal({ session, projectId, onClose, onRefr
             <button
               onClick={handleAddAll}
               disabled={addingAll || singleAdding !== null}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-semibold transition disabled:opacity-50"
+              className="w-full bg-blabia-blue hover:bg-blabia-blue text-white py-2 rounded-xl text-sm font-semibold transition disabled:opacity-50"
             >
               {addingAll ? 'Ajout en cours…' : 'Tout ajouter à la timeline'}
             </button>

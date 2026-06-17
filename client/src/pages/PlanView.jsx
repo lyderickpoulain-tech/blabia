@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
@@ -6,7 +6,7 @@ import api from '../utils/api';
 // ── Constantes statut ──────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   pending:     { label: 'Pas commencé', dot: 'bg-gray-300',    ring: 'ring-gray-300',    badge: 'bg-gray-100 text-gray-600 border-gray-200',    icon: '⬜' },
-  in_progress: { label: 'En cours',     dot: 'bg-blue-500',    ring: 'ring-blue-300',    badge: 'bg-blue-100 text-blue-700 border-blue-200',    icon: '🔵' },
+  in_progress: { label: 'En cours',     dot: 'bg-blue-500',    ring: 'ring-blue-300',    badge: 'bg-blue-100 text-blabia-blue border-blue-200',    icon: '🔵' },
   done:        { label: 'Terminé',      dot: 'bg-green-500',   ring: 'ring-green-300',   badge: 'bg-green-100 text-green-700 border-green-200',  icon: '✅' },
   blocked:     { label: 'Bloqué',       dot: 'bg-red-400',     ring: 'ring-red-300',     badge: 'bg-red-100 text-red-700 border-red-200',        icon: '🔴' },
 };
@@ -35,7 +35,7 @@ function StatusSelector({ value, onChange }) {
       value={value}
       onChange={e => onChange(e.target.value)}
       onClick={e => e.stopPropagation()}
-      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-2 focus:ring-blabia-blue outline-none cursor-pointer"
     >
       {STATUSES.map(s => (
         <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
@@ -72,7 +72,7 @@ function InsertMilestoneForm({ onSave, onCancel }) {
             <button key={t} type="button" onClick={() => setType(t)}
               className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition ${
                 type === t
-                  ? 'bg-blue-600 text-white border-blue-600'
+                  ? 'bg-blabia-blue text-white border-blabia-blue'
                   : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
               }`}
             >
@@ -99,7 +99,7 @@ function InsertMilestoneForm({ onSave, onCancel }) {
           className="text-xs border border-blue-200 bg-white rounded-lg px-2 py-1 outline-none text-gray-600 hidden sm:block"
         />
         <button type="submit" disabled={!title.trim() || saving}
-          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
+          className="text-xs bg-blabia-blue hover:bg-blabia-blue text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
           {saving ? '…' : 'Ajouter'}
         </button>
         <button type="button" onClick={onCancel}
@@ -202,7 +202,7 @@ function MilestoneCard({
                 <button key={t} type="button" onClick={() => setForm(p => ({ ...p, type: t }))}
                   className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition ${
                     form.type === t
-                      ? 'bg-blue-600 text-white border-blue-600'
+                      ? 'bg-blabia-blue text-white border-blabia-blue'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
                   }`}
                 >
@@ -214,7 +214,7 @@ function MilestoneCard({
           </div>
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={!form.title.trim() || saving}
-              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
+              className="text-xs bg-blabia-blue hover:bg-blabia-blue text-white px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50">
               {saving ? '…' : 'Sauvegarder'}
             </button>
             <button onClick={onCancelEdit}
@@ -233,7 +233,7 @@ function MilestoneCard({
           </div>
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3
-              className="text-sm font-semibold text-gray-900 cursor-pointer hover:text-blue-700 flex-1 leading-snug"
+              className="text-sm font-semibold text-gray-900 cursor-pointer hover:text-blabia-blue flex-1 leading-snug"
               onClick={onStartEdit}
               title="Cliquer pour modifier"
             >
@@ -517,7 +517,7 @@ export default function PlanView() {
           <div className="mb-6">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-bold text-gray-900">{project.name}</h1>
-              <span className="text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full">Plan</span>
+              <span className="text-xs font-medium bg-blue-100 text-blabia-blue border border-blue-200 px-2.5 py-1 rounded-full">Plan</span>
             </div>
             {project.description && (
               <p className="text-sm text-gray-500 mt-1">{project.description}</p>
@@ -528,7 +528,7 @@ export default function PlanView() {
         {/* Chargement */}
         {loading && (
           <div className="flex items-center justify-center py-24">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
           </div>
         )}
 
@@ -536,7 +536,7 @@ export default function PlanView() {
         {!loading && error && (
           <div className="text-center py-16">
             <p className="text-gray-500 text-sm">{error}</p>
-            <Link to={`/projects/${projectId}`} className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-2 inline-block">
+            <Link to={`/projects/${projectId}`} className="text-blabia-blue hover:text-blabia-blue text-sm font-medium mt-2 inline-block">
               ← Retour au projet
             </Link>
           </div>

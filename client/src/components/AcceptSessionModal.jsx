@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
 
@@ -168,7 +168,7 @@ export default function AcceptSessionModal({ session, projectId, planSuggestions
                         s.has(i) ? s.delete(i) : s.add(i);
                         return s;
                       })}
-                      className="w-3.5 h-3.5 accent-blue-600 shrink-0" />
+                      className="w-3.5 h-3.5 accent-blabia-blue shrink-0" />
                     <span className="text-sm shrink-0">{TYPE_ICON[m.type] || '🎯'}</span>
                     <span className="text-sm text-gray-700 flex-1">{m.title}</span>
                   </label>
@@ -176,7 +176,7 @@ export default function AcceptSessionModal({ session, projectId, planSuggestions
               </div>
               {!planAdded ? (
                 <button onClick={handleAddPlan} disabled={planAdding || activeMilestones.size === 0}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition disabled:opacity-50">
+                  className="w-full bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2 rounded-xl text-sm transition disabled:opacity-50">
                   {planAdding ? 'Ajout…' : `+ Ajouter ${activeMilestones.size} étape${activeMilestones.size > 1 ? 's' : ''} à la timeline`}
                 </button>
               ) : (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,7 +8,7 @@ import api from '../utils/api';
 const PALETTE = {
   Analyste:     { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-800',   dot: 'bg-blue-500',   light: 'bg-blue-100' },
   Créatif:      { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-800', dot: 'bg-purple-500', light: 'bg-purple-100' },
-  Critique:     { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-500', light: 'bg-orange-100' },
+  Critique:     { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-blabia-orange', light: 'bg-orange-100' },
   Expert:       { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800',  dot: 'bg-green-500',  light: 'bg-green-100' },
   Synthésiseur: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', dot: 'bg-indigo-500', light: 'bg-indigo-100' },
   Chercheur:    { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-800',   dot: 'bg-cyan-500',   light: 'bg-cyan-100' },
@@ -92,7 +92,7 @@ function CopyButton() {
       className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg border transition-all min-h-[40px] ${
         copied
           ? 'bg-green-50 border-green-200 text-green-700'
-          : 'bg-white border-gray-300 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+          : 'bg-white border-gray-300 text-gray-600 hover:border-blue-300 hover:text-blabia-blue'
       }`}
     >
       {copied ? iconCheck : iconLink}
@@ -153,7 +153,7 @@ export default function SummaryView() {
             ← Retour au projet
           </Link>
           <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-center">
-            <span className="text-sm font-bold text-blue-600 shrink-0">BlabIA</span>
+            <span className="text-sm font-bold text-blabia-blue shrink-0">BlabIA</span>
             {project && (
               <>
                 <span className="text-xs text-gray-300 shrink-0">·</span>
@@ -171,7 +171,7 @@ export default function SummaryView() {
         {/* ── Chargement ──────────────────────────────────────────────────── */}
         {loading && (
           <div className="flex items-center justify-center py-24">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
           </div>
         )}
 
@@ -179,7 +179,7 @@ export default function SummaryView() {
         {!loading && fetchError && (
           <div className="text-center py-24">
             <p className="text-gray-500 mb-4">{fetchError}</p>
-            <Link to={`/projects/${projectId}`} className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+            <Link to={`/projects/${projectId}`} className="text-blabia-blue hover:text-blabia-blue text-sm font-medium">
               ← Retour au projet
             </Link>
           </div>
@@ -191,7 +191,7 @@ export default function SummaryView() {
             {/* En-tête */}
             <div className="pt-10 pb-8">
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-xs font-semibold text-blue-600 uppercase tracking-widest">
+                <span className="text-xs font-semibold text-blabia-blue uppercase tracking-widest">
                   Compte-rendu
                 </span>
                 {session.status !== 'complete' && (

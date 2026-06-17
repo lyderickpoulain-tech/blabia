@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { useProjectPanel } from './ProjectLayout';
 
@@ -107,7 +107,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading && (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-400">
-              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
               <p className="text-sm">Analyse du brief et génération de la timeline…</p>
             </div>
           )}
@@ -123,7 +123,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
             <div className="text-center py-8 space-y-2">
               <div className="text-3xl">✅</div>
               <p className="font-semibold text-gray-800">{activeCount} étapes ajoutées à la timeline</p>
-              <button onClick={onClose} className="text-sm text-blue-600 hover:underline">Fermer</button>
+              <button onClick={onClose} className="text-sm text-blabia-blue hover:underline">Fermer</button>
             </div>
           )}
 
@@ -193,7 +193,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
                 Annuler
               </button>
               <button onClick={handleAdd} disabled={adding || activeCount === 0}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
                 {adding ? 'Ajout…' : `Ajouter ${activeCount} étape${activeCount > 1 ? 's' : ''} à ma timeline →`}
               </button>
             </div>

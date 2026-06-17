@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api';
 
 // ── Palette agents (même que NewSession) ──────────────────────────────────────
 const PALETTE = {
   'Analyste':       { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-800',   dot: 'bg-blue-500',   ring: 'ring-blue-300' },
   'Créatif':        { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-800', dot: 'bg-purple-500', ring: 'ring-purple-300' },
-  'Critique':       { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-500', ring: 'ring-orange-300' },
+  'Critique':       { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-blabia-orange', ring: 'ring-orange-300' },
   'Expert':         { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800',  dot: 'bg-green-500',  ring: 'ring-green-300' },
   'Synthésiseur':   { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', dot: 'bg-indigo-500', ring: 'ring-indigo-300' },
   'Chercheur':      { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-800',   dot: 'bg-cyan-500',   ring: 'ring-cyan-300' },
@@ -57,7 +57,7 @@ function AgentBubble({ agentName, content, streaming = false }) {
 function HumanBubble({ content }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3">
+      <div className="max-w-[80%] bg-blabia-blue text-white rounded-2xl rounded-tr-sm px-4 py-3">
         <p className="text-xs font-semibold text-blue-200 mb-1">Vous</p>
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
       </div>
@@ -86,12 +86,12 @@ function QuestionCard({ agent, question, answer, onChange, onSend, sending }) {
         placeholder="Votre réponse… (Ctrl+Entrée pour envoyer)"
         rows={3}
         autoFocus
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none resize-none"
       />
       <button
         onClick={onSend}
         disabled={!answer.trim() || sending}
-        className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-xl transition disabled:opacity-50"
+        className="mt-2 w-full bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-semibold py-2 rounded-xl transition disabled:opacity-50"
       >
         {sending ? 'Envoi…' : 'Répondre →'}
       </button>
@@ -176,7 +176,7 @@ function SuggestStepCard({ suggestion, projectId, onAdd, onIgnore }) {
         {STEP_TYPES.map(t => (
           <button key={t} type="button" onClick={() => setType(t)} title={t}
             className={`flex-1 text-base py-1 rounded-lg border transition ${
-              type === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+              type === t ? 'bg-blabia-blue border-blabia-blue text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
             }`}>
             {STEP_TYPE_ICON[t]}
           </button>
@@ -185,7 +185,7 @@ function SuggestStepCard({ suggestion, projectId, onAdd, onIgnore }) {
       <div className="flex gap-2">
         <button onClick={onIgnore} className="flex-1 text-sm border border-gray-200 text-gray-500 py-2 rounded-xl hover:bg-gray-50">Ignorer</button>
         <button onClick={handleAdd} disabled={!title.trim() || adding}
-          className="flex-1 text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl disabled:opacity-50">
+          className="flex-1 text-sm bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2 rounded-xl disabled:opacity-50">
           {adding ? 'Ajout…' : '+ Ajouter à la timeline'}
         </button>
       </div>
@@ -220,7 +220,7 @@ function SummarySteps({ exchanges, activeAgent, isSummaryPhase, pendingQuestion 
           <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
             <span className="w-2 h-2 rounded-full bg-white animate-ping" />
           </div>
-          <span className="text-sm font-medium text-blue-700">
+          <span className="text-sm font-medium text-blabia-blue">
             {isSummaryPhase ? 'Synthèse finale' : activeAgent.name}
           </span>
           <span className="text-xs text-blue-500 ml-auto">En cours…</span>
@@ -258,7 +258,7 @@ function LiveTimeline({ entries }) {
                 e.status === 'done'
                   ? 'text-green-700'
                   : e.status === 'in_progress'
-                  ? 'text-blue-700'
+                  ? 'text-blabia-blue'
                   : 'text-gray-400'
               }`}>{e.label}</span>
               {e.status === 'in_progress' && (

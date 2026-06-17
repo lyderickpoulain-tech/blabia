@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+﻿import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import {
@@ -348,7 +348,7 @@ export default function StackCheckModal({ milestone, projectId, onClose, onRefre
                   Annuler
                 </button>
                 <button onClick={handleMissingConfirm} disabled={saving}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                  className="flex-1 bg-blabia-orange hover:bg-orange-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
                   Créer une réunion →
                 </button>
               </div>

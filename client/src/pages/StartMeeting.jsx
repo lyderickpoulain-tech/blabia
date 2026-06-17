@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import api from '../utils/api';
@@ -31,7 +31,7 @@ function AgentScopeSelector({ scope, onChange, size = 'sm' }) {
               value={opt.value}
               checked={scope === opt.value}
               onChange={() => onChange(opt.value)}
-              className="mt-0.5 shrink-0 accent-blue-600"
+              className="mt-0.5 shrink-0 accent-blabia-blue"
             />
             <div>
               <span className={`${size === 'xs' ? 'text-[11px]' : 'text-xs'} font-medium text-gray-700`}>{opt.label}</span>
@@ -195,7 +195,7 @@ export default function StartMeeting() {
               onChange={e => setTask(e.target.value)}
               rows={4}
               placeholder="Ex : Définir les fonctionnalités principales du site..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none transition"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none transition"
               autoFocus
             />
           </div>
@@ -215,11 +215,11 @@ export default function StartMeeting() {
                   <button key={d.id} type="button" onClick={() => setDeliverable(d.id)}
                     className={`flex flex-col items-start gap-1.5 p-4 rounded-xl border-2 text-left transition ${
                       active
-                        ? 'border-blue-500 bg-blue-50'
+                        ? 'border-blabia-blue bg-blue-50'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}>
                     <span className="text-2xl">{d.icon}</span>
-                    <p className={`font-semibold text-sm ${active ? 'text-blue-700' : 'text-gray-800'}`}>
+                    <p className={`font-semibold text-sm ${active ? 'text-blabia-blue' : 'text-gray-800'}`}>
                       {d.label}
                     </p>
                     <p className="text-xs text-gray-400 leading-snug">{d.desc}</p>
@@ -241,7 +241,7 @@ export default function StartMeeting() {
               <button
                 onClick={() => handleSuggestAgents()}
                 disabled={suggestingAgents || !task.trim()}
-                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition disabled:opacity-40 shrink-0"
+                className="flex items-center gap-1.5 text-xs text-blabia-blue hover:text-blabia-blue border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition disabled:opacity-40 shrink-0"
               >
                 {suggestingAgents ? (
                   <>
@@ -254,7 +254,7 @@ export default function StartMeeting() {
 
             {agentsLoading ? (
               <div className="flex justify-center py-6">
-                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-6 h-6 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
               <div className="space-y-2">
@@ -267,7 +267,7 @@ export default function StartMeeting() {
                         active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
                       }`}>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
-                        active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                        active ? 'bg-blabia-blue text-white' : 'bg-gray-200 text-gray-600'
                       }`}>
                         {a.emoji || a.name?.[0] || '?'}
                       </div>
@@ -316,7 +316,7 @@ export default function StartMeeting() {
                       <button
                         onClick={handleCreateAgent}
                         disabled={!newAgentForm.name.trim() || creatingAgent}
-                        className="flex-1 bg-blue-600 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50"
+                        className="flex-1 bg-blabia-blue text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50"
                       >
                         {creatingAgent ? 'Création…' : 'Créer et inviter'}
                       </button>
@@ -350,7 +350,7 @@ export default function StartMeeting() {
           <button
             onClick={handleStart}
             disabled={!canStart}
-            className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm shadow-sm"
+            className="w-full bg-blabia-blue hover:bg-blabia-blue active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm shadow-sm"
           >
             {starting ? (
               <>
