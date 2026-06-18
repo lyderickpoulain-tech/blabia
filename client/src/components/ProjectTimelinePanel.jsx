@@ -383,6 +383,8 @@ function PanelBody({
   const [saving, setSaving]         = useState(false);
   const [insertingAt, setInsertingAt] = useState(null);
   const [reordering, setReordering] = useState(false);
+  const [dragId, setDragId]         = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -395,17 +397,36 @@ function PanelBody({
     setShowAdd(false);
   };
 
-  // Insertion entre deux étapes : insert + reorder pour conserver des entiers propres
-  const handleInsert = async ({ title, type }, targetDisplayOrder) => {
-    const intendedOrder = Math.round(targetDisplayOrder);
-    console.log('[handleInsert] displayOrder envoyé:', intendedOrder, '| entre:', targetDisplayOrder);
+  // Réécrit tous les displayOrder en multiples de 10 pour créer de l'espace avant insertion
+  const normalizeOrder = async (sorted) => {
+    await Promise.all(
+      sorted.map((m, i) =>
+        api.patch(`/projects/${projectId}/milestones/${m.id}`, { displayOrder: i * 10 })
+      )
+    );
+  };
+
+  // Insertion entre deux étapes avec normalisation automatique si l'espace est insuffisant
+  const handleInsert = async ({ title, type }, prevM, nextM) => {
+    const sorted = [...milestones].sort((a, b) => a.displayOrder - b.displayOrder);
+    let prevOrder = prevM?.displayOrder ?? (nextM ? nextM.displayOrder - 10 : 0);
+    let nextOrder = nextM?.displayOrder ?? prevOrder + 100;
+
+    if (nextOrder - prevOrder < 2) {
+      await normalizeOrder(sorted);
+      const prevIdx = prevM ? sorted.findIndex(m => m.id === prevM.id) : -1;
+      const nextIdx = nextM ? sorted.findIndex(m => m.id === nextM.id) : sorted.length;
+      prevOrder = prevIdx >= 0 ? prevIdx * 10 : (nextIdx * 10 - 10);
+      nextOrder = nextIdx < sorted.length ? nextIdx * 10 : prevOrder + 100;
+    }
+
+    const intendedOrder = Math.round((prevOrder + nextOrder) / 2);
     try {
       const { data } = await api.post(`/projects/${projectId}/milestones`, {
         title, type,
         displayOrder: intendedOrder,
       });
-      // On force l'ordre prévu pour le tri, indépendamment de ce que le serveur a retourné
-      const newList = [...milestones, { ...data, displayOrder: intendedOrder }]
+      const newList = [...sorted, { ...data, displayOrder: intendedOrder }]
         .sort((a, b) => a.displayOrder - b.displayOrder);
       await api.patch(`/projects/${projectId}/milestones/reorder`, {
         order: newList.map(m => m.id),
@@ -417,28 +438,30 @@ function PanelBody({
     }
   };
 
-  const handleMoveUp = async (idx) => {
-    if (idx === 0 || reordering) return;
-    setReordering(true);
-    const newList = [...milestones];
-    [newList[idx - 1], newList[idx]] = [newList[idx], newList[idx - 1]];
-    try {
-      await api.patch(`/projects/${projectId}/milestones/reorder`, { order: newList.map(m => m.id) });
-      onRefresh();
-    } catch (err) { console.error('[reorder up]', err.message); }
-    setReordering(false);
+  // Drag & drop
+  const handleDragStart = (e, milestoneId) => {
+    e.stopPropagation();
+    setDragId(milestoneId);
   };
 
-  const handleMoveDown = async (idx) => {
-    if (idx === milestones.length - 1 || reordering) return;
-    setReordering(true);
-    const newList = [...milestones];
-    [newList[idx], newList[idx + 1]] = [newList[idx + 1], newList[idx]];
+  const handleDragEnd = () => {
+    setDragId(null);
+    setDragOverId(null);
+  };
+
+  const handleDrop = async (targetId) => {
+    if (!dragId || dragId === targetId) { handleDragEnd(); return; }
+    const fromIdx = milestones.findIndex(m => m.id === dragId);
+    const toIdx   = milestones.findIndex(m => m.id === targetId);
+    const reordered = [...milestones];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setDragId(null);
+    setDragOverId(null);
     try {
-      await api.patch(`/projects/${projectId}/milestones/reorder`, { order: newList.map(m => m.id) });
+      await api.patch(`/projects/${projectId}/milestones/reorder`, { order: reordered.map(m => m.id) });
       onRefresh();
-    } catch (err) { console.error('[reorder down]', err.message); }
-    setReordering(false);
+    } catch (err) { console.error('[drag drop]', err.message); }
   };
 
   const openInsertForm = (order) => {
@@ -489,7 +512,7 @@ function PanelBody({
             {/* Bouton d'insertion AVANT le premier élément */}
             {insertingAt === 'before-first' ? (
               <InsertForm
-                onSave={(data) => handleInsert(data, (milestones[0]?.displayOrder ?? 1) - 1)}
+                onSave={(data) => handleInsert(data, null, milestones[0] || null)}
                 onCancel={() => setInsertingAt(null)}
               />
             ) : (
@@ -505,12 +528,28 @@ function PanelBody({
               const nextM  = milestones[idx + 1];
 
               return (
-                <div key={m.id}>
+                <div
+                  key={m.id}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverId(m.id); }}
+                  onDrop={(e) => { e.preventDefault(); handleDrop(m.id); }}
+                  onDragEnd={handleDragEnd}
+                  className={`rounded-lg transition ${dragOverId === m.id && dragId !== m.id ? 'ring-2 ring-blue-300 ring-inset' : ''}`}
+                >
                   <div
                     onClick={() => onMilestoneClick(m, linked)}
-                    className="group flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none"
+                    className="group flex items-center gap-1.5 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none"
                     title={m.title}
                   >
+                    {/* Handle glisser-déposer */}
+                    <div
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, m.id)}
+                      onClick={e => e.stopPropagation()}
+                      className="shrink-0 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition text-sm leading-none select-none"
+                      title="Glisser pour réorganiser"
+                    >
+                      ⠿
+                    </div>
                     <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🎯'}</span>
                     <span className="flex-1 min-w-0 leading-snug">
                       <span className="text-xs text-gray-700 truncate block">{trunc(m.title)}</span>
@@ -530,21 +569,6 @@ function PanelBody({
                     ) : (
                       <span className="text-[10px] leading-none shrink-0 opacity-30" title="Pas encore de réunion">⚪</span>
                     )}
-                    {/* Boutons réordonnancement ↑↓ */}
-                    <div className="flex flex-col gap-0 shrink-0 opacity-0 group-hover:opacity-100 transition">
-                      <button
-                        onClick={e => { e.stopPropagation(); handleMoveUp(idx); }}
-                        disabled={idx === 0 || reordering}
-                        className="w-3.5 h-3 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-0 text-[9px] leading-none transition"
-                        title="Déplacer vers le haut"
-                      >▲</button>
-                      <button
-                        onClick={e => { e.stopPropagation(); handleMoveDown(idx); }}
-                        disabled={idx === milestones.length - 1 || reordering}
-                        className="w-3.5 h-3 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-0 text-[9px] leading-none transition"
-                        title="Déplacer vers le bas"
-                      >▼</button>
-                    </div>
                     <span
                       className={`w-2 h-2 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`}
                       title={sd.label}
@@ -555,7 +579,7 @@ function PanelBody({
                   {nextM && (
                     insertingAt === m.id ? (
                       <InsertForm
-                        onSave={(data) => handleInsert(data, (m.displayOrder + nextM.displayOrder) / 2)}
+                        onSave={(data) => handleInsert(data, m, nextM)}
                         onCancel={() => setInsertingAt(null)}
                       />
                     ) : (
