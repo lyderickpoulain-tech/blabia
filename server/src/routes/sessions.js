@@ -1342,6 +1342,12 @@ router.patch('/:sessionId/status', async (req, res) => {
       return res.status(400).json({ error: 'Session déjà close' });
     }
     await db('Session').where({ id: sessionId }).update({ status });
+
+    // Évolution 5 : passer le milestone lié en "done" quand la session est acceptée
+    if (status === 'accepted' && s.milestoneId && (s.summary || s.planSuggestions)) {
+      await db('Milestone').where({ id: s.milestoneId }).update({ status: 'done' });
+    }
+
     res.json({ status });
   } catch (err) {
     console.error('[sessions/:id/status PATCH]', err.message);

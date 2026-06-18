@@ -122,6 +122,7 @@ const DELIVERABLE_LABEL = {
 function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh, onShowPrompt, onShowDeliverable, onDeleteMilestone }) {
   const [status, setStatus] = useState(milestone.status);
   const [saving, setSaving] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [pinnedDecisions, setPinnedDecisions] = useState([]);
 
   // Charger les décisions épinglées si la session liée est un meeting v3.0
@@ -144,6 +145,17 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
       onRefresh();
     } catch {}
     setSaving(false);
+  };
+
+  const handleReopen = async (sessionId) => {
+    setReopening(true);
+    try {
+      await api.post(`/projects/${projectId}/sessions/${sessionId}/reopen`);
+      navigate(`/projects/${projectId}/meeting/${sessionId}`);
+    } catch (err) {
+      console.error('[handleReopen]', err);
+    }
+    setReopening(false);
   };
 
   const sessionDate = linkedSession?.createdAt
@@ -217,16 +229,26 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
         {/* Action session */}
         {linkedSession ? (
           <div className="space-y-2 pt-1">
-            <button
-              onClick={() => navigate(openSessionPath)}
-              className="w-full bg-green-600 hover:bg-green-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
-            >
-              {linkedSession.mode === 'meeting' && linkedSession.status === 'open'
-                ? '🏁 Reprendre la réunion'
-                : linkedSession.mode === 'meeting'
-                ? '📋 Voir la réunion'
-                : '✓ Voir la session'}
-            </button>
+            {linkedSession.status === 'abandoned' ? (
+              <button
+                onClick={() => handleReopen(linkedSession.id)}
+                disabled={reopening}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {reopening ? '…' : '🔄 Reprendre la réunion'}
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(openSessionPath)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
+              >
+                {linkedSession.status === 'open'
+                  ? '▶ Reprendre la réunion'
+                  : linkedSession.mode === 'meeting'
+                  ? '📋 Voir la réunion'
+                  : '✓ Voir la session'}
+              </button>
+            )}
             {linkedSession.status === 'accepted' && onShowDeliverable && (
               <button
                 onClick={() => { onShowDeliverable(linkedSession, milestone.type); onClose(); }}

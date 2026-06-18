@@ -21,7 +21,7 @@ const MILESTONE_TYPE_CONFIG = {
   milestone:      { label: 'Jalon',         icon: '🏁', borderColor: 'border-l-gray-300' },
   // rétrocompat
   synthesis:      { label: 'Compte-rendu',  icon: '📋', borderColor: 'border-l-blue-400' },
-  memory:         { label: 'Souvenir',      icon: '🧠', borderColor: 'border-l-green-400' },
+  memory:         { label: 'Compte-rendu',  icon: '📋', borderColor: 'border-l-blue-400' },
   meeting:        { label: 'Compte-rendu',  icon: '📋', borderColor: 'border-l-blue-400' },
   technical:      { label: 'Claude Code',   icon: '💻', borderColor: 'border-l-violet-400' },
 };
