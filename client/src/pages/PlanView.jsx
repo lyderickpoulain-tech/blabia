@@ -2,6 +2,9 @@
 import { useParams, Link } from 'react-router-dom';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
+import SummaryDisplayModal from '../components/SummaryDisplayModal';
+import ExportModal from '../components/ExportModal';
+import TimelineStepsModal from '../components/TimelineStepsModal';
 
 // ── Constantes statut ──────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -26,6 +29,13 @@ const MILESTONE_TYPE_CONFIG = {
   technical:      { label: 'Claude Code',   icon: '💻', borderColor: 'border-l-violet-400' },
 };
 const MILESTONE_TYPES = ['summary', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
+
+const DELIVERABLE_LABEL = {
+  summary: '📋 Voir le compte-rendu', synthesis: '📋 Voir le compte-rendu',
+  memory: '📋 Voir le compte-rendu', meeting: '📋 Voir le compte-rendu',
+  claude_code: '💻 Voir le prompt', technical: '💻 Voir le prompt',
+  timeline_steps: '📅 Voir les étapes',
+};
 
 // ── Composants helpers ─────────────────────────────────────────────────────────
 
@@ -135,6 +145,7 @@ function MilestoneCard({
   isEditing, onStartEdit, onCancelEdit,
   isDragOver, draggable,
   onDragStart, onDragOver, onDrop, onDragEnd,
+  linkedSession, onShowDeliverable,
 }) {
   const typeConfig = MILESTONE_TYPE_CONFIG[milestone.type] || MILESTONE_TYPE_CONFIG.meeting;
   const [form, setForm]   = useState({ title: milestone.title, description: milestone.description || '', type: milestone.type || 'summary' });
@@ -260,6 +271,18 @@ function MilestoneCard({
               </span>
             </div>
           )}
+
+          {/* Bouton livrable — visible si étape terminée et session acceptée */}
+          {milestone.status === 'done' && linkedSession?.status === 'accepted' && onShowDeliverable && (
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={(e) => { e.stopPropagation(); onShowDeliverable(linkedSession, milestone.type); }}
+                className="text-xs text-violet-600 hover:text-violet-800 hover:bg-violet-50 border border-violet-200 px-2.5 py-1.5 rounded-lg transition font-medium"
+              >
+                {DELIVERABLE_LABEL[milestone.type] || '📄 Voir le livrable'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -267,7 +290,7 @@ function MilestoneCard({
 }
 
 // ── Composant Timeline principal ──────────────────────────────────────────────
-function MilestoneTimeline({ projectId, milestones, onUpdate }) {
+function MilestoneTimeline({ projectId, milestones, milestoneSessions, onUpdate, onShowDeliverable }) {
   const [insertingAfter, setInsertingAfter] = useState(null); // null | 'start' | milestoneId
   const [editingId, setEditingId]           = useState(null);
   const [mode, setMode]                     = useState(() =>
@@ -445,6 +468,8 @@ function MilestoneTimeline({ projectId, milestones, onUpdate }) {
                     onDragOver={(e) => handleDragOver(e, m.id)}
                     onDrop={(e) => handleDrop(e, m.id)}
                     onDragEnd={handleDragEnd}
+                    linkedSession={milestoneSessions?.[m.id]}
+                    onShowDeliverable={onShowDeliverable}
                   />
                 </div>
               </div>
@@ -478,10 +503,17 @@ function MilestoneTimeline({ projectId, milestones, onUpdate }) {
 // ── Page principale ────────────────────────────────────────────────────────────
 export default function PlanView() {
   const { id: projectId } = useParams();
-  const [project,    setProject]    = useState(null);
-  const [milestones, setMilestones] = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState('');
+  const [project,           setProject]           = useState(null);
+  const [milestones,        setMilestones]        = useState([]);
+  const [milestoneSessions, setMilestoneSessions] = useState({});
+  const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState('');
+
+  // État modaux livrable
+  const [summaryViewSession,   setSummaryViewSession]   = useState(null);
+  const [promptViewSession,    setPromptViewSession]    = useState(null);
+  const [timelineStepsSession, setTimelineStepsSession] = useState(null);
+  const [loadingDeliverable,   setLoadingDeliverable]   = useState(false);
 
   const loadPlan = async () => {
     try {
@@ -491,6 +523,7 @@ export default function PlanView() {
       ]);
       setProject(projRes.data);
       setMilestones(planRes.data.milestones || []);
+      setMilestoneSessions(planRes.data.milestoneSessions || {});
     } catch {
       setError('Impossible de charger le plan du projet.');
     } finally {
@@ -498,9 +531,27 @@ export default function PlanView() {
     }
   };
 
+  const handleShowDeliverable = async (linkedSession, milestoneType) => {
+    if (loadingDeliverable) return;
+    setLoadingDeliverable(true);
+    try {
+      const { data: full } = await api.get(`/projects/${projectId}/sessions/${linkedSession.id}`);
+      const t = milestoneType || '';
+      if (['summary', 'synthesis', 'memory', 'meeting'].includes(t)) {
+        setSummaryViewSession(full);
+      } else if (['claude_code', 'technical'].includes(t)) {
+        setPromptViewSession(full);
+      } else if (t === 'timeline_steps') {
+        setTimelineStepsSession(full);
+      }
+    } catch {}
+    setLoadingDeliverable(false);
+  };
+
   useEffect(() => { loadPlan(); }, [projectId]);
 
   return (
+    <>
     <ProjectLayout projectId={projectId}>
       <div className="max-w-3xl mx-auto">
         {/* Navigation */}
@@ -552,11 +603,43 @@ export default function PlanView() {
             <MilestoneTimeline
               projectId={projectId}
               milestones={milestones}
+              milestoneSessions={milestoneSessions}
               onUpdate={loadPlan}
+              onShowDeliverable={handleShowDeliverable}
             />
           </div>
         )}
       </div>
     </ProjectLayout>
+
+      {/* ── Modaux livrables ──────────────────────────────────────────── */}
+      {summaryViewSession && (
+        <SummaryDisplayModal
+          title={summaryViewSession.task}
+          date={summaryViewSession.createdAt
+            ? new Date(summaryViewSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+            : ''}
+          content={summaryViewSession.summary}
+          onClose={() => setSummaryViewSession(null)}
+        />
+      )}
+
+      {promptViewSession && (
+        <ExportModal
+          directContent={promptViewSession.summary}
+          projectId={projectId}
+          onClose={() => setPromptViewSession(null)}
+        />
+      )}
+
+      {timelineStepsSession && (
+        <TimelineStepsModal
+          session={timelineStepsSession}
+          projectId={projectId}
+          onClose={() => setTimelineStepsSession(null)}
+          onRefresh={loadPlan}
+        />
+      )}
+    </>
   );
 }
