@@ -13,9 +13,9 @@ export default function Layout({ children, wide = false }) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+      <header className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
         <Link to="/dashboard">
-          <img src='/logo.png' alt='BlabIA' className='h-8' />
+          <img src='/logo.png' alt='BlabIA' className='h-12' />
         </Link>
         <div className="flex items-center gap-4">
           <Link

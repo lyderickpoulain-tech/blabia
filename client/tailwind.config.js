@@ -15,8 +15,12 @@ export default {
           700: '#1d4ed8'
         },
         blabia: {
-          blue:   '#5B6FE8',
-          orange: '#F27B2C',
+          blue:          '#5B6FE8',
+          'blue-dark':   '#4A5CD4',
+          'blue-light':  '#EEF0FD',
+          orange:        '#F27B2C',
+          'orange-dark': '#D96A1E',
+          'orange-light':'#FEF3EC',
         }
       }
     }
