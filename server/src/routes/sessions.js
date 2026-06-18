@@ -2067,7 +2067,7 @@ function areSimilar(q1, q2, threshold = 0.6) {
 }
 
 async function orchestrate({ session, project, messages, activeAgents,
-  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false }) {
+  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false, turnCount = 0 }) {
 
   // Cas 1 : agent unique — pas besoin d'orchestrer
   if (activeAgents.length === 1) {
@@ -2122,10 +2122,16 @@ async function orchestrate({ session, project, messages, activeAgents,
     ? `\n⚠️ PRIORITÉ ABSOLUE : Le dernier message dans l'historique est un message humain ("${(lastMsg.content || '').slice(0, 120)}"). L'agent le plus pertinent pour répondre directement à CE message doit prendre la parole en premier.\n`
     : '';
 
+  const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
+  const tourNote = turnCount >= 4 && intentionKey === 'claude_code'
+    ? `\n🚨 IMPORTANT : Cette réunion claude_code est au tour ${turnCount}. Si les besoins principaux ont été clarifiés, tu DOIS proposer shouldClose=true.`
+    : '';
+
   const prompt = `Tu es l'orchestrateur d'une réunion IA.
 
 Objectif de la réunion : "${session.task}"
-Livrable attendu : ${Array.isArray(session.intention) ? session.intention[0] : 'compte-rendu'}
+Livrable attendu : ${intentionKey || 'compte-rendu'}
+Tour actuel : ${turnCount} / ${MAX_TURNS}${tourNote}
 
 Agents disponibles :
 ${agentList}
@@ -2139,7 +2145,7 @@ ${recentMessages || '(début de réunion)'}
 Décide maintenant :
 1. Quel agent doit prendre la parole ? (numéro de 1 à ${agentsForSelection.length})
 2. Pourquoi ? (1 phrase courte)
-3. La réunion doit-elle se clore ? (oui/non) — ${(Array.isArray(session.intention) ? session.intention[0] : '') === 'claude_code' ? "Pour une réunion de type claude_code : considère shouldClose=true si les agents ont fait au moins 2 tours complets ET que les besoins principaux ont été clarifiés. Ne cherche pas la perfection — le prompt sera complété par Claude Code lui-même." : "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points"}
+3. La réunion doit-elle se clore ? (oui/non) — ${intentionKey === 'claude_code' ? "Pour une réunion claude_code : considère shouldClose=true si les agents ont fait au moins 2 tours complets ET que les besoins principaux ont été clarifiés. Ne cherche pas la perfection — le prompt sera complété par Claude Code lui-même." : "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points"}
 
 Réponds UNIQUEMENT avec ce JSON :
 {"agentIndex": 1, "reason": "...", "shouldClose": false}`;
@@ -2338,6 +2344,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         humanMessage:         hasText ? humanMessage : null,
         resumeAfterDecision:  turnCount === 0 && resumeAfterDecision,
         delegated:            turnCount === 0 && !!delegated,
+        turnCount,
       });
 
       turnInputTokens  += next.usage?.inputTokens  || 0;

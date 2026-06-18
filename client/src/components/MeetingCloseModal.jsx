@@ -25,6 +25,7 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
   const [addingToPlan,   setAddingToPlan]   = useState(false);
   const [addedToPlan,    setAddedToPlan]    = useState(false);
   const [copied,         setCopied]         = useState(false);
+  const [openedInCC,     setOpenedInCC]     = useState(false);
   const [applying,        setApplying]        = useState(false);
   const [abandonConfirm,  setAbandonConfirm]  = useState(false);
   const [abandoning,      setAbandoning]      = useState(false);
@@ -61,6 +62,14 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleOpenInCC = () => {
+    const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    navigator.clipboard.writeText(text).then(() => {
+      setOpenedInCC(true);
+      setTimeout(() => setOpenedInCC(false), 5000);
     });
   };
 
@@ -310,16 +319,29 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
 
               {/* claude_code → code block + copier */}
               {meta.code && (
-                <div className="relative">
-                  <button
-                    onClick={handleCopy}
-                    className="absolute top-2 right-2 text-xs text-gray-500 hover:text-gray-700 bg-white border border-gray-200 px-2.5 py-1 rounded-lg transition z-10"
-                  >
-                    {copied ? '✓ Copié !' : 'Copier'}
-                  </button>
-                  <pre className="bg-gray-900 text-green-300 rounded-xl p-4 text-xs overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto">
+                <div className="space-y-3">
+                  <pre className="bg-gray-900 text-green-300 rounded-xl p-4 text-xs overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
                     {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
                   </pre>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCopy}
+                      className="flex-1 flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue-dark text-white font-semibold py-2.5 rounded-xl text-sm transition"
+                    >
+                      {copied ? '✓ Copié !' : '📋 Copier le prompt'}
+                    </button>
+                    <button
+                      onClick={handleOpenInCC}
+                      className="flex-1 flex items-center justify-center gap-2 border border-blabia-blue text-blabia-blue hover:bg-blabia-blue-light font-semibold py-2.5 rounded-xl text-sm transition"
+                    >
+                      💻 Ouvrir dans Claude Code
+                    </button>
+                  </div>
+                  {openedInCC && (
+                    <p className="text-xs text-center text-blabia-blue bg-blabia-blue-light rounded-lg py-2 px-3">
+                      ✅ Prompt copié — colle-le dans Claude Code
+                    </p>
+                  )}
                 </div>
               )}
 

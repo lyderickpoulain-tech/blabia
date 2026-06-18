@@ -1589,7 +1589,38 @@ export default function MeetingRoom() {
         </div>
 
         {/* ── Bannière suggest_close (orchestrateur) ──────────────────────── */}
-        {suggestClose && !isClosed && (
+        {suggestClose && !isClosed && currentIntention === 'claude_code' && (
+          <div className="shrink-0 mx-3 mt-2 mb-1 bg-blabia-blue-light border border-blabia-blue rounded-xl px-4 py-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <span className="text-blabia-blue text-base shrink-0 mt-0.5">✅</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-blabia-blue">
+                  Les agents estiment que les besoins sont clarifiés.
+                </p>
+                {suggestClose.reason && (
+                  <p className="text-xs text-gray-600 mt-0.5 leading-snug">
+                    Points couverts : {suggestClose.reason}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowCloseModal(true); setSuggestClose(null); }}
+                className="flex-1 text-xs font-semibold bg-blabia-blue hover:bg-blabia-blue-dark text-white px-3 py-2 rounded-lg transition"
+              >
+                🚀 Générer le prompt et clore
+              </button>
+              <button
+                onClick={() => setSuggestClose(null)}
+                className="text-xs font-medium text-blabia-blue hover:text-blabia-blue-dark border border-blabia-blue hover:bg-white px-3 py-2 rounded-lg transition"
+              >
+                Continuer les échanges
+              </button>
+            </div>
+          </div>
+        )}
+        {suggestClose && !isClosed && currentIntention !== 'claude_code' && (
           <div className="shrink-0 mx-3 mt-2 mb-1 flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
             <span className="text-green-600 text-base shrink-0 mt-0.5">✅</span>
             <div className="flex-1 min-w-0">
