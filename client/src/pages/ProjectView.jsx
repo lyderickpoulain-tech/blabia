@@ -540,6 +540,8 @@ export default function ProjectView() {
   const [archiving, setArchiving]       = useState(false);
   const [memoryOpen, setMemoryOpen]     = useState(false);
   const [resettingMemory, setResettingMemory] = useState(false);
+  const [showResetMemoryModal, setShowResetMemoryModal] = useState(false);
+  const [resetMemoryConfirmName, setResetMemoryConfirmName] = useState('');
   const [showDelete, setShowDelete]     = useState(false);
   const [deleting, setDeleting]         = useState(false);
   const [members, setMembers]           = useState([]);
@@ -793,11 +795,12 @@ export default function ProjectView() {
   };
 
   const handleResetMemory = async () => {
-    if (!confirm('Réinitialiser la mémoire du projet ? Cette action est irréversible.')) return;
     setResettingMemory(true);
     try {
-      await api.delete(`/projects/${id}/context`);
+      await api.delete(`/projects/${id}/memory`);
       setProject(prev => ({ ...prev, context: null }));
+      setShowResetMemoryModal(false);
+      setResetMemoryConfirmName('');
     } catch {
       alert('Erreur lors de la réinitialisation');
     } finally {
@@ -1067,13 +1070,34 @@ export default function ProjectView() {
 
       {/* Zone de danger — visible propriétaire + admin uniquement */}
       {canManage && (
-        <div className="mt-8 border-t border-gray-200 pt-6">
-          <button
-            onClick={() => setShowDelete(true)}
-            className="text-sm text-red-500 hover:text-red-700 transition"
-          >
-            Supprimer le projet…
-          </button>
+        <div className="mt-8 border-t border-red-100 pt-6">
+          <p className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-4">⚠️ Zone de danger</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between p-4 border border-amber-200 rounded-xl bg-amber-50">
+              <div>
+                <p className="text-sm font-medium text-amber-800">Réinitialiser la mémoire du projet</p>
+                <p className="text-xs text-amber-600 mt-0.5">Efface tout l'historique des réunions, les résumés et remet les étapes à zéro.</p>
+              </div>
+              <button
+                onClick={() => { setResetMemoryConfirmName(''); setShowResetMemoryModal(true); }}
+                className="shrink-0 ml-4 px-3 py-1.5 text-sm border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-100 transition"
+              >
+                🔄 Réinitialiser
+              </button>
+            </div>
+            <div className="flex items-center justify-between p-4 border border-red-200 rounded-xl bg-red-50">
+              <div>
+                <p className="text-sm font-medium text-red-700">Supprimer le projet</p>
+                <p className="text-xs text-red-500 mt-0.5">Action irréversible — supprime toutes les données.</p>
+              </div>
+              <button
+                onClick={() => setShowDelete(true)}
+                className="shrink-0 ml-4 px-3 py-1.5 text-sm border border-red-400 text-red-600 rounded-lg hover:bg-red-100 transition"
+              >
+                Supprimer…
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1099,6 +1123,48 @@ export default function ProjectView() {
           onConfirm={handleDeleteProject}
           deleting={deleting}
         />
+      )}
+      {showResetMemoryModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">🔄 Réinitialiser la mémoire du projet</h3>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1 text-sm text-amber-800">
+              <p className="font-medium">Cette action va :</p>
+              <ul className="list-disc pl-4 space-y-0.5 text-amber-700">
+                <li>Effacer la mémoire contextuelle du projet</li>
+                <li>Vider l'historique et les résumés de toutes les réunions</li>
+                <li>Remettre toutes les étapes de la timeline à l'état initial</li>
+              </ul>
+            </div>
+            <p className="text-sm text-gray-600">
+              Pour confirmer, saisissez le nom du projet :{' '}
+              <span className="font-semibold text-gray-900">{project.name}</span>
+            </p>
+            <input
+              type="text"
+              value={resetMemoryConfirmName}
+              onChange={e => setResetMemoryConfirmName(e.target.value)}
+              placeholder={project.name}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => { setShowResetMemoryModal(false); setResetMemoryConfirmName(''); }}
+                disabled={resettingMemory}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleResetMemory}
+                disabled={resettingMemory || resetMemoryConfirmName !== project.name}
+                className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium transition disabled:opacity-40"
+              >
+                {resettingMemory ? 'Réinitialisation…' : '🔄 Confirmer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {showGenTimeline && (
         <GenerateTimelineModal

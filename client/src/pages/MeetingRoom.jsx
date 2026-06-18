@@ -555,6 +555,11 @@ export default function MeetingRoom() {
   const [showDeliverable, setShowDeliverable] = useState(false);
   // Bannière suggest_close émise par l'orchestrateur
   const [suggestClose,    setSuggestClose]    = useState(null); // { reason: string } | null
+  // Menu ⋮ + modale réinitialisation réunion
+  const [showMenuDots,       setShowMenuDots]       = useState(false);
+  const [showResetModal,     setShowResetModal]     = useState(false);
+  const [resettingSession,   setResettingSession]   = useState(false);
+  const menuDotsRef = useRef(null);
   // Tokens consommés (cumulés par les turn_complete SSE)
   const [tokensUsed,      setTokensUsed]      = useState(null); // { input, output, total } | null
 
@@ -563,6 +568,21 @@ export default function MeetingRoom() {
     setShowCloseModal(false);
     refreshPanel();
   }, [refreshPanel]);
+
+  const handleResetSession = useCallback(async () => {
+    setResettingSession(true);
+    try {
+      await api.post(`/projects/${projectId}/sessions/${sessionId}/reset`);
+      setShowResetModal(false);
+      setSession(prev => prev ? { ...prev, status: 'open', summary: null } : prev);
+      setMessages([]);
+      refreshPanel();
+    } catch {
+      // silence — l'utilisateur verra simplement que rien n'a changé
+    } finally {
+      setResettingSession(false);
+    }
+  }, [projectId, sessionId, refreshPanel]);
 
   // Scroll initial vers le bas dès que le chargement est terminé
   useEffect(() => {
@@ -634,6 +654,17 @@ export default function MeetingRoom() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showIntentionDropdown]);
+
+  useEffect(() => {
+    if (!showMenuDots) return;
+    const handler = (e) => {
+      if (menuDotsRef.current && !menuDotsRef.current.contains(e.target)) {
+        setShowMenuDots(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMenuDots]);
 
   // Ajouter un agent à la session (partagé par dropdown + suggestion cards)
   const handleAddAgent = useCallback(async (agentId) => {
@@ -1487,6 +1518,27 @@ export default function MeetingRoom() {
             <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${badge.cls}`}>
               {badge.label}
             </span>
+
+            {/* Menu ⋮ */}
+            <div className="relative shrink-0 ml-auto" ref={menuDotsRef}>
+              <button
+                onClick={() => setShowMenuDots(v => !v)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                title="Actions"
+              >
+                ⋮
+              </button>
+              {showMenuDots && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1 overflow-hidden">
+                  <button
+                    onClick={() => { setShowMenuDots(false); setShowResetModal(true); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left text-amber-700 hover:bg-amber-50 transition"
+                  >
+                    🔄 Réinitialiser cette réunion
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Ligne 2 : chips agents */}
@@ -1860,6 +1912,38 @@ export default function MeetingRoom() {
       </div>
       {/* ── fin wrapper flex ────────────────────────────────────────────── */}
     </ProjectLayout>
+
+    {/* Modale réinitialisation réunion */}
+    {showResetModal && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">⚠️ Réinitialiser cette réunion ?</h3>
+          <p className="text-sm text-gray-600">Cette action va :</p>
+          <ul className="text-sm text-gray-700 space-y-1 pl-4 list-disc">
+            <li>Effacer tous les échanges de cette réunion</li>
+            <li>Supprimer sa contribution à la mémoire du projet</li>
+            <li>Réinitialiser la mémoire des étapes suivantes</li>
+          </ul>
+          <p className="text-sm text-gray-500 italic">Les étapes précédentes sont conservées.</p>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setShowResetModal(false)}
+              disabled={resettingSession}
+              className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleResetSession}
+              disabled={resettingSession}
+              className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium transition disabled:opacity-50"
+            >
+              {resettingSession ? 'Réinitialisation…' : '🔄 Réinitialiser'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Modal de clôture v3.0 */}
     {showCloseModal && session && (

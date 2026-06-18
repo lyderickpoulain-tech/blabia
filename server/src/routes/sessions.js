@@ -73,7 +73,7 @@ async function saveSession(sessionId, exchanges, summary, status) {
 }
 
 // Génère un digest 200-300 mots et l'ajoute à project.context (max ~3000 tokens)
-async function updateProjectContext(projectId, task, summaryText) {
+async function updateProjectContext(projectId, sessionId, task, summaryText) {
   try {
     const digestResponse = await anthropic.messages.create({
       model: MODEL,
@@ -87,7 +87,7 @@ async function updateProjectContext(projectId, task, summaryText) {
 
     const digest = digestResponse.content[0].text.trim();
     const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const entry = `[Session du ${date}]\n${digest}`;
+    const entry = `[SESSION:${sessionId} | ${date}]\n${digest}`;
 
     const [project] = await db('Project').select('context').where({ id: projectId }).limit(1);
     const current = project?.context || '';
@@ -1079,7 +1079,7 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
 
       await saveSession(sessionId, exchanges, summaryText, 'open');
       await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
-      updateProjectContext(projectId, session.task, summaryText);
+      updateProjectContext(projectId, sessionId, session.task, summaryText);
       extractSuggestedTools(sessionId, summaryText, projectId);
 
       // Mise à jour du statut du jalon lié
@@ -1209,7 +1209,7 @@ router.post('/:sessionId/synthesize', async (req, res) => {
 
     await saveSession(sessionId, exchanges, summaryText, 'open');
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
-    updateProjectContext(projectId, session.task, summaryText);
+    updateProjectContext(projectId, sessionId, session.task, summaryText);
     extractSuggestedTools(sessionId, summaryText, projectId);
 
     // Mise à jour du statut du jalon lié (mode conversation)
@@ -1371,6 +1371,82 @@ router.post('/:sessionId/reopen', async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('[sessions/:id/reopen POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── Réinitialiser une réunion ─────────────────────────────────────────────────
+
+router.post('/:sessionId/reset', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+
+    // Réinitialiser la session
+    await db('Session').where({ id: sessionId }).update({
+      messages: JSON.stringify([]),
+      status: 'open',
+      summary: null,
+      planSuggestions: null,
+      tokensUsed: 0,
+      hasCode: false,
+      codeStatus: null,
+      updatedAt: new Date()
+    });
+
+    // Trouver les sessions suivantes via leur jalon (displayOrder supérieur)
+    let followingCount = 0;
+    let newContext = project.context || '';
+
+    if (session.milestoneId) {
+      const [milestone] = await db('Milestone').where({ id: session.milestoneId }).limit(1);
+      if (milestone) {
+        // Récupérer les jalons suivants (displayOrder strictement supérieur)
+        const followingMilestones = await db('Milestone')
+          .where({ projectId })
+          .where('displayOrder', '>', milestone.displayOrder);
+        const followingMilestoneIds = followingMilestones.map(m => m.id);
+
+        // Sessions liées aux jalons suivants
+        let followingSessionIds = [sessionId];
+        if (followingMilestoneIds.length > 0) {
+          const followingSessions = await db('Session')
+            .whereIn('milestoneId', followingMilestoneIds)
+            .where({ projectId });
+          followingSessionIds = [sessionId, ...followingSessions.map(s => s.id)];
+          followingCount = followingSessions.length;
+        }
+
+        // Supprimer les blocs SESSION:uuid correspondants de project.context
+        for (const sid of followingSessionIds) {
+          const regex = new RegExp(
+            `(?:^|\\n---\\n)\\[SESSION:${sid}[^\\]]*\\][\\s\\S]*?(?=\\n---\\n|$)`,
+            'g'
+          );
+          newContext = newContext.replace(regex, '');
+        }
+        // Nettoyer les séparateurs orphelins
+        newContext = newContext.replace(/^---\n/gm, '').replace(/\n---\n---\n/g, '\n---\n').trim();
+
+        await db('Project').where({ id: projectId }).update({ context: newContext, updatedAt: new Date() });
+      }
+    } else {
+      // Pas de jalon lié : supprimer uniquement la contribution de cette session
+      const regex = new RegExp(
+        `(?:^|\\n---\\n)\\[SESSION:${sessionId}[^\\]]*\\][\\s\\S]*?(?=\\n---\\n|$)`,
+        'g'
+      );
+      newContext = newContext.replace(regex, '').replace(/^---\n/gm, '').replace(/\n---\n---\n/g, '\n---\n').trim();
+      await db('Project').where({ id: projectId }).update({ context: newContext, updatedAt: new Date() });
+    }
+
+    res.json({ message: 'Réunion réinitialisée', followingCount });
+  } catch (err) {
+    console.error('[sessions/:id/reset POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1956,7 +2032,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       // Auto-injection dans project.context pour summary (et memory legacy)
       if (deliverableType === 'summary' || deliverableType === 'memory') {
         const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const entry = `[Réunion du ${date} — ${session.task}]\n${content}`;
+        const entry = `[SESSION:${sessionId} | ${date} — ${session.task}]\n${content}`;
         const current = project.context || '';
         let newContext = (current ? current + '\n---\n' : '') + entry;
         const MAX_CHARS = 10000;
@@ -2129,9 +2205,23 @@ async function orchestrate({ session, project, messages, activeAgents,
     : '';
 
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
-  const tourNote = turnCount >= 4 && intentionKey === 'claude_code'
-    ? `\n🚨 IMPORTANT : Cette réunion claude_code est au tour ${turnCount}. Si les besoins principaux ont été clarifiés, tu DOIS proposer shouldClose=true.`
+  const tourNote =
+    (turnCount >= 4 && intentionKey === 'claude_code')
+      ? `\n🚨 IMPORTANT : Cette réunion claude_code est au tour ${turnCount}. Si les besoins principaux ont été clarifiés, tu DOIS proposer shouldClose=true.`
+    : (turnCount >= 3 && intentionKey === 'summary')
+      ? `\n🚨 IMPORTANT : Cette réunion compte-rendu est au tour ${turnCount}. Si les points clés, décisions et actions ont été couverts, tu DOIS proposer shouldClose=true.`
+    : (turnCount >= 4 && intentionKey === 'timeline_steps')
+      ? `\n🚨 IMPORTANT : Cette réunion timeline_steps est au tour ${turnCount}. Si les étapes ont été identifiées et structurées, tu DOIS proposer shouldClose=true.`
     : '';
+
+  const closeInstruction =
+    intentionKey === 'claude_code'
+      ? "Pour une réunion claude_code : considère shouldClose=true si les agents ont fait au moins 2 tours complets ET que les besoins principaux ont été clarifiés. Ne cherche pas la perfection — le prompt sera complété par Claude Code lui-même."
+    : intentionKey === 'summary'
+      ? "Pour un compte-rendu : considère shouldClose=true dès que les points clés, décisions et actions ont été couverts. 3 tours suffisent généralement."
+    : intentionKey === 'timeline_steps'
+      ? "Pour une réunion timeline_steps : considère shouldClose=true dès que les étapes principales ont été identifiées et structurées. 4 tours suffisent généralement."
+    : "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points";
 
   const prompt = `Tu es l'orchestrateur d'une réunion IA.
 
@@ -2151,7 +2241,7 @@ ${recentMessages || '(début de réunion)'}
 Décide maintenant :
 1. Quel agent doit prendre la parole ? (numéro de 1 à ${agentsForSelection.length})
 2. Pourquoi ? (1 phrase courte)
-3. La réunion doit-elle se clore ? (oui/non) — ${intentionKey === 'claude_code' ? "Pour une réunion claude_code : considère shouldClose=true si les agents ont fait au moins 2 tours complets ET que les besoins principaux ont été clarifiés. Ne cherche pas la perfection — le prompt sera complété par Claude Code lui-même." : "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points"}
+3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
 
 Réponds UNIQUEMENT avec ce JSON :
 {"agentIndex": 1, "reason": "...", "shouldClose": false}`;

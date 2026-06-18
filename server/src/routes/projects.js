@@ -349,6 +349,44 @@ router.delete('/:id/context', async (req, res) => {
   }
 });
 
+// DELETE /api/projects/:id/memory — réinitialisation complète (contexte + sessions + jalons)
+router.delete('/:id/memory', async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (!isOwnerOrAdmin(project, req.user.id, isAdmin)) {
+      return res.status(403).json({ error: 'Action réservée au propriétaire ou à un administrateur' });
+    }
+
+    // Effacer project.context
+    await db('Project').where({ id: req.params.id }).update({ context: null, updatedAt: new Date() });
+
+    // Vider messages + summary de toutes les sessions du projet
+    await db('Session').where({ projectId: req.params.id }).update({
+      messages: JSON.stringify([]),
+      summary: null,
+      planSuggestions: null,
+      tokensUsed: 0,
+      hasCode: false,
+      codeStatus: null,
+      status: 'open',
+      updatedAt: new Date()
+    });
+
+    // Remettre tous les jalons à pending
+    await db('Milestone').where({ projectId: req.params.id }).update({
+      status: 'pending',
+      updatedAt: new Date()
+    });
+
+    res.json({ message: 'Mémoire du projet réinitialisée' });
+  } catch (err) {
+    console.error('[projects/:id/memory DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── Membres du projet ─────────────────────────────────────────────────────────
 
 // GET /api/projects/:id/members
