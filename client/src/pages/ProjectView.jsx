@@ -526,7 +526,7 @@ export default function ProjectView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
   const [project, setProject]           = useState(null);
   const [loading, setLoading]           = useState(true);
   const [sessions, setSessions]         = useState([]);
@@ -616,7 +616,7 @@ export default function ProjectView() {
           try { setProjectStack(JSON.parse(data.techStack)); isFirstStackLoad.current = false; } catch {}
         }
         // Charger les membres si owner ou admin
-        if (data.userId === user?.id || user?.role === 'admin') {
+        if (data.userId === user?.id || user?.role === 'admin' || user?.role === 'supervisor') {
           setMembersLoading(true);
           api.get(`/projects/${id}/members`)
             .then(({ data: m }) => setMembers(m))

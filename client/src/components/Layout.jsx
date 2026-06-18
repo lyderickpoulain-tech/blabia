@@ -30,12 +30,12 @@ export default function Layout({ children, wide = false }) {
           >
             Mon environnement
           </Link>
-          {user?.role === 'admin' && (
+          {(user?.role === 'admin' || user?.role === 'supervisor') && (
             <Link
-              to="/admin/invitations"
+              to="/admin/users"
               className="text-sm text-gray-600 hover:text-gray-900 hidden sm:block"
             >
-              Invitations
+              Administration
             </Link>
           )}
           <span className="text-sm text-gray-500 hidden sm:block">{user?.email}</span>

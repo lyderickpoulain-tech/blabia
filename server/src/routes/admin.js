@@ -2,11 +2,13 @@ const express = require('express');
 const { randomUUID } = require('crypto');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
-const adminMiddleware = require('../middleware/admin');
+const { canManageUsers, SUPERVISOR_EMAIL } = require('../middleware/admin');
 const { sendInvitation, sendTestEmail } = require('../services/email');
 
 const router = express.Router();
-router.use(authMiddleware, adminMiddleware);
+router.use(authMiddleware, canManageUsers);
+
+const ALLOWED_ROLES = ['user', 'member', 'admin', 'supervisor'];
 
 // GET /api/admin/invitations
 router.get('/invitations', async (req, res) => {
@@ -68,7 +70,7 @@ router.delete('/invitations/:id', async (req, res) => {
   }
 });
 
-// POST /api/admin/test-email — envoie un email de test à l'admin connecté
+// POST /api/admin/test-email
 router.post('/test-email', async (req, res) => {
   try {
     await sendTestEmail(req.user.email);
@@ -88,6 +90,42 @@ router.get('/users', async (req, res) => {
     res.json(users);
   } catch (err) {
     console.error('[admin/users GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/admin/users/:id/role — changer le rôle d'un utilisateur
+router.put('/users/:id/role', async (req, res) => {
+  const requesterRole = req.user.role;
+  const { role: newRole } = req.body;
+
+  if (!ALLOWED_ROLES.includes(newRole)) {
+    return res.status(400).json({ error: `Rôle invalide. Valeurs acceptées : ${ALLOWED_ROLES.join(', ')}` });
+  }
+
+  try {
+    const [target] = await db('User').where({ id: req.params.id }).limit(1);
+    if (!target) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+    // Protéger contact@rasia-editions.fr contre toute rétrogradation
+    if (target.email === SUPERVISOR_EMAIL) {
+      return res.status(403).json({ error: 'Ce compte est protégé et ne peut pas être modifié' });
+    }
+
+    // Un admin ne peut pas promouvoir en supervisor
+    if (requesterRole === 'admin' && newRole === 'supervisor') {
+      return res.status(403).json({ error: 'Les administrateurs ne peuvent pas attribuer le rôle supervisor' });
+    }
+
+    // Un admin peut uniquement changer user↔member et promouvoir en admin
+    if (requesterRole === 'admin' && !['user', 'member', 'admin'].includes(newRole)) {
+      return res.status(403).json({ error: 'Action non autorisée pour votre rôle' });
+    }
+
+    await db('User').where({ id: req.params.id }).update({ role: newRole });
+    res.json({ message: 'Rôle mis à jour', role: newRole });
+  } catch (err) {
+    console.error('[admin/users/:id/role PUT]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

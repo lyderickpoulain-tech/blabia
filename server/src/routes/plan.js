@@ -28,7 +28,7 @@ async function findProject(id, userId, isAdmin) {
 // ── GET /api/projects/:id/plan — jalons + tâches ─────────────────────────────
 
 router.get('/:id/plan', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -77,7 +77,7 @@ router.get('/:id/plan', async (req, res) => {
 router.post('/:id/milestones', async (req, res) => {
   const { title, description, dueDate, displayOrder, type } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Le titre est requis' });
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -114,7 +114,7 @@ router.post('/:id/milestones', async (req, res) => {
 // PATCH /api/projects/:id/milestones/reorder  ← AVANT /:mid pour éviter le conflit
 router.patch('/:id/milestones/reorder', async (req, res) => {
   const { order } = req.body; // [milestoneId, ...]
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   if (!Array.isArray(order)) return res.status(400).json({ error: 'order (tableau) requis' });
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
@@ -135,7 +135,7 @@ router.patch('/:id/milestones/reorder', async (req, res) => {
 // PATCH /api/projects/:id/milestones/:mid
 router.patch('/:id/milestones/:mid', async (req, res) => {
   const { title, description, dueDate, status, type, displayOrder } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -167,7 +167,7 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
 
 // GET /api/projects/:id/milestones/:mid — jalon unique (breadcrumb, panel, StackCheckModal)
 router.get('/:id/milestones/:mid', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -207,7 +207,7 @@ router.get('/:id/milestones/:mid', async (req, res) => {
 // PATCH /api/projects/:id/milestones/:mid/checklist — mise à jour de la checklist stack_check
 router.patch('/:id/milestones/:mid/checklist', async (req, res) => {
   const { items, finalStatus } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items (tableau) requis' });
 
   const VALID_STATUSES = ['pending', 'in_progress', 'done', 'blocked'];
@@ -243,7 +243,7 @@ router.patch('/:id/milestones/:mid/checklist', async (req, res) => {
 
 // DELETE /api/projects/:id/milestones/:mid
 router.delete('/:id/milestones/:mid', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   const { id: projectId, mid: milestoneId } = req.params;
   console.log('[milestones DELETE] projectId:', projectId, 'milestoneId:', milestoneId, 'userId:', req.user.id);
   try {
@@ -271,7 +271,7 @@ router.delete('/:id/milestones/:mid', async (req, res) => {
 router.post('/:id/todos', async (req, res) => {
   const { title, description, milestoneId, priority = 'medium', dueDate, source = 'manual', sessionId } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Le titre est requis' });
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -324,7 +324,7 @@ router.post('/:id/todos', async (req, res) => {
 // PATCH /api/projects/:id/todos/reorder  ← AVANT /:tid
 router.patch('/:id/todos/reorder', async (req, res) => {
   const { order } = req.body; // [todoId, ...]
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   if (!Array.isArray(order)) return res.status(400).json({ error: 'order (tableau) requis' });
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
@@ -345,7 +345,7 @@ router.patch('/:id/todos/reorder', async (req, res) => {
 // PATCH /api/projects/:id/todos/:tid
 router.patch('/:id/todos/:tid', async (req, res) => {
   const { title, description, status, priority, dueDate, milestoneId, displayOrder } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -397,7 +397,7 @@ router.patch('/:id/todos/:tid', async (req, res) => {
 
 // DELETE /api/projects/:id/todos/:tid
 router.delete('/:id/todos/:tid', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -427,7 +427,7 @@ router.delete('/:id/todos/:tid', async (req, res) => {
 router.post('/:id/plan/bulk', async (req, res) => {
   const { milestones = [], standalone_todos = [], sessionId, sourceSessionId } = req.body;
   console.log('[plan/bulk] reçu — projectId:', req.params.id, '| milestones:', milestones.length, JSON.stringify(milestones.map(m => m.title)));
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });

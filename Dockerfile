@@ -4,7 +4,7 @@ FROM node:20-alpine AS client-builder
 WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm ci --prefer-offline
-RUN echo 'bust-v3.9-final' > /tmp/bust
+RUN echo 'bust-v3.9-evolution7' > /tmp/bust
 COPY client/ ./
 RUN npm run build
 

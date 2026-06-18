@@ -2,6 +2,7 @@ const express = require('express');
 const { randomUUID } = require('crypto');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
+const { canManageUsers } = require('../middleware/admin');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -28,12 +29,20 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/agents — créer un agent personnalisé
+// POST /api/agents — créer un agent (global si isDefault=true, réservé admin/supervisor)
 router.post('/', async (req, res) => {
-  const { name, role, systemPrompt, emoji = '🤖' } = req.body;
+  const { name, role, systemPrompt, emoji = '🤖', isDefault = false } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Le nom est requis' });
   if (!role?.trim()) return res.status(400).json({ error: 'Le rôle est requis' });
-  // systemPrompt optionnel — génère un prompt par défaut si absent
+
+  // Création d'un agent global réservée aux admin/supervisor
+  if (isDefault) {
+    const userRole = req.user.role;
+    if (userRole !== 'admin' && userRole !== 'supervisor') {
+      return res.status(403).json({ error: 'La création d\'agents globaux est réservée aux administrateurs' });
+    }
+  }
+
   const effectivePrompt = systemPrompt?.trim() || `Tu es ${name.trim()}, ${role.trim()}. Contribue de façon concise et pertinente.`;
 
   try {
@@ -44,8 +53,8 @@ router.post('/', async (req, res) => {
         role: role.trim(),
         systemPrompt: effectivePrompt,
         emoji: emoji.trim() || '🤖',
-        isDefault: false,
-        userId: req.user.id,
+        isDefault: Boolean(isDefault),
+        userId: isDefault ? null : req.user.id,
         createdAt: new Date()
       })
       .returning(AGENT_FIELDS);
@@ -60,7 +69,7 @@ router.post('/', async (req, res) => {
 // PATCH /api/agents/:id — modifier un agent personnalisé (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
   const { name, role, systemPrompt, emoji } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   try {
     const [agent] = await db('Agent').where({ id: req.params.id }).limit(1);
@@ -92,7 +101,7 @@ router.patch('/:id', async (req, res) => {
 
 // DELETE /api/agents/:id — supprimer un agent personnalisé (propriétaire ou admin)
 router.delete('/:id', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   try {
     const [agent] = await db('Agent').where({ id: req.params.id }).limit(1);

@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import NewProject from './pages/NewProject';
 import ProjectView from './pages/ProjectView';
 import AdminInvitations from './pages/AdminInvitations';
+import AdminUsers from './pages/AdminUsers';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import NewSessionLegacy from './pages/NewSessionLegacy';
@@ -62,6 +63,9 @@ export default function App() {
         } />
         <Route path="/admin/invitations" element={
           <ProtectedRoute adminOnly><AdminInvitations /></ProtectedRoute>
+        } />
+        <Route path="/admin/users" element={
+          <ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>
         } />
 
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

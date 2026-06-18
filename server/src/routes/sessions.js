@@ -451,7 +451,7 @@ router.post('/', async (req, res) => {
     activeAgents: activeAgentsParam = null
   } = req.body;
   const { projectId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const VALID_MODELS = ['claude-sonnet-4-6', 'claude-opus-4-8'];
   const selectedModel = VALID_MODELS.includes(modelParam) ? modelParam : MODEL;
@@ -677,7 +677,7 @@ Tâche : ${task.trim()}`
 router.post('/:sessionId/run', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { humanInput } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   // Valider avant d'ouvrir le SSE
   let session;
@@ -1133,7 +1133,7 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
 
 router.post('/:sessionId/synthesize', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   let session;
   try {
@@ -1252,7 +1252,7 @@ router.post('/:sessionId/synthesize', async (req, res) => {
 
 router.post('/:sessionId/close', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
@@ -1294,7 +1294,7 @@ router.post('/:sessionId/answer', async (req, res) => {
 
 router.patch('/:sessionId', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   const { task, intention } = req.body;
 
   if (task === undefined && intention === undefined) {
@@ -1332,7 +1332,7 @@ router.patch('/:sessionId/status', async (req, res) => {
   if (!['accepted', 'abandoned'].includes(status)) {
     return res.status(400).json({ error: 'Statut invalide (accepted | abandoned)' });
   }
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1359,7 +1359,7 @@ router.patch('/:sessionId/status', async (req, res) => {
 
 router.post('/:sessionId/reopen', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1379,7 +1379,7 @@ router.post('/:sessionId/reopen', async (req, res) => {
 
 router.post('/:sessionId/reset', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1455,7 +1455,7 @@ router.post('/:sessionId/reset', async (req, res) => {
 
 router.post('/:sessionId/generate-memory', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1490,7 +1490,7 @@ router.post('/suggest-agents', async (req, res) => {
   const { projectId } = req.params;
   const { task, milestoneType } = req.body;
   if (!task?.trim()) return res.status(400).json({ error: 'Tâche requise' });
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1561,7 +1561,7 @@ Retourne UNIQUEMENT ce JSON :
 
 router.get('/', async (req, res) => {
   const { projectId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1585,7 +1585,7 @@ router.get('/', async (req, res) => {
 
 router.get('/:sessionId', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1623,7 +1623,7 @@ router.get('/:sessionId', async (req, res) => {
 
 router.delete('/:sessionId', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -1648,7 +1648,7 @@ router.delete('/:sessionId', async (req, res) => {
 router.patch('/:sessionId/code-status', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { status } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   if (!['implemented', 'not_generated'].includes(status)) {
     return res.status(400).json({ error: 'Statut invalide — valeurs acceptées : implemented, not_generated' });
@@ -1731,7 +1731,7 @@ router.patch('/:sessionId/code-status', async (req, res) => {
 router.post('/:sessionId/timeline-event', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { type, label, status, meta, entryId, patch } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
@@ -1766,7 +1766,7 @@ router.post('/:sessionId/timeline-event', async (req, res) => {
 router.post('/:sessionId/add-agent', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { agentId } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   if (!agentId) return res.status(400).json({ error: 'agentId requis' });
 
@@ -1836,7 +1836,7 @@ router.post('/:sessionId/add-agent', async (req, res) => {
 router.post('/:sessionId/pin-message', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { messageId, type } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const VALID_TYPES = ['decision', 'step_suggestion'];
   if (!messageId) return res.status(400).json({ error: 'messageId requis' });
@@ -1905,7 +1905,7 @@ router.post('/:sessionId/pin-message', async (req, res) => {
 router.post('/:sessionId/answer-decision', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { messageId, answer, status } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const VALID_STATUSES = ['answered', 'deferred', 'delegated'];
   if (!messageId) return res.status(400).json({ error: 'messageId requis' });
@@ -1977,7 +1977,7 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
 router.post('/:sessionId/generate-deliverable', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { deliverableType } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const VALID_TYPES = ['synthesis', 'memory', 'summary', 'claude_code', 'timeline_steps'];
   if (!VALID_TYPES.includes(deliverableType)) {
@@ -2279,7 +2279,7 @@ Réponds UNIQUEMENT avec ce JSON :
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const hasText        = !!humanMessage?.trim();
   const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.length > 0;

@@ -36,7 +36,8 @@ function isOwnerOrAdmin(project, userId, isAdmin) {
 
 // GET /api/projects
 router.get('/', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const userRole = req.user.role;
+  const isPrivileged = userRole === 'admin' || userRole === 'supervisor';
   try {
     let query = db('Project')
       .select(
@@ -57,16 +58,25 @@ router.get('/', async (req, res) => {
       .groupBy('Project.id')
       .orderBy('Project.updatedAt', 'desc');
 
-    if (!isAdmin) {
-      // Projets dont l'utilisateur est propriétaire OU membre
-      query.where(function () {
-        this.where('Project.userId', req.user.id)
-          .orWhereExists(
-            db.select(db.raw('1')).from('ProjectMember')
-              .where('ProjectMember.userId', req.user.id)
-              .whereRaw('"ProjectMember"."projectId" = "Project"."id"')
-          );
-      });
+    if (!isPrivileged) {
+      if (userRole === 'user') {
+        // Les 'user' voient uniquement les projets où ils sont membres explicites
+        query.whereExists(
+          db.select(db.raw('1')).from('ProjectMember')
+            .where('ProjectMember.userId', req.user.id)
+            .whereRaw('"ProjectMember"."projectId" = "Project"."id"')
+        );
+      } else {
+        // member et autres : projets dont l'utilisateur est propriétaire OU membre
+        query.where(function () {
+          this.where('Project.userId', req.user.id)
+            .orWhereExists(
+              db.select(db.raw('1')).from('ProjectMember')
+                .where('ProjectMember.userId', req.user.id)
+                .whereRaw('"ProjectMember"."projectId" = "Project"."id"')
+            );
+        });
+      }
     }
 
     const projects = await query;
@@ -79,6 +89,9 @@ router.get('/', async (req, res) => {
 
 // POST /api/projects
 router.post('/', async (req, res) => {
+  if (req.user.role === 'user') {
+    return res.status(403).json({ error: 'Votre compte ne permet pas de créer des projets' });
+  }
   const { name, description, objectif, contexte, notes } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
@@ -133,7 +146,7 @@ router.post('/', async (req, res) => {
 
 // GET /api/projects/:id
 router.get('/:id', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -151,7 +164,7 @@ router.get('/:id', async (req, res) => {
 
 // GET /api/projects/:id/stats — tokens cumulés et coût estimé
 router.get('/:id/stats', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -190,7 +203,7 @@ router.patch('/:id', async (req, res) => {
   if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -217,7 +230,7 @@ router.patch('/:id', async (req, res) => {
 // PATCH /api/projects/:id/brief — mettre à jour le brief structuré (propriétaire ou admin)
 router.patch('/:id/brief', async (req, res) => {
   const { objectif, contexte, notes } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -244,7 +257,7 @@ router.patch('/:id/brief', async (req, res) => {
 
 // PATCH /api/projects/:id/archive — basculer active ↔ archived (propriétaire ou admin)
 router.patch('/:id/archive', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -266,7 +279,7 @@ router.patch('/:id/archive', async (req, res) => {
 
 // DELETE /api/projects/:id — suppression définitive (propriétaire ou admin uniquement)
 router.delete('/:id', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -288,7 +301,7 @@ router.delete('/:id', async (req, res) => {
 // PATCH /api/projects/:id/tech-stack — sauvegarder la stack technique du projet
 router.patch('/:id/tech-stack', async (req, res) => {
   const { techStack } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -308,7 +321,7 @@ router.patch('/:id/tech-stack', async (req, res) => {
 router.patch('/:id/context', async (req, res) => {
   const { memory, sessionTitle } = req.body;
   if (!memory?.trim()) return res.status(400).json({ error: 'Souvenir requis' });
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -351,7 +364,7 @@ router.delete('/:id/context', async (req, res) => {
 
 // DELETE /api/projects/:id/memory — réinitialisation complète (contexte + sessions + jalons)
 router.delete('/:id/memory', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -391,7 +404,7 @@ router.delete('/:id/memory', async (req, res) => {
 
 // GET /api/projects/:id/members
 router.get('/:id/members', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -423,7 +436,7 @@ router.post('/:id/members', async (req, res) => {
   const { email } = req.body;
   if (!email?.trim()) return res.status(400).json({ error: 'Email requis' });
 
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -495,7 +508,7 @@ router.post('/:id/members', async (req, res) => {
 
 // DELETE /api/projects/:id/members/:uid — retirer un membre
 router.delete('/:id/members/:uid', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -519,7 +532,7 @@ router.delete('/:id/members/:uid', async (req, res) => {
 
 // GET /api/projects/:id/agents — tous les agents avec leur statut dans ce projet
 router.get('/:id/agents', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -553,7 +566,7 @@ router.get('/:id/agents', async (req, res) => {
 router.post('/:id/agents', async (req, res) => {
   const { agentId, source = 'manual' } = req.body;
   if (!agentId) return res.status(400).json({ error: 'agentId requis' });
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -589,7 +602,7 @@ router.post('/:id/agents', async (req, res) => {
 // PATCH /api/projects/:id/agents/reorder — réordonner les agents actifs
 router.patch('/:id/agents/reorder', async (req, res) => {
   const { order } = req.body; // tableau d'agentId dans l'ordre souhaité
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   if (!Array.isArray(order)) return res.status(400).json({ error: 'order (tableau) requis' });
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
@@ -612,7 +625,7 @@ router.patch('/:id/agents/reorder', async (req, res) => {
 // PATCH /api/projects/:id/agents/:agentId — toggle enabled
 router.patch('/:id/agents/:agentId', async (req, res) => {
   const { enabled } = req.body;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -649,7 +662,7 @@ router.patch('/:id/agents/:agentId', async (req, res) => {
 
 // DELETE /api/projects/:id/agents/:agentId — retirer un agent du projet
 router.delete('/:id/agents/:agentId', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -667,7 +680,7 @@ router.delete('/:id/agents/:agentId', async (req, res) => {
 
 // POST /api/projects/:id/generate-timeline — génère une timeline depuis le brief
 router.post('/:id/generate-timeline', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
@@ -718,7 +731,7 @@ Retourne UNIQUEMENT du JSON valide sans markdown :
 
 // GET /api/projects/:id/meeting-context
 router.get('/:id/meeting-context', async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
