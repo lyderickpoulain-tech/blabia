@@ -478,6 +478,18 @@ export default function SessionView() {
                   {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
                 {(() => {
+                  const allMsgs = Array.isArray(session.messages) ? session.messages : [];
+                  const agentMsgs = allMsgs.filter(m => m.role === 'agent');
+                  const humanMsgs = allMsgs.filter(m => m.role === 'human');
+                  const total = agentMsgs.length + humanMsgs.length;
+                  if (total === 0) return null;
+                  return (
+                    <span className="text-xs text-gray-400">
+                      💬 {total} messages · {agentMsgs.length} tours d'agents
+                    </span>
+                  );
+                })()}
+                {(() => {
                   const tu = session.tokensUsed;
                   if (!tu || !tu.total) return null;
                   return (

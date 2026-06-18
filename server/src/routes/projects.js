@@ -48,6 +48,7 @@ router.get('/', async (req, res) => {
         'Project.updatedAt',
         'Project.userId',
         db.raw('COUNT(DISTINCT "Session"."id")::int AS "sessionCount"'),
+        db.raw(`(SELECT COUNT(*)::int FROM "Session" WHERE "projectId" = "Project"."id" AND status = 'open') AS "openSessionCount"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status != 'cancelled') AS "todoTotal"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'done') AS "todoDone"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'in_progress') AS "todoInProgress"`)

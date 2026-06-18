@@ -378,7 +378,13 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
             <span className="truncate block">{truncated}</span>
           </div>
         </td>
-        <td className="px-4 py-3"><SessionStatusBadge status={session.status} /><CodeStatusBadge session={session} /></td>
+        <td className="px-4 py-3">
+          <SessionStatusBadge status={session.status} />
+          <CodeStatusBadge session={session} />
+          {isOpen && isMeeting && (
+            <span className="ml-1 inline-flex items-center gap-1 text-xs font-semibold bg-blabia-blue text-white px-1.5 py-0.5 rounded-full animate-pulse">🔵</span>
+          )}
+        </td>
         <td className="px-4 py-3 text-sm text-gray-500">{session.agentCount ?? '–'} agents</td>
         <td className="px-4 py-3 text-sm text-gray-400">{date}</td>
         <td className="px-4 py-3 text-right">

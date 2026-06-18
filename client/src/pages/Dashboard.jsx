@@ -137,7 +137,14 @@ export default function Dashboard() {
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={project.status} /></td>
                   <td className="px-4 py-3">
-                    <span className="text-sm text-gray-600">{project.sessionCount ?? 0}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">{project.sessionCount ?? 0}</span>
+                      {(project.openSessionCount ?? 0) > 0 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold bg-blabia-blue text-white px-2 py-0.5 rounded-full animate-pulse">
+                          🔵 En cours
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">{formatDate(project.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
@@ -173,7 +180,14 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-400 mb-2 line-clamp-2">{project.description}</p>
               )}
               <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-gray-400">{project.sessionCount ?? 0} réunion{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · {formatDate(project.createdAt)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">{project.sessionCount ?? 0} réunion{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · {formatDate(project.createdAt)}</span>
+                  {(project.openSessionCount ?? 0) > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-blabia-blue text-white px-1.5 py-0.5 rounded-full animate-pulse">
+                      🔵
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={e => handleArchive(e, project)}
                   disabled={archiving === project.id}

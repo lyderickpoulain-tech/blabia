@@ -261,40 +261,56 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
 function ConversationFeed({ messages, activeAgents, streamingAgent, streamingText, streamingReason, agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite, stepSuggestions, onAddStep, onDismissStep, session, project, onAutoLaunch, isClosed, pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision }) {
 
   if (messages.length === 0 && !streamingAgent) {
+    const intentionKey0 = Array.isArray(session?.intention) ? session.intention[0]
+      : (() => { try { const p = JSON.parse(session?.intention || '[]'); return p[0] || 'synthesis'; } catch { return 'synthesis'; } })();
+    const intentionMeta0 = DELIVERABLE_TYPES.find(d => d.id === intentionKey0) || DELIVERABLE_TYPES[0];
+    const modelLabel = session?.model?.includes('opus') ? 'Claude Opus'
+      : session?.model?.includes('haiku') ? 'Claude Haiku'
+      : 'Claude Sonnet';
+
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-6 px-6 py-10">
-        <div className="text-center">
-          <span className="text-4xl">☕</span>
-          <p className="mt-2 text-gray-500 text-sm font-medium">La réunion vient de commencer.</p>
-        </div>
+      <div className="flex flex-col items-center justify-center h-full px-6 py-8">
+        <div className="w-full max-w-md bg-white border border-gray-100 rounded-2xl shadow-sm p-5 space-y-4">
+          <h3 className="text-sm font-bold text-gray-800">🎙 Réunion prête à démarrer</h3>
 
-        {!isClosed && (
-          <div className="w-full max-w-md flex flex-col gap-3">
-            {/* Option 1 : lancement automatique */}
-            <button
-              onClick={onAutoLaunch}
-              disabled={!session || !project}
-              className="w-full flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              🚀 Lancer automatiquement
-            </button>
-            <p className="text-xs text-gray-400 text-center -mt-1">
-              Construit le message d'intro depuis l'objectif et le brief du projet.
-            </p>
-
-            {/* Séparateur */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400">ou</span>
-              <div className="flex-1 h-px bg-gray-200" />
+          <div className="space-y-2.5">
+            <div className="flex items-start gap-2">
+              <span className="text-xs text-gray-400 w-16 shrink-0 pt-0.5">Objectif</span>
+              <span className="text-xs text-gray-700 font-medium leading-snug">{session?.task}</span>
             </div>
-
-            {/* Option 2 : message manuel */}
-            <p className="text-xs text-gray-400 text-center">
-              Écris ton premier message ci-dessous pour lancer les échanges.
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-16 shrink-0">Livrable</span>
+              <span className="text-xs text-gray-700">{intentionMeta0.icon} {intentionMeta0.label}</span>
+            </div>
+            {activeAgents.length > 0 && (
+              <div className="flex items-start gap-2">
+                <span className="text-xs text-gray-400 w-16 shrink-0 pt-0.5">Agents</span>
+                <div className="flex flex-wrap gap-1">
+                  {activeAgents.map(a => (
+                    <span key={a.id} className="text-xs bg-blabia-blue-light text-blabia-blue px-2 py-0.5 rounded-full font-medium">{a.name}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-16 shrink-0">Modèle</span>
+              <span className="text-xs text-gray-700">{modelLabel}</span>
+            </div>
           </div>
-        )}
+
+          {!isClosed && (
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={onAutoLaunch}
+                disabled={!session || !project}
+                className="w-full flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue-dark text-white font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                🎙 Lancer automatiquement
+              </button>
+              <p className="text-xs text-gray-400 text-center">— ou tape ton premier message —</p>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -1155,6 +1171,12 @@ export default function MeetingRoom() {
         parts.push(`Prompts Claude Code des dernières réunions :\n${prompts}`);
       }
       parts.push(`Objectif de cette réunion : ${task}`);
+      const intentionNote = {
+        claude_code: 'INSTRUCTION : Cette réunion doit préparer un prompt Claude Code. Tu NE dois PAS rédiger ou structurer le prompt pendant les échanges. Pose uniquement des questions pour clarifier les besoins.',
+        summary: 'INSTRUCTION : Cette réunion doit produire un compte-rendu à la clôture. Contribue à la conversation sans rédiger le compte-rendu toi-même.',
+        timeline_steps: 'INSTRUCTION : Cette réunion doit identifier des étapes pour la timeline. Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges.',
+      }[Array.isArray(session?.intention) ? session.intention[0] : ''] || '';
+      if (intentionNote) parts.push(intentionNote);
       parts.push('Lance la réunion et présente les points à traiter.');
       handleSend(parts.join('\n\n'));
     } catch {

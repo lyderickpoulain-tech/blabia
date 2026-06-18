@@ -442,21 +442,24 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
               </button>
             </div>
           ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-gray-500 text-center">La réunion sera close sans appliquer le livrable.</p>
+            <div className="space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center space-y-1">
+                <p className="text-sm font-semibold text-red-700">🚫 Abandonner cette réunion ?</p>
+                <p className="text-xs text-red-600">Cette action est définitive. Aucun livrable ne sera généré.</p>
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setAbandonConfirm(false)}
-                  className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm"
+                  className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={handleAbandon}
                   disabled={abandoning}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-xl text-sm disabled:opacity-50"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
                 >
-                  {abandoning ? '…' : '🚫 Abandonner'}
+                  {abandoning ? '…' : '🚫 Confirmer l\'abandon'}
                 </button>
               </div>
             </div>
