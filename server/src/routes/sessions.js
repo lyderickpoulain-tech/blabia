@@ -255,6 +255,15 @@ async function appendMessageEntry(sessionId, message) {
 
 // Stocke silencieusement une suggestion d'étape hors-contexte (intention != timeline_steps)
 async function appendPendingStepSuggestion(sessionId, suggestion) {
+  const [row] = await db('Session').select('pendingStepSuggestions').where({ id: sessionId });
+  const existing = (() => {
+    const raw = row?.pendingStepSuggestions;
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw || '[]'); } catch { return []; }
+  })();
+  if (existing.length >= 5) return;
+  const isDuplicate = existing.some(s => areSimilar(s.title || '', suggestion.title || '', 0.5));
+  if (isDuplicate) return;
   await db.raw(
     `UPDATE "Session" SET "pendingStepSuggestions" = COALESCE("pendingStepSuggestions", '[]'::jsonb) || ?::jsonb WHERE id = ?`,
     [JSON.stringify([suggestion]), sessionId]
@@ -884,7 +893,7 @@ router.post('/:sessionId/run', async (req, res) => {
         return arr[0] || '';
       })();
       const intentionInstruction0 = intentionGuard0 === 'claude_code'
-        ? '\nINTENTION DE CETTE SESSION : Préparer un prompt pour Claude Code.\n- Tu NE dois PAS écrire de code pendant les échanges\n- Tu NE dois PAS générer le prompt Claude Code maintenant\n- Concentre-toi sur : clarifier les besoins, définir les fonctionnalités, préciser les contraintes\n- Le prompt sera généré automatiquement à la clôture'
+        ? '\nINTENTION DE CETTE SESSION : Préparer un prompt pour Claude Code.\nTu NE dois PAS résumer, structurer ou rédiger le prompt Claude Code pendant la réunion. Tu NE dois PAS faire de récapitulatif. Pose uniquement des questions pour clarifier les besoins. Le prompt sera généré automatiquement à la clôture. Si tu es tenté de faire un récap, pose une question à la place.'
         : intentionGuard0 === 'summary'
         ? '\nINTENTION DE CETTE SESSION : Produire un compte-rendu à la clôture.\n- Tu NE dois PAS rédiger le compte-rendu pendant les échanges\n- Contribue, apporte tes analyses et suggestions\n- Le compte-rendu sera généré automatiquement à la clôture'
         : intentionGuard0 === 'timeline_steps'
@@ -2049,12 +2058,12 @@ async function loadMessages(sessionId) {
   try { return JSON.parse(m || '[]'); } catch { return []; }
 }
 
-function areSimilar(q1, q2) {
+function areSimilar(q1, q2, threshold = 0.6) {
   const words1 = new Set(q1.toLowerCase().split(/\s+/).filter(w => w.length > 3));
   const words2 = new Set(q2.toLowerCase().split(/\s+/).filter(w => w.length > 3));
   const intersection = [...words1].filter(w => words2.has(w));
   const union = new Set([...words1, ...words2]);
-  return union.size > 0 && intersection.length / union.size > 0.6;
+  return union.size > 0 && intersection.length / union.size > threshold;
 }
 
 async function orchestrate({ session, project, messages, activeAgents,
@@ -2130,7 +2139,7 @@ ${recentMessages || '(début de réunion)'}
 Décide maintenant :
 1. Quel agent doit prendre la parole ? (numéro de 1 à ${agentsForSelection.length})
 2. Pourquoi ? (1 phrase courte)
-3. La réunion doit-elle se clore ? (oui/non) — seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points
+3. La réunion doit-elle se clore ? (oui/non) — ${(Array.isArray(session.intention) ? session.intention[0] : '') === 'claude_code' ? "Pour une réunion de type claude_code : considère shouldClose=true si les agents ont fait au moins 2 tours complets ET que les besoins principaux ont été clarifiés. Ne cherche pas la perfection — le prompt sera complété par Claude Code lui-même." : "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points"}
 
 Réponds UNIQUEMENT avec ce JSON :
 {"agentIndex": 1, "reason": "...", "shouldClose": false}`;
@@ -2360,7 +2369,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       const reasonLine   = next.reason ? `\nRaison de ta prise de parole : ${next.reason}\n` : '';
 
       const intentionInstruction = intention[0] === 'claude_code'
-        ? '\nINTENTION DE CETTE RÉUNION : Préparer un prompt pour Claude Code.\n- Tu NE dois PAS écrire de code pendant la réunion\n- Tu NE dois PAS générer le prompt Claude Code maintenant\n- Concentre-toi sur : clarifier les besoins, définir les fonctionnalités, préciser les contraintes techniques\n- Le prompt sera généré automatiquement à la clôture de la réunion'
+        ? '\nINTENTION DE CETTE RÉUNION : Préparer un prompt pour Claude Code.\nTu NE dois PAS résumer, structurer ou rédiger le prompt Claude Code pendant la réunion. Tu NE dois PAS faire de récapitulatif. Pose uniquement des questions pour clarifier les besoins. Le prompt sera généré automatiquement à la clôture. Si tu es tenté de faire un récap, pose une question à la place.'
         : intention[0] === 'summary'
         ? '\nINTENTION DE CETTE RÉUNION : Produire un compte-rendu à la clôture.\n- Tu NE dois PAS rédiger le compte-rendu pendant les échanges\n- Contribue à la conversation, apporte tes analyses et suggestions\n- Le compte-rendu sera généré automatiquement à la clôture'
         : intention[0] === 'timeline_steps'
