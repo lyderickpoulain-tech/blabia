@@ -58,13 +58,16 @@ export default function StartMeeting() {
     () => milestoneType && MT_MAP[milestoneType] ? MT_MAP[milestoneType] : 'summary'
   );
 
-  const [availableAgents,   setAvailableAgents]   = useState([]);
-  const [selectedAgentIds,  setSelectedAgentIds]  = useState(new Set());
-  const [agentsLoading,     setAgentsLoading]     = useState(true);
-  const [suggestingAgents,  setSuggestingAgents]  = useState(false);
-  const [suggestionReasons, setSuggestionReasons] = useState({});
-  const [newAgentForm,      setNewAgentForm]      = useState({ open: false, name: '', role: '', systemPrompt: '', scope: 'project' });
-  const [creatingAgent,     setCreatingAgent]     = useState(false);
+  const [availableAgents,    setAvailableAgents]    = useState([]);
+  const [selectedAgentIds,   setSelectedAgentIds]   = useState(new Set());
+  const [agentsLoading,      setAgentsLoading]      = useState(true);
+  const [suggestingAgents,   setSuggestingAgents]   = useState(false);
+  const [suggestionReasons,  setSuggestionReasons]  = useState({});
+  const [newAgentSuggestion, setNewAgentSuggestion] = useState(null);
+  const [suggestedScope,     setSuggestedScope]     = useState('project');
+  const [creatingSuggested,  setCreatingSuggested]  = useState(false);
+  const [newAgentForm,       setNewAgentForm]       = useState({ open: false, name: '', role: '', systemPrompt: '', scope: 'project' });
+  const [creatingAgent,      setCreatingAgent]      = useState(false);
   const [model,             setModel]             = useState('claude-sonnet-4-6');
   const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
   const [starting,          setStarting]          = useState(false);
@@ -93,17 +96,42 @@ export default function StartMeeting() {
   const handleSuggestAgents = async (taskValue = task, milType = null) => {
     if (!taskValue.trim() || suggestingAgents) return;
     setSuggestingAgents(true);
+    setNewAgentSuggestion(null);
     try {
       const { data } = await api.post(`/projects/${projectId}/sessions/suggest-agents`, {
         task: taskValue,
         ...(milType ? { milestoneType: milType } : {})
       });
-      if (data.length > 0) {
-        setSelectedAgentIds(new Set(data.map(s => s.agentId)));
-        setSuggestionReasons(data.reduce((acc, s) => ({ ...acc, [s.agentId]: s.reason }), {}));
+      const selected = data.existingSelected || [];
+      if (selected.length > 0) {
+        setSelectedAgentIds(new Set(selected.map(s => s.agentId)));
+        setSuggestionReasons(selected.reduce((acc, s) => ({ ...acc, [s.agentId]: s.reason }), {}));
+      }
+      if (data.newAgentSuggestion) {
+        setNewAgentSuggestion(data.newAgentSuggestion);
+        setSuggestedScope('project');
       }
     } catch {}
     setSuggestingAgents(false);
+  };
+
+  const handleCreateSuggestedAgent = async () => {
+    if (!newAgentSuggestion || creatingSuggested) return;
+    setCreatingSuggested(true);
+    try {
+      const { data: agent } = await api.post('/agents', {
+        name:         newAgentSuggestion.name.trim(),
+        role:         newAgentSuggestion.role.trim(),
+        systemPrompt: `Tu es ${newAgentSuggestion.name}. ${newAgentSuggestion.role}.`,
+        isDefault:    suggestedScope === 'global'
+      });
+      await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'suggested' });
+      setAvailableAgents(prev => [...prev, { ...agent, agentId: agent.id, enabled: true }]);
+      setSelectedAgentIds(prev => new Set([...prev, agent.id]));
+      setSuggestionReasons(prev => ({ ...prev, [agent.id]: newAgentSuggestion.reason }));
+      setNewAgentSuggestion(null);
+    } catch {}
+    setCreatingSuggested(false);
   };
 
   const toggleAgent = (id) => {
@@ -290,6 +318,43 @@ export default function StartMeeting() {
                     </div>
                   );
                 })}
+
+                {/* Carte — Agent suggéré (compétence manquante) */}
+                {newAgentSuggestion && (
+                  <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <span className="text-base shrink-0 mt-0.5">💡</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Agent suggéré pour cette réunion</p>
+                        <p className="text-sm font-semibold text-gray-900">{newAgentSuggestion.name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 leading-snug">{newAgentSuggestion.role}</p>
+                        {newAgentSuggestion.reason && (
+                          <p className="text-xs text-amber-600 italic mt-1">"{newAgentSuggestion.reason}"</p>
+                        )}
+                      </div>
+                    </div>
+                    <AgentScopeSelector
+                      scope={suggestedScope}
+                      onChange={setSuggestedScope}
+                      size="xs"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleCreateSuggestedAgent}
+                        disabled={creatingSuggested}
+                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium py-2 rounded-lg transition disabled:opacity-50"
+                      >
+                        {creatingSuggested ? 'Création…' : '+ Créer et ajouter'}
+                      </button>
+                      <button
+                        onClick={() => setNewAgentSuggestion(null)}
+                        className="text-sm text-gray-400 hover:text-gray-600 px-3"
+                      >
+                        Ignorer
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Créer un agent inline */}
                 {newAgentForm.open ? (

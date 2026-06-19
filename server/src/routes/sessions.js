@@ -1633,8 +1633,8 @@ router.post('/suggest-agents', async (req, res) => {
     );
     const apiPromise = anthropic.messages.create({
       model: MODEL,
-      max_tokens: 500,
-      system: 'Tu sélectionnes des agents IA pertinents pour une réunion. Réponds UNIQUEMENT en JSON valide.',
+      max_tokens: 600,
+      system: 'Tu sélectionnes des agents IA pertinents pour une réunion. Réponds UNIQUEMENT en JSON valide, sans commentaires.',
       messages: [{
         role: 'user',
         content: `Tu dois suggérer des agents pertinents pour cette réunion spécifique.
@@ -1646,10 +1646,11 @@ Objectif de la réunion : "${task.trim()}"${milestoneType ? `\nType d'étape : $
 Agents disponibles pour CE projet :
 ${agentsList}
 
-Sélectionne 2 à 4 agents parmi la liste ci-dessus qui sont DIRECTEMENT utiles pour atteindre l'objectif de cette réunion.
-Ne sélectionne PAS un agent simplement parce qu'il existe.
+1. Sélectionne 2 à 4 agents parmi la liste ci-dessus qui sont DIRECTEMENT utiles. Ne sélectionne pas un agent simplement parce qu'il existe.
+2. Si une compétence importante manque pour cet objectif et qu'aucun agent existant ne la couvre, suggère la création d'UN SEUL nouvel agent spécialisé avec un nom et un rôle précis. Sinon, mets null.
+
 Retourne UNIQUEMENT ce JSON :
-{"suggestions":[{"name":"NomExact","reason":"Courte raison (10 mots max)"}]}`
+{"existingSelected":[{"name":"NomExact","reason":"Courte raison (10 mots max)"}],"newAgentSuggestion":{"name":"NomAgent","role":"Rôle précis en une phrase","reason":"Pourquoi ce profil est nécessaire pour cet objectif"} ou null}`
       }]
     });
 
@@ -1659,17 +1660,20 @@ Retourne UNIQUEMENT ce JSON :
     const agentMap = {};
     agents.forEach(a => { agentMap[a.name.toLowerCase()] = a; });
 
-    const result = (parsed.suggestions || []).map(s => {
-      const a = agentMap[s.name.toLowerCase()];
+    const existingSelected = (parsed.existingSelected || []).map(s => {
+      const a = agentMap[(s.name || '').toLowerCase()];
       return a ? { agentId: a.id, agentName: a.name, emoji: a.emoji, reason: s.reason } : null;
     }).filter(Boolean);
 
-    res.json(result);
+    res.json({ existingSelected, newAgentSuggestion: parsed.newAgentSuggestion || null });
   } catch {
-    // Fallback : 2 premiers agents défaut
+    // Fallback : 2 premiers agents défaut, sans suggestion de création
     try {
       const fallback = await db('Agent').select('id', 'name', 'emoji').where({ isDefault: true }).limit(2);
-      res.json(fallback.map(a => ({ agentId: a.id, agentName: a.name, emoji: a.emoji, reason: 'Agent par défaut' })));
+      res.json({
+        existingSelected: fallback.map(a => ({ agentId: a.id, agentName: a.name, emoji: a.emoji, reason: 'Agent par défaut' })),
+        newAgentSuggestion: null
+      });
     } catch (e) {
       res.status(500).json({ error: 'Erreur serveur' });
     }
