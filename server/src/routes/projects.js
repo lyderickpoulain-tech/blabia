@@ -762,4 +762,149 @@ router.get('/:id/meeting-context', async (req, res) => {
   }
 });
 
+// POST /api/projects/:id/quick-command — prompt rapide sans réunion
+router.post('/:id/quick-command', async (req, res) => {
+  const { input } = req.body;
+  if (!input?.trim()) return res.status(400).json({ error: 'Input requis' });
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const isCommand = input.startsWith('/');
+    const command = isCommand ? input.split(' ')[0].toLowerCase() : null;
+    const args = isCommand ? input.slice((command || '').length).trim() : null;
+
+    // /aide — répondre sans appel Claude
+    if (command === '/aide') {
+      const help = `# Commandes disponibles
+
+**Commandes prédéfinies :**
+- \`/ajouterEtapes [description]\` — Génère et ajoute des étapes dans la timeline
+- \`/résumerProjet\` — État actuel du projet, avancement, points clés
+- \`/résumerRéunion [nom ou numéro]\` — Résume une réunion spécifique
+- \`/décisions\` — Toutes les décisions prises dans les réunions
+- \`/prochainEtape\` — Identifie et explique la prochaine étape à traiter
+- \`/analyserBloquants\` — Étapes bloquées et solutions proposées
+- \`/exporterTimeline\` — Timeline en texte structuré, copiable
+- \`/aide\` — Cette aide
+
+**Question libre :** Pose n'importe quelle question sur le projet sans préfixe.`;
+      return res.json({ type: 'command', command: '/aide', result: help });
+    }
+
+    const milestones = await db('Milestone').where({ projectId: req.params.id }).orderBy('displayOrder');
+    const sessions   = await db('Session')
+      .where({ projectId: req.params.id, status: 'accepted' })
+      .select('id', 'task', 'summary', 'intention', 'createdAt', 'milestoneId');
+
+    const systemPrompt = `Tu es l'assistant du projet "${project.name}".
+Brief : ${project.brief || 'non défini'}
+Timeline : ${milestones.length > 0 ? milestones.map(m => `- ${m.title} (${m.status})`).join('\n') : 'aucune étape'}
+Réunions acceptées : ${sessions.length > 0 ? sessions.map(s => `- ${s.task}`).join('\n') : 'aucune'}
+Mémoire projet : ${project.context?.slice(0, 1000) || 'aucune'}
+
+IMPORTANT : Ta réponse N'EST PAS stockée dans la mémoire du projet. C'est une réponse ponctuelle.`;
+
+    let userPrompt;
+    let isAddSteps = false;
+
+    switch (command) {
+      case '/ajouteretapes':
+        isAddSteps = true;
+        userPrompt = `Génère ${args || 'des étapes pertinentes'} pour ce projet.
+Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
+{"milestones": [{"title": "...", "type": "summary|claude_code|stack_check"}]}
+Limite à 5 étapes maximum. Titres courts et actionnables (max 50 chars).`;
+        break;
+      case '/résumerprojet':
+        userPrompt = "Fais un résumé de l'état actuel du projet : avancement, points clés, prochaines priorités.";
+        break;
+      case '/résumerréunion':
+        userPrompt = args
+          ? `Résume la réunion "${args}" en points clés et décisions.`
+          : "Résume la dernière réunion en points clés et décisions.";
+        break;
+      case '/décisions':
+        userPrompt = "Liste toutes les décisions formelles prises dans les réunions de ce projet.";
+        break;
+      case '/prochainetape':
+        userPrompt = "Quelle est la prochaine étape à traiter ? Explique pourquoi et comment la démarrer.";
+        break;
+      case '/analyserbloquants':
+        userPrompt = "Identifie les étapes bloquées ou en retard et propose des solutions concrètes.";
+        break;
+      case '/exportertimeline':
+        userPrompt = "Exporte la timeline en texte structuré et lisible, avec les statuts.";
+        break;
+      default:
+        userPrompt = input;
+    }
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    });
+
+    const resultText = response.content[0].text;
+
+    if (isAddSteps) {
+      try {
+        const raw = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error('JSON introuvable');
+        const parsed = JSON.parse(match[0]);
+        const stepsToCreate = (parsed.milestones || []).slice(0, 5);
+
+        const [{ maxOrder }] = await db('Milestone').max('displayOrder as maxOrder').where({ projectId: req.params.id });
+        let order = (maxOrder ?? -1) + 1;
+
+        const created = [];
+        for (const step of stepsToCreate) {
+          if (!step.title?.trim()) continue;
+          const [milestone] = await db('Milestone')
+            .insert({
+              id:           randomUUID(),
+              projectId:    req.params.id,
+              title:        step.title.trim(),
+              description:  step.description?.trim() || null,
+              status:       'pending',
+              type:         ['summary', 'claude_code', 'stack_check'].includes(step.type) ? step.type : 'summary',
+              displayOrder: order++,
+              createdAt:    new Date(),
+              createdBy:    req.user.id
+            })
+            .returning(['id', 'title', 'type', 'status', 'displayOrder']);
+          created.push(milestone);
+        }
+
+        return res.json({
+          type: 'command',
+          command: '/ajouterEtapes',
+          result: `${created.length} étape${created.length !== 1 ? 's' : ''} ajoutée${created.length !== 1 ? 's' : ''} à la timeline.`,
+          milestonesCreated: created
+        });
+      } catch {
+        return res.json({
+          type: 'command',
+          command: '/ajouterEtapes',
+          result: resultText,
+          milestonesCreated: []
+        });
+      }
+    }
+
+    res.json({
+      type: isCommand ? 'command' : 'question',
+      command,
+      result: resultText
+    });
+  } catch (err) {
+    console.error('[projects/:id/quick-command POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 module.exports = router;

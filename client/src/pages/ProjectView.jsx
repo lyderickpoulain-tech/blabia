@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,6 +10,43 @@ import GenerateTimelineModal from '../components/GenerateTimelineModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
 import TimelineStepsModal from '../components/TimelineStepsModal';
+
+const QUICK_COMMANDS = [
+  { cmd: '/ajouterEtapes',    label: 'Ajouter des étapes',     placeholder: '/ajouterEtapes ' },
+  { cmd: '/résumerProjet',    label: 'Résumer le projet' },
+  { cmd: '/résumerRéunion',   label: 'Résumer une réunion',    placeholder: '/résumerRéunion ' },
+  { cmd: '/décisions',        label: 'Lister les décisions' },
+  { cmd: '/prochainEtape',    label: 'Prochaine étape' },
+  { cmd: '/analyserBloquants',label: 'Analyser les blocages' },
+  { cmd: '/exporterTimeline', label: 'Exporter la timeline' },
+  { cmd: '/aide',             label: 'Aide' },
+];
+
+const QUICK_MD = {
+  h1: ({ children }) => <h1 className="text-base font-bold text-gray-900 mb-2 mt-4 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-sm font-bold text-gray-800 mb-2 mt-3 pb-1 border-b border-gray-200">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-800 mb-1.5 mt-3">{children}</h3>,
+  p:  ({ children }) => <p className="text-sm text-gray-700 mb-2 leading-relaxed last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="mb-2 space-y-0.5 list-none">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 space-y-0.5 list-decimal list-inside text-sm text-gray-700">{children}</ol>,
+  li: ({ children }) => (
+    <li className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
+      <span className="text-blue-400 font-bold mt-0.5 shrink-0 text-xs">▸</span>
+      <span>{children}</span>
+    </li>
+  ),
+  strong:     ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+  em:         ({ children }) => <em className="italic text-gray-600">{children}</em>,
+  hr:         () => <hr className="my-3 border-gray-200" />,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-4 border-blue-300 pl-3 py-0.5 my-2 text-gray-600 italic bg-blue-50 rounded-r-lg text-sm">
+      {children}
+    </blockquote>
+  ),
+  code: ({ inline, children }) => inline
+    ? <code className="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+    : <pre className="bg-gray-900 text-gray-100 p-3 rounded-xl overflow-x-auto text-xs font-mono mb-2"><code>{children}</code></pre>,
+};
 
 // ── Définition des catégories de stack (idem EnvironmentPage) ─────────────────
 const CATEGORIES = [
@@ -561,6 +600,13 @@ export default function ProjectView() {
   const [createAgentError, setCreateAgentError] = useState('');
   const [draggedAgentId, setDraggedAgentId]   = useState(null);
   const [dragOverAgentId, setDragOverAgentId] = useState(null);
+  // ── Commande rapide ────────────────────────────────────────────────────────
+  const [quickInput, setQuickInput]   = useState('');
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [quickResult, setQuickResult] = useState(null);
+  const [quickHistory, setQuickHistory] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(`blabia-qh-${id}`) || '[]'); } catch { return []; }
+  });
   // ── Stack technique ────────────────────────────────────────────────────────
   const [projectStack, setProjectStack] = useState({});
   const [stackLoading, setStackLoading] = useState(false);
@@ -736,6 +782,26 @@ export default function ProjectView() {
     }
   };
 
+  const handleQuickCommand = async (e) => {
+    e?.preventDefault();
+    const input = quickInput.trim();
+    if (!input || quickLoading) return;
+    setQuickLoading(true);
+    setQuickResult(null);
+    const prev = JSON.parse(sessionStorage.getItem(`blabia-qh-${id}`) || '[]');
+    const updated = [input, ...prev.filter(h => h !== input)].slice(0, 5);
+    sessionStorage.setItem(`blabia-qh-${id}`, JSON.stringify(updated));
+    setQuickHistory(updated);
+    try {
+      const { data } = await api.post(`/projects/${id}/quick-command`, { input });
+      setQuickResult(data);
+    } catch (err) {
+      setQuickResult({ type: 'error', result: err.response?.data?.error || 'Erreur lors de l\'exécution de la commande' });
+    } finally {
+      setQuickLoading(false);
+    }
+  };
+
   const handleArchive = async () => {
     const label = project.status === 'active' ? 'archiver' : 'réactiver';
     if (!confirm(`Voulez-vous ${label} ce projet ?`)) return;
@@ -768,7 +834,7 @@ export default function ProjectView() {
       } else {
         setInviteResult({ type: 'ok', message: `Invitation envoyée à ${data.email}.` });
       }
-      setInviteEmail('');
+      setInviteInput('');
     } catch (err) {
       setInviteResult({ type: 'error', message: err.response?.data?.error || 'Erreur lors de l\'invitation' });
     } finally {
@@ -915,6 +981,78 @@ export default function ProjectView() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* ── Commande rapide ─────────────────────────────────────────────── */}
+      <div className="mb-5">
+        <form onSubmit={handleQuickCommand} className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 text-sm shrink-0 pl-1">⚡</span>
+            <input
+              type="text"
+              value={quickInput}
+              onChange={e => setQuickInput(e.target.value)}
+              placeholder="Pose une question ou tape / pour une commande"
+              className="flex-1 text-sm outline-none text-gray-800 placeholder-gray-400 min-w-0"
+              disabled={quickLoading}
+            />
+            <button
+              type="submit"
+              disabled={quickLoading || !quickInput.trim()}
+              className="shrink-0 bg-blabia-blue text-white text-sm font-medium w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-40 transition hover:opacity-90"
+              title="Envoyer"
+            >
+              {quickLoading ? '…' : '▶'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-100">
+            {QUICK_COMMANDS.map(c => (
+              <button
+                key={c.cmd}
+                type="button"
+                onClick={() => setQuickInput(c.placeholder || c.cmd)}
+                className="text-xs bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blabia-blue border border-gray-200 hover:border-blue-200 px-2 py-1 rounded-lg transition"
+              >
+                {c.cmd}
+              </button>
+            ))}
+          </div>
+          {quickHistory.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
+              <span className="text-xs text-gray-400">Récent :</span>
+              {quickHistory.map((h, i) => (
+                <button key={i} type="button" onClick={() => setQuickInput(h)}
+                  className="text-xs text-gray-400 hover:text-gray-600 bg-gray-50 border border-gray-100 hover:border-gray-200 px-2 py-0.5 rounded-lg transition truncate max-w-[160px]">
+                  {h.length > 30 ? h.slice(0, 30) + '…' : h}
+                </button>
+              ))}
+            </div>
+          )}
+        </form>
+
+        {quickResult && (
+          <div className="mt-2 bg-white rounded-xl border border-blue-100 shadow-sm">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
+              <span className="text-sm font-medium text-gray-700">⚡ Résultat</span>
+              <button onClick={() => setQuickResult(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+            <div className="px-4 py-3 max-h-96 overflow-y-auto">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={QUICK_MD}>
+                {quickResult.result}
+              </ReactMarkdown>
+            </div>
+            {quickResult.milestonesCreated?.length > 0 && (
+              <div className="px-4 pb-3 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap">
+                <span className="text-sm text-green-700">
+                  ✅ {quickResult.milestonesCreated.length} étape{quickResult.milestonesCreated.length !== 1 ? 's' : ''} ajoutée{quickResult.milestonesCreated.length !== 1 ? 's' : ''} à la timeline
+                </span>
+                <Link to={`/projects/${id}/plan`} className="text-sm text-blabia-blue font-medium hover:underline">
+                  Voir la timeline →
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Mémoire du projet */}
