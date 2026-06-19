@@ -270,6 +270,44 @@ async function appendPendingStepSuggestion(sessionId, suggestion) {
   );
 }
 
+// Stocke silencieusement une suggestion d'outil manquant [NEED_TOOL]
+async function appendPendingToolSuggestion(sessionId, toolData) {
+  const [row] = await db('Session').select('pendingToolSuggestions').where({ id: sessionId });
+  const existing = (() => {
+    const raw = row?.pendingToolSuggestions;
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw || '[]'); } catch { return []; }
+  })();
+  if (existing.length >= 10) return;
+  if (existing.some(t => t.id === toolData.id)) return;
+  await db.raw(
+    `UPDATE "Session" SET "pendingToolSuggestions" = COALESCE("pendingToolSuggestions", '[]'::jsonb) || ?::jsonb WHERE id = ?`,
+    [JSON.stringify([toolData]), sessionId]
+  );
+}
+
+const TOOLBOX_CAT_LABELS = {
+  hosting: 'Hébergement', database: 'Base de données', frontend: 'Frontend',
+  backend: 'Backend', auth: 'Authentification', emails: 'Emails',
+  devtools: 'Outils dev', domain: 'Domaine'
+};
+
+function buildToolboxSection(toolbox) {
+  const STATUS = { owned: 'Possédé', planned: 'Prévu', evaluating: 'En évaluation' };
+  const lines = Object.entries(TOOLBOX_CAT_LABELS).map(([catId, catLabel]) => {
+    const sel = toolbox[catId]?.selected;
+    if (!sel) return null;
+    const status = STATUS[toolbox[catId]?.status] || 'Possédé';
+    const customs = toolbox[`_custom_${catId}`] || [];
+    const custom = customs.find(t => t.id === sel);
+    const label = custom?.name || sel;
+    return `- ${catLabel} : ${label} (${status})`;
+  }).filter(Boolean);
+  return lines.length > 0
+    ? `\n\nBoîte à outils de l'utilisateur :\n${lines.join('\n')}\nCes outils sont déjà disponibles — tiens-en compte dans tes recommandations.`
+    : '';
+}
+
 // Met à jour une entrée existante dans la timeline (lecture + réécriture)
 async function patchTimelineEntry(sessionId, entryId, patch) {
   const [session] = await db('Session').select('timeline').where({ id: sessionId }).limit(1);
@@ -702,7 +740,7 @@ router.post('/:sessionId/run', async (req, res) => {
       .orderBy('displayOrder', 'asc');
 
     // ── 3 : Stack technique effective (projet surcharge utilisateur) ──────────
-    const [userRecord] = await db('User').select(['techStack']).where({ id: req.user.id }).limit(1);
+    const [userRecord] = await db('User').select(['techStack', 'toolbox']).where({ id: req.user.id }).limit(1);
     const userStack = typeof userRecord?.techStack === 'string'
       ? JSON.parse(userRecord.techStack) : (userRecord?.techStack || {});
     const projectStack = project.techStack
@@ -710,6 +748,8 @@ router.post('/:sessionId/run', async (req, res) => {
       : null;
     const effectiveStack = projectStack ?? userStack;
     stackLines = formatTechStack(effectiveStack);
+    const userToolbox = typeof userRecord?.toolbox === 'string'
+      ? JSON.parse(userRecord.toolbox || '{}') : (userRecord?.toolbox || {});
 
     // ── 2.2 : Contexte projet tronqué (~2000 tokens) sauf si fullContext ──────
     const CONTEXT_MAX_CHARS = 8000;
@@ -886,6 +926,9 @@ router.post('/:sessionId/run', async (req, res) => {
       const stackSection = stackLines.length > 0
         ? `\n\nStack technique du projet :\n${stackLines.join('\n')}\nAdapte tes recommandations à cet environnement.`
         : '';
+      const toolboxSection = project.hasTechnicalStack
+        ? buildToolboxSection(userToolbox)
+        : '';
 
       const intentionGuard0 = (() => {
         const i = session.intention;
@@ -900,14 +943,18 @@ router.post('/:sessionId/run', async (req, res) => {
         ? '\nINTENTION DE CETTE SESSION : Identifier des étapes pour la timeline.\n- Tu NE dois PAS lister les étapes finales toi-même\n- Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges\n- Le plan final sera consolidé à la clôture'
         : '';
 
+      const needToolInstruction = project.hasTechnicalStack
+        ? `\nSi tu identifies UN outil technique clairement manquant dans la boîte à outils et qui serait vraiment utile pour ce projet, signale-le DISCRÈTEMENT à la toute fin de ton message : [NEED_TOOL: {"id": "docker", "label": "Docker", "category": "devtools", "required": true, "reason": "Explication en 1 phrase"}]. Un seul outil maximum, uniquement si vraiment nécessaire. required=true si indispensable pour le projet, false si optionnel.`
+        : '';
+
       const systemPrompt =
         `${systemPromptBase}
-Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${timelineSection}${contextSection}${parentExchangesBlock}${stackSection}${conversationNote}
+Ton rôle spécifique dans cette session : ${agent.role}.${briefSection}${timelineSection}${contextSection}${parentExchangesBlock}${stackSection}${toolboxSection}${conversationNote}
 Réponds en français, de façon concise et structurée. Apporte une contribution distincte et complémentaire des agents précédents.
 Contraintes de réponse : maximum 250 mots, va à l'essentiel avec des points clés, évite les introductions et conclusions génériques.
 Si et seulement si tu as besoin d'une information cruciale de l'utilisateur pour avancer, pose exactement UNE question en terminant ton message par [QUESTION: ta question précise]. Sinon, ne pose aucune question.
 Si tu identifies qu'un expert avec une compétence très spécifique manquante serait utile pour cette tâche, tu peux le suggérer en ajoutant à la toute fin de ton message : [SUGGEST_AGENT: {"name": "NomAgent", "role": "Description courte", "systemPrompt": "Prompt système complet"}]. Un seul agent suggéré maximum, uniquement si vraiment nécessaire.
-Si tu identifies une étape future importante et concrète pour ce projet (action à mener après cette session), tu peux la signaler avec : [SUGGEST_STEP: titre de l'étape]. Une seule suggestion par contribution.
+Si tu identifies une étape future importante et concrète pour ce projet (action à mener après cette session), tu peux la signaler avec : [SUGGEST_STEP: titre de l'étape]. Une seule suggestion par contribution.${needToolInstruction}
 RÈGLE DE COMMUNICATION :
 - Adapte ton langage à un interlocuteur qui n'est PAS expert dans ton domaine
 - Évite le jargon technique et les acronymes non expliqués
@@ -924,7 +971,7 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
         send('chunk', { agent: agent.name, text: chunk });
       }, 800, session.model || MODEL);
 
-      // Détecter question, suggestion agent, suggestion étape
+      // Détecter question, suggestion agent, suggestion étape, outil manquant
       const questionMatch = fullText.match(/\[QUESTION:\s*([\s\S]*?)\]/);
       let suggestedAgentData = null;
       const suggestMatch = fullText.match(/\[SUGGEST_AGENT:\s*(\{[\s\S]*?\})\]/);
@@ -934,10 +981,17 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
       const stepMatch = fullText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
       const suggestedStepTitle = stepMatch ? stepMatch[1].trim() : null;
 
+      let needToolData = null;
+      const needToolMatch = fullText.match(/\[NEED_TOOL:\s*(\{[\s\S]*?\})\]/);
+      if (needToolMatch) {
+        try { needToolData = JSON.parse(needToolMatch[1]); } catch {}
+      }
+
       const agentContent = fullText
         .replace(/\[QUESTION:[\s\S]*?\]/, '')
         .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/, '')
         .replace(/\[SUGGEST_STEP:[\s\S]*?\]/, '')
+        .replace(/\[NEED_TOOL:[\s\S]*?\]/, '')
         .trim();
 
       const agentExchange = {
@@ -974,6 +1028,18 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
             timestamp: new Date().toISOString()
           });
         }
+      }
+
+      if (needToolData?.id && needToolData?.label && project.hasTechnicalStack) {
+        await appendPendingToolSuggestion(sessionId, {
+          id: needToolData.id,
+          label: needToolData.label,
+          category: needToolData.category || 'devtools',
+          required: needToolData.required === true,
+          reason: needToolData.reason || '',
+          agentName: agent.name,
+          timestamp: new Date().toISOString()
+        }).catch(() => {});
       }
 
       if (questionMatch) {
@@ -1447,6 +1513,33 @@ router.post('/:sessionId/reset', async (req, res) => {
     res.json({ message: 'Réunion réinitialisée', followingCount });
   } catch (err) {
     console.error('[sessions/:id/reset POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/sessions/:sessionId/pending-tool — supprimer une suggestion d'outil résolue
+router.patch('/:sessionId/pending-tool', async (req, res) => {
+  const { sessionId } = req.params;
+  const { toolId } = req.body;
+  if (!toolId) return res.status(400).json({ error: 'toolId requis' });
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const [session] = await db('Session').select(['id', 'pendingToolSuggestions', 'projectId']).where({ id: sessionId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+    const project = await getProject(session.projectId, req.user.id, isAdmin);
+    if (!project) return res.status(403).json({ error: 'Accès refusé' });
+
+    const existing = (() => {
+      const raw = session.pendingToolSuggestions;
+      if (Array.isArray(raw)) return raw;
+      try { return JSON.parse(raw || '[]'); } catch { return []; }
+    })();
+    await db('Session').where({ id: sessionId }).update({
+      pendingToolSuggestions: JSON.stringify(existing.filter(t => t.id !== toolId))
+    });
+    res.json({ message: 'Suggestion supprimée' });
+  } catch (err) {
+    console.error('[sessions/:id/pending-tool PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

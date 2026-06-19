@@ -618,9 +618,10 @@ export default function ProjectView() {
   const stackTimerRef = useRef(null);
   const isFirstStackLoad = useRef(true);
   // ── Stack v4 : panneau latéral ─────────────────────────────────────────────
-  const [showStackPanel, setShowStackPanel] = useState(false);
-  const [userToolbox, setUserToolbox]       = useState({});
-  const [stackOverrides, setStackOverrides] = useState({});
+  const [showStackPanel, setShowStackPanel]   = useState(false);
+  const [userToolbox, setUserToolbox]         = useState({});
+  const [stackOverrides, setStackOverrides]   = useState({});
+  const [pendingToolsCount, setPendingToolsCount] = useState(0);
 
   // Charger le stack projet + stack global utilisateur + boîte à outils v4
   useEffect(() => {
@@ -680,6 +681,12 @@ export default function ProjectView() {
             .then(({ data: m }) => setMembers(m))
             .catch(() => {})
             .finally(() => setMembersLoading(false));
+        }
+        // Badge pending tools si projet technique
+        if (data.hasTechnicalStack) {
+          api.get(`/projects/${id}/pending-tools`)
+            .then(({ data: pt }) => setPendingToolsCount(Array.isArray(pt) ? pt.length : 0))
+            .catch(() => {});
         }
       })
       .catch(() => navigate('/dashboard'))
@@ -975,9 +982,14 @@ export default function ProjectView() {
             {project.hasTechnicalStack && (
               <button
                 onClick={() => setShowStackPanel(true)}
-                className="text-sm border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
+                className="relative text-sm border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
               >
                 🔧 Stack
+                {pendingToolsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
+                    {pendingToolsCount}
+                  </span>
+                )}
               </button>
             )}
             <Link
@@ -1390,6 +1402,8 @@ export default function ProjectView() {
           overrides={stackOverrides}
           onSaveOverrides={handleSaveOverrides}
           onClose={() => setShowStackPanel(false)}
+          onToolboxUpdate={newToolbox => setUserToolbox(newToolbox)}
+          onPendingToolsChange={count => setPendingToolsCount(count)}
         />
       )}
     </ProjectLayout>

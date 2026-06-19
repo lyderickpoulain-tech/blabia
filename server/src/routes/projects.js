@@ -909,6 +909,36 @@ Limite à 5 étapes maximum. Titres courts et actionnables (max 50 chars).`;
   }
 });
 
+// GET /api/projects/:id/pending-tools — agrège les outils suggérés par les réunions
+router.get('/:id/pending-tools', async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const sessions = await db('Session')
+      .select(['id', 'task', 'pendingToolSuggestions'])
+      .where({ projectId: req.params.id })
+      .whereNotNull('pendingToolSuggestions');
+
+    const tools = [];
+    for (const s of sessions) {
+      const raw = s.pendingToolSuggestions;
+      const list = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw || '[]'); } catch { return []; } })();
+      for (const t of list) {
+        if (!tools.some(x => x.id === t.id)) {
+          tools.push({ ...t, sessionId: s.id, sessionTitle: s.task });
+        }
+      }
+    }
+
+    res.json(tools);
+  } catch (err) {
+    console.error('[projects/:id/pending-tools GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // POST /api/projects/:id/suggest-stack — suggestion de stack via Claude (boîte à outils prioritaire)
 router.post('/:id/suggest-stack', async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
