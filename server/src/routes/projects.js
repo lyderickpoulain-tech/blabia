@@ -403,7 +403,7 @@ router.delete('/:id/memory', async (req, res) => {
       messages: JSON.stringify([]),
       summary: null,
       planSuggestions: null,
-      tokensUsed: 0,
+      tokensUsed: JSON.stringify({ input: 0, output: 0, total: 0 }),
       hasCode: false,
       codeStatus: null,
       status: 'open'

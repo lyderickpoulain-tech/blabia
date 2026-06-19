@@ -1489,10 +1489,9 @@ router.post('/:sessionId/reset', async (req, res) => {
       status: 'open',
       summary: null,
       planSuggestions: null,
-      tokensUsed: 0,
+      tokensUsed: JSON.stringify({ input: 0, output: 0, total: 0 }),
       hasCode: false,
-      codeStatus: null,
-      updatedAt: new Date()
+      codeStatus: null
     });
 
     // Trouver les sessions suivantes via leur jalon (displayOrder supérieur)
