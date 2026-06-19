@@ -55,6 +55,8 @@ model Project {
   name          String
   description   String?
   status        String          @default("active") // "active" ou "archived"
+  brief             String?   // Brief structuré : objectif, contexte, notes — ajouté migration 20260603000012
+  devDirectory      String?   // Répertoire de développement local — ajouté migration 20260613000003
   context           String?   // Mémoire cumulée des sessions précédentes
   techStack         Json?     // Surcharge de la stack technique de l'utilisateur
   hasTechnicalStack Boolean   @default(false) // v4.0 : projet implique du développement technique
