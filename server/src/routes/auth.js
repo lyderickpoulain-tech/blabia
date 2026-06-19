@@ -2,10 +2,27 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('crypto');
+const rateLimit = require('express-rate-limit');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: 'Trop de créations de compte depuis cette IP. Réessayez dans 1 heure.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function makeToken(user) {
   return jwt.sign(
@@ -16,7 +33,7 @@ function makeToken(user) {
 }
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe requis' });
@@ -41,7 +58,7 @@ router.post('/login', async (req, res) => {
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 
 // POST /api/auth/register — inscription par invitation uniquement
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   const { token, password, username } = req.body;
   if (!token || !password) {
     return res.status(400).json({ error: "Token d'invitation et mot de passe requis" });
