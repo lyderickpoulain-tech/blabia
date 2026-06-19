@@ -28,7 +28,8 @@ const MILESTONE_TYPE_CONFIG = {
   meeting:        { label: 'Compte-rendu',  icon: '📋', borderColor: 'border-l-blue-400' },
   technical:      { label: 'Claude Code',   icon: '💻', borderColor: 'border-l-violet-400' },
 };
-const MILESTONE_TYPES = ['summary', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
+// Types actifs pour la création (milestone et timeline_steps conservés dans MILESTONE_TYPE_CONFIG pour rétrocompat)
+const MILESTONE_TYPES = ['summary', 'claude_code', 'stack_check'];
 
 const DELIVERABLE_LABEL = {
   summary: '📋 Voir le compte-rendu', synthesis: '📋 Voir le compte-rendu',

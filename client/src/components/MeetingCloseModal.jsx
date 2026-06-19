@@ -3,12 +3,12 @@ import api from '../utils/api';
 import SummaryDisplayModal from './SummaryDisplayModal';
 
 const DELIVERABLE_META = {
-  summary:        { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
-  synthesis:      { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
-  memory:         { icon: '📋', label: 'Compte-rendu',      editable: true,  code: false, list: false },
-  meeting:        { icon: '📋', label: 'Compte-rendu',      editable: false, code: false, list: false },
-  claude_code:    { icon: '💻', label: 'Prompt Claude Code', editable: false, code: true,  list: false },
-  timeline_steps: { icon: '📅', label: 'Étapes timeline',   editable: false, code: false, list: true  },
+  summary:        { icon: '📋', label: 'Compte-rendu',       editable: false, code: false },
+  synthesis:      { icon: '📋', label: 'Compte-rendu',       editable: false, code: false },
+  memory:         { icon: '📋', label: 'Compte-rendu',       editable: true,  code: false },
+  meeting:        { icon: '📋', label: 'Compte-rendu',       editable: false, code: false },
+  claude_code:    { icon: '💻', label: 'Prompt Claude Code', editable: false, code: true  },
+  timeline_steps: { icon: '📋', label: 'Compte-rendu',       editable: false, code: false }, // rétrocompat
 };
 
 export default function MeetingCloseModal({ session, projectId, onClose, onClosed }) {
@@ -22,8 +22,6 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
   const [content,        setContent]        = useState(null);
   const [editedContent,  setEditedContent]  = useState('');
   const [genError,       setGenError]       = useState('');
-  const [addingToPlan,   setAddingToPlan]   = useState(false);
-  const [addedToPlan,    setAddedToPlan]    = useState(false);
   const [copied,         setCopied]         = useState(false);
   const [openedInCC,     setOpenedInCC]     = useState(false);
   const [applying,        setApplying]        = useState(false);
@@ -71,21 +69,6 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
       setOpenedInCC(true);
       setTimeout(() => setOpenedInCC(false), 5000);
     });
-  };
-
-  const handleAddToPlan = async () => {
-    if (addingToPlan || !content) return;
-    setAddingToPlan(true);
-    try {
-      await api.post(`/projects/${projectId}/plan/bulk`, {
-        milestones:       content.milestones       || [],
-        standalone_todos: content.standalone_todos || [],
-        sessionId:        session.id,
-        sourceSessionId:  session.id
-      });
-      setAddedToPlan(true);
-    } catch {}
-    setAddingToPlan(false);
   };
 
   const handleApply = async () => {
@@ -345,63 +328,8 @@ export default function MeetingCloseModal({ session, projectId, onClose, onClose
                 </div>
               )}
 
-              {/* timeline_steps → liste jalons + option ajout */}
-              {meta.list && typeof content === 'object' && (
-                <div className="space-y-3">
-                  {(content.milestones || []).length > 0 ? (
-                    <ul className="space-y-2">
-                      {content.milestones.map((m, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <span className="text-blue-400 font-bold mt-0.5 shrink-0">·</span>
-                          <div>
-                            <span className="font-medium text-gray-800">{m.title}</span>
-                            {m.description && (
-                              <p className="text-xs text-gray-400 mt-0.5">{m.description}</p>
-                            )}
-                            {(m.todos || []).length > 0 && (
-                              <ul className="mt-1 space-y-0.5">
-                                {m.todos.map((t, j) => (
-                                  <li key={j} className="text-xs text-gray-500 flex items-center gap-1">
-                                    <span>→</span> {t.title}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-gray-400">Aucune étape extraite.</p>
-                  )}
-
-                  {(content.standalone_todos || []).length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-gray-500">Tâches autonomes :</p>
-                      {content.standalone_todos.map((t, i) => (
-                        <p key={i} className="text-xs text-gray-600 flex items-center gap-1.5">
-                          <span className="text-gray-300">·</span> {t.title}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-
-                  {!addedToPlan ? (
-                    <button
-                      onClick={handleAddToPlan}
-                      disabled={addingToPlan || (content.milestones || []).length === 0}
-                      className="w-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blabia-blue text-sm font-medium py-2 rounded-xl transition disabled:opacity-50"
-                    >
-                      {addingToPlan ? 'Ajout…' : '+ Ajouter à la timeline'}
-                    </button>
-                  ) : (
-                    <p className="text-xs text-green-600 text-center">✓ Étapes ajoutées à la timeline</p>
-                  )}
-                </div>
-              )}
-
-              {/* synthesis → aperçu + bouton plein écran */}
-              {!meta.editable && !meta.code && !meta.list && (
+              {/* summary / rétrocompat → aperçu + bouton plein écran */}
+              {!meta.editable && !meta.code && (
                 <div className="space-y-2">
                   <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-32 overflow-hidden relative">
                     {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}

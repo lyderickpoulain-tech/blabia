@@ -4,16 +4,14 @@ import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import api from '../utils/api';
 
 const DELIVERABLES = [
-  { id: 'summary',        icon: '📋', label: 'Compte-rendu',    desc: 'Synthèse structurée + mémorisée dans le projet' },
-  { id: 'claude_code',    icon: '💻', label: 'Claude Code',     desc: 'Prompt prêt pour le développement' },
-  { id: 'timeline_steps', icon: '📅', label: 'Étapes timeline', desc: 'Nouvelles étapes actionnables' },
+  { id: 'summary',     icon: '📋', label: 'Compte-rendu', desc: 'Synthèse structurée + mémorisée dans le projet' },
+  { id: 'claude_code', icon: '💻', label: 'Claude Code',  desc: 'Prompt prêt pour le développement' },
 ];
 
 const MT_MAP = {
   summary: 'summary', synthesis: 'summary', meeting: 'summary',
-  memory: 'summary',
+  memory: 'summary', timeline_steps: 'summary',
   claude_code: 'claude_code', technical: 'claude_code',
-  timeline_steps: 'timeline_steps',
 };
 
 function AgentScopeSelector({ scope, onChange, size = 'sm' }) {

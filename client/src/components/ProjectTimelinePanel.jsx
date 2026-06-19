@@ -32,7 +32,8 @@ const TYPE_LABEL = {
   technical:      'Claude Code',
 };
 
-const TYPES = ['summary', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
+// Types actifs pour la création (milestone et timeline_steps conservés dans TYPE_ICON/LABEL pour rétrocompat)
+const TYPES = ['summary', 'claude_code', 'stack_check'];
 
 const STATUS_DOT = {
   pending:     { cls: 'bg-gray-300',  label: 'Pas commencé' },
