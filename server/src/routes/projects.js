@@ -406,14 +406,12 @@ router.delete('/:id/memory', async (req, res) => {
       tokensUsed: 0,
       hasCode: false,
       codeStatus: null,
-      status: 'open',
-      updatedAt: new Date()
+      status: 'open'
     });
 
     // Remettre tous les jalons à pending
     await db('Milestone').where({ projectId: req.params.id }).update({
-      status: 'pending',
-      updatedAt: new Date()
+      status: 'pending'
     });
 
     res.json({ message: 'Mémoire du projet réinitialisée' });
