@@ -107,4 +107,36 @@ router.patch('/me/tech-stack', async (req, res) => {
   }
 });
 
+// GET /api/users/me/toolbox — boîte à outils personnelle
+router.get('/me/toolbox', async (req, res) => {
+  try {
+    const [user] = await db('User').select(['toolbox']).where({ id: req.user.id }).limit(1);
+    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    const toolbox = typeof user.toolbox === 'string'
+      ? JSON.parse(user.toolbox)
+      : (user.toolbox || {});
+    res.json(toolbox);
+  } catch (err) {
+    console.error('[users/me/toolbox GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/users/me/toolbox — sauvegarder la boîte à outils
+router.patch('/me/toolbox', async (req, res) => {
+  const { toolbox } = req.body;
+  if (!toolbox || typeof toolbox !== 'object' || Array.isArray(toolbox)) {
+    return res.status(400).json({ error: 'toolbox invalide' });
+  }
+  try {
+    await db('User').where({ id: req.user.id }).update({
+      toolbox: JSON.stringify(toolbox)
+    });
+    res.json({ message: 'Boîte à outils sauvegardée' });
+  } catch (err) {
+    console.error('[users/me/toolbox PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 module.exports = router;

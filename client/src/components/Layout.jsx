@@ -25,10 +25,10 @@ export default function Layout({ children, wide = false }) {
             Agents
           </Link>
           <Link
-            to="/profile/environment"
+            to="/profile/toolbox"
             className="text-sm text-gray-600 hover:text-gray-900 hidden sm:block"
           >
-            Mon environnement
+            Ma boîte à outils
           </Link>
           {(user?.role === 'admin' || user?.role === 'supervisor') && (
             <Link

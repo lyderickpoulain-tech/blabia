@@ -14,6 +14,7 @@ import SessionView from './pages/SessionView';
 import SummaryView from './pages/SummaryView';
 import AgentsPage from './pages/AgentsPage';
 import EnvironmentPage from './pages/EnvironmentPage';
+import MyToolbox from './pages/MyToolbox';
 import PlanView from './pages/PlanView';
 import StartMeeting from './pages/StartMeeting';
 import MeetingRoom from './pages/MeetingRoom';
@@ -61,6 +62,9 @@ export default function App() {
         } />
         <Route path="/profile/environment" element={
           <ProtectedRoute><EnvironmentPage /></ProtectedRoute>
+        } />
+        <Route path="/profile/toolbox" element={
+          <ProtectedRoute><MyToolbox /></ProtectedRoute>
         } />
         <Route path="/admin/invitations" element={
           <ProtectedRoute adminOnly><AdminInvitations /></ProtectedRoute>
