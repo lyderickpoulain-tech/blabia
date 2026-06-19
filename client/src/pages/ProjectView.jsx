@@ -20,6 +20,7 @@ const QUICK_COMMANDS = [
   { cmd: '/prochainEtape',    label: 'Prochaine étape' },
   { cmd: '/analyserBloquants',label: 'Analyser les blocages' },
   { cmd: '/exporterTimeline', label: 'Exporter la timeline' },
+  { cmd: '/rechercher',       label: 'Rechercher 🌐',         placeholder: '/rechercher ' },
   { cmd: '/aide',             label: 'Aide' },
 ];
 
@@ -1091,6 +1092,17 @@ export default function ProjectView() {
                 <Link to={`/projects/${id}/plan`} className="text-sm text-blabia-blue font-medium hover:underline">
                   Voir la timeline →
                 </Link>
+              </div>
+            )}
+            {quickResult.sources?.length > 0 && (
+              <div className="px-4 pb-3 pt-2 border-t border-gray-100 space-y-1">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Sources web</p>
+                {quickResult.sources.map((s, i) => (
+                  <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 hover:underline truncate">
+                    🌐 <span className="truncate">{s.title || s.url}</span>
+                  </a>
+                ))}
               </div>
             )}
           </div>

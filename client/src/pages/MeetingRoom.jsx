@@ -404,6 +404,16 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                 }`}>
                   {msg.content}
                 </div>
+                {msg.sources?.length > 0 && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {msg.sources.map((s, i) => (
+                      <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline truncate">
+                        🌐 <span className="truncate">{s.title || s.url}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
                 {msg.interrupted ? (
                   <p className="text-xs text-blabia-orange mt-1 flex items-center gap-1">
                     ⚠️ Interrompu
@@ -1056,6 +1066,16 @@ export default function MeetingRoom() {
             } else if (ev.type === 'turn_complete') {
               setIsStreaming(false);
               if (ev.tokensUsed) setTokensUsed(ev.tokensUsed);
+
+            } else if (ev.type === 'sources') {
+              setMessages(prev => {
+                const idx = [...prev].reverse().findIndex(m => m.role === 'agent' && m.agentName === ev.agentName);
+                if (idx === -1) return prev;
+                const realIdx = prev.length - 1 - idx;
+                const updated = [...prev];
+                updated[realIdx] = { ...updated[realIdx], sources: ev.sources || [] };
+                return updated;
+              });
 
             } else if (ev.type === 'suggest_agent') {
               setAgentSuggestions(prev => [...prev, {

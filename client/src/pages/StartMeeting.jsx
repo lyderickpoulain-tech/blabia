@@ -65,6 +65,7 @@ export default function StartMeeting() {
   const [suggestionReasons, setSuggestionReasons] = useState({});
   const [newAgentForm,      setNewAgentForm]      = useState({ open: false, name: '', role: '', systemPrompt: '', scope: 'project' });
   const [creatingAgent,     setCreatingAgent]     = useState(false);
+  const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
   const [starting,          setStarting]          = useState(false);
   const [error,             setError]             = useState('');
 
@@ -150,10 +151,11 @@ export default function StartMeeting() {
         }));
 
       const { data } = await api.post(`/projects/${projectId}/sessions`, {
-        task:         task.trim(),
-        intention:    [deliverable],
+        task:             task.trim(),
+        intention:        [deliverable],
         activeAgents,
-        mode:         'meeting',
+        mode:             'meeting',
+        webSearchEnabled: webSearchEnabled === true,
         ...(milestoneId ? { milestoneId } : {})
       });
 
@@ -333,6 +335,34 @@ export default function StartMeeting() {
                   </button>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* ── Section C : Recherche web ───────────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Recherche web 🌐</p>
+                <p className="text-xs text-gray-400 mt-0.5">Les agents pourront chercher des informations en temps réel</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={webSearchEnabled}
+                onClick={() => setWebSearchEnabled(v => !v)}
+                className={`relative inline-flex w-11 h-6 shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${
+                  webSearchEnabled ? 'bg-blabia-blue' : 'bg-gray-200'
+                }`}
+              >
+                <span className={`inline-block w-4 h-4 mt-1 bg-white rounded-full shadow transition-transform duration-200 ${
+                  webSearchEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+            {webSearchEnabled && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                ⚠️ La recherche web entraîne un coût supplémentaire par requête Anthropic. Activez uniquement si les agents ont besoin d'informations actuelles.
+              </p>
             )}
           </div>
 

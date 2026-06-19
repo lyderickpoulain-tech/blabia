@@ -789,10 +789,41 @@ router.post('/:id/quick-command', async (req, res) => {
 - \`/prochainEtape\` — Identifie et explique la prochaine étape à traiter
 - \`/analyserBloquants\` — Étapes bloquées et solutions proposées
 - \`/exporterTimeline\` — Timeline en texte structuré, copiable
+- \`/rechercher [requête]\` — Recherche web en temps réel 🌐
 - \`/aide\` — Cette aide
 
 **Question libre :** Pose n'importe quelle question sur le projet sans préfixe.`;
       return res.json({ type: 'command', command: '/aide', result: help });
+    }
+
+    // /rechercher — recherche web via Claude avec tool web_search_20250305
+    if (command === '/rechercher') {
+      const query = args?.trim() || input.replace(/^\/rechercher\s*/i, '').trim();
+      if (!query) return res.status(400).json({ error: 'Requête de recherche requise' });
+      try {
+        const searchResponse = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 800,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          system: `Tu es l'assistant du projet "${project.name}". Recherche sur le web et réponds en français de façon concise.`,
+          messages: [{ role: 'user', content: query }]
+        });
+        const textBlocks = searchResponse.content.filter(b => b.type === 'text');
+        const resultText = textBlocks.map(b => b.text).join('\n') || 'Aucun résultat trouvé.';
+        const sources = [];
+        for (const block of searchResponse.content) {
+          if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
+            for (const r of block.content) {
+              if (r.type === 'web_search_result' && r.url && !sources.some(s => s.url === r.url)) {
+                sources.push({ url: r.url, title: r.title || r.url });
+              }
+            }
+          }
+        }
+        return res.json({ type: 'command', command: '/rechercher', result: resultText, sources });
+      } catch (err) {
+        return res.json({ type: 'command', command: '/rechercher', result: `Erreur de recherche : ${err.message}`, sources: [] });
+      }
     }
 
     const milestones = await db('Milestone').where({ projectId: req.params.id }).orderBy('displayOrder');

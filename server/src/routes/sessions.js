@@ -410,21 +410,27 @@ function waitForAnswer(sessionId, timeoutMs = 300_000) {
 
 // Appel Anthropic en streaming avec auto-continuation sur max_tokens (max 5 tours)
 // Retourne { text, usage: { inputTokens, outputTokens } }
-async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500, model = MODEL, signal = null) {
+async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500, model = MODEL, signal = null, webSearch = false) {
   const MAX_CONTINUATIONS = 5;
   let fullText = '';
   let messages = [{ role: 'user', content: userMessage }];
   let totalInputTokens  = 0;
   let totalOutputTokens = 0;
+  const sources = [];
 
   for (let attempt = 0; attempt <= MAX_CONTINUATIONS; attempt++) {
-    const stream = await anthropic.messages.create({
+    const apiParams = {
       model,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages,
       stream: true
-    }, signal ? { signal } : undefined);
+    };
+    if (webSearch) {
+      apiParams.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+    }
+
+    const stream = await anthropic.messages.create(apiParams, signal ? { signal } : undefined);
 
     let chunkText = '';
     let stopReason = null;
@@ -443,18 +449,30 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500,
         if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
         if (event.usage) totalOutputTokens += event.usage.output_tokens || 0;
       }
+      // Extraction des sources web depuis le bloc résultat outil
+      if (webSearch && event.type === 'content_block_start') {
+        const cb = event.content_block;
+        if (cb?.type === 'web_search_tool_result' && Array.isArray(cb.content)) {
+          for (const result of cb.content) {
+            if (result.type === 'web_search_result' && result.url) {
+              if (!sources.some(s => s.url === result.url)) {
+                sources.push({ url: result.url, title: result.title || result.url });
+              }
+            }
+          }
+        }
+      }
     }
 
     if (signal?.aborted) break;
     if (stopReason !== 'max_tokens') break;
 
     if (attempt >= MAX_CONTINUATIONS) {
-      // Tronquer proprement à la dernière phrase complète
       const truncated = fullText.replace(/[^.!?]*$/, '').trim();
       if (truncated && truncated.length < fullText.length) {
         const delta = truncated.length - fullText.length;
         fullText = truncated;
-        onChunk('\0'.repeat(Math.abs(delta))); // signal interne non visible
+        onChunk('\0'.repeat(Math.abs(delta)));
       }
       const note = '\n\n*[Synthèse condensée]*';
       fullText += note;
@@ -469,7 +487,7 @@ async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500,
     ];
   }
 
-  return { text: fullText, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens } };
+  return { text: fullText, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens }, sources };
 }
 
 // ── SOUS-ÉTAPE 1 : Création de session + formation d'équipe ──────────────────
@@ -486,7 +504,8 @@ router.post('/', async (req, res) => {
     cachedAgents = null,
     selectedAgents = null,
     intention = [],
-    activeAgents: activeAgentsParam = null
+    activeAgents: activeAgentsParam = null,
+    webSearchEnabled: webSearchEnabledParam = false
   } = req.body;
   const { projectId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
@@ -531,11 +550,12 @@ router.post('/', async (req, res) => {
           model: selectedModel,
           fullContext: fullContextEnabled,
           intention: JSON.stringify(Array.isArray(intention) ? intention : []),
+          webSearchEnabled: webSearchEnabledParam === true,
           projectId,
           milestoneId: milestoneId || null,
           createdAt: now
         })
-        .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId']);
+        .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId', 'webSearchEnabled']);
       await db('Project').where({ id: projectId }).update({ updatedAt: now });
       if (milestoneId) {
         try { await db('Milestone').where({ id: milestoneId, projectId }).update({ status: 'in_progress' }); } catch {}
@@ -750,6 +770,7 @@ router.post('/:sessionId/run', async (req, res) => {
     stackLines = formatTechStack(effectiveStack);
     const userToolbox = typeof userRecord?.toolbox === 'string'
       ? JSON.parse(userRecord.toolbox || '{}') : (userRecord?.toolbox || {});
+    const webSearchEnabled = session.webSearchEnabled === true;
 
     // ── 2.2 : Contexte projet tronqué (~2000 tokens) sauf si fullContext ──────
     const CONTEXT_MAX_CHARS = 8000;
@@ -967,9 +988,11 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
 - Si une décision tarde, signale-le en une phrase : "J'attends la réponse de l'humain avant de continuer."
 - N'avance JAMAIS sans la réponse de l'humain sur une décision posée${intentionInstruction0}`;
 
-      const { text: fullText } = await streamAgent(systemPrompt, userMessage, (chunk) => {
-        send('chunk', { agent: agent.name, text: chunk });
-      }, 800, session.model || MODEL);
+      const { text: fullText, sources: agentSources = [] } = await streamAgent(
+        systemPrompt, userMessage,
+        (chunk) => { send('chunk', { agent: agent.name, text: chunk }); },
+        800, session.model || MODEL, null, webSearchEnabled
+      );
 
       // Détecter question, suggestion agent, suggestion étape, outil manquant
       const questionMatch = fullText.match(/\[QUESTION:\s*([\s\S]*?)\]/);
@@ -1004,6 +1027,9 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
       else if (isAdditionalPrompt) agentExchange.turn = additionalTurnNumber;
       exchanges.push(agentExchange);
       send('agent_done', { name: agent.name, content: agentContent });
+      if (agentSources.length > 0) {
+        send('sources', { agentName: agent.name, sources: agentSources });
+      }
       if (tlIds.agents[agent.name]) {
         await patchTimelineEntry(sessionId, tlIds.agents[agent.name], { status: 'done' }).catch(() => {});
       }
