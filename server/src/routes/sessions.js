@@ -4,6 +4,7 @@ const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const anthropic = require('../services/anthropic');
 const { computeMilestoneStatus } = require('../utils/milestones');
+const { findProject: getProject, formatTechStack } = require('../utils/projectHelpers');
 const multer  = require('multer');
 const mammoth = require('mammoth');
 const XLSX    = require('xlsx');
@@ -24,49 +25,6 @@ function extractJson(text) {
   const match = text.trim().match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Pas de JSON dans la réponse');
   return JSON.parse(match[0]);
-}
-
-const TECH_STACK_LABELS = {
-  hebergement: 'Hébergement',
-  bdd:         'Base de données',
-  frontend:    'Framework frontend',
-  backend:     'Framework backend',
-  auth:        'Authentification',
-  emails:      'Envoi d\'emails',
-  devtools:    'Outils de développement',
-  domaine:     'Domaine',
-};
-
-function formatTechStackForPrompt(raw) {
-  const ts = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
-  const lines = [];
-  for (const [key, label] of Object.entries(TECH_STACK_LABELS)) {
-    const selected = ts[key] || [];
-    if (selected.length === 0) continue;
-    const items = selected.map(item => {
-      if (item === 'Autre' && ts[`${key}_autre`]) return ts[`${key}_autre`];
-      if (item === 'Autre') return null;
-      return item;
-    }).filter(Boolean);
-    if (items.length > 0) lines.push(`- ${label} : ${items.join(', ')}`);
-  }
-  return lines;
-}
-
-async function getProject(projectId, userId, isAdmin) {
-  const query = db('Project').where('Project.id', projectId);
-  if (!isAdmin) {
-    query.where(function () {
-      this.where('Project.userId', userId)
-        .orWhereExists(
-          db.select(db.raw('1')).from('ProjectMember')
-            .where('ProjectMember.projectId', projectId)
-            .where('ProjectMember.userId', userId)
-        );
-    });
-  }
-  const [project] = await query.limit(1);
-  return project;
 }
 
 async function saveSession(sessionId, exchanges, summary, status) {
@@ -113,28 +71,6 @@ async function updateProjectContext(projectId, sessionId, task, summaryText) {
   } catch (err) {
     console.error('[updateProjectContext]', err.message);
   }
-}
-
-// Formate la stack technique en lignes lisibles pour les prompts
-function formatTechStack(ts) {
-  if (!ts || typeof ts !== 'object') return [];
-  const LABELS = {
-    hebergement: 'Hébergement', bdd: 'Base de données',
-    frontend: 'Framework frontend', backend: 'Framework backend',
-    auth: 'Authentification', emails: "Envoi d'emails",
-    devtools: 'Outils de développement', domaine: 'Domaine'
-  };
-  const lines = [];
-  for (const [key, label] of Object.entries(LABELS)) {
-    const selected = ts[key] || [];
-    const items = selected.map(item => {
-      if (item === 'Autre' && ts[`${key}_autre`]) return ts[`${key}_autre`];
-      if (item === 'Autre') return null;
-      return item;
-    }).filter(Boolean);
-    if (items.length > 0) lines.push(`- ${label} : ${items.join(', ')}`);
-  }
-  return lines;
 }
 
 // Extrait les outils suggérés / manquants depuis le summary, puis crée le milestone stack_check
@@ -2177,7 +2113,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     if (deliverableType === 'claude_code') {
       // Contexte projet
       const devDir   = project.devDirectory?.trim() || null;
-      const stackLines = formatTechStackForPrompt(project.techStack);
+      const stackLines = formatTechStack(project.techStack);
 
       // Décisions épinglées pendant la réunion
       const decisions = messages.filter(m => m.pinned || m.type === 'decision');

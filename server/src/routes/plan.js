@@ -3,27 +3,10 @@ const { randomUUID } = require('crypto');
 const db         = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { computeMilestoneStatus } = require('../utils/milestones');
+const { findProject } = require('../utils/projectHelpers');
 
 const router = express.Router();
 router.use(authMiddleware);
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function findProject(id, userId, isAdmin) {
-  const query = db('Project').where('Project.id', id);
-  if (!isAdmin) {
-    query.where(function () {
-      this.where('Project.userId', userId)
-        .orWhereExists(
-          db.select(db.raw('1')).from('ProjectMember')
-            .where('ProjectMember.projectId', id)
-            .where('ProjectMember.userId', userId)
-        );
-    });
-  }
-  const [project] = await query.limit(1);
-  return project;
-}
 
 // ── GET /api/projects/:id/plan — jalons + tâches ─────────────────────────────
 
