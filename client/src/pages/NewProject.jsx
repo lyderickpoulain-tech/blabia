@@ -9,6 +9,7 @@ export default function NewProject() {
   const [objectif, setObjectif] = useState('');
   const [contexte, setContexte] = useState('');
   const [notes, setNotes] = useState('');
+  const [hasTechnicalStack, setHasTechnicalStack] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export default function NewProject() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes });
+      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, hasTechnicalStack });
       navigate(`/projects/${data.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
@@ -114,6 +115,26 @@ export default function NewProject() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hasTechnicalStack}
+                  onClick={() => setHasTechnicalStack(v => !v)}
+                  className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${hasTechnicalStack ? 'bg-blabia-blue' : 'bg-gray-200'}`}
+                >
+                  <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${hasTechnicalStack ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+                <span className="text-sm text-gray-700">Ce projet implique du développement technique</span>
+              </label>
+              {hasTechnicalStack && (
+                <p className="text-xs text-gray-400 mt-1.5 ml-[3.25rem]">
+                  Le panneau Stack sera disponible dans le projet pour configurer et suggérer les outils techniques.
+                </p>
+              )}
             </div>
 
             {error && (

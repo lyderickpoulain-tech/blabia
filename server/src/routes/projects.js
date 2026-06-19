@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context', 'techStack', 'createdAt', 'updatedAt', 'userId'
+  'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context', 'techStack', 'hasTechnicalStack', 'createdAt', 'updatedAt', 'userId'
 ];
 
 // Trouve un projet accessible : propriétaire OU membre OU admin
@@ -92,7 +92,7 @@ router.post('/', async (req, res) => {
   if (req.user.role === 'user') {
     return res.status(403).json({ error: 'Votre compte ne permet pas de créer des projets' });
   }
-  const { name, description, objectif, contexte, notes } = req.body;
+  const { name, description, objectif, contexte, notes, hasTechnicalStack } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -112,6 +112,7 @@ router.post('/', async (req, res) => {
         description: description?.trim() || null,
         brief,
         status: 'active',
+        hasTechnicalStack: hasTechnicalStack === true,
         userId: req.user.id,
         createdAt: now,
         updatedAt: now
@@ -199,7 +200,7 @@ router.get('/:id/stats', async (req, res) => {
 
 // PATCH /api/projects/:id — mettre à jour les champs du projet (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
-  const { name, description, devDirectory } = req.body;
+  const { name, description, devDirectory, hasTechnicalStack } = req.body;
   if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -212,9 +213,10 @@ router.patch('/:id', async (req, res) => {
     }
 
     const updates = { updatedAt: new Date() };
-    if (name !== undefined)          updates.name         = name.trim();
-    if (description !== undefined)   updates.description  = description?.trim() || null;
-    if (devDirectory !== undefined)  updates.devDirectory = devDirectory?.trim() || null;
+    if (name !== undefined)             updates.name               = name.trim();
+    if (description !== undefined)      updates.description        = description?.trim() || null;
+    if (devDirectory !== undefined)     updates.devDirectory       = devDirectory?.trim() || null;
+    if (hasTechnicalStack !== undefined) updates.hasTechnicalStack = Boolean(hasTechnicalStack);
 
     const [updated] = await db('Project')
       .where({ id: req.params.id })
@@ -903,6 +905,55 @@ Limite à 5 étapes maximum. Titres courts et actionnables (max 50 chars).`;
     });
   } catch (err) {
     console.error('[projects/:id/quick-command POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/suggest-stack — suggestion de stack via Claude (boîte à outils prioritaire)
+router.post('/:id/suggest-stack', async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+
+    const { toolboxSummary = {} } = req.body;
+    const owned      = (toolboxSummary.owned      || []).join(', ') || 'aucun';
+    const planned    = (toolboxSummary.planned    || []).join(', ') || 'aucun';
+    const evaluating = (toolboxSummary.evaluating || []).join(', ') || 'aucun';
+
+    const userPrompt = `Analyse ce projet et suggère la stack technique la plus adaptée.
+
+Brief du projet : ${project.brief || 'Non défini'}
+Description : ${project.description || 'Non définie'}
+
+Boîte à outils de l'utilisateur :
+- Outils possédés : ${owned}
+- Outils prévus : ${planned}
+- Outils en évaluation : ${evaluating}
+
+Règles :
+1. Priorise TOUJOURS les outils déjà possédés — ne propose pas d'alternative si l'outil possédé convient
+2. Suggère un outil supplémentaire SEULEMENT s'il manque quelque chose d'essentiel
+3. Explique brièvement pourquoi chaque outil est adapté (1-2 phrases)
+4. Si la boîte à outils couvre bien le projet, dis-le explicitement
+
+Format de réponse (Markdown) :
+## Stack recommandée
+[Liste des outils recommandés avec courte justification]
+
+## Outils manquants (si nécessaire)
+[SEULEMENT si un outil essentiel manque dans la boîte à outils — sinon omets cette section]`;
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 600,
+      system: 'Tu es un expert en architecture logicielle. Tes réponses sont concises et directes.',
+      messages: [{ role: 'user', content: userPrompt }]
+    });
+
+    res.json({ suggestion: response.content[0].text });
+  } catch (err) {
+    console.error('[projects/:id/suggest-stack POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

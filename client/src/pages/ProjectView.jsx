@@ -10,6 +10,7 @@ import GenerateTimelineModal from '../components/GenerateTimelineModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
 import TimelineStepsModal from '../components/TimelineStepsModal';
+import StackPanel from '../components/StackPanel';
 
 const QUICK_COMMANDS = [
   { cmd: '/ajouterEtapes',    label: 'Ajouter des étapes',     placeholder: '/ajouterEtapes ' },
@@ -616,14 +617,20 @@ export default function ProjectView() {
   const [userGlobalStack, setUserGlobalStack] = useState({});
   const stackTimerRef = useRef(null);
   const isFirstStackLoad = useRef(true);
+  // ── Stack v4 : panneau latéral ─────────────────────────────────────────────
+  const [showStackPanel, setShowStackPanel] = useState(false);
+  const [userToolbox, setUserToolbox]       = useState({});
+  const [stackOverrides, setStackOverrides] = useState({});
 
-  // Charger le stack projet + stack global utilisateur
+  // Charger le stack projet + stack global utilisateur + boîte à outils v4
   useEffect(() => {
     setStackLoading(true);
     Promise.all([
       api.get(`/users/me/tech-stack`),
-    ]).then(([userRes]) => {
+      api.get(`/users/me/toolbox`),
+    ]).then(([userRes, toolboxRes]) => {
       setUserGlobalStack(userRes.data || {});
+      setUserToolbox(toolboxRes.data || {});
     }).catch(() => {}).finally(() => setStackLoading(false));
   }, []);
 
@@ -654,12 +661,17 @@ export default function ProjectView() {
     api.get(`/projects/${id}`)
       .then(({ data }) => {
         setProject(data);
-        // Initialiser la stack projet depuis les données du projet
-        if (data.techStack && typeof data.techStack === 'object') {
-          setProjectStack(data.techStack);
-          isFirstStackLoad.current = false;
-        } else if (data.techStack) {
-          try { setProjectStack(JSON.parse(data.techStack)); isFirstStackLoad.current = false; } catch {}
+        // Initialiser les ajustements v4 (panneau Stack)
+        const ts = typeof data.techStack === 'object' ? (data.techStack || {}) : {};
+        setStackOverrides(ts.v4?.overrides || {});
+        // Initialiser la stack legacy (projet non-technique ou projets existants)
+        if (!data.hasTechnicalStack) {
+          if (data.techStack && typeof data.techStack === 'object') {
+            setProjectStack(data.techStack);
+            isFirstStackLoad.current = false;
+          } else if (data.techStack) {
+            try { setProjectStack(JSON.parse(data.techStack)); isFirstStackLoad.current = false; } catch {}
+          }
         }
         // Charger les membres si owner ou admin
         if (data.userId === user?.id || user?.role === 'admin' || user?.role === 'supervisor') {
@@ -800,6 +812,16 @@ export default function ProjectView() {
     } finally {
       setQuickLoading(false);
     }
+  };
+
+  const handleSaveOverrides = async (newOverrides) => {
+    setStackOverrides(newOverrides);
+    try {
+      const base = typeof projectStack === 'object' ? projectStack : {};
+      const merged = { ...base, v4: { overrides: newOverrides } };
+      await api.patch(`/projects/${id}/tech-stack`, { techStack: merged });
+      setProject(prev => ({ ...prev, techStack: merged }));
+    } catch {}
   };
 
   const handleArchive = async () => {
@@ -950,6 +972,14 @@ export default function ProjectView() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 self-start flex-wrap">
+            {project.hasTechnicalStack && (
+              <button
+                onClick={() => setShowStackPanel(true)}
+                className="text-sm border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
+              >
+                🔧 Stack
+              </button>
+            )}
             <Link
               to={`/projects/${id}/plan`}
               className="text-sm border border-blue-200 text-blabia-blue hover:bg-blue-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
@@ -1352,6 +1382,16 @@ export default function ProjectView() {
         );
         return null;
       })()}
+
+      {showStackPanel && (
+        <StackPanel
+          project={project}
+          toolbox={userToolbox}
+          overrides={stackOverrides}
+          onSaveOverrides={handleSaveOverrides}
+          onClose={() => setShowStackPanel(false)}
+        />
+      )}
     </ProjectLayout>
   );
 }
