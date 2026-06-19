@@ -10,6 +10,17 @@ router.use(authMiddleware, canManageUsers);
 
 const ALLOWED_ROLES = ['user', 'member', 'admin', 'supervisor'];
 
+// Résoudre email ou @pseudo en email réel
+async function resolveEmail(emailOrUsername) {
+  const input = emailOrUsername.trim();
+  if (input.startsWith('@')) {
+    const username = input.slice(1);
+    const [user] = await db('User').where({ username }).limit(1);
+    return user ? user.email : null;
+  }
+  return input;
+}
+
 // GET /api/admin/invitations
 router.get('/invitations', async (req, res) => {
   try {
@@ -25,8 +36,17 @@ router.get('/invitations', async (req, res) => {
 
 // POST /api/admin/invitations
 router.post('/invitations', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email requis' });
+  const { email: rawEmail, username: rawUsername } = req.body;
+  const rawInput = rawEmail || rawUsername;
+  if (!rawInput) return res.status(400).json({ error: 'Email ou pseudo requis' });
+
+  let email;
+  try {
+    email = await resolveEmail(rawInput);
+    if (!email) return res.status(404).json({ error: 'Pseudo introuvable' });
+  } catch {
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
 
   try {
     const [existingUser] = await db('User').where({ email }).limit(1);

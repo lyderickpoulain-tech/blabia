@@ -13,6 +13,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +40,7 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/register', { token: invitationToken, password });
+      const { data } = await api.post('/auth/register', { token: invitationToken, password, username: username.trim() || undefined });
       localStorage.setItem('token', data.token);
       navigate('/dashboard');
     } catch (err) {
@@ -122,6 +123,23 @@ export default function Login() {
                 placeholder="••••••••"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pseudo <span className="text-gray-400 font-normal">(optionnel)</span>
+              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-400 text-sm">@</span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="monpseudo"
+                  maxLength={20}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">3-20 car., lettres, chiffres, - ou _</p>
             </div>
 
             {error && (

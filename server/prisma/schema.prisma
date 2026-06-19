@@ -12,6 +12,7 @@ model User {
   email            String          @unique
   password         String
   role             String          @default("member") // "user" | "member" | "admin" | "supervisor"
+  username         String?         @unique
   techStack        Json            @default("{}")    // Environnement technique personnel
   createdAt        DateTime        @default(now())
   projects           Project[]

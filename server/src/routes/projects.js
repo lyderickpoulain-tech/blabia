@@ -419,7 +419,8 @@ router.get('/:id/members', async (req, res) => {
         'ProjectMember.userId',
         'ProjectMember.role',
         'ProjectMember.invitedAt',
-        'User.email'
+        'User.email',
+        'User.username'
       )
       .where('ProjectMember.projectId', req.params.id)
       .orderBy('ProjectMember.invitedAt', 'asc');
@@ -431,10 +432,11 @@ router.get('/:id/members', async (req, res) => {
   }
 });
 
-// POST /api/projects/:id/members — inviter par email
+// POST /api/projects/:id/members — inviter par email ou @pseudo
 router.post('/:id/members', async (req, res) => {
-  const { email } = req.body;
-  if (!email?.trim()) return res.status(400).json({ error: 'Email requis' });
+  const { email: rawEmail, username: rawUsername } = req.body;
+  const rawInput = rawEmail || rawUsername;
+  if (!rawInput?.trim()) return res.status(400).json({ error: 'Email ou pseudo requis' });
 
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
@@ -443,11 +445,17 @@ router.post('/:id/members', async (req, res) => {
     if (!isOwnerOrAdmin(project, req.user.id, isAdmin)) {
       return res.status(403).json({ error: 'Action réservée au propriétaire' });
     }
-    if (project.userId === email || project.userId === req.user.id) {
-      // Ne pas s'inviter soi-même ni inviter le propriétaire
-    }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    // Résoudre @pseudo en email
+    let normalizedEmail;
+    const input = rawInput.trim();
+    if (input.startsWith('@')) {
+      const [resolved] = await db('User').where({ username: input.slice(1) }).limit(1);
+      if (!resolved) return res.status(404).json({ error: 'Pseudo introuvable' });
+      normalizedEmail = resolved.email;
+    } else {
+      normalizedEmail = input.toLowerCase();
+    }
 
     // Cas 1 : utilisateur existant → ajout direct comme membre
     const [existingUser] = await db('User').where({ email: normalizedEmail }).limit(1);
@@ -475,7 +483,7 @@ router.post('/:id/members', async (req, res) => {
 
       return res.status(201).json({
         type: 'added',
-        member: { ...member, email: existingUser.email }
+        member: { ...member, email: existingUser.email, username: existingUser.username || null }
       });
     }
 

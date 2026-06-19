@@ -38,14 +38,21 @@ router.post('/login', async (req, res) => {
   }
 });
 
+const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
+
 // POST /api/auth/register — inscription par invitation uniquement
 router.post('/register', async (req, res) => {
-  const { token, password } = req.body;
+  const { token, password, username } = req.body;
   if (!token || !password) {
     return res.status(400).json({ error: "Token d'invitation et mot de passe requis" });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Le mot de passe doit faire au moins 8 caractères' });
+  }
+
+  const cleanUsername = username?.trim() || null;
+  if (cleanUsername && !USERNAME_REGEX.test(cleanUsername)) {
+    return res.status(400).json({ error: 'Pseudo invalide (3-20 caractères, lettres, chiffres, - ou _)' });
   }
 
   try {
@@ -59,10 +66,17 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Un compte existe déjà pour cet email' });
     }
 
+    if (cleanUsername) {
+      const [takenUsername] = await db('User').where({ username: cleanUsername }).limit(1);
+      if (takenUsername) {
+        return res.status(409).json({ error: 'Ce pseudo est déjà utilisé' });
+      }
+    }
+
     const hashed = await bcrypt.hash(password, 12);
     const [user] = await db('User')
-      .insert({ id: randomUUID(), email: invitation.email, password: hashed, role: 'guest' })
-      .returning(['id', 'email', 'role']);
+      .insert({ id: randomUUID(), email: invitation.email, password: hashed, role: 'member', username: cleanUsername })
+      .returning(['id', 'email', 'role', 'username']);
 
     await db('Invitation').where({ token }).update({ used: true });
 
@@ -90,7 +104,7 @@ router.post('/register', async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'createdAt')
+      .select('id', 'email', 'role', 'username', 'createdAt')
       .where({ id: req.user.id })
       .limit(1);
 

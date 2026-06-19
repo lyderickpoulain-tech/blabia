@@ -546,7 +546,7 @@ export default function ProjectView() {
   const [deleting, setDeleting]         = useState(false);
   const [members, setMembers]           = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
-  const [inviteEmail, setInviteEmail]   = useState('');
+  const [inviteInput, setInviteInput]   = useState('');
   const [inviting, setInviting]         = useState(false);
   const [inviteResult, setInviteResult] = useState(null);
   const [removingMember, setRemovingMember] = useState(null);
@@ -752,14 +752,19 @@ export default function ProjectView() {
 
   const handleInviteMember = async (e) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    const input = inviteInput.trim();
+    if (!input) return;
     setInviting(true);
     setInviteResult(null);
     try {
-      const { data } = await api.post(`/projects/${id}/members`, { email: inviteEmail.trim() });
+      const body = input.startsWith('@')
+        ? { username: input.slice(1) }
+        : { email: input };
+      const { data } = await api.post(`/projects/${id}/members`, body);
       if (data.type === 'added') {
         setMembers(prev => [...prev, data.member]);
-        setInviteResult({ type: 'ok', message: `${data.member.email} ajouté comme collaborateur.` });
+        const label = data.member.username ? `@${data.member.username}` : data.member.email;
+        setInviteResult({ type: 'ok', message: `${label} ajouté comme collaborateur.` });
       } else {
         setInviteResult({ type: 'ok', message: `Invitation envoyée à ${data.email}.` });
       }
@@ -955,15 +960,15 @@ export default function ProjectView() {
           <div className="px-5 py-4 border-b border-gray-100">
             <form onSubmit={handleInviteMember} className="flex gap-2">
               <input
-                type="email"
-                value={inviteEmail}
-                onChange={e => { setInviteEmail(e.target.value); setInviteResult(null); }}
-                placeholder="email@exemple.com"
+                type="text"
+                value={inviteInput}
+                onChange={e => { setInviteInput(e.target.value); setInviteResult(null); }}
+                placeholder="email@exemple.com ou @pseudo"
                 className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none"
               />
               <button
                 type="submit"
-                disabled={inviting || !inviteEmail.trim()}
+                disabled={inviting || !inviteInput.trim()}
                 className="bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50 shrink-0"
               >
                 {inviting ? '…' : 'Inviter'}
@@ -986,7 +991,10 @@ export default function ProjectView() {
               {members.map(m => (
                 <li key={m.id} className="flex items-center justify-between px-5 py-3">
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{m.email}</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {m.email}
+                      {m.username && <span className="ml-1.5 text-xs text-gray-400">@{m.username}</span>}
+                    </p>
                     <p className="text-xs text-gray-400 capitalize">{m.role}</p>
                   </div>
                   <button

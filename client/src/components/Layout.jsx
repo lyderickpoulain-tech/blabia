@@ -38,7 +38,13 @@ export default function Layout({ children, wide = false }) {
               Administration
             </Link>
           )}
-          <span className="text-sm text-gray-500 hidden sm:block">{user?.email}</span>
+          <Link
+            to="/profile"
+            className="text-sm text-gray-500 hover:text-gray-800 hidden sm:block transition"
+            title="Mon profil"
+          >
+            {user?.username ? `@${user.username}` : user?.email}
+          </Link>
           <button
             onClick={handleLogout}
             className="text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 transition min-h-[40px]"

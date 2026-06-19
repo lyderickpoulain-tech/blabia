@@ -148,7 +148,10 @@ export default function AdminUsers() {
     setInvError('');
     setSubmitting(true);
     try {
-      const { data } = await api.post('/admin/invitations', { email: invEmail });
+      const body = invEmail.startsWith('@')
+        ? { username: invEmail.slice(1) }
+        : { email: invEmail };
+      const { data } = await api.post('/admin/invitations', body);
       setInvitations(prev => [data, ...prev]);
       setInvSuccess(`Invitation envoyée à ${invEmail}`);
       setInvEmail('');
@@ -260,6 +263,7 @@ export default function AdminUsers() {
                   <tr key={u.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       {u.email}
+                      {u.username && <span className="ml-1.5 text-xs text-gray-400">@{u.username}</span>}
                       {u.id === me?.id && <span className="ml-2 text-xs text-gray-400">(vous)</span>}
                     </td>
                     <td className="px-4 py-3"><RoleBadge role={u.role} /></td>
@@ -405,13 +409,13 @@ export default function AdminUsers() {
                 <h2 className="text-lg font-bold text-gray-900 mb-4">Inviter quelqu'un</h2>
                 <form onSubmit={handleCreateInvitation} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email ou @pseudo</label>
                     <input
-                      type="email"
+                      type="text"
                       required
                       value={invEmail}
                       onChange={e => setInvEmail(e.target.value)}
-                      placeholder="invite@example.com"
+                      placeholder="invite@example.com ou @pseudo"
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none"
                       autoFocus
                     />
