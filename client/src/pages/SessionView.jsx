@@ -979,7 +979,7 @@ export default function SessionView() {
           )}
           {!isComplete && (
             <Link
-              to={`/projects/${projectId}/session/new`}
+              to={`/projects/${projectId}/meeting/new`}
               className="flex items-center justify-center gap-2 border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold py-3 rounded-xl transition text-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

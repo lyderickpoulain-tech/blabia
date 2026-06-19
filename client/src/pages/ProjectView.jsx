@@ -1216,7 +1216,7 @@ export default function ProjectView() {
               )}
             </div>
             {project.status === 'active' && (
-              <Link to={`/projects/${id}/session/new`} className="bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-medium px-3 py-1.5 rounded-lg transition">
+              <Link to={`/projects/${id}/meeting/new`} className="bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-medium px-3 py-1.5 rounded-lg transition">
                 + Nouvelle réunion
               </Link>
             )}
@@ -1249,7 +1249,7 @@ export default function ProjectView() {
             <div className="text-center py-10 px-5 text-gray-400">
               <p className="text-sm">Aucune réunion pour l'instant.</p>
               {project.status === 'active' && (
-                <Link to={`/projects/${id}/session/new`} className="inline-block mt-2 text-blabia-blue hover:text-blabia-blue text-sm font-medium">
+                <Link to={`/projects/${id}/meeting/new`} className="inline-block mt-2 text-blabia-blue hover:text-blabia-blue text-sm font-medium">
                   Lancer votre première réunion →
                 </Link>
               )}
