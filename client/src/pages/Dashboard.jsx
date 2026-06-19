@@ -19,6 +19,14 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function formatTokens(n) {
+  return (n || 0).toLocaleString('fr-FR');
+}
+
+function formatCost(usd) {
+  return `~${(usd || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+}
+
 export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +50,12 @@ export default function Dashboard() {
     });
   }, [projects, search, statusTab]);
 
+  const globalStats = useMemo(() => {
+    const totalTokens = projects.reduce((s, p) => s + (p.totalTokens || 0), 0);
+    const totalCost   = projects.reduce((s, p) => s + (p.estimatedCostUSD || 0), 0);
+    return { totalTokens, totalCost };
+  }, [projects]);
+
   const handleArchive = async (e, project) => {
     e.preventDefault();
     e.stopPropagation();
@@ -63,7 +77,12 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Mes projets</h1>
-          <p className="text-gray-500 text-sm mt-1">{projects.length} projet{projects.length !== 1 ? 's' : ''} au total</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {projects.length} projet{projects.length !== 1 ? 's' : ''} au total
+            {globalStats.totalTokens > 0 && (
+              <> · <span className="text-gray-400">🔢 {formatTokens(globalStats.totalTokens)} tokens</span> · <span className="text-gray-400">💰 {formatCost(globalStats.totalCost)} estimé</span></>
+            )}
+          </p>
         </div>
         <Link
           to="/projects/new"
@@ -110,6 +129,7 @@ export default function Dashboard() {
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Statut</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Réunions</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Créé le</th>
+                <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Coût IA</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -147,6 +167,16 @@ export default function Dashboard() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">{formatDate(project.createdAt)}</td>
+                  <td className="px-4 py-3">
+                    {(project.totalTokens || 0) > 0 ? (
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-gray-400">🔢 {formatTokens(project.totalTokens)}</p>
+                        <p className="text-xs text-gray-400">💰 {formatCost(project.estimatedCostUSD)}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-200">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={e => handleArchive(e, project)}
@@ -180,8 +210,13 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-400 mb-2 line-clamp-2">{project.description}</p>
               )}
               <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">{project.sessionCount ?? 0} réunion{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · {formatDate(project.createdAt)}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400">
+                    {project.sessionCount ?? 0} réunion{(project.sessionCount ?? 0) !== 1 ? 's' : ''} · {formatDate(project.createdAt)}
+                    {(project.totalTokens || 0) > 0 && (
+                      <> · 🔢 {formatTokens(project.totalTokens)} · 💰 {formatCost(project.estimatedCostUSD)}</>
+                    )}
+                  </span>
                   {(project.openSessionCount ?? 0) > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold bg-blabia-blue text-white px-1.5 py-0.5 rounded-full animate-pulse">
                       🔵

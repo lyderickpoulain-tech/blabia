@@ -39,6 +39,9 @@ router.get('/', async (req, res) => {
   const userRole = req.user.role;
   const isPrivileged = userRole === 'admin' || userRole === 'supervisor';
   try {
+    const TOKEN_CASE = (key) =>
+      `COALESCE(SUM(CASE WHEN "Session"."tokensUsed" IS NOT NULL AND "Session"."tokensUsed" != '{}'::jsonb THEN CAST("Session"."tokensUsed"->>'${key}' AS BIGINT) ELSE 0 END), 0)::bigint`;
+
     let query = db('Project')
       .select(
         'Project.id',
@@ -52,7 +55,10 @@ router.get('/', async (req, res) => {
         db.raw(`(SELECT COUNT(*)::int FROM "Session" WHERE "projectId" = "Project"."id" AND status = 'open') AS "openSessionCount"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status != 'cancelled') AS "todoTotal"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'done') AS "todoDone"`),
-        db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'in_progress') AS "todoInProgress"`)
+        db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'in_progress') AS "todoInProgress"`),
+        db.raw(`${TOKEN_CASE('total')} AS "totalTokens"`),
+        db.raw(`${TOKEN_CASE('input')} AS "totalInputTokens"`),
+        db.raw(`${TOKEN_CASE('output')} AS "totalOutputTokens"`)
       )
       .leftJoin('Session', 'Session.projectId', 'Project.id')
       .groupBy('Project.id')
@@ -79,7 +85,22 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const projects = await query;
+    const rows = await query;
+
+    const SONNET_RATES = { input: 3, output: 15 };
+    const OPUS_RATES   = { input: 15, output: 75 };
+    const estimateCost = (inp, out, model = 'sonnet') => {
+      const r = (model || '').includes('opus') ? OPUS_RATES : SONNET_RATES;
+      return (inp / 1_000_000 * r.input) + (out / 1_000_000 * r.output);
+    };
+
+    const projects = rows.map(p => {
+      const totalTokens = parseInt(p.totalTokens) || 0;
+      const inp = parseInt(p.totalInputTokens) || 0;
+      const out = parseInt(p.totalOutputTokens) || 0;
+      return { ...p, totalTokens, totalInputTokens: inp, totalOutputTokens: out, estimatedCostUSD: estimateCost(inp, out) };
+    });
+
     res.json(projects);
   } catch (err) {
     console.error('[projects GET]', err.message);
