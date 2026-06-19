@@ -350,18 +350,23 @@ function ConversationFeed({ messages, activeAgents, streamingAgent, streamingTex
                 {/* Pièces jointes */}
                 {hasAttachments && (
                   <div className="flex gap-2 flex-wrap justify-end">
-                    {msg.attachments.map((a, i) => (
-                      a.isImage && a.dataUrl ? (
+                    {msg.attachments.map((a, i) => {
+                      const fileIcon = a.isPdf ? '📕'
+                        : a.isImage ? '🖼️'
+                        : (a.name?.toLowerCase().endsWith('.docx')) ? '📘'
+                        : (a.name?.toLowerCase().endsWith('.xlsx') || a.name?.toLowerCase().endsWith('.csv')) ? '📗'
+                        : '📄';
+                      return a.isImage && a.dataUrl ? (
                         <a key={i} href={a.dataUrl} target="_blank" rel="noopener noreferrer" title={a.name}>
                           <img src={a.dataUrl} alt={a.name} className="w-20 h-20 rounded-xl object-cover border border-blue-200 hover:opacity-90 transition cursor-zoom-in" />
                         </a>
                       ) : (
                         <div key={i} className="flex items-center gap-1.5 bg-blue-100 border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs text-blue-800 max-w-[160px]">
-                          <span>📄</span>
+                          <span>{fileIcon}</span>
                           <span className="truncate">{a.name}</span>
                         </div>
-                      )
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 <div className={`px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed ${
@@ -939,7 +944,7 @@ export default function MeetingRoom() {
         type:        'message',
         pinned:      false,
         attachments: currentAttachments.length > 0
-          ? currentAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage, dataUrl: a.isImage ? a.dataUrl : null }))
+          ? currentAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage, isPdf: !!a.isPdf, dataUrl: a.isImage ? a.dataUrl : null }))
           : undefined,
       };
       setMessages(prev => [...prev, humanMsg]);
@@ -953,11 +958,12 @@ export default function MeetingRoom() {
 
     // Sérialiser les pièces jointes (seulement si pas un resume)
     const serializedAttachments = (!resume && currentAttachments.length > 0)
-      ? currentAttachments.map(a =>
-          a.isImage
-            ? { name: a.name, type: a.type, isImage: true,  base64: a.base64, mediaType: a.type }
-            : { name: a.name, type: a.type, isImage: false, text: a.text }
-        )
+      ? currentAttachments.map(a => {
+          if (a.isImage)  return { name: a.name, type: a.type, isImage: true,  isPdf: false, base64: a.base64, mediaType: a.type };
+          if (a.isPdf)    return { name: a.name, type: a.type, isImage: false, isPdf: true,  base64: a.base64 };
+          if (a.extractedText) return { name: a.name, type: a.type, isImage: false, isPdf: false, extractedText: a.extractedText };
+          return { name: a.name, type: a.type, isImage: false, isPdf: false, text: a.text };
+        })
       : [];
 
     const token = localStorage.getItem('token');
@@ -1240,38 +1246,82 @@ export default function MeetingRoom() {
     }
   }, [projectId, project, session, handleSend]);
 
-  const processFiles = useCallback((fileList) => {
+  const processFiles = useCallback(async (fileList) => {
     const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const ACCEPTED_EXTRACT     = ['.docx', '.xlsx', '.csv'];
+    const ACCEPTED_TEXT_TYPES  = ['text/plain', 'text/markdown', 'text/csv', 'application/json'];
     const MAX = 3;
     const remaining = MAX - attachmentsRef.current.length;
     if (remaining <= 0) return;
 
-    const files = Array.from(fileList)
-      .filter(f => ACCEPTED_IMAGE_TYPES.includes(f.type) || f.type.startsWith('text/') || f.type === 'application/json')
-      .slice(0, remaining);
+    const isAccepted = (f) => {
+      if (ACCEPTED_IMAGE_TYPES.includes(f.type)) return true;
+      if (f.type === 'application/pdf') return true;
+      if (ACCEPTED_TEXT_TYPES.includes(f.type) || f.type.startsWith('text/')) return true;
+      const name = f.name.toLowerCase();
+      return ACCEPTED_EXTRACT.some(ext => name.endsWith(ext));
+    };
 
-    const promises = files.map(file => new Promise(resolve => {
-      const reader  = new FileReader();
+    const files = Array.from(fileList).filter(isAccepted).slice(0, remaining);
+    const results = [];
+
+    for (const file of files) {
+      const name = file.name.toLowerCase();
       const isImage = ACCEPTED_IMAGE_TYPES.includes(file.type);
-      reader.onload  = e => {
-        if (isImage) {
-          const dataUrl = e.target.result;
-          resolve({ name: file.name, type: file.type, size: file.size, isImage: true, dataUrl, base64: dataUrl.split(',')[1] });
-        } else {
-          resolve({ name: file.name, type: file.type, size: file.size, isImage: false, text: e.target.result });
-        }
-      };
-      reader.onerror = () => resolve({ name: file.name, error: true });
-      if (isImage) reader.readAsDataURL(file);
-      else         reader.readAsText(file);
-    }));
+      const isPdf   = file.type === 'application/pdf';
+      const needsExtract = name.endsWith('.docx') || name.endsWith('.xlsx') || name.endsWith('.csv');
 
-    Promise.all(promises).then(results => {
-      const failed = results.filter(r => r?.error);
-      if (failed.length > 0) setSendError(`Impossible de lire : ${failed.map(f => f.name).join(', ')}`);
-      setAttachments(prev => [...prev, ...results.filter(r => r && !r.error)].slice(0, MAX));
-    }).catch(() => setSendError('Erreur lors de la lecture des fichiers'));
-  }, []);
+      if (isImage || isPdf) {
+        // Lecture base64
+        const att = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = e => {
+            const dataUrl = e.target.result;
+            resolve({ name: file.name, type: file.type, size: file.size,
+              isImage, isPdf: isPdf && !isImage,
+              dataUrl: isImage ? dataUrl : null,
+              base64: dataUrl.split(',')[1] });
+          };
+          reader.onerror = () => resolve({ name: file.name, error: true });
+          reader.readAsDataURL(file);
+        });
+        if (!att.error) results.push(att);
+
+      } else if (needsExtract) {
+        // Extraction serveur
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const token = localStorage.getItem('token');
+          const resp = await fetch(
+            `/api/projects/${projectId}/sessions/${sessionId}/extract-file`,
+            { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData }
+          );
+          if (resp.ok) {
+            const { text: extractedText } = await resp.json();
+            results.push({ name: file.name, type: file.type, size: file.size,
+              isImage: false, isPdf: false, extractedText });
+          } else {
+            setSendError(`Impossible d'extraire : ${file.name}`);
+          }
+        } catch {
+          setSendError(`Erreur extraction : ${file.name}`);
+        }
+
+      } else {
+        // Texte brut
+        const att = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = e => resolve({ name: file.name, type: file.type, size: file.size, isImage: false, isPdf: false, text: e.target.result });
+          reader.onerror = () => resolve({ name: file.name, error: true });
+          reader.readAsText(file);
+        });
+        if (!att.error) results.push(att);
+      }
+    }
+
+    setAttachments(prev => [...prev, ...results].slice(0, MAX));
+  }, [projectId, sessionId]);
 
   const handleDragOver  = useCallback((e) => { e.preventDefault(); setIsDragging(true);  }, []);
   const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragging(false); }, []);
@@ -1822,7 +1872,7 @@ export default function MeetingRoom() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/jpeg,image/png,image/gif,image/webp,text/*,application/json"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.docx,.xlsx,.csv,text/*,application/json"
                 className="hidden"
                 onChange={e => { processFiles(e.target.files); e.target.value = ''; }}
               />
@@ -1836,7 +1886,7 @@ export default function MeetingRoom() {
                         <img src={a.dataUrl} alt={a.name} className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
                       ) : (
                         <div className="flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-gray-700 max-w-[140px]">
-                          <span>📄</span>
+                          <span>{a.isPdf ? '📕' : a.name?.toLowerCase().endsWith('.docx') ? '📘' : a.name?.toLowerCase().endsWith('.xlsx') || a.name?.toLowerCase().endsWith('.csv') ? '📗' : '📄'}</span>
                           <span className="truncate">{a.name}</span>
                         </div>
                       )}
@@ -1885,7 +1935,7 @@ export default function MeetingRoom() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isStreaming || !!pendingDecisionId || attachments.length >= 3}
-                  title={attachments.length >= 3 ? 'Maximum 3 fichiers atteint' : 'Joindre une image ou un fichier texte'}
+                  title={attachments.length >= 3 ? 'Maximum 3 fichiers atteint' : 'Joindre une image, PDF, Word, Excel ou texte'}
                   className="shrink-0 w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blabia-blue hover:bg-blue-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   📎

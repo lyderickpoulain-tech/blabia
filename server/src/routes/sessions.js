@@ -4,6 +4,11 @@ const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const anthropic = require('../services/anthropic');
 const { computeMilestoneStatus } = require('../utils/milestones');
+const multer  = require('multer');
+const mammoth = require('mammoth');
+const XLSX    = require('xlsx');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = express.Router({ mergeParams: true });
 router.use(authMiddleware);
@@ -2397,6 +2402,34 @@ Réponds UNIQUEMENT avec ce JSON :
   }
 }
 
+// ── Évolution 4 — POST /:sessionId/extract-file : extraction texte docx/xlsx ──
+
+router.post('/:sessionId/extract-file', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fichier requis' });
+  const { mimetype, buffer, originalname } = req.file;
+  try {
+    let extractedText = '';
+    if (mimetype.includes('wordprocessingml') || originalname.toLowerCase().endsWith('.docx')) {
+      const result = await mammoth.extractRawText({ buffer });
+      extractedText = result.value || '';
+    } else if (mimetype.includes('spreadsheetml') || originalname.toLowerCase().endsWith('.xlsx')) {
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      workbook.SheetNames.forEach(name => {
+        extractedText += `\n--- Feuille : ${name} ---\n`;
+        extractedText += XLSX.utils.sheet_to_csv(workbook.Sheets[name]);
+      });
+    } else if (originalname.toLowerCase().endsWith('.csv') || mimetype === 'text/csv') {
+      extractedText = buffer.toString('utf-8');
+    } else {
+      return res.status(400).json({ error: 'Format non supporté. Utilisez .docx, .xlsx ou .csv' });
+    }
+    res.json({ text: extractedText.trim().slice(0, 10000), filename: originalname });
+  } catch (err) {
+    console.error('[extract-file]', err.message);
+    res.status(500).json({ error: "Erreur lors de l'extraction du fichier" });
+  }
+});
+
 // ── v3.0 : Évolution 2.1 — POST /:sessionId/chat (moteur de conversation SSE) ──
 
 router.post('/:sessionId/chat', async (req, res) => {
@@ -2480,7 +2513,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     // 1. Sauvegarder le message humain (skip si resume silencieux sans contenu)
     if (hasText || hasAttachments) {
       const attachmentRefs = hasAttachments
-        ? rawAttachments.map(a => ({ name: a.name, type: a.type, isImage: a.isImage }))
+        ? rawAttachments.map(a => ({ name: a.name, type: a.type, isImage: !!a.isImage, isPdf: !!a.isPdf }))
         : undefined;
       const humanMsg = {
         id:        randomUUID(),
@@ -2642,9 +2675,14 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
         try {
           const contentBlocks = [{ type: 'text', text: baseText }];
           for (const att of rawAttachments) {
-            if (att.isImage && att.base64 && att.mediaType) {
+            if (att.isPdf && att.base64) {
+              const data = att.base64.replace(/^data:[^;]+;base64,/, '');
+              contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } });
+            } else if (att.isImage && att.base64 && att.mediaType) {
               const data = att.base64.replace(/^data:[^;]+;base64,/, '');
               contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: att.mediaType, data } });
+            } else if (att.extractedText) {
+              contentBlocks.push({ type: 'text', text: `[Fichier joint : ${att.name}]\n${att.extractedText}` });
             } else if (!att.isImage && att.text) {
               contentBlocks.push({ type: 'text', text: `[Fichier texte joint : ${att.name}]\n${att.text}` });
             }
