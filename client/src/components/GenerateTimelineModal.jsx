@@ -3,10 +3,11 @@ import api from '../utils/api';
 import { useProjectPanel } from './ProjectLayout';
 
 const TYPE_ICON = {
-  synthesis: '📄', memory: '🧠', claude_code: '💻',
-  timeline_steps: '📅', stack_check: '🔧', milestone: '🎯',
+  synthesis:   '📋',
+  claude_code: '💻',
+  stack_check: '🔧',
 };
-const TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone'];
+const TYPES = ['synthesis', 'claude_code', 'stack_check'];
 
 export default function GenerateTimelineModal({ project, existingCount, onClose, onAdded }) {
   const { refreshPanel } = useProjectPanel();
