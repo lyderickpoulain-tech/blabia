@@ -327,6 +327,11 @@ router.post('/:sessionId/chat', async (req, res) => {
 
     while (turnCount < MAX_TURNS && !conversationDone && !abortController.signal.aborted) {
 
+      // Recharger depuis la DB à chaque début de tour — garantit que l'historique
+      // est à jour même si le rechargement de fin de tour précédent était caduc.
+      currentMessages = await loadMessages(sessionId);
+      console.log(`[chat turn=${turnCount}] msgs=${currentMessages.length} session=${sessionId}`);
+
       const next = await orchestrate({
         session, project, messages: currentMessages, activeAgents,
         lastAgentId, consecutiveCount,
@@ -370,6 +375,14 @@ router.post('/:sessionId/chat', async (req, res) => {
         ? '\nINTENTION DE CETTE RÉUNION : Identifier des étapes pour la timeline.\n- Tu NE dois PAS lister les étapes finales toi-même\n- Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges\n- Le plan final sera consolidé à la clôture'
         : '';
 
+      // Questions de décision déjà soulevées dans cette réunion — injectées pour éviter les doublons
+      const priorDecisions = currentMessages
+        .filter(m => m.type === 'decision' && m.question)
+        .map(m => `- "${m.question}" (${m.agentName})`);
+      const priorDecisionsNote = priorDecisions.length > 0
+        ? `\nQUESTIONS DÉJÀ POSÉES dans cette réunion — ne les repose pas, même reformulées :\n${priorDecisions.join('\n')}\n`
+        : '';
+
       const systemPrompt =
 `Tu es ${agent.name}, ${agent.role}.
 ${agent.systemPrompt || ''}
@@ -385,7 +398,7 @@ Sois concis (100 mots max par contribution). Si tu n'as rien de nouveau à appor
 Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
 [DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
 Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, question compréhensible par un non-technicien, contexte en langage simple, une seule fois par contribution.
-RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (même partiellement, même de façon imprécise), tu DOIS accepter cette réponse et avancer. Ne repose JAMAIS la même question ou une variante de la même question. Si la réponse est insuffisante, reformule en une phrase et passe à autre chose.
+RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (même partiellement, même de façon imprécise), tu DOIS accepter cette réponse et avancer. Ne repose JAMAIS la même question ou une variante de la même question. Si la réponse est insuffisante, reformule en une phrase et passe à autre chose.${priorDecisionsNote}
 Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
 Si une étape concrète doit être ajoutée à la timeline, ajoute : [SUGGEST_STEP: titre de l'étape].
 Maximum un marqueur de chaque type par réponse.
