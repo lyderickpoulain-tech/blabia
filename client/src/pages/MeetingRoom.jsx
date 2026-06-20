@@ -474,11 +474,11 @@ export default function MeetingRoom() {
     // resume:true = reprise silencieuse après décision, bypass guards normaux
     if (isClosed) return;
     if (!resume && !isStreaming && (!text && currentAttachments.length === 0)) return;
-    if (!resume && pendingDecisionId) return;
 
-    // Si streaming en cours — interrompre avant d'envoyer
-    if (isStreaming && !resume) {
+    // Si streaming ou décision en attente — interrompre/annuler avant d'envoyer
+    if (!resume && (isStreaming || pendingDecisionId)) {
       abortControllerRef.current?.abort();
+      setPendingDecisionId(null);
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 

@@ -144,19 +144,18 @@ export default function MeetingInputBar({
               value={inputText}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              disabled={!!pendingDecisionId}
               placeholder={
-                isStreaming         ? '✍️ Les agents répondent… (tape pour interrompre)'
-                : pendingDecisionId ? '🤔 Répondez à la décision ci-dessus pour continuer…'
-                : 'Tape ton message… (Ctrl+Entrée pour envoyer)'
+                isStreaming || pendingDecisionId
+                  ? '✍️ Tape pour interrompre et envoyer…'
+                  : 'Tape ton message… (Ctrl+Entrée pour envoyer)'
               }
               rows={2}
-              className="flex-1 resize-none px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-400 transition disabled:bg-gray-50 disabled:text-gray-400"
+              className="flex-1 resize-none px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-400 transition"
             />
             <button
               onClick={handleSend}
-              disabled={(!isStreaming && !inputText.trim() && attachments.length === 0) || !!pendingDecisionId}
-              title={isStreaming ? 'Envoyer (interrompt les agents en cours)' : undefined}
+              disabled={!isStreaming && !pendingDecisionId && !inputText.trim() && attachments.length === 0}
+              title={isStreaming ? 'Envoyer (interrompt les agents en cours)' : pendingDecisionId ? 'Envoyer (annule la décision en attente)' : undefined}
               className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 isStreaming ? 'bg-blabia-orange hover:bg-blabia-orange' : 'bg-blabia-blue hover:bg-blabia-blue'
               }`}
