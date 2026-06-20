@@ -423,14 +423,9 @@ function PanelBody({
 
     const intendedOrder = Math.round((prevOrder + nextOrder) / 2);
     try {
-      const { data } = await api.post(`/projects/${projectId}/milestones`, {
+      await api.post(`/projects/${projectId}/milestones`, {
         title, type,
         displayOrder: intendedOrder,
-      });
-      const newList = [...sorted, { ...data, displayOrder: intendedOrder }]
-        .sort((a, b) => a.displayOrder - b.displayOrder);
-      await api.patch(`/projects/${projectId}/milestones/reorder`, {
-        order: newList.map(m => m.id),
       });
       setInsertingAt(null);
       onRefresh();
