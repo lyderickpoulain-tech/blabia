@@ -699,6 +699,15 @@ router.post('/:id/generate-timeline', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     if (!project.brief) return res.status(400).json({ error: 'Brief manquant — définissez un brief avant de générer une timeline' });
 
+    // Contexte stack technique si déjà défini
+    let stackContext = '';
+    if (project.hasTechnicalStack && project.techStack) {
+      const stack = typeof project.techStack === 'string'
+        ? project.techStack
+        : JSON.stringify(project.techStack, null, 2);
+      stackContext = `\nStack technique déjà définie pour ce projet :\n${stack}\n→ Ne propose PAS d'étape de définition ou découverte de la stack : elle est déjà connue. Si une vérification de l'environnement local est utile, utilise le type "stack_check" avec un titre orienté vérification (ex : "Vérification environnement de développement").\n`;
+    }
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
@@ -709,7 +718,7 @@ router.post('/:id/generate-timeline', async (req, res) => {
 
 Brief du projet :
 ${project.brief}
-
+${stackContext}
 RÈGLE IMPORTANTE : calibre le nombre d'étapes selon la complexité :
 - Projet simple (page web, démo, document unique) : 3 à 4 étapes
 - Projet moyen (application simple, campagne marketing) : 4 à 6 étapes
@@ -722,7 +731,7 @@ Chaque étape doit être directement actionnelle pour CE projet spécifique.
 Pour chaque étape :
 - title : titre court et spécifique (max 50 chars)
 - description : ce que cette étape accomplit concrètement (1-2 phrases)
-- type : "synthesis" (réflexion/décision/compte-rendu) | "memory" (structurer des informations clés) | "claude_code" (développement/implémentation technique) | "timeline_steps" (définir les prochaines étapes) | "stack_check" (vérification outils/environnement) | "milestone" (livraison/validation externe)
+- type : "synthesis" (réflexion/décision/compte-rendu) | "claude_code" (développement/implémentation technique) | "stack_check" (vérification outils/environnement)
 - estimatedOrder : ordre chronologique
 
 Retourne UNIQUEMENT du JSON valide sans markdown :
