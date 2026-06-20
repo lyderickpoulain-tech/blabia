@@ -113,6 +113,8 @@ export default function MeetingRoom() {
   const [decisionQueue,           setDecisionQueue]           = useState([]);
   const pendingDecisionIdRef       = useRef(null);
   pendingDecisionIdRef.current     = pendingDecisionId; // sync pour accès dans les callbacks SSE
+  const isStreamingRef             = useRef(false);
+  isStreamingRef.current           = isStreaming; // sync pour handleTextareaFocus sans closure stale
   const handleSendRef              = useRef(null);  // évite TDZ (handleSend déclaré après)
   const decisionQueueRef           = useRef([]);    // accès synchrone sans closure stale
   decisionQueueRef.current         = decisionQueue;
@@ -475,11 +477,14 @@ export default function MeetingRoom() {
     if (isClosed) return;
     if (!resume && !isStreaming && (!text && currentAttachments.length === 0)) return;
 
-    // Si streaming ou décision en attente — interrompre/annuler avant d'envoyer
-    if (!resume && (isStreaming || pendingDecisionId)) {
+    // Streaming en cours → abort (déclencheur secondaire si le focus n'a pas suffi)
+    if (!resume && isStreaming) {
       abortControllerRef.current?.abort();
-      setPendingDecisionId(null);
       await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    // Décision en attente → annuler sans abort (aucun agent ne parle)
+    if (!resume && pendingDecisionId) {
+      setPendingDecisionId(null);
     }
 
     // Après abort éventuel : si pas de contenu à envoyer, on s'arrête là
@@ -703,6 +708,13 @@ export default function MeetingRoom() {
     }
   }, [inputText, isStreaming, isClosed, streamingAgent, pendingDecisionId, projectId, sessionId]);
   handleSendRef.current = handleSend; // toujours à jour après chaque render
+
+  // Interruption au focus du textarea : abort immédiat si streaming, ne rien faire si pendingDecision
+  const handleTextareaFocus = useCallback(() => {
+    if (isStreamingRef.current) {
+      abortControllerRef.current?.abort();
+    }
+  }, []); // deps vides — isStreamingRef est toujours à jour via sync render
 
   const handleSelectMention = useCallback((agent) => {
     setInputText(prev => prev.replace(/@\w*$/, `@${agent.name} `));
@@ -1079,6 +1091,7 @@ export default function MeetingRoom() {
           handleInputChange={handleInputChange}
           handleKeyDown={handleKeyDown}
           handleSend={handleSend}
+          handleTextareaFocus={handleTextareaFocus}
           setShowCloseModal={setShowCloseModal}
         />
 

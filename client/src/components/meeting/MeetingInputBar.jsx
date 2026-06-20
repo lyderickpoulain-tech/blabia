@@ -25,6 +25,7 @@ export default function MeetingInputBar({
   handleInputChange,
   handleKeyDown,
   handleSend,
+  handleTextareaFocus,
   setShowCloseModal,
 }) {
   function agentColor(name) {
@@ -144,6 +145,7 @@ export default function MeetingInputBar({
               value={inputText}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onFocus={handleTextareaFocus}
               placeholder={
                 isStreaming || pendingDecisionId
                   ? '✍️ Tape pour interrompre et envoyer…'
