@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
+const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -80,10 +81,7 @@ router.get('/me/tech-stack', async (req, res) => {
   try {
     const [user] = await db('User').select(['techStack']).where({ id: req.user.id }).limit(1);
     if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    const techStack = typeof user.techStack === 'string'
-      ? JSON.parse(user.techStack)
-      : (user.techStack || {});
-    res.json(techStack);
+    res.json(parseJsonField(user.techStack, {}));
   } catch (err) {
     console.error('[users/me/tech-stack GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -112,10 +110,7 @@ router.get('/me/toolbox', async (req, res) => {
   try {
     const [user] = await db('User').select(['toolbox']).where({ id: req.user.id }).limit(1);
     if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    const toolbox = typeof user.toolbox === 'string'
-      ? JSON.parse(user.toolbox)
-      : (user.toolbox || {});
-    res.json(toolbox);
+    res.json(parseJsonField(user.toolbox, {}));
   } catch (err) {
     console.error('[users/me/toolbox GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

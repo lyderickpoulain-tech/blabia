@@ -13,21 +13,22 @@ const {
   appendMessageEntry,
   appendPendingStepSuggestion,
 } = require('./helpers');
+const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt');
+const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
+const { parseAgentOutput } = require('../../services/markers');
+const { parseJsonField } = require('../../utils/parseJsonField');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = express.Router({ mergeParams: true });
 
-const MAX_TURNS       = 12;
 const MAX_CONSECUTIVE = 2;
 
 // ── loadMessages ──────────────────────────────────────────────────────────────
 
 async function loadMessages(sessionId) {
   const [s] = await db('Session').select('messages').where({ id: sessionId }).limit(1);
-  const m = s?.messages;
-  if (Array.isArray(m)) return m;
-  try { return JSON.parse(m || '[]'); } catch { return []; }
+  return parseJsonField(s?.messages, []);
 }
 
 // ── orchestrate ───────────────────────────────────────────────────────────────
@@ -83,47 +84,16 @@ async function orchestrate({ session, project, messages, activeAgents,
     ? `\n⚠️ PRIORITÉ ABSOLUE : Le dernier message dans l'historique est un message humain ("${(lastMsg.content || '').slice(0, 120)}"). L'agent le plus pertinent pour répondre directement à CE message doit prendre la parole en premier.\n`
     : '';
 
-  const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
-  const tourNote =
-    (turnCount >= 4 && intentionKey === 'claude_code')
-      ? `\n🚨 IMPORTANT : Cette réunion claude_code est au tour ${turnCount}. Si les besoins principaux ont été clarifiés, tu DOIS proposer shouldClose=true.`
-    : (turnCount >= 3 && intentionKey === 'summary')
-      ? `\n🚨 IMPORTANT : Cette réunion compte-rendu est au tour ${turnCount}. Si les points clés, décisions et actions ont été couverts, tu DOIS proposer shouldClose=true.`
-    : (turnCount >= 4 && intentionKey === 'timeline_steps')
-      ? `\n🚨 IMPORTANT : Cette réunion timeline_steps est au tour ${turnCount}. Si les étapes ont été identifiées et structurées, tu DOIS proposer shouldClose=true.`
-    : '';
-
-  const closeInstruction =
-    intentionKey === 'claude_code'
-      ? "Pour une réunion claude_code : considère shouldClose=true si les agents ont fait au moins 2 tours complets ET que les besoins principaux ont été clarifiés. Ne cherche pas la perfection — le prompt sera complété par Claude Code lui-même."
-    : intentionKey === 'summary'
-      ? "Pour un compte-rendu : considère shouldClose=true dès que les points clés, décisions et actions ont été couverts. 3 tours suffisent généralement."
-    : intentionKey === 'timeline_steps'
-      ? "Pour une réunion timeline_steps : considère shouldClose=true dès que les étapes principales ont été identifiées et structurées. 4 tours suffisent généralement."
-    : "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points";
-
-  const prompt = `Tu es l'orchestrateur d'une réunion IA.
-
-Objectif de la réunion : "${session.task}"
-Livrable attendu : ${intentionKey || 'compte-rendu'}
-Tour actuel : ${turnCount} / ${MAX_TURNS}${tourNote}
-
-Agents disponibles :
-${agentList}
-
-${blockedAgent ? `⚠️ ${blockedAgent} a déjà parlé ${consecutiveCount} fois de suite. Ne le sélectionne PAS.` : ''}
-${humanPriorityNote}
-Si la dernière contribution contient beaucoup de jargon technique ou est difficile à comprendre pour un non-expert, donne la priorité à un agent qui peut reformuler ou vulgariser ce qui vient d'être dit.
-${delegated ? `⚡ L'humain a délégué une décision aux agents. Les agents doivent débattre entre eux, argumenter leurs positions et converger vers une recommandation claire. L'agent le plus pertinent propose une conclusion en dernier.\n` : ''}Derniers échanges :
-${recentMessages || '(début de réunion)'}
-
-Décide maintenant :
-1. Quel agent doit prendre la parole ? (numéro de 1 à ${agentsForSelection.length})
-2. Pourquoi ? (1 phrase courte)
-3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
-
-Réponds UNIQUEMENT avec ce JSON :
-{"agentIndex": 1, "reason": "...", "shouldClose": false}`;
+  const prompt = buildOrchestratorPrompt({
+    session,
+    agentsForSelection,
+    recentMessagesText: recentMessages,
+    blockedAgentName: blockedAgent,
+    blockedAgentCount: consecutiveCount,
+    humanPriorityNote,
+    delegated,
+    turnCount,
+  });
 
   try {
     const response = await anthropic.messages.create({
@@ -206,11 +176,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     }
     session = s;
 
-    const storedAgents = (() => {
-      const a = s.activeAgents;
-      if (Array.isArray(a)) return a;
-      try { return JSON.parse(a || '[]'); } catch { return []; }
-    })();
+    const storedAgents = parseJsonField(s.activeAgents, []);
 
     if (agentIds && Array.isArray(agentIds) && agentIds.length > 0) {
       const agentMap = {};
@@ -280,11 +246,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       .where({ id: sessionId })
       .limit(1);
 
-    let currentMessages = (() => {
-      const m = freshSession.messages;
-      if (Array.isArray(m)) return m;
-      try { return JSON.parse(m || '[]'); } catch { return []; }
-    })();
+    let currentMessages = parseJsonField(freshSession.messages, []);
 
     if (resume) {
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -293,27 +255,25 @@ router.post('/:sessionId/chat', async (req, res) => {
       console.log('[resume] dernier message:', lastMsg?.type, lastMsg?.content?.slice(0, 50));
     }
 
-    const intention = (() => {
-      const i = freshSession.intention;
-      if (Array.isArray(i)) return i;
-      try { return JSON.parse(i || '[]'); } catch { return []; }
-    })();
+    const intention = parseJsonField(freshSession.intention, []);
 
     const TL_EMOJI = { done: '✅', in_progress: '🔵', blocked: '🔴', pending: '⚪' };
     const timelineText = projectMilestones.length > 0
       ? projectMilestones.filter(m => m.status !== 'done').slice(0, 5).map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n')
       : '';
 
-    const intentionText = Array.isArray(intention) && intention.length > 0
-      ? intention.join(', ')
-      : 'non défini';
-
-    const briefSection    = project.brief
-      ? `\nBrief du projet :\n${project.brief}\n`   : '';
-    const timelineSection = timelineText
-      ? `\nÉtat de la timeline :\n${timelineText}\n` : '';
-    const memorySection   = project.context
-      ? `\nMémoire du projet :\n${project.context.substring(0, 1500)}\n` : '';
+    let pastCodePromptsText = '';
+    if (intention[0] === 'claude_code') {
+      const pastCodeSessions = await db('Session')
+        .select(['task', 'summary'])
+        .where({ projectId, status: 'accepted', hasCode: true })
+        .whereNotNull('summary')
+        .orderBy('createdAt', 'desc')
+        .limit(3);
+      pastCodePromptsText = pastCodeSessions
+        .map((s, i) => `Réunion précédente ${i + 1} — ${s.task} :\n${s.summary}`)
+        .join('\n\n');
+    }
 
     const resumeAfterDecision = !!resume;
     let turnCount        = 0;
@@ -365,53 +325,19 @@ router.post('/:sessionId/chat', async (req, res) => {
           return `${m.agentName} : ${m.content}`;
         });
       const historyText  = historyLines.join('\n\n');
-      const reasonLine   = next.reason ? `\nRaison de ta prise de parole : ${next.reason}\n` : '';
-
-      const intentionInstruction = intention[0] === 'claude_code'
-        ? '\nINTENTION DE CETTE RÉUNION : Préparer un prompt pour Claude Code.\nTu NE dois PAS résumer, structurer ou rédiger le prompt Claude Code pendant la réunion. Tu NE dois PAS faire de récapitulatif. Pose uniquement des questions pour clarifier les besoins. Le prompt sera généré automatiquement à la clôture. Si tu es tenté de faire un récap, pose une question à la place.'
-        : intention[0] === 'summary'
-        ? '\nINTENTION DE CETTE RÉUNION : Produire un compte-rendu à la clôture.\n- Tu NE dois PAS rédiger le compte-rendu pendant les échanges\n- Contribue à la conversation, apporte tes analyses et suggestions\n- Le compte-rendu sera généré automatiquement à la clôture'
-        : intention[0] === 'timeline_steps'
-        ? '\nINTENTION DE CETTE RÉUNION : Identifier des étapes pour la timeline.\n- Tu NE dois PAS lister les étapes finales toi-même\n- Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges\n- Le plan final sera consolidé à la clôture'
-        : '';
 
       // Questions de décision déjà soulevées dans cette réunion — injectées pour éviter les doublons
-      const priorDecisions = currentMessages
+      const priorDecisionQuestions = currentMessages
         .filter(m => m.type === 'decision' && m.question)
         .map(m => `- "${m.question}" (${m.agentName})`);
-      const priorDecisionsNote = priorDecisions.length > 0
-        ? `\nQUESTIONS DÉJÀ POSÉES dans cette réunion — ne les repose pas, même reformulées :\n${priorDecisions.join('\n')}\n`
-        : '';
 
-      const systemPrompt =
-`Tu es ${agent.name}, ${agent.role}.
-${agent.systemPrompt || ''}
-${briefSection}${timelineSection}${memorySection}
-Objectif de cette réunion : ${session.task}
-Livrable attendu : ${intentionText}
-${reasonLine}
-Tu participes à une réunion collaborative avec d'autres agents.
-Tu peux rebondir sur ce qu'un autre agent vient de dire, lui poser une question directement, ou demander une précision à l'humain.
-Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarque.
-Ne répète PAS ce que les autres agents ont déjà dit.
-Sois concis (100 mots max par contribution). Si tu n'as rien de nouveau à apporter, dis-le en 1 phrase.
-Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
-[DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
-Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, question compréhensible par un non-technicien, contexte en langage simple, une seule fois par contribution.
-RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (même partiellement, même de façon imprécise), tu DOIS accepter cette réponse et avancer. Ne repose JAMAIS la même question ou une variante de la même question. Si la réponse est insuffisante, reformule en une phrase et passe à autre chose.${priorDecisionsNote}
-Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
-Si une étape concrète doit être ajoutée à la timeline, ajoute : [SUGGEST_STEP: titre de l'étape].
-Maximum un marqueur de chaque type par réponse.
-RÈGLE DE COMMUNICATION :
-- Adapte ton langage à un interlocuteur qui n'est PAS expert dans ton domaine
-- Évite le jargon technique et les acronymes non expliqués
-- Si tu dois utiliser un terme technique, explique-le en une phrase simple
-- Préfère des exemples concrets aux abstractions
-Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
-RÈGLE ABSOLUE SUR LES DÉCISIONS :
-- Tu ne peux JAMAIS prendre une décision à la place de l'humain
-- Si une décision tarde, signale-le en une phrase : "J'attends la réponse de l'humain avant de continuer."
-- N'avance JAMAIS sans la réponse de l'humain sur une décision posée${intentionInstruction}`;
+      const systemPrompt = buildAgentSystemPrompt({
+        agent, project, session, intention, activeAgents,
+        reason: next.reason || '',
+        timelineText,
+        priorDecisionQuestions,
+        pastCodePromptsText,
+      });
 
       const baseText = historyText
         ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
@@ -451,7 +377,7 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
         const agentResult = await streamAgent(systemPrompt, userMessage, (chunk) => {
           partialAgentText += chunk;
           send('chunk', { agentName: agent.name, text: chunk });
-        }, 2048, MODEL, abortController.signal);
+        }, 2048, session.model || MODEL, abortController.signal);
         agentFullText = agentResult.text;
         agentUsage    = agentResult.usage;
       } catch (agentErr) {
@@ -473,30 +399,20 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
       turnInputTokens  += agentUsage.inputTokens  || 0;
       turnOutputTokens += agentUsage.outputTokens || 0;
 
-      let processedText = agentFullText;
-      if (/\[DECISION:/.test(agentFullText)) {
-        if ((decisionCountPerAgent[agent.name] || 0) >= 1) {
-          processedText = agentFullText.replace(/\[DECISION:\{[\s\S]*?\}\]/gs, '').trim();
-        }
-        decisionCountPerAgent[agent.name] = (decisionCountPerAgent[agent.name] || 0) + 1;
-      }
-
-      const decisionMatch   = processedText.match(/\[DECISION:(\{[\s\S]*?\})\]/);
-      const suggestAgtMatch = processedText.match(/\[SUGGEST_AGENT:\s*([\s\S]*?)\]/);
-      const suggestStpMatch = processedText.match(/\[SUGGEST_STEP:\s*([\s\S]*?)\]/);
-
-      const agentContent = processedText
-        .replace(/\[DECISION:[\s\S]*?\]/g, '')
-        .replace(/\[SUGGEST_AGENT:[\s\S]*?\]/g, '')
-        .replace(/\[SUGGEST_STEP:[\s\S]*?\]/g, '')
-        .trim();
+      const parsed = parseAgentOutput(agentFullText);
+      // Un seul [DECISION] accepté par agent et par réunion — le texte reste
+      // nettoyé du marqueur dans tous les cas, seule la carte de décision est supprimée.
+      const decision = parsed.decision && (decisionCountPerAgent[agent.name] || 0) < 1
+        ? parsed.decision
+        : null;
+      if (parsed.decision) decisionCountPerAgent[agent.name] = (decisionCountPerAgent[agent.name] || 0) + 1;
 
       const agentMsg = {
         id:        randomUUID(),
         role:      'agent',
         agentName: agent.name,
         ...(next.reason ? { reason: next.reason } : {}),
-        content:   agentContent,
+        content:   parsed.content,
         timestamp: new Date().toISOString(),
         type:      'message',
         pinned:    false,
@@ -505,58 +421,48 @@ RÈGLE ABSOLUE SUR LES DÉCISIONS :
 
       send('agent_done', { agentName: agent.name, messageId: agentMsg.id });
 
-      if (decisionMatch) {
-        let decisionData = null;
-        try { decisionData = JSON.parse(decisionMatch[1]); } catch {}
-        if (decisionData?.question) {
-          const decisionMsg = {
-            id:         randomUUID(),
-            role:       'system',
-            type:       'decision',
-            question:   decisionData.question,
-            choices:    Array.isArray(decisionData.choices) ? decisionData.choices : [],
-            context:    decisionData.context || '',
-            status:     'pending',
-            answer:     null,
-            answeredAt: null,
-            agentName:  agent.name,
-            timestamp:  new Date().toISOString(),
-          };
-          await appendMessageEntry(sessionId, decisionMsg);
-          send('decision', {
-            messageId: decisionMsg.id,
-            question:  decisionMsg.question,
-            choices:   decisionMsg.choices,
-            context:   decisionMsg.context,
-            agentName: agent.name,
-          });
-          decisionEmitted = true;
-        }
+      if (decision) {
+        const decisionMsg = {
+          id:         randomUUID(),
+          role:       'system',
+          type:       'decision',
+          question:   decision.question,
+          choices:    decision.choices,
+          context:    decision.context,
+          status:     'pending',
+          answer:     null,
+          answeredAt: null,
+          agentName:  agent.name,
+          timestamp:  new Date().toISOString(),
+        };
+        await appendMessageEntry(sessionId, decisionMsg);
+        send('decision', {
+          messageId: decisionMsg.id,
+          question:  decisionMsg.question,
+          choices:   decisionMsg.choices,
+          context:   decisionMsg.context,
+          agentName: agent.name,
+        });
+        decisionEmitted = true;
       }
 
       if (decisionEmitted) { conversationDone = true; break; }
 
-      if (suggestAgtMatch) {
-        const parts   = suggestAgtMatch[1].split(',').map(p => p.trim());
-        const sugName = parts[0] || '';
-        const sugRole = parts.slice(1).join(', ') || '';
-        if (sugName) send('suggest_agent', { name: sugName, role: sugRole, reason: `Suggéré par ${agent.name}` });
+      if (parsed.suggestedAgent) {
+        send('suggest_agent', { ...parsed.suggestedAgent, reason: `Suggéré par ${agent.name}` });
       }
 
-      if (suggestStpMatch) {
-        const stepTitle = suggestStpMatch[1].trim();
-        if (stepTitle) {
-          const meetingIntention = Array.isArray(session.intention) ? session.intention : [];
-          if (meetingIntention.includes('timeline_steps')) {
-            send('suggest_step', { title: stepTitle, type: 'summary' });
-          } else {
-            await appendPendingStepSuggestion(sessionId, {
-              title: stepTitle,
-              type: 'summary',
-              agentName: agent.name,
-              timestamp: new Date().toISOString()
-            });
-          }
+      if (parsed.suggestedStep) {
+        const meetingIntention = Array.isArray(session.intention) ? session.intention : [];
+        if (meetingIntention.includes('timeline_steps')) {
+          send('suggest_step', { title: parsed.suggestedStep.title, type: 'summary' });
+        } else {
+          await appendPendingStepSuggestion(sessionId, {
+            title: parsed.suggestedStep.title,
+            type: 'summary',
+            agentName: agent.name,
+            timestamp: new Date().toISOString()
+          });
         }
       }
 

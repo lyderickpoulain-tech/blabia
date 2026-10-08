@@ -163,11 +163,8 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
     ? new Date(linkedSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
     : '';
 
-  // Navigation : mode meeting → /meeting/:sid, sinon → /session/:sid
   const openSessionPath = linkedSession
-    ? (linkedSession.mode === 'meeting'
-        ? `/projects/${projectId}/meeting/${linkedSession.id}`
-        : `/projects/${projectId}/session/${linkedSession.id}`)
+    ? `/projects/${projectId}/meeting/${linkedSession.id}`
     : null;
 
   const SESSION_STATUS_LABEL = {
@@ -245,9 +242,7 @@ function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose,
               >
                 {linkedSession.status === 'open'
                   ? '▶ Reprendre la réunion'
-                  : linkedSession.mode === 'meeting'
-                  ? '📋 Voir la réunion'
-                  : '✓ Voir la session'}
+                  : '📋 Voir la réunion'}
               </button>
             )}
             {linkedSession.status === 'accepted' && onShowDeliverable && (
@@ -644,7 +639,6 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [loading, setLoading]                   = useState(true);
   const [showAdd, setShowAdd]                   = useState(false);
   const [mobileOpen, setMobileOpen]             = useState(false);
-  const [exportSession,          setExportSession]          = useState(null); // réunion → ExportModal (régénère)
   const [promptViewSession,      setPromptViewSession]      = useState(null); // prompt stocké → ExportModal (lecture seule)
   const [summaryViewSession,     setSummaryViewSession]     = useState(null); // compte-rendu → SummaryDisplayModal
   const [timelineStepsSession,   setTimelineStepsSession]   = useState(null); // étapes → TimelineStepsModal
@@ -705,14 +699,10 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
       setSessionDrawer({ milestone: m, linked: linked || null, intention: TYPE_TO_INTENTION[t] });
       return;
     }
-    // claude_code / technical : meeting → drawer, session rapide hasCode → ExportModal
+    // claude_code / technical : milestone sans session liée → choix, sinon → drawer
     if (['claude_code', 'technical'].includes(t)) {
       if (!linked) {
         setTechChoiceMilestone(m);
-      } else if (linked.mode === 'meeting') {
-        setSessionDrawer({ milestone: m, linked, intention: 'claude_code' });
-      } else if (linked.hasCode && linked.summary) {
-        setExportSession(linked);
       } else {
         setSessionDrawer({ milestone: m, linked, intention: 'claude_code' });
       }
@@ -821,15 +811,6 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── ExportModal (type technical avec session hasCode) ────────────── */}
-      {exportSession && (
-        <ExportModal
-          summary={exportSession.summary}
-          projectId={projectId}
-          onClose={() => setExportSession(null)}
-        />
       )}
 
       {/* ── ExportModal lecture seule (prompt déjà stocké dans session.summary) ── */}

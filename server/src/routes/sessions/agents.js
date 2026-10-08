@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { appendMessageEntry } = require('./helpers');
+const { parseJsonField } = require('../../utils/parseJsonField');
 
 const router = express.Router({ mergeParams: true });
 
@@ -28,11 +29,7 @@ router.post('/:sessionId/add-agent', async (req, res) => {
     const [agent] = await db('Agent').where({ id: agentId }).limit(1);
     if (!agent) return res.status(404).json({ error: 'Agent introuvable' });
 
-    const currentActiveAgents = (() => {
-      const a = session.activeAgents;
-      if (Array.isArray(a)) return a;
-      try { return JSON.parse(a || '[]'); } catch { return []; }
-    })();
+    const currentActiveAgents = parseJsonField(session.activeAgents, []);
 
     if (currentActiveAgents.some(a => a.id === agentId)) {
       return res.status(409).json({ error: 'Cet agent est déjà dans la réunion' });
@@ -85,11 +82,7 @@ router.patch('/:sessionId/pending-tool', async (req, res) => {
     const project = await getProject(session.projectId, req.user.id, isAdmin);
     if (!project) return res.status(403).json({ error: 'Accès refusé' });
 
-    const existing = (() => {
-      const raw = session.pendingToolSuggestions;
-      if (Array.isArray(raw)) return raw;
-      try { return JSON.parse(raw || '[]'); } catch { return []; }
-    })();
+    const existing = parseJsonField(session.pendingToolSuggestions, []);
     await db('Session').where({ id: sessionId }).update({
       pendingToolSuggestions: JSON.stringify(existing.filter(t => t.id !== toolId))
     });

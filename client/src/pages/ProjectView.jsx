@@ -1,7 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import Markdown from '../components/Markdown';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,32 +22,6 @@ const QUICK_COMMANDS = [
   { cmd: '/rechercher',       label: 'Rechercher 🌐',         placeholder: '/rechercher ' },
   { cmd: '/aide',             label: 'Aide' },
 ];
-
-const QUICK_MD = {
-  h1: ({ children }) => <h1 className="text-base font-bold text-gray-900 mb-2 mt-4 first:mt-0">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-sm font-bold text-gray-800 mb-2 mt-3 pb-1 border-b border-gray-200">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-800 mb-1.5 mt-3">{children}</h3>,
-  p:  ({ children }) => <p className="text-sm text-gray-700 mb-2 leading-relaxed last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-2 space-y-0.5 list-none">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-2 space-y-0.5 list-decimal list-inside text-sm text-gray-700">{children}</ol>,
-  li: ({ children }) => (
-    <li className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
-      <span className="text-blue-400 font-bold mt-0.5 shrink-0 text-xs">▸</span>
-      <span>{children}</span>
-    </li>
-  ),
-  strong:     ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-  em:         ({ children }) => <em className="italic text-gray-600">{children}</em>,
-  hr:         () => <hr className="my-3 border-gray-200" />,
-  blockquote: ({ children }) => (
-    <blockquote className="border-l-4 border-blue-300 pl-3 py-0.5 my-2 text-gray-600 italic bg-blue-50 rounded-r-lg text-sm">
-      {children}
-    </blockquote>
-  ),
-  code: ({ inline, children }) => inline
-    ? <code className="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
-    : <pre className="bg-gray-900 text-gray-100 p-3 rounded-xl overflow-x-auto text-xs font-mono mb-2"><code>{children}</code></pre>,
-};
 
 // ── Définition des catégories de stack (idem EnvironmentPage) ─────────────────
 const CATEGORIES = [
@@ -385,16 +358,12 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
 
   const truncated = session.task.length > 50 ? session.task.substring(0, 50) + '…' : session.task;
   const date = new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const isMeeting  = session.mode === 'meeting';
-  const isFinished = isMeeting && (session.status === 'accepted' || session.status === 'abandoned');
+  const isFinished = session.status === 'accepted' || session.status === 'abandoned';
   const isOpen     = session.status === 'open';
-  const isViewable = session.status === 'complete' || session.status === 'accepted' || isFinished;
-  const isClickable = isViewable || (isOpen && isMeeting);
+  const isClickable = isFinished || isOpen;
   const depth = session.depth ?? 0;
   const isContinuation = depth > 0;
-  const sessionPath = isMeeting
-    ? `/projects/${projectId}/meeting/${session.id}`
-    : `/projects/${projectId}/session/${session.id}`;
+  const sessionPath = `/projects/${projectId}/meeting/${session.id}`;
 
   const handleReopen = async (e) => {
     e.preventDefault();
@@ -422,7 +391,7 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
         <td className="px-4 py-3">
           <SessionStatusBadge status={session.status} />
           <CodeStatusBadge session={session} />
-          {isOpen && isMeeting && (
+          {isOpen && (
             <span className="ml-1 inline-flex items-center gap-1 text-xs font-semibold bg-blabia-blue text-white px-1.5 py-0.5 rounded-full animate-pulse">🔵</span>
           )}
         </td>
@@ -450,16 +419,7 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
               </button>
             </div>
           ) : (
-            <>
-              {isViewable && (
-                <span className="text-xs text-blabia-blue font-medium">
-                  {isMeeting ? 'Voir la réunion →' : 'Relire →'}
-                </span>
-              )}
-              {isOpen && isMeeting && (
-                <span className="text-xs text-green-600 font-medium">Reprendre →</span>
-              )}
-            </>
+            isOpen && <span className="text-xs text-green-600 font-medium">Reprendre →</span>
           )}
         </td>
       </tr>
@@ -499,10 +459,7 @@ function SessionRow({ session, projectId, onViewDeliverable }) {
             </button>
           </div>
         ) : (
-          <>
-            {isViewable && <p className="text-xs text-blabia-blue font-medium mt-2">{isMeeting ? 'Voir la réunion →' : 'Relire →'}</p>}
-            {isOpen && isMeeting && <p className="text-xs text-green-600 font-medium mt-1">Reprendre →</p>}
-          </>
+          isOpen && <p className="text-xs text-green-600 font-medium mt-1">Reprendre →</p>
         )}
       </div>
     </>
@@ -1080,9 +1037,9 @@ export default function ProjectView() {
               <button onClick={() => setQuickResult(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
             </div>
             <div className="px-4 py-3 max-h-96 overflow-y-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={QUICK_MD}>
+              <Markdown size="compact">
                 {quickResult.result}
-              </ReactMarkdown>
+              </Markdown>
             </div>
             {quickResult.milestonesCreated?.length > 0 && (
               <div className="px-4 pb-3 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap">

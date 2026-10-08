@@ -780,37 +780,13 @@ export default function MeetingRoom() {
     }
   }, [projectId, sessionId]);
 
-  const handleAutoLaunch = useCallback(async () => {
-    const task = session?.task?.trim() ?? '';
-    try {
-      const { data } = await api.get(`/projects/${projectId}/meeting-context`);
-      const parts = [];
-      if (data.brief)   parts.push(`Brief du projet :\n${data.brief}`);
-      if (data.context) parts.push(`Contexte projet :\n${data.context}`);
-      if (data.pastCodePrompts?.length > 0) {
-        const prompts = data.pastCodePrompts
-          .map((p, i) => `Réunion précédente ${i + 1} — ${p.task} :\n${p.summary}`)
-          .join('\n\n');
-        parts.push(`Prompts Claude Code des dernières réunions :\n${prompts}`);
-      }
-      parts.push(`Objectif de cette réunion : ${task}`);
-      const intentionNote = {
-        claude_code: 'INSTRUCTION : Cette réunion doit préparer un prompt Claude Code. Tu NE dois PAS rédiger ou structurer le prompt pendant les échanges. Pose uniquement des questions pour clarifier les besoins.',
-        summary: 'INSTRUCTION : Cette réunion doit produire un compte-rendu à la clôture. Contribue à la conversation sans rédiger le compte-rendu toi-même.',
-        timeline_steps: 'INSTRUCTION : Cette réunion doit identifier des étapes pour la timeline. Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges.',
-      }[Array.isArray(session?.intention) ? session.intention[0] : ''] || '';
-      if (intentionNote) parts.push(intentionNote);
-      parts.push('Lance la réunion et présente les points à traiter.');
-      handleSend(parts.join('\n\n'));
-    } catch {
-      const brief = project?.brief?.trim() ?? '';
-      handleSend([
-        `Voici le contexte du projet :\n${brief}`,
-        `Objectif de cette réunion : ${task}`,
-        'Lance la réunion et présente les points à traiter.',
-      ].join('\n\n'));
-    }
-  }, [projectId, project, session, handleSend]);
+  // Aucune consigne d'agent construite ici : le serveur injecte déjà brief,
+  // mémoire projet, timeline et intention dans le prompt système (voir
+  // server/src/services/prompts/agentPrompt.js). Un simple "resume" silencieux
+  // déclenche la première contribution des agents.
+  const handleAutoLaunch = useCallback(() => {
+    handleSend('', { resume: true });
+  }, [handleSend]);
 
   const processFiles = useCallback(async (fileList) => {
     const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];

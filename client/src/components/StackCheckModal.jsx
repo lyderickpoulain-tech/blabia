@@ -1,5 +1,4 @@
 ﻿import { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import {
   extractStackToolNames,
@@ -114,8 +113,6 @@ function groupByCategory(items) {
 // ── Composant principal ────────────────────────────────────────────────────────
 
 export default function StackCheckModal({ milestone, projectId, onClose, onRefresh }) {
-  const navigate = useNavigate();
-
   const initialItems = useMemo(() => {
     const raw = milestone.checklistData;
     const existingItems = (() => {
@@ -133,10 +130,8 @@ export default function StackCheckModal({ milestone, projectId, onClose, onRefre
     );
   }, [milestone]);
 
-  const [items, setItems]           = useState(initialItems);
-  const [showMissing, setShowMissing] = useState(false);
-  const [missingText, setMissingText] = useState('');
-  const [saving, setSaving]         = useState(false);
+  const [items, setItems]   = useState(initialItems);
+  const [saving, setSaving] = useState(false);
 
   const groups      = useMemo(() => groupByCategory(items), [items]);
   const checkedCount = items.filter(i => i.checked).length;
@@ -196,13 +191,7 @@ export default function StackCheckModal({ milestone, projectId, onClose, onRefre
 
   const handleMissingConfirm = async () => {
     await saveChecklist(items, 'blocked');
-    const task = missingText.trim()
-      ? `Résoudre les outils manquants : ${missingText.trim()}`
-      : 'Résoudre les outils manquants de la stack';
     onClose();
-    navigate(`/projects/${projectId}/session/new`, {
-      state: { initialTask: task, milestoneId: milestone.id }
-    });
   };
 
   const catEntries = Object.entries(groups);
@@ -318,42 +307,16 @@ export default function StackCheckModal({ milestone, projectId, onClose, onRefre
 
         {/* Actions */}
         <div className="shrink-0 px-5 py-4 border-t border-gray-100 space-y-2">
-          {!showMissing ? (
-            <div className="flex gap-2">
-              <button onClick={handleMarkDone} disabled={saving}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50 flex items-center justify-center gap-1.5">
-                ✅ Marquer comme vérifié
-              </button>
-              <button onClick={() => setShowMissing(true)}
-                className="flex-1 border border-orange-300 text-orange-700 hover:bg-orange-50 font-medium py-2.5 rounded-xl text-sm transition">
-                ⚠️ Des outils manquent
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-600 block">
-                Quels outils manquent ?
-              </label>
-              <textarea
-                value={missingText}
-                onChange={e => setMissingText(e.target.value)}
-                autoFocus
-                placeholder="Ex : système de paiement, CDN, monitoring…"
-                rows={3}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-              />
-              <div className="flex gap-2">
-                <button onClick={() => setShowMissing(false)}
-                  className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 py-2.5 rounded-xl text-sm transition font-medium">
-                  Annuler
-                </button>
-                <button onClick={handleMissingConfirm} disabled={saving}
-                  className="flex-1 bg-blabia-orange hover:bg-orange-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
-                  Créer une réunion →
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <button onClick={handleMarkDone} disabled={saving}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50 flex items-center justify-center gap-1.5">
+              ✅ Marquer comme vérifié
+            </button>
+            <button onClick={handleMissingConfirm} disabled={saving}
+              className="flex-1 border border-orange-300 text-orange-700 hover:bg-orange-50 font-medium py-2.5 rounded-xl text-sm transition">
+              ⚠️ Des outils manquent
+            </button>
+          </div>
         </div>
 
       </div>

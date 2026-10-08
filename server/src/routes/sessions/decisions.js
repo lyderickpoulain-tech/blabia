@@ -4,6 +4,7 @@ const db             = require('../../utils/db');
 const { computeMilestoneStatus } = require('../../utils/milestones');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { appendTimelineEntry, patchTimelineEntry } = require('./helpers');
+const { parseJsonField } = require('../../utils/parseJsonField');
 
 const router = express.Router({ mergeParams: true });
 
@@ -27,11 +28,7 @@ router.post('/:sessionId/pin-message', async (req, res) => {
     const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!session) return res.status(404).json({ error: 'Session introuvable' });
 
-    const messages = (() => {
-      const m = session.messages;
-      if (Array.isArray(m)) return m;
-      try { return JSON.parse(m || '[]'); } catch { return []; }
-    })();
+    const messages = parseJsonField(session.messages, []);
 
     const idx = messages.findIndex(m => m.id === messageId);
     if (idx < 0) return res.status(404).json({ error: 'Message introuvable' });
@@ -96,11 +93,7 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
     const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!session) return res.status(404).json({ error: 'Session introuvable' });
 
-    const messages = (() => {
-      const m = session.messages;
-      if (Array.isArray(m)) return m;
-      try { return JSON.parse(m || '[]'); } catch { return []; }
-    })();
+    const messages = parseJsonField(session.messages, []);
 
     const idx = messages.findIndex(m => m.id === messageId && m.type === 'decision');
     if (idx < 0) return res.status(404).json({ error: 'Décision introuvable' });

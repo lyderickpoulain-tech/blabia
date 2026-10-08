@@ -9,9 +9,6 @@ import AdminUsers from './pages/AdminUsers';
 import ProfilePage from './pages/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
 
-import NewSessionLegacy from './pages/NewSessionLegacy';
-import SessionView from './pages/SessionView';
-import SummaryView from './pages/SummaryView';
 import AgentsPage from './pages/AgentsPage';
 import EnvironmentPage from './pages/EnvironmentPage';
 import MyToolbox from './pages/MyToolbox';
@@ -42,20 +39,11 @@ export default function App() {
         <Route path="/projects/:id/plan" element={
           <ProtectedRoute><PlanView /></ProtectedRoute>
         } />
-        <Route path="/projects/:id/session/new" element={
-          <ProtectedRoute><NewSessionLegacy /></ProtectedRoute>
-        } />
         <Route path="/projects/:id/meeting/new" element={
           <ProtectedRoute><StartMeeting /></ProtectedRoute>
         } />
         <Route path="/projects/:id/meeting/:sid" element={
           <ProtectedRoute><MeetingRoom /></ProtectedRoute>
-        } />
-        <Route path="/projects/:id/session/:sid" element={
-          <ProtectedRoute><SessionView /></ProtectedRoute>
-        } />
-        <Route path="/projects/:id/session/:sid/summary" element={
-          <ProtectedRoute><SummaryView /></ProtectedRoute>
         } />
         <Route path="/agents" element={
           <ProtectedRoute><AgentsPage /></ProtectedRoute>

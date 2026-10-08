@@ -6,7 +6,6 @@ router.use(authMiddleware);
 
 // Ordre important : fixed paths (/suggest-agents) avant les wildcards (/:sessionId/...)
 router.use(require('./crud'));
-router.use(require('./run'));
 router.use(require('./lifecycle'));
 router.use(require('./deliverables'));
 router.use(require('./agents'));

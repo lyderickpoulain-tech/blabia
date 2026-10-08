@@ -92,7 +92,7 @@ model Milestone {
   description  String?
   dueDate      DateTime?
   status              String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
-  type                String     @default("meeting") // "meeting" | "technical" | "stack_check" | "milestone"
+  type                String     @default("meeting") // valeurs réelles : "meeting" | "synthesis" | "stack_check" | "claude_code" | "technical" | "memory" | "timeline_steps" | "milestone" — à consolider en phase 3 (decision | claude_code | stack)
   checklistData       Json?      // { items: [{ id, label, category, checked, notes }] }
   createdFromSessionId String?
   displayOrder        Int        @default(0)
@@ -143,8 +143,8 @@ model Session {
   agents          Json
   exchanges       Json
   summary         String?
-  status          String    @default("complete") // "complete" ou "interrupted"
-  mode            String    @default("realtime") // "realtime" ou "summary"
+  status          String    @default("complete") // "open" | "accepted" | "abandoned" (CHECK contraint ajoutée en v3 — le défaut "complete" ci-dessus est un résidu v1, jamais utilisé : tous les chemins de création renseignent status explicitement)
+  mode            String    @default("realtime") // "meeting" uniquement depuis v5.0 (toute création passe par crud.js avec mode explicite) — le défaut "realtime" ci-dessus est un résidu v1/legacy, jamais utilisé en pratique ; "realtime"/"conversation" (legacy) ont été migrés vers "meeting" en phase 1
   hasCode         Boolean   @default(false)
   codeStatus      String?   // null | "implemented" | "not_generated"
   model           String    @default("claude-sonnet-4-6")
@@ -152,7 +152,7 @@ model Session {
   suggestedTools  Json?     // { suggestedTools: string[], missingTools: string[] }
   planSuggestions Json?     // { milestones: [...], standalone_todos: [...] }
   timeline        Json      @default("[]") // [ { id, type, label, status, timestamp, meta } ]
-  intention       Json?     @default("[]") // livrables attendus : synthesis | memory | claude_code | timeline_steps
+  intention       Json?     @default("[]") // livrable attendu, un seul élément en pratique : "summary" | "claude_code" (seuls choix proposés à la création depuis StartMeeting.jsx) — "synthesis" | "memory" | "timeline_steps" | "meeting" | "technical" sont des valeurs legacy encore gérées en lecture (chat.js, generate-deliverable) mais plus jamais créées
   messages        Json?     @default("[]") // v3.0 : fil de conversation [{ id, role, agentName, content, timestamp, type, pinned }]
   activeAgents           Json?     @default("[]") // v3.0 : agents actifs [{ id, name, role, systemPrompt, emoji, joinedAt }]
   pendingStepSuggestions  Json?     @default("[]")                                      // v3.6 : étapes suggérées hors-contexte [{ title, type, agentName, timestamp }]

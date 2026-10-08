@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
+import Markdown from './Markdown';
 import api from '../utils/api';
 import { TOOLBOX_CATEGORIES } from '../utils/techStack';
 
@@ -13,20 +13,6 @@ const STATUS_COLORS = {
 const CAT_ICONS = {
   hosting: '🌐', database: '🗄️', frontend: '🎨', backend: '⚙️',
   auth: '🔐', emails: '📧', devtools: '🛠️', domain: '🌐'
-};
-
-const MD = {
-  h2: ({ children }) => <h2 className="text-xs font-bold text-gray-800 mt-3 mb-1">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-xs font-semibold text-gray-700 mt-2 mb-1">{children}</h3>,
-  p:  ({ children }) => <p className="text-xs text-gray-600 mb-1.5 leading-relaxed last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-1.5 space-y-0.5">{children}</ul>,
-  li: ({ children }) => (
-    <li className="flex items-start gap-1.5 text-xs text-gray-600">
-      <span className="text-blue-400 shrink-0 mt-0.5">▸</span>
-      <span>{children}</span>
-    </li>
-  ),
-  strong: ({ children }) => <strong className="font-semibold text-gray-800">{children}</strong>,
 };
 
 export default function StackPanel({
@@ -289,7 +275,7 @@ export default function StackPanel({
           <div className="px-4 py-3 border-t border-gray-100 max-h-52 overflow-y-auto shrink-0">
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Suggestion IA</p>
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown components={MD}>{suggestion}</ReactMarkdown>
+              <Markdown size="mini">{suggestion}</Markdown>
             </div>
           </div>
         )}

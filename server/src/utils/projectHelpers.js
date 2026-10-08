@@ -1,4 +1,5 @@
 const db = require('./db');
+const { parseJsonField } = require('./parseJsonField');
 
 const TECH_STACK_LABELS = {
   hebergement: 'Hébergement',
@@ -36,7 +37,7 @@ async function findProject(id, userId, isAdmin) {
  * Retourne [] si vide ou invalide.
  */
 function formatTechStack(raw) {
-  const ts = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+  const ts = parseJsonField(raw, {});
   if (!ts || typeof ts !== 'object') return [];
   const lines = [];
   for (const [key, label] of Object.entries(TECH_STACK_LABELS)) {

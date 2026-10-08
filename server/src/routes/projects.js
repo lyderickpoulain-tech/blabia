@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const { sendInvitation } = require('../services/email');
 const anthropic = require('../services/anthropic');
 const { findProject } = require('../utils/projectHelpers');
+const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -751,31 +752,6 @@ Retourne UNIQUEMENT du JSON valide sans markdown :
   }
 });
 
-// GET /api/projects/:id/meeting-context
-router.get('/:id/meeting-context', async (req, res) => {
-  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  try {
-    const project = await findProject(req.params.id, req.user.id, isAdmin);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
-
-    const pastCodePrompts = await db('Session')
-      .select(['task', 'summary'])
-      .where({ projectId: req.params.id, status: 'accepted', hasCode: true })
-      .whereNotNull('summary')
-      .orderBy('createdAt', 'desc')
-      .limit(3);
-
-    res.json({
-      brief:           project.brief   || '',
-      context:         project.context || '',
-      pastCodePrompts: pastCodePrompts.map(s => ({ task: s.task, summary: s.summary })),
-    });
-  } catch (err) {
-    console.error('[projects/:id/meeting-context]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
 // POST /api/projects/:id/quick-command — prompt rapide sans réunion
 router.post('/:id/quick-command', async (req, res) => {
   const { input } = req.body;
@@ -966,8 +942,7 @@ router.get('/:id/pending-tools', async (req, res) => {
 
     const tools = [];
     for (const s of sessions) {
-      const raw = s.pendingToolSuggestions;
-      const list = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw || '[]'); } catch { return []; } })();
+      const list = parseJsonField(s.pendingToolSuggestions, []);
       for (const t of list) {
         if (!tools.some(x => x.id === t.id)) {
           tools.push({ ...t, sessionId: s.id, sessionTitle: s.task });

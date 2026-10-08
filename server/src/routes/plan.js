@@ -4,6 +4,7 @@ const db         = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { computeMilestoneStatus } = require('../utils/milestones');
 const { findProject } = require('../utils/projectHelpers');
+const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -164,20 +165,18 @@ router.get('/:id/milestones/:mid', async (req, res) => {
     // Données supplémentaires pour StackCheckModal
     const [ownerUser] = await db('User').select(['techStack']).where({ id: project.userId }).limit(1);
 
-    const parse = (v) => v ? (typeof v === 'string' ? JSON.parse(v) : v) : null;
-
     const [linkedSession] = await db('Session')
       .select(['suggestedTools'])
       .where({ milestoneId: req.params.mid })
       .orderBy('createdAt', 'desc')
       .limit(1);
 
-    const parsedSuggested = parse(linkedSession?.suggestedTools) || {};
+    const parsedSuggested = parseJsonField(linkedSession?.suggestedTools, {});
 
     res.json({
       ...milestone,
-      userTechStack:    parse(ownerUser?.techStack)  || {},
-      projectTechStack: parse(project.techStack)     || {},
+      userTechStack:    parseJsonField(ownerUser?.techStack, {}),
+      projectTechStack: parseJsonField(project.techStack, {}),
       suggestedTools:   parsedSuggested.suggestedTools || [],
       missingTools:     parsedSuggested.missingTools   || [],
     });

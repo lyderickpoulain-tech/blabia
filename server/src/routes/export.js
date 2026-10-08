@@ -3,6 +3,7 @@ const authMiddleware = require('../middleware/auth');
 const anthropic = require('../services/anthropic');
 const db = require('../utils/db');
 const { formatTechStack } = require('../utils/projectHelpers');
+const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -19,8 +20,7 @@ router.post('/claude-code', async (req, res) => {
   try {
     // Récupérer l'environnement technique : project.techStack ?? user.techStack
     const [user] = await db('User').select(['techStack']).where({ id: req.user.id }).limit(1);
-    const userStack = typeof user?.techStack === 'string'
-      ? JSON.parse(user.techStack) : (user?.techStack || {});
+    const userStack = parseJsonField(user?.techStack, {});
 
     let effectiveStack = userStack;
     let devDirectory = null;
@@ -28,9 +28,7 @@ router.post('/claude-code', async (req, res) => {
     if (projectId) {
       const [project] = await db('Project').select(['techStack', 'devDirectory', 'brief']).where({ id: projectId }).limit(1);
       if (project?.techStack) {
-        const projectStack = typeof project.techStack === 'string'
-          ? JSON.parse(project.techStack) : project.techStack;
-        effectiveStack = projectStack;
+        effectiveStack = parseJsonField(project.techStack, {});
       }
       devDirectory  = project?.devDirectory?.trim() || null;
       projectBrief  = project?.brief?.trim()        || null;

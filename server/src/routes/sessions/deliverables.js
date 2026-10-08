@@ -3,7 +3,13 @@ const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const anthropic      = require('../../services/anthropic');
 const { findProject: getProject, formatTechStack } = require('../../utils/projectHelpers');
-const { MODEL } = require('./helpers');
+const { MODEL, updateProjectContext } = require('./helpers');
+const {
+  buildSummaryPrompt,
+  buildClaudeCodePrompt,
+  buildTimelineStepsPrompt,
+} = require('../../services/prompts/deliverablePrompts');
+const { parseJsonField } = require('../../utils/parseJsonField');
 
 const router = express.Router({ mergeParams: true });
 
@@ -136,11 +142,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!session) return res.status(404).json({ error: 'Session introuvable' });
 
-    const messages = (() => {
-      const m = session.messages;
-      if (Array.isArray(m)) return m;
-      try { return JSON.parse(m || '[]'); } catch { return []; }
-    })();
+    const messages = parseJsonField(session.messages, []);
 
     if (messages.length === 0) {
       return res.status(400).json({ error: 'Aucun message dans cette réunion' });
@@ -157,77 +159,36 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
 
     // ── Compte-rendu : synthesis (legacy) | memory (legacy) | summary (v3.3) ──
     if (['synthesis', 'memory', 'summary'].includes(deliverableType)) {
+      const { system, user } = buildSummaryPrompt(sessionContext);
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 4000,
-        system: 'Tu es un expert en synthèse de réunion d\'entreprise. Tu rédiges des comptes-rendus clairs et structurés. Réponds uniquement en français, sans introduction ni conclusion génériques.',
-        messages: [{
-          role: 'user',
-          content: `Génère un compte-rendu structuré de cette réunion.\n\nFormat :\n## Objectif\n## Points discutés\n## Décisions prises\n## Actions à mener\n\nMax 600 mots.\n\n${sessionContext}`
-        }]
+        system,
+        messages: [{ role: 'user', content: user }]
       });
       const content = response.content[0].text.trim();
       await db('Session').where({ id: sessionId }).update({ summary: content });
 
       if (deliverableType === 'summary' || deliverableType === 'memory') {
-        const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const entry = `[SESSION:${sessionId} | ${date} — ${session.task}]\n${content}`;
-        const current = project.context || '';
-        let newContext = (current ? current + '\n---\n' : '') + entry;
-        const MAX_CHARS = 10000;
-        if (newContext.length > MAX_CHARS) {
-          const parts = newContext.split('\n---\n');
-          while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) parts.shift();
-          newContext = parts.join('\n---\n');
-        }
-        await db('Project').where({ id: projectId }).update({ context: newContext, updatedAt: new Date() });
+        await updateProjectContext(projectId, sessionId, session.task, content);
       }
 
       return res.json({ deliverableType, content });
     }
 
     if (deliverableType === 'claude_code') {
-      const devDir    = project.devDirectory?.trim() || null;
+      const devDirectory = project.devDirectory?.trim() || null;
       const stackLines = formatTechStack(project.techStack);
-
       const decisions = messages.filter(m => m.pinned || m.type === 'decision');
 
-      const briefSection = project.brief?.trim()
-        ? `Brief du projet :\n${project.brief.trim()}\n\n`
-        : '';
-      const stackSection = stackLines.length > 0
-        ? `Stack technique :\n${stackLines.join('\n')}\n\n`
-        : '';
-      const decisionsSection = decisions.length > 0
-        ? `Décisions prises pendant la réunion (contraintes obligatoires) :\n${decisions.map((m, i) => `${i + 1}. ${m.content}`).join('\n')}\n\n`
-        : '';
-      const cdInstruction = devDir
-        ? `- Commencer IMPÉRATIVEMENT par la ligne : cd "${devDir}"`
-        : '- Préciser que l\'utilisateur doit naviguer manuellement vers son répertoire de projet';
-
+      const { system, user } = buildClaudeCodePrompt({
+        session, brief: project.brief, devDirectory, stackLines, decisions, historyText
+      });
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 4000,
-        system: 'Tu es un expert en rédaction de prompts techniques pour Claude Code. Tu génères des prompts précis, calibrés et directement utilisables. Réponds uniquement en français.',
-        messages: [{
-          role: 'user',
-          content:
-`${briefSection}Objectif de la réunion : ${session.task}
-
-${stackSection}${decisionsSection}Génère un prompt Claude Code prêt à être copié dans Claude Code.
-
-Le prompt généré doit :
-${cdInstruction}
-- Calibrer sa complexité sur l'objectif réel (ne pas over-engineer : chaque tâche doit servir directement "${session.task}")
-- Lister les tâches concrètes à implémenter dans l'ordre logique (numérotées)
-- Préciser les fichiers ou composants concernés si identifiés dans la réunion
-- Intégrer les décisions prises comme contraintes non négociables
-- Demander une validation étape par étape avant de passer à la suivante
-- Être rédigé en français
-
-Conversation de la réunion :
-${historyText}`
-        }]
+        system,
+        messages: [{ role: 'user', content: user }]
       });
       const content = response.content[0].text.trim();
       await db('Session').where({ id: sessionId }).update({ summary: content, hasCode: true });
@@ -235,14 +196,12 @@ ${historyText}`
     }
 
     if (deliverableType === 'timeline_steps') {
+      const { system, user } = buildTimelineStepsPrompt(sessionContext);
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 2048,
-        system: 'Tu extrais des jalons et tâches actionnables depuis une réunion. Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks.',
-        messages: [{
-          role: 'user',
-          content: `Extrais les étapes actionnables de cette réunion sous forme de jalons et tâches.\n\nRetourne UNIQUEMENT ce JSON :\n{\n  "milestones": [\n    { "title": "...", "description": "...", "type": "meeting", "todos": [{ "title": "...", "priority": "high" }] }\n  ],\n  "standalone_todos": [{ "title": "...", "priority": "medium" }]\n}\n\n${sessionContext}`
-        }]
+        system,
+        messages: [{ role: 'user', content: user }]
       });
 
       const raw = response.content[0].text.trim()
