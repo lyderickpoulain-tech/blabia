@@ -159,14 +159,28 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
 
     // ── Compte-rendu : synthesis (legacy) | memory (legacy) | summary (v3.3) ──
     if (['synthesis', 'memory', 'summary'].includes(deliverableType)) {
-      const { system, user } = buildSummaryPrompt(sessionContext);
+      const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
+      const { system, user } = buildSummaryPrompt(sessionContext, expertiseLevel);
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 4000,
         system,
         messages: [{ role: 'user', content: user }]
       });
-      const content = response.content[0].text.trim();
+      let content = response.content[0].text.trim();
+
+      // Sources web citées pendant la réunion (dédupliquées), agrégées en fin de CR
+      const citedSources = new Map();
+      for (const m of messages) {
+        for (const s of (m.webSearch?.sources || [])) {
+          if (s.url && !citedSources.has(s.url)) citedSources.set(s.url, s);
+        }
+      }
+      if (citedSources.size > 0) {
+        const lines = [...citedSources.values()].map(s => `- [${s.title || s.url}](${s.url})`);
+        content += `\n\n## Sources web consultées\n${lines.join('\n')}`;
+      }
+
       await db('Session').where({ id: sessionId }).update({ summary: content });
 
       if (deliverableType === 'summary' || deliverableType === 'memory') {

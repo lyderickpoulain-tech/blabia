@@ -9,7 +9,7 @@ const XLSX    = require('xlsx');
 const {
   MODEL,
   areSimilar,
-  streamAgent,
+  callAgent,
   appendMessageEntry,
   appendPendingStepSuggestion,
 } = require('./helpers');
@@ -257,6 +257,10 @@ router.post('/:sessionId/chat', async (req, res) => {
 
     const intention = parseJsonField(freshSession.intention, []);
 
+    // Surcharge réunion > défaut projet (2.4 / 2.5)
+    const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
+    const humorLevel     = session.humorLevel     ?? project.humorLevel     ?? 2;
+
     const TL_EMOJI = { done: '✅', in_progress: '🔵', blocked: '🔴', pending: '⚪' };
     const timelineText = projectMilestones.length > 0
       ? projectMilestones.filter(m => m.status !== 'done').slice(0, 5).map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n')
@@ -314,7 +318,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       if (!agent) break;
       if (abortController.signal.aborted) break;
 
-      send('agent_start', { agentName: agent.name, agentRole: agent.role, reason: next.reason || '' });
+      send('agent_typing', { agentName: agent.name, agentEmoji: agent.emoji, agentRole: agent.role, reason: next.reason || '' });
 
       const historyLines = currentMessages
         .slice(-10)
@@ -337,6 +341,9 @@ router.post('/:sessionId/chat', async (req, res) => {
         timelineText,
         priorDecisionQuestions,
         pastCodePromptsText,
+        expertiseLevel,
+        humorLevel,
+        webSearchEnabled: session.webSearchEnabled === true,
       });
 
       const baseText = historyText
@@ -370,26 +377,21 @@ router.post('/:sessionId/chat', async (req, res) => {
         userMessage = baseText;
       }
 
-      let partialAgentText = '';
       let agentFullText;
       let agentUsage = { inputTokens: 0, outputTokens: 0 };
+      let agentWebSearch = null;
       try {
-        const agentResult = await streamAgent(systemPrompt, userMessage, (chunk) => {
-          partialAgentText += chunk;
-          send('chunk', { agentName: agent.name, text: chunk });
-        }, 2048, session.model || MODEL, abortController.signal);
-        agentFullText = agentResult.text;
-        agentUsage    = agentResult.usage;
+        const agentResult = await callAgent(
+          systemPrompt, userMessage, 600, session.model || MODEL, abortController.signal,
+          session.webSearchEnabled === true
+        );
+        agentFullText   = agentResult.text;
+        agentUsage      = agentResult.usage;
+        agentWebSearch  = agentResult.webSearch;
       } catch (agentErr) {
         if (abortController.signal.aborted || agentErr.name === 'AbortError') {
-          if (partialAgentText.trim()) {
-            const partialMsg = {
-              id: randomUUID(), role: 'agent', agentName: agent.name,
-              content: partialAgentText.trim(), timestamp: new Date().toISOString(),
-              type: 'message', pinned: false, interrupted: true,
-            };
-            await appendMessageEntry(sessionId, partialMsg).catch(() => {});
-          }
+          // Appel non streamé interrompu avant d'aboutir : rien à enregistrer,
+          // il n'y a pas de texte partiel (cf. phase 2.1).
           res.end();
           return;
         }
@@ -407,19 +409,29 @@ router.post('/:sessionId/chat', async (req, res) => {
         : null;
       if (parsed.decision) decisionCountPerAgent[agent.name] = (decisionCountPerAgent[agent.name] || 0) + 1;
 
-      const agentMsg = {
+      // Découpage en bulles (séparateur [NEXT], cf. phase 2.2) — même turnId,
+      // un message distinct par bulle, affichées l'une après l'autre côté client.
+      // Les sources web (si recherche réellement effectuée) sont rattachées à
+      // la première bulle du tour.
+      const turnId = randomUUID();
+      const hasWebSearchSources = agentWebSearch?.sources?.length > 0;
+      const agentMessages = parsed.bubbles.map((bubbleContent, i) => ({
         id:        randomUUID(),
         role:      'agent',
         agentName: agent.name,
-        ...(next.reason ? { reason: next.reason } : {}),
-        content:   parsed.content,
+        turnId,
+        ...(i === 0 && next.reason ? { reason: next.reason } : {}),
+        ...(i === 0 && hasWebSearchSources ? { webSearch: { queries: agentWebSearch.queries, sources: agentWebSearch.sources } } : {}),
+        content:   bubbleContent,
         timestamp: new Date().toISOString(),
         type:      'message',
         pinned:    false,
-      };
-      await appendMessageEntry(sessionId, agentMsg);
+      }));
+      for (const m of agentMessages) await appendMessageEntry(sessionId, m);
 
-      send('agent_done', { agentName: agent.name, messageId: agentMsg.id });
+      if (agentMessages.length > 0) {
+        send('agent_message', { agentName: agent.name, messages: agentMessages });
+      }
 
       if (decision) {
         const decisionMsg = {

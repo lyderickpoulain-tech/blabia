@@ -8,6 +8,24 @@ const INTENTION_INSTRUCTIONS = {
   timeline_steps: '\nINTENTION DE CETTE RÉUNION : Identifier des étapes pour la timeline.\n- Tu NE dois PAS lister les étapes finales toi-même\n- Utilise [SUGGEST_STEP: titre] pour signaler une étape au fil des échanges\n- Le plan final sera consolidé à la clôture',
 };
 
+// ── Curseur « maîtrise du sujet » (1 → 5) ──────────────────────────────────────
+const EXPERTISE_INSTRUCTIONS = {
+  1: `1. Découverte — zéro jargon. Explique chaque notion par une analogie du quotidien. Une seule notion nouvelle par message. Présente les choix par leurs conséquences concrètes, jamais par leur nom technique.`,
+  2: `2. Initié — termes courants autorisés, mais défini(s) entre parenthèses à leur première apparition.`,
+  3: `3. Intermédiaire — vocabulaire du domaine normal ; seules les notions avancées sont expliquées. Concentre-toi sur les arbitrages à faire.`,
+  4: `4. Avancé — échange entre pairs, justification technique directe, pas de vulgarisation sauf si l'humain la demande.`,
+  5: `5. Expert — direct et dense : options, risques, compromis. Aucune explication de base.`,
+};
+
+// ── Curseur « humour » (1 → 5) ─────────────────────────────────────────────────
+const HUMOR_INSTRUCTIONS = {
+  1: `1. Sobre — ton professionnel, aucun trait d'humour.`,
+  2: `2. Détendu — ton chaleureux, une touche légère de temps en temps.`,
+  3: `3. Complice — humour régulier, jeux de mots, métaphores amusantes.`,
+  4: `4. Taquin — un style d'humour lié à ton rôle, petites piques bienveillantes envers les autres agents.`,
+  5: `5. Réunion de potes — franchement drôle, running gags, autodérision. L'information doit rester exacte et la concision prime toujours sur la blague.`,
+};
+
 /**
  * Construit le prompt système d'un agent pour un tour de réunion.
  * @param {object} p
@@ -20,6 +38,9 @@ const INTENTION_INSTRUCTIONS = {
  * @param {string} [p.timelineText] - lignes "✅ Titre" (déjà formatées) des jalons du projet
  * @param {string[]} [p.priorDecisionQuestions] - questions de décision déjà posées
  * @param {string}  [p.pastCodePromptsText] - prompts Claude Code des réunions précédentes (intention claude_code)
+ * @param {number}  [p.expertiseLevel] - 1 (découverte) à 5 (expert), défaut 3
+ * @param {number}  [p.humorLevel] - 1 (sobre) à 5 (réunion de potes), défaut 2
+ * @param {boolean} [p.webSearchEnabled] - recherche web disponible pour cette réunion (2.6)
  */
 function buildAgentSystemPrompt({
   agent,
@@ -31,6 +52,9 @@ function buildAgentSystemPrompt({
   timelineText = '',
   priorDecisionQuestions = [],
   pastCodePromptsText = '',
+  expertiseLevel = 3,
+  humorLevel = 2,
+  webSearchEnabled = false,
 }) {
   const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
   const timelineSection = timelineText
@@ -47,6 +71,21 @@ function buildAgentSystemPrompt({
     ? `\nQUESTIONS DÉJÀ POSÉES dans cette réunion — ne les repose pas, même reformulées :\n${priorDecisionQuestions.join('\n')}\n`
     : '';
 
+  const expertise = EXPERTISE_INSTRUCTIONS[expertiseLevel] || EXPERTISE_INSTRUCTIONS[3];
+  const humor      = HUMOR_INSTRUCTIONS[humorLevel] || HUMOR_INSTRUCTIONS[2];
+  const isNonExpert = expertiseLevel <= 2;
+
+  const decisionQuestionRule = isNonExpert
+    ? 'question compréhensible par un non-technicien, contexte en langage simple, '
+    : '';
+  const explainSimplyRule = isNonExpert
+    ? '\nSi tu reformules ou vulgarises la contribution d\'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."'
+    : '';
+
+  const webSearchSection = webSearchEnabled
+    ? '\nRECHERCHE WEB DISPONIBLE : utilise-la pour toute information factuelle récente ou chiffrée (prix, versions, actualité, réglementation). Ne présente JAMAIS comme vérifiée une information que tu n\'as pas trouvée via une recherche.\n'
+    : '';
+
   return `Tu es ${agent.name}, ${agent.role}.
 ${agent.systemPrompt || ''}
 ${briefSection}${timelineSection}${memorySection}${pastCodeSection}
@@ -57,20 +96,30 @@ Tu participes à une réunion collaborative avec d'autres agents.
 Tu peux rebondir sur ce qu'un autre agent vient de dire, lui poser une question directement, ou demander une précision à l'humain.
 Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarque.
 Ne répète PAS ce que les autres agents ont déjà dit.
-Sois concis (100 mots max par contribution). Si tu n'as rien de nouveau à apporter, dis-le en 1 phrase.
+${webSearchSection}
+FORMAT DE TES MESSAGES :
+- Une idée par bulle, 50 mots maximum par bulle, 3 bulles maximum par tour
+- Sépare chaque bulle par une ligne contenant uniquement [NEXT]
+- Pas d'introduction, pas de reformulation de la question posée, pas de conclusion de politesse
+- Si tu n'as rien de nouveau à apporter, dis-le en une seule bulle courte
+
+MISE EN FORME AUTORISÉE dans tes bulles : gras, listes à puces, tableaux (uniquement si tu compares au moins 3 lignes de données comparables), liens. INTERDIT : titres (#), HTML.
+
 Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
 [DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
-Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, question compréhensible par un non-technicien, contexte en langage simple, une seule fois par contribution.
+Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, ${decisionQuestionRule}une seule fois par contribution.
 RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (même partiellement, même de façon imprécise), tu DOIS accepter cette réponse et avancer. Ne repose JAMAIS la même question ou une variante de la même question. Si la réponse est insuffisante, reformule en une phrase et passe à autre chose.${priorDecisionsNote}
 Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
 Si une étape concrète doit être ajoutée à la timeline, ajoute : [SUGGEST_STEP: titre de l'étape].
 Maximum un marqueur de chaque type par réponse.
-RÈGLE DE COMMUNICATION :
-- Adapte ton langage à un interlocuteur qui n'est PAS expert dans ton domaine
-- Évite le jargon technique et les acronymes non expliqués
-- Si tu dois utiliser un terme technique, explique-le en une phrase simple
-- Préfère des exemples concrets aux abstractions
-Si tu reformules ou vulgarises la contribution d'un autre agent, commence par : "Pour expliquer simplement ce que [NomAgent] vient de dire : ..."
+
+NIVEAU DE MAÎTRISE DU SUJET DE TON INTERLOCUTEUR (adapte TOUT ton langage à ce niveau) :
+${expertise}${explainSimplyRule}
+
+TON D'HUMOUR À ADOPTER :
+${humor}
+Garde-fous : jamais d'humour dans une carte de décision ([DECISION:...]) ni aux dépens de l'humain. L'humour ne doit jamais allonger un message au-delà des limites de bulles ci-dessus.
+
 RÈGLE ABSOLUE SUR LES DÉCISIONS :
 - Tu ne peux JAMAIS prendre une décision à la place de l'humain
 - Si une décision tarde, signale-le en une phrase : "J'attends la réponse de l'humain avant de continuer."

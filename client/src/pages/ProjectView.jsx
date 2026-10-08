@@ -10,6 +10,7 @@ import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
 import TimelineStepsModal from '../components/TimelineStepsModal';
 import StackPanel from '../components/StackPanel';
+import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 const QUICK_COMMANDS = [
   { cmd: '/ajouterEtapes',    label: 'Ajouter des étapes',     placeholder: '/ajouterEtapes ' },
@@ -95,6 +96,8 @@ function findToolInCategories(toolName) {
 function RenameModal({ project, onSave, onClose }) {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || '');
+  const [expertiseLevel, setExpertiseLevel] = useState(project.expertiseLevel || 3);
+  const [humorLevel, setHumorLevel] = useState(project.humorLevel || 2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -103,7 +106,7 @@ function RenameModal({ project, onSave, onClose }) {
     setLoading(true);
     setError('');
     try {
-      const { data } = await api.patch(`/projects/${project.id}`, { name, description });
+      const { data } = await api.patch(`/projects/${project.id}`, { name, description, expertiseLevel, humorLevel });
       onSave(data);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la modification');
@@ -134,6 +137,21 @@ function RenameModal({ project, onSave, onClose }) {
               onChange={e => setDescription(e.target.value)}
               rows={3}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none"
+            />
+          </div>
+          <div className="border-t border-gray-100 pt-4 space-y-4">
+            <LevelSlider
+              label="Maîtrise du sujet de l'interlocuteur"
+              value={expertiseLevel}
+              onChange={setExpertiseLevel}
+              labels={EXPERTISE_LABELS}
+            />
+            <LevelSlider
+              label="Humour"
+              value={humorLevel}
+              onChange={setHumorLevel}
+              labels={HUMOR_LABELS}
+              icons={HUMOR_ICONS}
             />
           </div>
           {error && (

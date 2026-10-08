@@ -11,8 +11,14 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context', 'techStack', 'hasTechnicalStack', 'createdAt', 'updatedAt', 'userId'
+  'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context', 'techStack', 'hasTechnicalStack',
+  'expertiseLevel', 'humorLevel', 'createdAt', 'updatedAt', 'userId'
 ];
+
+function clampLevel(v, fallback) {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : fallback;
+}
 
 // Vérifie que l'utilisateur est propriétaire ou admin (pas collaborateur)
 function isOwnerOrAdmin(project, userId, isAdmin) {
@@ -98,7 +104,7 @@ router.post('/', async (req, res) => {
   if (req.user.role === 'user') {
     return res.status(403).json({ error: 'Votre compte ne permet pas de créer des projets' });
   }
-  const { name, description, objectif, contexte, notes, hasTechnicalStack } = req.body;
+  const { name, description, objectif, contexte, notes, hasTechnicalStack, expertiseLevel, humorLevel } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -119,6 +125,8 @@ router.post('/', async (req, res) => {
         brief,
         status: 'active',
         hasTechnicalStack: hasTechnicalStack === true,
+        expertiseLevel: clampLevel(expertiseLevel, 3),
+        humorLevel: clampLevel(humorLevel, 2),
         userId: req.user.id,
         createdAt: now,
         updatedAt: now
@@ -206,7 +214,7 @@ router.get('/:id/stats', async (req, res) => {
 
 // PATCH /api/projects/:id — mettre à jour les champs du projet (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
-  const { name, description, devDirectory, hasTechnicalStack } = req.body;
+  const { name, description, devDirectory, hasTechnicalStack, expertiseLevel, humorLevel } = req.body;
   if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -223,6 +231,8 @@ router.patch('/:id', async (req, res) => {
     if (description !== undefined)      updates.description        = description?.trim() || null;
     if (devDirectory !== undefined)     updates.devDirectory       = devDirectory?.trim() || null;
     if (hasTechnicalStack !== undefined) updates.hasTechnicalStack = Boolean(hasTechnicalStack);
+    if (expertiseLevel !== undefined)   updates.expertiseLevel     = clampLevel(expertiseLevel, project.expertiseLevel);
+    if (humorLevel !== undefined)       updates.humorLevel         = clampLevel(humorLevel, project.humorLevel);
 
     const [updated] = await db('Project')
       .where({ id: req.params.id })

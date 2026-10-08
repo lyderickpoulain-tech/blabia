@@ -60,6 +60,8 @@ model Project {
   context           String?   // Mémoire cumulée des sessions précédentes
   techStack         Json?     // Surcharge de la stack technique de l'utilisateur
   hasTechnicalStack Boolean   @default(false) // v4.0 : projet implique du développement technique
+  expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
+  humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
   createdAt         DateTime  @default(now())
   updatedAt     DateTime        @updatedAt
   userId        String
@@ -159,6 +161,8 @@ model Session {
   tokensUsed              Json?     @default("{\"input\":0,\"output\":0,\"total\":0}")  // v3.6 : tokens Anthropic cumulés { input, output, total }
   pendingToolSuggestions  Json?     @default("[]")    // v4.0 : outils détectés via [NEED_TOOL:...] [{ name, reason, required, agentName, timestamp }]
   webSearchEnabled        Boolean   @default(false)   // v4.0 (Év.6) : activer la recherche web pour cette réunion
+  expertiseLevel          Int?      // v5.0 : 1 à 5, null = hérite de Project.expertiseLevel
+  humorLevel              Int?      // v5.0 : 1 à 5, null = hérite de Project.humorLevel
   milestoneId     String?
   todos           TodoItem[]
   createdAt       DateTime  @default(now())

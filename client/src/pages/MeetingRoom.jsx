@@ -59,9 +59,8 @@ export default function MeetingRoom() {
   const [mentionSelectedIdx,  setMentionSelectedIdx]  = useState(0);
   const [sendError,  setSendError]  = useState('');
 
-  // États streaming
+  // États streaming (2.1 : plus de texte partiel, juste l'indicateur "en train d'écrire")
   const [streamingAgent,  setStreamingAgent]  = useState(null);
-  const [streamingText,   setStreamingText]   = useState('');
   const [streamingReason, setStreamingReason] = useState('');
   const [isStreaming,     setIsStreaming]      = useState(false);
 
@@ -72,8 +71,7 @@ export default function MeetingRoom() {
   const attachmentsRef  = useRef([]);
   attachmentsRef.current = attachments;
 
-  // Refs pour capturer text et reason dans la closure SSE sans dépendance stale
-  const streamingTextRef    = useRef('');
+  // Refs pour capturer reason dans la closure SSE sans dépendance stale
   const streamingReasonRef  = useRef('');
   const abortControllerRef  = useRef(null);
 
@@ -98,6 +96,8 @@ export default function MeetingRoom() {
   const [savingTask,            setSavingTask]            = useState(false);
   const [showIntentionDropdown, setShowIntentionDropdown] = useState(false);
   const [savingIntention,       setSavingIntention]       = useState(false);
+  const levelsDropdownRef                                 = useRef(null);
+  const [showLevelsDropdown,    setShowLevelsDropdown]    = useState(false);
 
   // États suggestions d'agent SSE
   const [agentSuggestions,    setAgentSuggestions]    = useState([]);
@@ -176,7 +176,7 @@ export default function MeetingRoom() {
     } else {
       setShowNewMessage(true);
     }
-  }, [messages, streamingText, agentSuggestions, stepSuggestions, isStreaming]);
+  }, [messages, streamingAgent, agentSuggestions, stepSuggestions, isStreaming]);
 
   // Masquer le bouton quand l'utilisateur scrolle jusqu'en bas manuellement
   const handleFeedScroll = useCallback(() => {
@@ -236,6 +236,17 @@ export default function MeetingRoom() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showMenuDots]);
+
+  useEffect(() => {
+    if (!showLevelsDropdown) return;
+    const handler = (e) => {
+      if (levelsDropdownRef.current && !levelsDropdownRef.current.contains(e.target)) {
+        setShowLevelsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showLevelsDropdown]);
 
   // Ajouter un agent à la session (partagé par dropdown + suggestion cards)
   const handleAddAgent = useCallback(async (agentId) => {
@@ -467,6 +478,8 @@ export default function MeetingRoom() {
     catch { return 'synthesis'; }
   })();
   const intentionMeta = DELIVERABLE_TYPES.find(d => d.id === currentIntention) || DELIVERABLE_TYPES[0];
+  const effectiveExpertiseLevel = session?.expertiseLevel ?? project?.expertiseLevel ?? 3;
+  const effectiveHumorLevel     = session?.humorLevel     ?? project?.humorLevel     ?? 2;
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
@@ -476,8 +489,8 @@ export default function MeetingRoom() {
     // resume:true = reprise silencieuse après décision, bypass guards normaux
     if (isClosed) return;
     // Un resume ne doit jamais se superposer à un flux déjà actif (ex. double-clic sur
-    // "Lancer automatiquement") : deux flux SSE concurrents écriraient dans le même
-    // streamingTextRef et produiraient un texte entrelacé/corrompu.
+    // "Lancer automatiquement") : deux requêtes /chat concurrentes pousseraient
+    // chacune leurs propres messages dans le même état local.
     if (resume && isStreaming) return;
     if (!resume && !isStreaming && (!text && currentAttachments.length === 0)) return;
 
@@ -516,8 +529,6 @@ export default function MeetingRoom() {
     }
     setIsStreaming(true);
     setStreamingAgent(null);
-    streamingTextRef.current = '';
-    setStreamingText('');
 
     // Sérialiser les pièces jointes (seulement si pas un resume)
     const serializedAttachments = (!resume && currentAttachments.length > 0)
@@ -572,35 +583,24 @@ export default function MeetingRoom() {
           try {
             const ev = JSON.parse(line.slice(6));
 
-            if (ev.type === 'agent_start') {
+            if (ev.type === 'agent_typing') {
               setStreamingAgent(ev.agentName);
               streamingReasonRef.current = ev.reason || '';
               setStreamingReason(ev.reason || '');
-              streamingTextRef.current = '';
-              setStreamingText('');
 
-            } else if (ev.type === 'chunk') {
-              streamingTextRef.current += ev.text;
-              setStreamingText(streamingTextRef.current);
-
-            } else if (ev.type === 'agent_done') {
-              const finalContent  = streamingTextRef.current;
-              const finalReason   = streamingReasonRef.current;
-              setMessages(prev => [...prev, {
-                id:        ev.messageId,
-                role:      'agent',
-                agentName: ev.agentName,
-                ...(finalReason ? { reason: finalReason } : {}),
-                content:   finalContent,
-                timestamp: new Date().toISOString(),
-                type:      'message',
-                pinned:    false
-              }]);
+            } else if (ev.type === 'agent_message') {
+              // Messages finaux uniquement (2.1) : la bulle d'attente disparaît
+              // dès réception, les bulles de la réponse s'affichent ensuite
+              // l'une après l'autre (~400 ms d'écart, 2.2).
               setStreamingAgent(null);
               streamingReasonRef.current = '';
               setStreamingReason('');
-              streamingTextRef.current = '';
-              setStreamingText('');
+              const bubbles = ev.messages || [];
+              for (let i = 0; i < bubbles.length; i++) {
+                if (i > 0) await new Promise(resolve => setTimeout(resolve, 400));
+                const bubble = bubbles[i];
+                setMessages(prev => [...prev, bubble]);
+              }
 
             } else if (ev.type === 'decision') {
               // Nouveau format v3.2 : décision structurée avec question + choix
@@ -636,16 +636,6 @@ export default function MeetingRoom() {
               setIsStreaming(false);
               if (ev.tokensUsed) setTokensUsed(ev.tokensUsed);
 
-            } else if (ev.type === 'sources') {
-              setMessages(prev => {
-                const idx = [...prev].reverse().findIndex(m => m.role === 'agent' && m.agentName === ev.agentName);
-                if (idx === -1) return prev;
-                const realIdx = prev.length - 1 - idx;
-                const updated = [...prev];
-                updated[realIdx] = { ...updated[realIdx], sources: ev.sources || [] };
-                return updated;
-              });
-
             } else if (ev.type === 'suggest_agent') {
               setAgentSuggestions(prev => [...prev, {
                 name:       ev.name,
@@ -670,8 +660,6 @@ export default function MeetingRoom() {
             } else if (ev.type === 'error') {
               setSendError(ev.message || 'Erreur inconnue');
               setStreamingAgent(null);
-              streamingTextRef.current = '';
-              setStreamingText('');
               setIsStreaming(false);
             }
           } catch {}
@@ -679,35 +667,18 @@ export default function MeetingRoom() {
       }
     } catch (err) {
       if (err.name === 'AbortError') {
-        // Interruption volontaire : sauvegarder le texte partiel localement
-        const partialText    = streamingTextRef.current;
-        const partialAgent   = streamingAgent;
-        const wasDecision    = decisionJustEmittedRef.current;
+        // Interruption volontaire : plus de texte partiel à conserver (2.1) —
+        // l'agent en cours n'est simplement pas enregistré.
+        const wasDecision = decisionJustEmittedRef.current;
         decisionJustEmittedRef.current = false;
         setStreamingAgent(null);
-        streamingTextRef.current = '';
-        setStreamingText('');
         setIsStreaming(false);
         // Ne pas effacer pendingDecisionId si l'abort a été déclenché par une décision
         if (!wasDecision) setPendingDecisionId(null);
-        if (partialText.trim() && partialAgent) {
-          setMessages(prev => [...prev, {
-            id:          `interrupted-${Date.now()}`,
-            role:        'agent',
-            agentName:   partialAgent,
-            content:     partialText.trim(),
-            timestamp:   new Date().toISOString(),
-            type:        'message',
-            pinned:      false,
-            interrupted: true,
-          }]);
-        }
         return;
       }
       setSendError('Connexion interrompue : ' + err.message);
       setStreamingAgent(null);
-      streamingTextRef.current = '';
-      setStreamingText('');
       setIsStreaming(false);
     }
   }, [inputText, isStreaming, isClosed, streamingAgent, pendingDecisionId, projectId, sessionId]);
@@ -899,6 +870,14 @@ export default function MeetingRoom() {
     setSavingIntention(false);
   }, [savingIntention, projectId, sessionId]);
 
+  // Curseurs pédagogie/humour : surcharge de cette réunion, effet au tour suivant
+  const handleChangeLevel = useCallback(async (field, value) => {
+    setSession(prev => ({ ...prev, [field]: value })); // optimiste
+    try {
+      await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { [field]: value });
+    } catch {}
+  }, [projectId, sessionId]);
+
   // ── Rendu ─────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -970,6 +949,12 @@ export default function MeetingRoom() {
           savingIntention={savingIntention}
           handleSaveIntention={handleSaveIntention}
           intentionDropdownRef={intentionDropdownRef}
+          expertiseLevel={effectiveExpertiseLevel}
+          humorLevel={effectiveHumorLevel}
+          onChangeLevel={handleChangeLevel}
+          showLevelsDropdown={showLevelsDropdown}
+          setShowLevelsDropdown={setShowLevelsDropdown}
+          levelsDropdownRef={levelsDropdownRef}
           showDecisions={showDecisions}
           setShowDecisions={setShowDecisions}
           decisions={decisions}
@@ -1007,7 +992,6 @@ export default function MeetingRoom() {
             messages={messages}
             activeAgents={activeAgents}
             streamingAgent={streamingAgent}
-            streamingText={streamingText}
             streamingReason={streamingReason}
             agentSuggestions={agentSuggestions}
             onInviteSuggested={handleInviteSuggested}

@@ -1,10 +1,15 @@
 // Prompts de génération des livrables à la clôture d'une réunion
 // (server/src/routes/sessions/deliverables.js — POST /:sessionId/generate-deliverable).
 
-function buildSummaryPrompt(sessionContext) {
+function buildSummaryPrompt(sessionContext, expertiseLevel = 3) {
+  // Niveau 1-2 (découverte/initié) : le compte-rendu se termine par un glossaire
+  // des termes techniques employés — pas au niveau prompt Claude Code (phase 2.4).
+  const glossarySection = expertiseLevel <= 2
+    ? '\n## Glossaire\n(Termine le compte-rendu par cette section si tu as employé des termes techniques : chaque terme, défini en une phrase simple.)'
+    : '';
   return {
     system: 'Tu es un expert en synthèse de réunion d\'entreprise. Tu rédiges des comptes-rendus clairs et structurés. Réponds uniquement en français, sans introduction ni conclusion génériques.',
-    user: `Génère un compte-rendu structuré de cette réunion.\n\nFormat :\n## Objectif\n## Points discutés\n## Décisions prises\n## Actions à mener\n\nMax 600 mots.\n\n${sessionContext}`,
+    user: `Génère un compte-rendu structuré de cette réunion.\n\nFormat :\n## Objectif\n## Points discutés\n## Décisions prises\n## Actions à mener${glossarySection}\n\nMax 600 mots (hors glossaire).\n\n${sessionContext}`,
   };
 }
 

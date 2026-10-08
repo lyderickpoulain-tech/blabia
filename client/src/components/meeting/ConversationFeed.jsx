@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import DecisionCard from '../DecisionCard';
 import AgentScopeSelector from './AgentScopeSelector';
+import Markdown from '../Markdown';
 
 // ── Constantes locales ────────────────────────────────────────────────────────
 
@@ -17,6 +18,58 @@ const POSITION_OPTIONS = [
   { id: 'end',   label: 'À la fin de la timeline' },
   { id: 'after', label: 'Après l\'étape en cours' },
 ];
+
+// ── Recherche web (2.6) ────────────────────────────────────────────────────────
+
+function extractDomain(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+// Insère un appel de note [n] juste après chaque extrait réellement cité,
+// quand on parvient à le localiser dans le texte affiché.
+function annotateWithCitations(content, sources) {
+  let result = content;
+  sources.forEach((s, i) => {
+    if (!s.citedText) return;
+    const idx = result.indexOf(s.citedText);
+    if (idx === -1) return;
+    const insertAt = idx + s.citedText.length;
+    result = `${result.slice(0, insertAt)} [${i + 1}]${result.slice(insertAt)}`;
+  });
+  return result;
+}
+
+function WebSearchBlock({ webSearch }) {
+  const [open, setOpen] = useState(false);
+  const queries = webSearch.queries || [];
+  const sources = webSearch.sources || [];
+  if (queries.length === 0) return null;
+
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1.5"
+      >
+        <span>🔎 {queries.length} recherche{queries.length !== 1 ? 's' : ''}</span>
+        {sources.length > 0 && (
+          <span className="text-gray-400">· Sources ({sources.length}) {open ? '▲' : '▼'}</span>
+        )}
+      </button>
+      {open && sources.length > 0 && (
+        <div className="mt-1 space-y-1 border-l-2 border-blue-100 pl-2">
+          {sources.map((s, i) => (
+            <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+              className="flex items-start gap-1.5 text-xs text-blue-600 hover:text-blue-800 hover:underline">
+              <span className="text-gray-400 shrink-0">[{i + 1}]</span>
+              <span className="truncate">{s.title} <span className="text-gray-400">— {extractDomain(s.url)}</span></span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── SuggestionAgentCard ───────────────────────────────────────────────────────
 
@@ -192,7 +245,7 @@ function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
 export default function ConversationFeed({
-  messages, activeAgents, streamingAgent, streamingText, streamingReason,
+  messages, activeAgents, streamingAgent, streamingReason,
   agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite,
   stepSuggestions, onAddStep, onDismissStep,
   session, project, onAutoLaunch, isClosed, isStreaming,
@@ -346,23 +399,16 @@ export default function ConversationFeed({
                 {msg.reason && (
                   <p className={`text-xs italic mb-1 ${/vulgarise|reformule/i.test(msg.reason) ? 'text-blue-400' : 'text-gray-400'}`}>↳ {msg.reason}</p>
                 )}
-                <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed whitespace-pre-wrap ${
+                <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed ${
                   isDecision
                     ? 'bg-amber-50 border border-amber-200 text-amber-900'
                     : `${color.bg} ${color.text}`
                 }`}>
-                  {msg.content}
+                  <Markdown size="bubble">
+                    {msg.webSearch?.sources?.length > 0 ? annotateWithCitations(msg.content, msg.webSearch.sources) : msg.content}
+                  </Markdown>
                 </div>
-                {msg.sources?.length > 0 && (
-                  <div className="mt-1.5 space-y-0.5">
-                    {msg.sources.map((s, i) => (
-                      <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline truncate">
-                        🌐 <span className="truncate">{s.title || s.url}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
+                {msg.webSearch && <WebSearchBlock webSearch={msg.webSearch} />}
                 {msg.interrupted ? (
                   <p className="text-xs text-blabia-orange mt-1 flex items-center gap-1">
                     ⚠️ Interrompu
@@ -380,26 +426,24 @@ export default function ConversationFeed({
         return null;
       })}
 
-      {/* Streaming en cours */}
+      {/* Bulle d'attente (2.1 : plus de texte partiel, juste l'indicateur de frappe) */}
       {streamingAgent && (
         <div className="flex items-start gap-3">
           <div className={`w-8 h-8 rounded-full ${agentColor(streamingAgent).avatar} flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5`}>
             {activeAgents.find(a => a.name === streamingAgent)?.emoji || streamingAgent?.[0] || '?'}
           </div>
           <div className="max-w-[75%]">
-            <p className={`text-xs font-semibold ${streamingReason ? 'mb-0.5' : 'mb-1'} ${agentColor(streamingAgent).text} flex items-center gap-1.5`}>
-              {streamingAgent}
-              <span className="inline-flex gap-0.5">
-                <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </span>
-            </p>
+            <p className="text-xs font-semibold mb-1 text-gray-400">{streamingAgent}</p>
             {streamingReason && (
               <p className="text-xs italic text-gray-400 mb-1">↳ {streamingReason}</p>
             )}
-            <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed whitespace-pre-wrap ${agentColor(streamingAgent).bg} ${agentColor(streamingAgent).text}`}>
-              {streamingText || <span className="opacity-50">Rédaction…</span>}
+            <div className={`px-4 py-3 rounded-2xl rounded-tl-sm inline-flex items-center gap-1.5 ${agentColor(streamingAgent).bg} ${agentColor(streamingAgent).text}`}>
+              <span className="text-sm">écrit</span>
+              <span className="inline-flex gap-0.5">
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </span>
             </div>
           </div>
         </div>

@@ -82,85 +82,86 @@ async function appendPendingStepSuggestion(sessionId, suggestion) {
   );
 }
 
-// ── Streaming Anthropic avec auto-continuation ────────────────────────────────
+// ── Appel Anthropic non streamé ────────────────────────────────────────────────
+// v5.0 phase 2 : remplace streamAgent. Un seul appel, pas de boucle de relance —
+// si stop_reason === 'max_tokens', on coupe proprement à la dernière phrase
+// complète plutôt que de redemander une suite (cf. règle "messages courts").
+//
+// Recherche web (2.6) : outil serveur web_search_20260318, user_location France
+// approximative. pause_turn (recherche longue) : on renvoie la réponse assistant
+// telle quelle pour laisser l'outil terminer, jusqu'à 3 boucles. Seules les
+// sources réellement citées (TextBlock.citations, type web_search_result_location)
+// sont remontées — pas tous les résultats de recherche bruts.
 
-async function streamAgent(systemPrompt, userMessage, onChunk, maxTokens = 1500, model = MODEL, signal = null, webSearch = false) {
-  const MAX_CONTINUATIONS = 5;
-  let fullText = '';
+const WEB_SEARCH_MAX_USES    = 3;
+const WEB_SEARCH_MAX_PAUSES  = 3;
+const WEB_SEARCH_USER_LOCATION = { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' };
+
+async function callAgent(systemPrompt, userMessage, maxTokens = 600, model = MODEL, signal = null, webSearch = false) {
   let messages = [{ role: 'user', content: userMessage }];
-  let totalInputTokens  = 0;
-  let totalOutputTokens = 0;
-  const sources = [];
+  let totalInputTokens = 0, totalOutputTokens = 0, totalWebSearchRequests = 0;
+  const queries = [];
+  const sourcesByUrl = new Map();
+  let response;
 
-  for (let attempt = 0; attempt <= MAX_CONTINUATIONS; attempt++) {
-    const apiParams = {
-      model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages,
-      stream: true
-    };
+  for (let loop = 0; loop <= WEB_SEARCH_MAX_PAUSES; loop++) {
+    const apiParams = { model, max_tokens: maxTokens, system: systemPrompt, messages };
     if (webSearch) {
-      apiParams.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+      apiParams.tools = [{
+        type: 'web_search_20260318',
+        name: 'web_search',
+        max_uses: WEB_SEARCH_MAX_USES,
+        user_location: WEB_SEARCH_USER_LOCATION,
+      }];
     }
 
-    const stream = await anthropic.messages.create(apiParams, signal ? { signal } : undefined);
+    response = await anthropic.messages.create(apiParams, signal ? { signal } : undefined);
 
-    let chunkText = '';
-    let stopReason = null;
+    totalInputTokens  += response.usage?.input_tokens  || 0;
+    totalOutputTokens += response.usage?.output_tokens || 0;
+    totalWebSearchRequests += response.usage?.server_tool_use?.web_search_requests || 0;
 
-    for await (const event of stream) {
-      if (signal?.aborted) break;
-      if (event.type === 'message_start' && event.message?.usage) {
-        totalInputTokens += event.message.usage.input_tokens || 0;
+    for (const block of response.content) {
+      if (block.type === 'server_tool_use' && block.name === 'web_search' && block.input?.query) {
+        queries.push(block.input.query);
+        console.log(`[web_search] "${block.input.query}"`);
       }
-      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-        chunkText += event.delta.text;
-        fullText += event.delta.text;
-        onChunk(event.delta.text);
-      }
-      if (event.type === 'message_delta') {
-        if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
-        if (event.usage) totalOutputTokens += event.usage.output_tokens || 0;
-      }
-      if (webSearch && event.type === 'content_block_start') {
-        const cb = event.content_block;
-        if (cb?.type === 'web_search_tool_result' && Array.isArray(cb.content)) {
-          for (const result of cb.content) {
-            if (result.type === 'web_search_result' && result.url) {
-              if (!sources.some(s => s.url === result.url)) {
-                sources.push({ url: result.url, title: result.title || result.url });
-              }
-            }
+      if (block.type === 'text' && Array.isArray(block.citations)) {
+        for (const c of block.citations) {
+          if (c.type === 'web_search_result_location' && c.url && !sourcesByUrl.has(c.url)) {
+            sourcesByUrl.set(c.url, { url: c.url, title: c.title || c.url, citedText: c.cited_text || '' });
           }
         }
       }
     }
 
-    if (signal?.aborted) break;
-    if (stopReason !== 'max_tokens') break;
-
-    if (attempt >= MAX_CONTINUATIONS) {
-      const truncated = fullText.replace(/[^.!?]*$/, '').trim();
-      if (truncated && truncated.length < fullText.length) {
-        const delta = truncated.length - fullText.length;
-        fullText = truncated;
-        onChunk('\0'.repeat(Math.abs(delta)));
-      }
-      const note = '\n\n*[Synthèse condensée]*';
-      fullText += note;
-      onChunk(note);
-      break;
-    }
-
-    messages = [
-      ...messages,
-      { role: 'assistant', content: chunkText },
-      { role: 'user', content: 'Continue exactement où tu t\'es arrêté, sans répéter ce qui précède.' }
-    ];
+    if (response.stop_reason !== 'pause_turn') break;
+    // Laisse l'outil terminer : on renvoie la réponse assistant telle quelle,
+    // sans nouveau message utilisateur.
+    messages = [...messages, { role: 'assistant', content: response.content }];
   }
 
-  return { text: fullText, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens }, sources };
+  let text = response.content
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('');
+
+  if (response.stop_reason === 'max_tokens') {
+    const truncated = text.replace(/[^.!?]*$/, '').trim();
+    if (truncated) text = truncated;
+  }
+
+  return {
+    text,
+    stopReason: response.stop_reason,
+    usage: {
+      inputTokens:  totalInputTokens,
+      outputTokens: totalOutputTokens,
+    },
+    webSearch: webSearch
+      ? { queries, sources: [...sourcesByUrl.values()], requests: totalWebSearchRequests }
+      : null,
+  };
 }
 
 module.exports = {
@@ -171,5 +172,5 @@ module.exports = {
   patchTimelineEntry,
   appendMessageEntry,
   appendPendingStepSuggestion,
-  streamAgent,
+  callAgent,
 };

@@ -2,6 +2,7 @@
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import api from '../utils/api';
+import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 const DELIVERABLES = [
   { id: 'summary',     icon: '📋', label: 'Compte-rendu', desc: 'Synthèse structurée + mémorisée dans le projet' },
@@ -70,6 +71,8 @@ export default function StartMeeting() {
   const [creatingAgent,      setCreatingAgent]      = useState(false);
   const [model,             setModel]             = useState('claude-sonnet-4-6');
   const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
+  const [expertiseLevel,    setExpertiseLevel]    = useState(3);
+  const [humorLevel,        setHumorLevel]        = useState(2);
   const [starting,          setStarting]          = useState(false);
   const [error,             setError]             = useState('');
 
@@ -84,6 +87,16 @@ export default function StartMeeting() {
       })
       .catch(() => {})
       .finally(() => setAgentsLoading(false));
+  }, [projectId]);
+
+  // Pré-remplissage des curseurs depuis les défauts du projet
+  useEffect(() => {
+    api.get(`/projects/${projectId}`)
+      .then(({ data }) => {
+        if (data.expertiseLevel) setExpertiseLevel(data.expertiseLevel);
+        if (data.humorLevel)     setHumorLevel(data.humorLevel);
+      })
+      .catch(() => {});
   }, [projectId]);
 
   // Auto-suggestion si pré-rempli depuis la timeline
@@ -186,6 +199,8 @@ export default function StartMeeting() {
         mode:             'meeting',
         model,
         webSearchEnabled: webSearchEnabled === true,
+        expertiseLevel,
+        humorLevel,
         ...(milestoneId ? { milestoneId } : {})
       });
 
@@ -403,6 +418,23 @@ export default function StartMeeting() {
                 )}
               </div>
             )}
+          </div>
+
+          {/* ── Section B2 : Pédagogie et humour ────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+            <LevelSlider
+              label="Maîtrise du sujet de l'interlocuteur"
+              value={expertiseLevel}
+              onChange={setExpertiseLevel}
+              labels={EXPERTISE_LABELS}
+            />
+            <LevelSlider
+              label="Humour"
+              value={humorLevel}
+              onChange={setHumorLevel}
+              labels={HUMOR_LABELS}
+              icons={HUMOR_ICONS}
+            />
           </div>
 
           {/* ── Section C : Modèle + Recherche web ─────────────────────────── */}

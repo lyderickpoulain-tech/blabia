@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import AgentScopeSelector from './AgentScopeSelector';
+import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../LevelSlider';
 
 export default function MeetingHeader({
   projectId,
@@ -12,6 +13,9 @@ export default function MeetingHeader({
   intentionMeta, currentIntention, deliverableTypes,
   showIntentionDropdown, setShowIntentionDropdown, savingIntention, handleSaveIntention,
   intentionDropdownRef,
+  // Pédagogie / humour
+  expertiseLevel, humorLevel, onChangeLevel,
+  showLevelsDropdown, setShowLevelsDropdown, levelsDropdownRef,
   // Decisions panel toggle
   showDecisions, setShowDecisions, decisions, pendingDecisionCount,
   // Tokens
@@ -87,6 +91,35 @@ export default function MeetingHeader({
           )}
         </div>
 
+        {/* Badge 🎓 Pédagogie/humour — réglage de la réunion en cours */}
+        <div className="relative shrink-0" ref={levelsDropdownRef}>
+          <button
+            onClick={() => setShowLevelsDropdown(v => !v)}
+            className="text-xs font-medium px-2.5 py-1 rounded-full border bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 transition flex items-center gap-1"
+            title="Maîtrise du sujet et humour"
+          >
+            🎓 {HUMOR_ICONS[humorLevel - 1]}
+          </button>
+          {showLevelsDropdown && (
+            <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-4 space-y-4">
+              <LevelSlider
+                label="Maîtrise du sujet"
+                value={expertiseLevel}
+                onChange={v => onChangeLevel('expertiseLevel', v)}
+                labels={EXPERTISE_LABELS}
+              />
+              <LevelSlider
+                label="Humour"
+                value={humorLevel}
+                onChange={v => onChangeLevel('humorLevel', v)}
+                labels={HUMOR_LABELS}
+                icons={HUMOR_ICONS}
+              />
+              <p className="text-[10px] text-gray-400">Effet à partir du prochain message.</p>
+            </div>
+          )}
+        </div>
+
         {/* Badge 📌 Décisions */}
         <button
           onClick={() => setShowDecisions(v => !v)}
@@ -103,6 +136,16 @@ export default function MeetingHeader({
             </span>
           )}
         </button>
+
+        {/* Badge recherche web activée */}
+        {session.webSearchEnabled && (
+          <span
+            className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border bg-blue-50 border-blue-200 text-blabia-blue cursor-default"
+            title="Les agents peuvent chercher des informations sur le web"
+          >
+            🔎 Recherche web activée
+          </span>
+        )}
 
         {/* Badge tokens consommés */}
         {tokensUsed && (

@@ -2,6 +2,7 @@
 import { useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
+import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 export default function NewProject() {
   const [name, setName] = useState('');
@@ -10,6 +11,8 @@ export default function NewProject() {
   const [contexte, setContexte] = useState('');
   const [notes, setNotes] = useState('');
   const [hasTechnicalStack, setHasTechnicalStack] = useState(false);
+  const [expertiseLevel, setExpertiseLevel] = useState(3);
+  const [humorLevel, setHumorLevel] = useState(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -19,7 +22,7 @@ export default function NewProject() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, hasTechnicalStack });
+      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, hasTechnicalStack, expertiseLevel, humorLevel });
       navigate(`/projects/${data.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
@@ -115,6 +118,22 @@ export default function NewProject() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4 space-y-4">
+              <LevelSlider
+                label="Maîtrise du sujet de l'interlocuteur"
+                value={expertiseLevel}
+                onChange={setExpertiseLevel}
+                labels={EXPERTISE_LABELS}
+              />
+              <LevelSlider
+                label="Humour"
+                value={humorLevel}
+                onChange={setHumorLevel}
+                labels={HUMOR_LABELS}
+                icons={HUMOR_ICONS}
+              />
             </div>
 
             <div className="border-t border-gray-100 pt-4">

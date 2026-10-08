@@ -5,6 +5,7 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "seed:admin": "node src/scripts/seed-admin.js",
+    "check:web-search": "node src/scripts/check-web-search.js",
     "test": "vitest run"
   },
   "dependencies": {

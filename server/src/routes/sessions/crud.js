@@ -17,7 +17,9 @@ router.post('/', async (req, res) => {
     fullContext: fullContextParam = false,
     intention = [],
     activeAgents: activeAgentsParam = null,
-    webSearchEnabled: webSearchEnabledParam = false
+    webSearchEnabled: webSearchEnabledParam = false,
+    expertiseLevel: expertiseLevelParam,
+    humorLevel: humorLevelParam,
   } = req.body;
   const { projectId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
@@ -25,6 +27,12 @@ router.post('/', async (req, res) => {
   const VALID_MODELS = ['claude-sonnet-4-6', 'claude-opus-4-8'];
   const selectedModel = VALID_MODELS.includes(modelParam) ? modelParam : MODEL;
   const fullContextEnabled = !!fullContextParam;
+  const clampLevel = (v) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+  };
+  const expertiseLevel = clampLevel(expertiseLevelParam);
+  const humorLevel     = clampLevel(humorLevelParam);
 
   if (!task?.trim()) return res.status(400).json({ error: 'La tâche est requise' });
   if (!Array.isArray(activeAgentsParam) || activeAgentsParam.length === 0) {
@@ -53,11 +61,13 @@ router.post('/', async (req, res) => {
         fullContext: fullContextEnabled,
         intention: JSON.stringify(Array.isArray(intention) ? intention : []),
         webSearchEnabled: webSearchEnabledParam === true,
+        expertiseLevel,
+        humorLevel,
         projectId,
         milestoneId: milestoneId || null,
         createdAt: now
       })
-      .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId', 'webSearchEnabled']);
+      .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId', 'webSearchEnabled', 'expertiseLevel', 'humorLevel']);
     await db('Project').where({ id: projectId }).update({ updatedAt: now });
     if (milestoneId) {
       try { await db('Milestone').where({ id: milestoneId, projectId }).update({ status: 'in_progress' }); } catch {}
@@ -153,16 +163,20 @@ router.delete('/:sessionId', async (req, res) => {
   }
 });
 
-// ── PATCH /:sessionId — Mise à jour tâche / intention ─────────────────────────
+// ── PATCH /:sessionId — Mise à jour tâche / intention / curseurs ──────────────
 
 router.patch('/:sessionId', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  const { task, intention } = req.body;
+  const { task, intention, expertiseLevel, humorLevel } = req.body;
 
-  if (task === undefined && intention === undefined) {
-    return res.status(400).json({ error: 'Champ requis : task ou intention' });
+  if ([task, intention, expertiseLevel, humorLevel].every(v => v === undefined)) {
+    return res.status(400).json({ error: 'Champ requis : task, intention, expertiseLevel ou humorLevel' });
   }
+  const clampLevel = (v) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+  };
 
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
@@ -177,10 +191,15 @@ router.patch('/:sessionId', async (req, res) => {
     const updates = { updatedAt: new Date() };
     if (task !== undefined)      updates.task      = task.trim();
     if (intention !== undefined) updates.intention = JSON.stringify(Array.isArray(intention) ? intention : [intention]);
+    if (expertiseLevel !== undefined) updates.expertiseLevel = clampLevel(expertiseLevel);
+    if (humorLevel !== undefined)     updates.humorLevel     = clampLevel(humorLevel);
 
     await db('Session').where({ id: sessionId }).update(updates);
     const [updated] = await db('Session').where({ id: sessionId }).limit(1);
-    return res.json({ id: updated.id, task: updated.task, intention: updated.intention });
+    return res.json({
+      id: updated.id, task: updated.task, intention: updated.intention,
+      expertiseLevel: updated.expertiseLevel, humorLevel: updated.humorLevel,
+    });
   } catch (err) {
     console.error('[sessions/patch]', err.message);
     return res.status(500).json({ error: 'Erreur serveur' });
