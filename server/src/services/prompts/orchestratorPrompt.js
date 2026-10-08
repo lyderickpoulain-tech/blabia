@@ -3,17 +3,18 @@
 
 const MAX_TURNS = 12;
 
+// v5.0 phase 3.2 : decision | claude_code | stack
 const CLOSE_INSTRUCTIONS = {
   claude_code: "Pour une réunion claude_code : considère shouldClose=true si les agents ont fait au moins 2 tours complets ET que les besoins principaux ont été clarifiés. Ne cherche pas la perfection — le prompt sera complété par Claude Code lui-même.",
-  summary: "Pour un compte-rendu : considère shouldClose=true dès que les points clés, décisions et actions ont été couverts. 3 tours suffisent généralement.",
-  timeline_steps: "Pour une réunion timeline_steps : considère shouldClose=true dès que les étapes principales ont été identifiées et structurées. 4 tours suffisent généralement.",
+  decision: "Pour une réunion de prise de décision : considère shouldClose=true dès que les décisions, options écartées et actions ont été couverts. 3 tours suffisent généralement.",
+  stack: "Pour une réunion outils : considère shouldClose=true dès que les catégories pertinentes ont été passées en revue.",
 };
 const DEFAULT_CLOSE_INSTRUCTION = "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points";
 
 const TOUR_NOTES = {
   claude_code: { minTurn: 4, text: 'Si les besoins principaux ont été clarifiés, tu DOIS proposer shouldClose=true.' },
-  summary: { minTurn: 3, text: 'Si les points clés, décisions et actions ont été couverts, tu DOIS proposer shouldClose=true.' },
-  timeline_steps: { minTurn: 4, text: 'Si les étapes ont été identifiées et structurées, tu DOIS proposer shouldClose=true.' },
+  decision:    { minTurn: 3, text: 'Si les décisions, options écartées et actions ont été couvertes, tu DOIS proposer shouldClose=true.' },
+  stack:       { minTurn: 4, text: 'Si les catégories pertinentes ont été passées en revue, tu DOIS proposer shouldClose=true.' },
 };
 
 /**

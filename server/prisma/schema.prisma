@@ -94,7 +94,7 @@ model Milestone {
   description  String?
   dueDate      DateTime?
   status              String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
-  type                String     @default("meeting") // valeurs réelles : "meeting" | "synthesis" | "stack_check" | "claude_code" | "technical" | "memory" | "timeline_steps" | "milestone" — à consolider en phase 3 (decision | claude_code | stack)
+  type                String     @default("decision") // v5.0 phase 3 : "decision" | "claude_code" | "stack" — anciennes valeurs ("meeting" | "synthesis" | "stack_check" | "technical" | "memory" | "timeline_steps" | "milestone") migrées en phase 3 (stack_check -> stack, tout le reste -> decision)
   checklistData       Json?      // { items: [{ id, label, category, checked, notes }] }
   createdFromSessionId String?
   displayOrder        Int        @default(0)
@@ -144,7 +144,8 @@ model Session {
   task            String
   agents          Json
   exchanges       Json
-  summary         String?
+  summary         String?   // compte-rendu de la réunion (toujours produit à la clôture)
+  deliverable     String?   // v5.0 phase 3 : livrable typé (prompt Claude Code, relevé de décisions texte, proposition d'outils) — distinct du compte-rendu depuis la phase 3 ; avant, le prompt claude_code était stocké dans summary
   status          String    @default("complete") // "open" | "accepted" | "abandoned" (CHECK contraint ajoutée en v3 — le défaut "complete" ci-dessus est un résidu v1, jamais utilisé : tous les chemins de création renseignent status explicitement)
   mode            String    @default("realtime") // "meeting" uniquement depuis v5.0 (toute création passe par crud.js avec mode explicite) — le défaut "realtime" ci-dessus est un résidu v1/legacy, jamais utilisé en pratique ; "realtime"/"conversation" (legacy) ont été migrés vers "meeting" en phase 1
   hasCode         Boolean   @default(false)
@@ -154,10 +155,11 @@ model Session {
   suggestedTools  Json?     // { suggestedTools: string[], missingTools: string[] }
   planSuggestions Json?     // { milestones: [...], standalone_todos: [...] }
   timeline        Json      @default("[]") // [ { id, type, label, status, timestamp, meta } ]
-  intention       Json?     @default("[]") // livrable attendu, un seul élément en pratique : "summary" | "claude_code" (seuls choix proposés à la création depuis StartMeeting.jsx) — "synthesis" | "memory" | "timeline_steps" | "meeting" | "technical" sont des valeurs legacy encore gérées en lecture (chat.js, generate-deliverable) mais plus jamais créées
+  intention       Json?     @default("[]") // v5.0 phase 3 : livrable attendu, un seul élément : "decision" | "claude_code" | "stack" (seuls choix proposés à la création depuis StartMeeting.jsx) — anciennes valeurs ("summary" | "synthesis" | "memory" | "timeline_steps" | "meeting" | "technical") migrées vers "decision" (claude_code conservé)
   messages        Json?     @default("[]") // v3.0 : fil de conversation [{ id, role, agentName, content, timestamp, type, pinned }]
   activeAgents           Json?     @default("[]") // v3.0 : agents actifs [{ id, name, role, systemPrompt, emoji, joinedAt }]
-  pendingStepSuggestions  Json?     @default("[]")                                      // v3.6 : étapes suggérées hors-contexte [{ title, type, agentName, timestamp }]
+  pendingStepSuggestions  Json?     @default("[]")                                      // DEPRECATED v5.0 — remplacé par pendingMeetingSuggestions (phase 3.4), conservé en lecture seule pour les anciennes réunions non closes
+  pendingMeetingSuggestions Json?   @default("[]")                                      // v5.0 phase 3.4 : [{ id, title, objective, type, reason, after, status: pending|kept|discarded, agentName, timestamp, editedTitle?, editedType? }]
   tokensUsed              Json?     @default("{\"input\":0,\"output\":0,\"total\":0}")  // v3.6 : tokens Anthropic cumulés { input, output, total }
   pendingToolSuggestions  Json?     @default("[]")    // v4.0 : outils détectés via [NEED_TOOL:...] [{ name, reason, required, agentName, timestamp }]
   webSearchEnabled        Boolean   @default(false)   // v4.0 (Év.6) : activer la recherche web pour cette réunion

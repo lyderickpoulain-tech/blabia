@@ -133,6 +133,7 @@ router.get('/:sessionId', async (req, res) => {
       intention:       parseJsonField(session.intention, []),
       messages:        parseJsonField(session.messages, []),
       activeAgents:    parseJsonField(session.activeAgents, []),
+      pendingMeetingSuggestions: parseJsonField(session.pendingMeetingSuggestions, []),
       planAlreadyAdded: parseInt(planCount || 0) > 0,
     });
   } catch (err) {
@@ -168,10 +169,10 @@ router.delete('/:sessionId', async (req, res) => {
 router.patch('/:sessionId', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  const { task, intention, expertiseLevel, humorLevel } = req.body;
+  const { task, intention, expertiseLevel, humorLevel, summary, deliverable } = req.body;
 
-  if ([task, intention, expertiseLevel, humorLevel].every(v => v === undefined)) {
-    return res.status(400).json({ error: 'Champ requis : task, intention, expertiseLevel ou humorLevel' });
+  if ([task, intention, expertiseLevel, humorLevel, summary, deliverable].every(v => v === undefined)) {
+    return res.status(400).json({ error: 'Champ requis : task, intention, expertiseLevel, humorLevel, summary ou deliverable' });
   }
   const clampLevel = (v) => {
     const n = Number(v);
@@ -193,12 +194,16 @@ router.patch('/:sessionId', async (req, res) => {
     if (intention !== undefined) updates.intention = JSON.stringify(Array.isArray(intention) ? intention : [intention]);
     if (expertiseLevel !== undefined) updates.expertiseLevel = clampLevel(expertiseLevel);
     if (humorLevel !== undefined)     updates.humorLevel     = clampLevel(humorLevel);
+    // Édition du CR / livrable à la relecture, avant validation (3.3)
+    if (summary !== undefined)     updates.summary     = summary;
+    if (deliverable !== undefined) updates.deliverable = deliverable;
 
     await db('Session').where({ id: sessionId }).update(updates);
     const [updated] = await db('Session').where({ id: sessionId }).limit(1);
     return res.json({
       id: updated.id, task: updated.task, intention: updated.intention,
       expertiseLevel: updated.expertiseLevel, humorLevel: updated.humorLevel,
+      summary: updated.summary, deliverable: updated.deliverable,
     });
   } catch (err) {
     console.error('[sessions/patch]', err.message);

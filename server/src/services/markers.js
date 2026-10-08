@@ -1,8 +1,9 @@
 // Parsing centralisé des marqueurs émis par les agents en fin de message.
 // Marqueurs reconnus : [DECISION:{...}], [SUGGEST_AGENT: Nom, rôle],
-// [SUGGEST_STEP: titre], [NEED_TOOL:{...}]. Un seul de chaque type est
-// retenu par message (le premier) ; tous sont retirés du texte affiché,
-// même si le JSON est invalide ou le marqueur dupliqué.
+// [SUGGEST_MEETING:{...}] (phase 3.4, remplace [SUGGEST_STEP: titre]),
+// [NEED_TOOL:{...}]. Un seul de chaque type est retenu par message (le
+// premier) ; tous sont retirés du texte affiché, même si le JSON est
+// invalide ou le marqueur dupliqué.
 
 // Note : les marqueurs à charge utile JSON ({...}) doivent être retirés avec
 // un motif borné par les accolades, sinon un "]" à l'intérieur du JSON (ex.
@@ -12,8 +13,8 @@ const DECISION_RE      = /\[DECISION:(\{[\s\S]*?\})\]/;
 const DECISION_STRIP_RE = /\[DECISION:\{[\s\S]*?\}\]/g;
 const SUGGEST_AGENT_RE  = /\[SUGGEST_AGENT:\s*([\s\S]*?)\]/;
 const SUGGEST_AGENT_STRIP_RE = /\[SUGGEST_AGENT:[\s\S]*?\]/g;
-const SUGGEST_STEP_RE   = /\[SUGGEST_STEP:\s*([\s\S]*?)\]/;
-const SUGGEST_STEP_STRIP_RE  = /\[SUGGEST_STEP:[\s\S]*?\]/g;
+const SUGGEST_MEETING_RE   = /\[SUGGEST_MEETING:(\{[\s\S]*?\})\]/;
+const SUGGEST_MEETING_STRIP_RE = /\[SUGGEST_MEETING:\{[\s\S]*?\}\]/g;
 const NEED_TOOL_RE      = /\[NEED_TOOL:(\{[\s\S]*?\})\]/;
 const NEED_TOOL_STRIP_RE     = /\[NEED_TOOL:\{[\s\S]*?\}\]/g;
 
@@ -31,7 +32,7 @@ function safeJsonParse(text) {
  *   content: string,
  *   decision: {question:string, choices:string[], context:string} | null,
  *   suggestedAgent: {name:string, role:string} | null,
- *   suggestedStep: {title: string} | null,
+ *   suggestedMeeting: {title:string, objective:string, type:string, reason:string, after:string|null} | null,
  *   neededTool: object | null,
  * }}
  */
@@ -56,9 +57,17 @@ function parseAgentOutput(text) {
     if (name) suggestedAgent = { name, role: parts.slice(1).join(', ') || '' };
   }
 
-  const suggestStepMatch = raw.match(SUGGEST_STEP_RE);
-  const stepTitle = suggestStepMatch ? suggestStepMatch[1].trim() : '';
-  const suggestedStep = stepTitle ? { title: stepTitle } : null;
+  const suggestMeetingMatch = raw.match(SUGGEST_MEETING_RE);
+  const suggestMeetingData  = suggestMeetingMatch ? safeJsonParse(suggestMeetingMatch[1]) : null;
+  const suggestedMeeting = suggestMeetingData?.title
+    ? {
+        title:     suggestMeetingData.title,
+        objective: suggestMeetingData.objective || '',
+        type:      ['decision', 'claude_code', 'stack'].includes(suggestMeetingData.type) ? suggestMeetingData.type : 'decision',
+        reason:    suggestMeetingData.reason || '',
+        after:     suggestMeetingData.after || null,
+      }
+    : null;
 
   const needToolMatch = raw.match(NEED_TOOL_RE);
   const neededTool = needToolMatch ? safeJsonParse(needToolMatch[1]) : null;
@@ -66,7 +75,7 @@ function parseAgentOutput(text) {
   const content = raw
     .replace(DECISION_STRIP_RE, '')
     .replace(SUGGEST_AGENT_STRIP_RE, '')
-    .replace(SUGGEST_STEP_STRIP_RE, '')
+    .replace(SUGGEST_MEETING_STRIP_RE, '')
     .replace(NEED_TOOL_STRIP_RE, '')
     .trim();
 
@@ -75,7 +84,7 @@ function parseAgentOutput(text) {
     .map(s => s.trim())
     .filter(Boolean);
 
-  return { bubbles, content, decision, suggestedAgent, suggestedStep, neededTool };
+  return { bubbles, content, decision, suggestedAgent, suggestedMeeting, neededTool };
 }
 
 module.exports = { parseAgentOutput };

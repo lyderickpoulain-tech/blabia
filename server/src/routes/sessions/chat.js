@@ -11,7 +11,7 @@ const {
   areSimilar,
   callAgent,
   appendMessageEntry,
-  appendPendingStepSuggestion,
+  appendPendingMeetingSuggestion,
 } = require('./helpers');
 const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt');
 const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
@@ -23,6 +23,15 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const router = express.Router({ mergeParams: true });
 
 const MAX_CONSECUTIVE = 2;
+
+// ── Garde-fou 3.3 : repère un message qui rédige déjà le livrable claude_code
+// (bloc de code de plus de 15 lignes, ou texte qui ressemble à un prompt complet)
+// pendant les échanges, alors que le livrable ne doit être produit qu'à la clôture.
+function looksLikeDeliverable(text) {
+  const codeBlocks = text.match(/```[\s\S]*?```/g) || [];
+  if (codeBlocks.some(b => b.split('\n').length > 15)) return true;
+  return /^(voici le prompt|prompt claude code|objectif\s*:|tâche\s*:)/i.test(text.trim());
+}
 
 // ── loadMessages ──────────────────────────────────────────────────────────────
 
@@ -191,7 +200,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     }
 
     projectMilestones = await db('Milestone')
-      .select('title', 'status')
+      .select('id', 'title', 'status', 'type')
       .where({ projectId })
       .orderBy('displayOrder', 'asc');
   } catch {
@@ -261,10 +270,11 @@ router.post('/:sessionId/chat', async (req, res) => {
     const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
     const humorLevel     = session.humorLevel     ?? project.humorLevel     ?? 2;
 
-    const TL_EMOJI = { done: '✅', in_progress: '🔵', blocked: '🔴', pending: '⚪' };
-    const timelineText = projectMilestones.length > 0
-      ? projectMilestones.filter(m => m.status !== 'done').slice(0, 5).map(m => `${TL_EMOJI[m.status] || '⚪'} ${m.title}`).join('\n')
-      : '';
+    // Réunions du projet avec référence courte (R1, R2…) — positionnement des
+    // suggestions [SUGGEST_MEETING] et dédoublonnage (phase 3.4).
+    const projectMeetings = projectMilestones.map((m, i) => ({
+      ref: `R${i + 1}`, id: m.id, title: m.title, status: m.status, type: m.type,
+    }));
 
     let pastCodePromptsText = '';
     if (intention[0] === 'claude_code') {
@@ -338,7 +348,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       const systemPrompt = buildAgentSystemPrompt({
         agent, project, session, intention, activeAgents,
         reason: next.reason || '',
-        timelineText,
+        projectMeetings,
         priorDecisionQuestions,
         pastCodePromptsText,
         expertiseLevel,
@@ -388,6 +398,20 @@ router.post('/:sessionId/chat', async (req, res) => {
         agentFullText   = agentResult.text;
         agentUsage      = agentResult.usage;
         agentWebSearch  = agentResult.webSearch;
+
+        // Garde-fou 3.3 : relance unique si l'agent rédige déjà le livrable
+        if (intention[0] === 'claude_code' && looksLikeDeliverable(agentFullText)) {
+          const retryMessage = Array.isArray(userMessage)
+            ? [...userMessage, { type: 'text', text: 'Reformule sans rédiger le livrable : pose plutôt une question pour clarifier le besoin.' }]
+            : `${userMessage}\n\nReformule sans rédiger le livrable : pose plutôt une question pour clarifier le besoin.`;
+          const retryResult = await callAgent(
+            systemPrompt, retryMessage, 600, session.model || MODEL, abortController.signal,
+            session.webSearchEnabled === true
+          );
+          agentFullText  = retryResult.text;
+          agentUsage     = { inputTokens: agentUsage.inputTokens + retryResult.usage.inputTokens, outputTokens: agentUsage.outputTokens + retryResult.usage.outputTokens };
+          agentWebSearch = retryResult.webSearch || agentWebSearch;
+        }
       } catch (agentErr) {
         if (abortController.signal.aborted || agentErr.name === 'AbortError') {
           // Appel non streamé interrompu avant d'aboutir : rien à enregistrer,
@@ -464,18 +488,24 @@ router.post('/:sessionId/chat', async (req, res) => {
         send('suggest_agent', { ...parsed.suggestedAgent, reason: `Suggéré par ${agent.name}` });
       }
 
-      if (parsed.suggestedStep) {
-        const meetingIntention = Array.isArray(session.intention) ? session.intention : [];
-        if (meetingIntention.includes('timeline_steps')) {
-          send('suggest_step', { title: parsed.suggestedStep.title, type: 'summary' });
-        } else {
-          await appendPendingStepSuggestion(sessionId, {
-            title: parsed.suggestedStep.title,
-            type: 'summary',
-            agentName: agent.name,
-            timestamp: new Date().toISOString()
-          });
-        }
+      if (parsed.suggestedMeeting) {
+        const suggestion = {
+          id:        randomUUID(),
+          title:     parsed.suggestedMeeting.title,
+          objective: parsed.suggestedMeeting.objective,
+          type:      parsed.suggestedMeeting.type,
+          reason:    parsed.suggestedMeeting.reason,
+          after:     parsed.suggestedMeeting.after,
+          status:    'pending',
+          agentName: agent.name,
+          timestamp: new Date().toISOString(),
+        };
+        const stored = await appendPendingMeetingSuggestion(sessionId, suggestion);
+        // Rien n'est créé côté Milestone à ce stade — juste affiché dans le
+        // panneau "Réunions suggérées" (3.4). stored=false si doublon ou limite atteinte.
+        // Nesté sous "suggestion" : le champ suggestion.type (decision|claude_code|stack)
+        // entrerait sinon en collision avec le type d'événement SSE lui-même.
+        if (stored) send('suggest_meeting', { suggestion });
       }
 
       consecutiveCount = next.agentId === lastAgentId ? consecutiveCount + 1 : 1;

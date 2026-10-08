@@ -48,16 +48,25 @@ export default function MeetingInputBar({
               🔁 Reprendre
             </button>
           </div>
-          {session.status === 'accepted' && (session.summary || currentIntention === 'timeline_steps') && (
-            <button
-              onClick={() => setShowDeliverable(true)}
-              className="w-full bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-xs font-semibold py-2 rounded-xl transition flex items-center justify-center gap-1.5"
-            >
-              {currentIntention === 'summary' ? '📋 Voir le compte-rendu'
-                : currentIntention === 'claude_code' ? '💻 Voir le prompt'
-                : currentIntention === 'timeline_steps' ? '📅 Voir les étapes'
-                : '📄 Voir le livrable'}
-            </button>
+          {session.status === 'accepted' && (
+            <div className="flex gap-2">
+              {session.summary && (
+                <button
+                  onClick={() => setShowDeliverable('summary')}
+                  className="flex-1 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-xs font-semibold py-2 rounded-xl transition flex items-center justify-center gap-1.5"
+                >
+                  📋 Voir le compte-rendu
+                </button>
+              )}
+              {currentIntention === 'claude_code' && session.deliverable && (
+                <button
+                  onClick={() => setShowDeliverable('deliverable')}
+                  className="flex-1 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-xs font-semibold py-2 rounded-xl transition flex items-center justify-center gap-1.5"
+                >
+                  💻 Voir le prompt
+                </button>
+              )}
+            </div>
           )}
         </div>
       ) : (

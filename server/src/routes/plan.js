@@ -9,6 +9,10 @@ const { parseJsonField } = require('../utils/parseJsonField');
 const router = express.Router();
 router.use(authMiddleware);
 
+// v5.0 phase 3.2 : decision | claude_code | stack (remplace l'ancien éventail
+// synthesis/memory/timeline_steps/stack_check/milestone/meeting/technical)
+const MILESTONE_TYPES = ['decision', 'claude_code', 'stack'];
+
 // ── GET /api/projects/:id/plan — jalons + tâches ─────────────────────────────
 
 router.get('/:id/plan', async (req, res) => {
@@ -81,7 +85,7 @@ router.post('/:id/milestones', async (req, res) => {
         description: description?.trim() || null,
         dueDate:     dueDate || null,
         status:      'pending',
-        type:        ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone', 'meeting', 'technical'].includes(type) ? type : 'synthesis',
+        type:        MILESTONE_TYPES.includes(type) ? type : 'decision',
         displayOrder: order,
         createdAt:   new Date(),
         createdBy:   req.user.id
@@ -132,7 +136,7 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
     if (description          !== undefined) updates.description  = description?.trim() || null;
     if (dueDate              !== undefined) updates.dueDate      = dueDate || null;
     if (status               !== undefined) updates.status       = status;
-    if (type                 !== undefined) updates.type         = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone', 'meeting', 'technical'].includes(type) ? type : 'synthesis';
+    if (type                 !== undefined) updates.type         = MILESTONE_TYPES.includes(type) ? type : 'decision';
     if (displayOrder         !== undefined) updates.displayOrder = displayOrder;
 
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Aucune modification' });
@@ -432,7 +436,6 @@ router.post('/:id/plan/bulk', async (req, res) => {
 
     for (const mData of milestones) {
       if (!mData.title?.trim()) continue;
-      const VALID_TYPES = ['synthesis', 'memory', 'claude_code', 'timeline_steps', 'stack_check', 'milestone', 'meeting', 'technical'];
       const titleKey = mData.title.trim().toLowerCase();
       let milestoneId;
 
@@ -449,7 +452,7 @@ router.post('/:id/plan/bulk', async (req, res) => {
             id: randomUUID(), projectId: req.params.id,
             title: mData.title.trim(), description: mData.description?.trim() || null,
             status: 'pending',
-            type: VALID_TYPES.includes(mData.type) ? mData.type : 'synthesis',
+            type: MILESTONE_TYPES.includes(mData.type) ? mData.type : 'decision',
             displayOrder: milestoneOrder++,
             createdFromSessionId: sourceSessionId || null,
             createdAt: new Date(), createdBy: req.user.id

@@ -8,18 +8,17 @@ import { getPricing, PRICING_CONFIG } from '../utils/techStack';
 import GenerateTimelineModal from '../components/GenerateTimelineModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
-import TimelineStepsModal from '../components/TimelineStepsModal';
 import StackPanel from '../components/StackPanel';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 const QUICK_COMMANDS = [
-  { cmd: '/ajouterEtapes',    label: 'Ajouter des étapes',     placeholder: '/ajouterEtapes ' },
+  { cmd: '/ajouterEtapes',    label: 'Ajouter des réunions',   placeholder: '/ajouterEtapes ' },
   { cmd: '/résumerProjet',    label: 'Résumer le projet' },
   { cmd: '/résumerRéunion',   label: 'Résumer une réunion',    placeholder: '/résumerRéunion ' },
   { cmd: '/décisions',        label: 'Lister les décisions' },
-  { cmd: '/prochainEtape',    label: 'Prochaine étape' },
+  { cmd: '/prochainEtape',    label: 'Prochaine réunion' },
   { cmd: '/analyserBloquants',label: 'Analyser les blocages' },
-  { cmd: '/exporterTimeline', label: 'Exporter la timeline' },
+  { cmd: '/exporterTimeline', label: 'Exporter les réunions' },
   { cmd: '/rechercher',       label: 'Rechercher 🌐',         placeholder: '/rechercher ' },
   { cmd: '/aide',             label: 'Aide' },
 ];
@@ -332,10 +331,11 @@ function getIntentionKey(session) {
   try { const p = JSON.parse(i || '[]'); return p[0] || ''; } catch { return ''; }
 }
 
+// v5.0 phase 3.2 : decision | claude_code | stack
 const DELIVERABLE_ICON = {
-  summary: '📋', synthesis: '📋', memory: '📋', meeting: '📋',
-  claude_code: '💻', technical: '💻',
-  timeline_steps: '📅',
+  decision: '📋',
+  claude_code: '💻',
+  stack: '🔧',
 };
 
 function CodeStatusBadge({ session }) {
@@ -981,7 +981,7 @@ export default function ProjectView() {
             {project.brief && (
               <button onClick={() => setShowGenTimeline(true)}
                 className="text-sm border border-violet-200 text-violet-600 hover:bg-violet-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium">
-                📅 Timeline IA
+                📅 Réunions IA
               </button>
             )}
             <button
@@ -1062,10 +1062,10 @@ export default function ProjectView() {
             {quickResult.milestonesCreated?.length > 0 && (
               <div className="px-4 pb-3 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-green-700">
-                  ✅ {quickResult.milestonesCreated.length} étape{quickResult.milestonesCreated.length !== 1 ? 's' : ''} ajoutée{quickResult.milestonesCreated.length !== 1 ? 's' : ''} à la timeline
+                  ✅ {quickResult.milestonesCreated.length} réunion{quickResult.milestonesCreated.length !== 1 ? 's' : ''} ajoutée{quickResult.milestonesCreated.length !== 1 ? 's' : ''}
                 </span>
                 <Link to={`/projects/${id}/plan`} className="text-sm text-blabia-blue font-medium hover:underline">
-                  Voir la timeline →
+                  Voir le plan →
                 </Link>
               </div>
             )}
@@ -1308,7 +1308,7 @@ export default function ProjectView() {
               <ul className="list-disc pl-4 space-y-0.5 text-amber-700">
                 <li>Effacer la mémoire contextuelle du projet</li>
                 <li>Vider l'historique et les résumés de toutes les réunions</li>
-                <li>Remettre toutes les étapes de la timeline à l'état initial</li>
+                <li>Remettre toutes les réunions planifiées à l'état initial</li>
               </ul>
             </div>
             <p className="text-sm text-gray-600">
@@ -1357,7 +1357,15 @@ export default function ProjectView() {
         const dateStr = deliverableSession.createdAt
           ? new Date(deliverableSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
           : '';
-        if (['summary','synthesis','memory','meeting'].includes(ik)) return (
+        if (ik === 'claude_code') return (
+          <ExportModal
+            directContent={deliverableSession.deliverable || deliverableSession.summary}
+            projectId={id}
+            onClose={() => setDeliverableSession(null)}
+          />
+        );
+        // decision | stack (et valeurs legacy non encore migrées, défensif) → compte-rendu
+        return (
           <SummaryDisplayModal
             title={deliverableSession.task}
             date={dateStr}
@@ -1365,21 +1373,6 @@ export default function ProjectView() {
             onClose={() => setDeliverableSession(null)}
           />
         );
-        if (['claude_code','technical'].includes(ik)) return (
-          <ExportModal
-            directContent={deliverableSession.summary}
-            projectId={id}
-            onClose={() => setDeliverableSession(null)}
-          />
-        );
-        if (ik === 'timeline_steps') return (
-          <TimelineStepsModal
-            session={deliverableSession}
-            projectId={id}
-            onClose={() => setDeliverableSession(null)}
-          />
-        );
-        return null;
       })()}
 
       {showStackPanel && (

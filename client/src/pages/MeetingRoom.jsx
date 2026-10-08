@@ -4,7 +4,6 @@ import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import MeetingCloseModal from '../components/MeetingCloseModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
-import TimelineStepsModal from '../components/TimelineStepsModal';
 import MeetingHeader from '../components/meeting/MeetingHeader';
 import MeetingInputBar from '../components/meeting/MeetingInputBar';
 import { MeetingDecisionPanel, MeetingSuggestCloseBanner } from '../components/meeting/MeetingDecisionFlow';
@@ -30,11 +29,11 @@ const STATUS_BADGE = {
   abandoned: { label: 'Abandonnée', cls: 'bg-gray-100 text-gray-500'    },
 };
 
+// v5.0 phase 3.2 : decision | claude_code (stack : phase 4)
 const DELIVERABLE_TYPES = [
-  { id: 'synthesis',      icon: '📝', label: 'Synthèse'    },
-  { id: 'memory',         icon: '🧠', label: 'Souvenir'    },
-  { id: 'claude_code',    icon: '💻', label: 'Claude Code' },
-  { id: 'timeline_steps', icon: '📋', label: 'Étapes'      },
+  { id: 'decision',    icon: '🤝', label: 'Décision'    },
+  { id: 'claude_code', icon: '💻', label: 'Claude Code' },
+  { id: 'stack',       icon: '🔧', label: 'Outils'      },
 ];
 
 
@@ -104,8 +103,8 @@ export default function MeetingRoom() {
   const agentSuggestionsRef = useRef([]);
   agentSuggestionsRef.current = agentSuggestions; // sync à chaque rendu pour éviter stale closures
 
-  // États suggestions d'étape SSE
-  const [stepSuggestions, setStepSuggestions] = useState([]);
+  // Réunions suggérées ([SUGGEST_MEETING], phase 3.4)
+  const [meetingSuggestions, setStepSuggestions] = useState([]);
 
   // ID de la décision en attente (bloque la saisie jusqu'à réponse/report)
   const [pendingDecisionId,       setPendingDecisionId]       = useState(null);
@@ -176,7 +175,7 @@ export default function MeetingRoom() {
     } else {
       setShowNewMessage(true);
     }
-  }, [messages, streamingAgent, agentSuggestions, stepSuggestions, isStreaming]);
+  }, [messages, streamingAgent, agentSuggestions, meetingSuggestions, isStreaming]);
 
   // Masquer le bouton quand l'utilisateur scrolle jusqu'en bas manuellement
   const handleFeedScroll = useCallback(() => {
@@ -425,26 +424,21 @@ export default function MeetingRoom() {
     }
   }, [projectId, sessionId]);
 
-  // Ajouter une étape timeline suggérée
-  const handleAddStep = useCallback(async (idx, form) => {
-    const s = stepSuggestions[idx];
-    if (!s || s.adding) return;
-    setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, adding: true } : x));
+  // Réunions suggérées ([SUGGEST_MEETING], phase 3.4) — Garder/Modifier/Écarter
+  // ne créent rien immédiatement : la matérialisation se fait au "Plan des
+  // réunions" (panneau latéral) ou à la clôture.
+  const [meetingSuggestionBusyId, setMeetingSuggestionBusyId] = useState(null);
+  const patchMeetingSuggestion = useCallback(async (id, body) => {
+    setMeetingSuggestionBusyId(id);
     try {
-      await api.post(`/projects/${projectId}/milestones`, {
-        title: form.title.trim(),
-        type:  form.type,
-      });
-      setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, added: true, adding: false } : x));
-      refreshPanel();
-    } catch {
-      setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, adding: false } : x));
-    }
-  }, [stepSuggestions, projectId, refreshPanel]);
-
-  const handleDismissStep = useCallback((idx) => {
-    setStepSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, dismissed: true } : x));
-  }, []);
+      const { data } = await api.patch(`/projects/${projectId}/sessions/${sessionId}/meeting-suggestions/${id}`, body);
+      setStepSuggestions(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+    } catch {}
+    setMeetingSuggestionBusyId(null);
+  }, [projectId, sessionId]);
+  const handleKeepMeeting    = useCallback((id) => patchMeetingSuggestion(id, { status: 'kept' }), [patchMeetingSuggestion]);
+  const handleDiscardMeeting = useCallback((id) => patchMeetingSuggestion(id, { status: 'discarded' }), [patchMeetingSuggestion]);
+  const handleSaveMeeting    = useCallback((id, fields) => patchMeetingSuggestion(id, fields), [patchMeetingSuggestion]);
 
   // Chargement initial : session + projet en parallèle
   useEffect(() => {
@@ -458,6 +452,7 @@ export default function MeetingRoom() {
         setProject(projectData);
         setMessages(Array.isArray(sessionData.messages) ? sessionData.messages : []);
         setActiveAgents(Array.isArray(sessionData.activeAgents) ? sessionData.activeAgents : []);
+        setStepSuggestions(Array.isArray(sessionData.pendingMeetingSuggestions) ? sessionData.pendingMeetingSuggestions : []);
       })
       .catch(() => setLoadError('Réunion introuvable ou accès refusé.'))
       .finally(() => setLoading(false));
@@ -474,8 +469,8 @@ export default function MeetingRoom() {
   const currentIntention = (() => {
     const i = session?.intention;
     if (Array.isArray(i) && i.length > 0) return i[0];
-    try { const p = JSON.parse(i || '[]'); return Array.isArray(p) && p.length > 0 ? p[0] : 'synthesis'; }
-    catch { return 'synthesis'; }
+    try { const p = JSON.parse(i || '[]'); return Array.isArray(p) && p.length > 0 ? p[0] : 'decision'; }
+    catch { return 'decision'; }
   })();
   const intentionMeta = DELIVERABLE_TYPES.find(d => d.id === currentIntention) || DELIVERABLE_TYPES[0];
   const effectiveExpertiseLevel = session?.expertiseLevel ?? project?.expertiseLevel ?? 3;
@@ -648,14 +643,8 @@ export default function MeetingRoom() {
                 createForm: { name: ev.name, role: ev.role, systemPrompt: '' }
               }]);
 
-            } else if (ev.type === 'suggest_step') {
-              setStepSuggestions(prev => [...prev, {
-                title:     ev.title || '',
-                type:      ev.milestoneType || 'meeting',
-                dismissed: false,
-                adding:    false,
-                added:     false,
-              }]);
+            } else if (ev.type === 'suggest_meeting') {
+              setStepSuggestions(prev => [...prev, ev.suggestion]);
 
             } else if (ev.type === 'error') {
               setSendError(ev.message || 'Erreur inconnue');
@@ -959,6 +948,7 @@ export default function MeetingRoom() {
           setShowDecisions={setShowDecisions}
           decisions={decisions}
           pendingDecisionCount={pendingDecisionCount}
+          meetingSuggestionsCount={meetingSuggestions.filter(s => s.status === 'pending').length}
           tokensUsed={tokensUsed}
           showMenuDots={showMenuDots}
           setShowMenuDots={setShowMenuDots}
@@ -997,9 +987,11 @@ export default function MeetingRoom() {
             onInviteSuggested={handleInviteSuggested}
             onDismissSuggestion={handleDismissSuggestion}
             onCreateAndInvite={handleCreateAndInvite}
-            stepSuggestions={stepSuggestions}
-            onAddStep={handleAddStep}
-            onDismissStep={handleDismissStep}
+            meetingSuggestions={meetingSuggestions}
+            onKeepMeeting={handleKeepMeeting}
+            onDiscardMeeting={handleDiscardMeeting}
+            onSaveMeeting={handleSaveMeeting}
+            meetingSuggestionBusyId={meetingSuggestionBusyId}
             session={session}
             project={project}
             onAutoLaunch={handleAutoLaunch}
@@ -1103,6 +1095,7 @@ export default function MeetingRoom() {
     {showCloseModal && session && (
       <MeetingCloseModal
         session={session}
+        initialSuggestions={meetingSuggestions}
         projectId={projectId}
         onClose={() => setShowCloseModal(false)}
         onClosed={handleSessionClosed}
@@ -1110,7 +1103,7 @@ export default function MeetingRoom() {
     )}
 
     {/* ── Modaux livrables ────────────────────────────────────────────── */}
-    {showDeliverable && session?.status === 'accepted' && currentIntention === 'summary' && (
+    {showDeliverable === 'summary' && session?.status === 'accepted' && (
       <SummaryDisplayModal
         title={session.task}
         date={session.createdAt
@@ -1120,16 +1113,9 @@ export default function MeetingRoom() {
         onClose={() => setShowDeliverable(false)}
       />
     )}
-    {showDeliverable && session?.status === 'accepted' && currentIntention === 'claude_code' && (
+    {showDeliverable === 'deliverable' && session?.status === 'accepted' && (
       <ExportModal
-        directContent={session.summary}
-        projectId={projectId}
-        onClose={() => setShowDeliverable(false)}
-      />
-    )}
-    {showDeliverable && session?.status === 'accepted' && currentIntention === 'timeline_steps' && (
-      <TimelineStepsModal
-        session={session}
+        directContent={session.deliverable}
         projectId={projectId}
         onClose={() => setShowDeliverable(false)}
       />

@@ -1,15 +1,20 @@
 // Prompts de génération des livrables à la clôture d'une réunion
 // (server/src/routes/sessions/deliverables.js — POST /:sessionId/generate-deliverable).
 
-function buildSummaryPrompt(sessionContext, expertiseLevel = 3) {
+// v5.0 phase 3.2 : pour les réunions de type "decision", le compte-rendu prend
+// la forme d'un relevé de décisions plutôt que du format générique.
+function buildSummaryPrompt(sessionContext, expertiseLevel = 3, meetingType = 'decision') {
   // Niveau 1-2 (découverte/initié) : le compte-rendu se termine par un glossaire
   // des termes techniques employés — pas au niveau prompt Claude Code (phase 2.4).
   const glossarySection = expertiseLevel <= 2
     ? '\n## Glossaire\n(Termine le compte-rendu par cette section si tu as employé des termes techniques : chaque terme, défini en une phrase simple.)'
     : '';
+  const format = meetingType === 'decision'
+    ? '## Décisions prises\n## Options écartées et pourquoi\n## Questions ouvertes\n## Actions'
+    : '## Objectif\n## Points discutés\n## Décisions prises\n## Actions à mener';
   return {
     system: 'Tu es un expert en synthèse de réunion d\'entreprise. Tu rédiges des comptes-rendus clairs et structurés. Réponds uniquement en français, sans introduction ni conclusion génériques.',
-    user: `Génère un compte-rendu structuré de cette réunion.\n\nFormat :\n## Objectif\n## Points discutés\n## Décisions prises\n## Actions à mener${glossarySection}\n\nMax 600 mots (hors glossaire).\n\n${sessionContext}`,
+    user: `Génère un compte-rendu structuré de cette réunion.\n\nFormat :\n${format}${glossarySection}\n\nMax 600 mots (hors glossaire).\n\n${sessionContext}`,
   };
 }
 
@@ -47,11 +52,4 @@ ${historyText}`,
   };
 }
 
-function buildTimelineStepsPrompt(sessionContext) {
-  return {
-    system: 'Tu extrais des jalons et tâches actionnables depuis une réunion. Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks.',
-    user: `Extrais les étapes actionnables de cette réunion sous forme de jalons et tâches.\n\nRetourne UNIQUEMENT ce JSON :\n{\n  "milestones": [\n    { "title": "...", "description": "...", "type": "meeting", "todos": [{ "title": "...", "priority": "high" }] }\n  ],\n  "standalone_todos": [{ "title": "...", "priority": "medium" }]\n}\n\n${sessionContext}`,
-  };
-}
-
-module.exports = { buildSummaryPrompt, buildClaudeCodePrompt, buildTimelineStepsPrompt };
+module.exports = { buildSummaryPrompt, buildClaudeCodePrompt };

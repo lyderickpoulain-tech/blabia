@@ -3,11 +3,11 @@ import api from '../utils/api';
 import { useProjectPanel } from './ProjectLayout';
 
 const TYPE_ICON = {
-  synthesis:   '📋',
+  decision:    '🤝',
   claude_code: '💻',
-  stack_check: '🔧',
+  stack:       '🔧',
 };
-const TYPES = ['synthesis', 'claude_code', 'stack_check'];
+const TYPES = ['decision', 'claude_code', 'stack'];
 
 export default function GenerateTimelineModal({ project, existingCount, onClose, onAdded }) {
   const { refreshPanel } = useProjectPanel();
@@ -68,7 +68,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
       milestones: active.map(s => ({
         title: s.title.trim(),
         description: s.description?.trim() || '',
-        type: s.type || 'synthesis',
+        type: s.type || 'decision',
         todos: []
       })),
       standalone_todos: []
@@ -97,9 +97,9 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
           <span className="text-xl">📅</span>
           <div className="flex-1">
-            <h2 className="text-base font-bold text-gray-900">Timeline proposée pour « {project.name} »</h2>
+            <h2 className="text-base font-bold text-gray-900">Réunions proposées pour « {project.name} »</h2>
             {!loading && steps.length > 0 && (
-              <p className="text-xs text-gray-400 mt-0.5">{steps.length} étape{steps.length > 1 ? 's' : ''} générée{steps.length > 1 ? 's' : ''}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{steps.length} réunion{steps.length > 1 ? 's' : ''} générée{steps.length > 1 ? 's' : ''}</p>
             )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">×</button>
@@ -109,7 +109,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
           {loading && (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-400">
               <div className="w-8 h-8 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm">Analyse du brief et génération de la timeline…</p>
+              <p className="text-sm">Analyse du brief et génération des réunions…</p>
             </div>
           )}
 
@@ -123,7 +123,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
           {done && (
             <div className="text-center py-8 space-y-2">
               <div className="text-3xl">✅</div>
-              <p className="font-semibold text-gray-800">{activeCount} étapes ajoutées à la timeline</p>
+              <p className="font-semibold text-gray-800">{activeCount} réunions ajoutées au plan</p>
               <button onClick={onClose} className="text-sm text-blabia-blue hover:underline">Fermer</button>
             </div>
           )}
@@ -147,7 +147,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
                         type="text"
                         value={step.title}
                         onChange={e => updateStep(i, 'title', e.target.value)}
-                        placeholder="Titre de l'étape…"
+                        placeholder="Titre de la réunion…"
                         className="w-full text-sm font-medium border-0 border-b border-transparent focus:border-blue-300 outline-none bg-transparent py-0.5"
                       />
                       <p className="text-xs text-gray-400 leading-relaxed">{step.description}</p>
@@ -175,7 +175,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
 
               <button onClick={() => insertAfter(steps.length - 1)}
                 className="w-full py-2 border-2 border-dashed border-gray-200 hover:border-blue-300 rounded-xl text-xs text-gray-400 hover:text-blue-500 transition">
-                + Ajouter une étape
+                + Ajouter une réunion
               </button>
             </div>
           )}
@@ -185,7 +185,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
           <div className="shrink-0 px-5 py-4 border-t border-gray-100 space-y-2">
             {existingCount > 0 && (
               <p className="text-xs text-gray-400 text-center">
-                {newCount} étape{newCount > 1 ? 's' : ''} seront ajoutées — {existingCount} jalon{existingCount > 1 ? 's' : ''} existant{existingCount > 1 ? 's' : ''} conservé{existingCount > 1 ? 's' : ''}
+                {newCount} réunion{newCount > 1 ? 's' : ''} seront ajoutées — {existingCount} réunion{existingCount > 1 ? 's' : ''} existante{existingCount > 1 ? 's' : ''} conservée{existingCount > 1 ? 's' : ''}
               </p>
             )}
             <div className="flex gap-2">
@@ -195,7 +195,7 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
               </button>
               <button onClick={handleAdd} disabled={adding || activeCount === 0}
                 className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
-                {adding ? 'Ajout…' : `Ajouter ${activeCount} étape${activeCount > 1 ? 's' : ''} à ma timeline →`}
+                {adding ? 'Ajout…' : `Ajouter ${activeCount} réunion${activeCount > 1 ? 's' : ''} à mon plan →`}
               </button>
             </div>
           </div>

@@ -70,16 +70,20 @@ async function appendMessageEntry(sessionId, message) {
   );
 }
 
-async function appendPendingStepSuggestion(sessionId, suggestion) {
-  const [row] = await db('Session').select('pendingStepSuggestions').where({ id: sessionId });
-  const existing = parseJsonField(row?.pendingStepSuggestions, []);
-  if (existing.length >= 5) return;
-  const isDuplicate = existing.some(s => areSimilar(s.title || '', suggestion.title || '', 0.5));
-  if (isDuplicate) return;
+// v5.0 phase 3.4 : remplace appendPendingStepSuggestion. Max 5 suggestions en
+// attente par réunion, dédoublonnage par similarité de titre. Retourne true si
+// la suggestion a bien été stockée (false = doublon ou limite atteinte).
+async function appendPendingMeetingSuggestion(sessionId, suggestion) {
+  const [row] = await db('Session').select('pendingMeetingSuggestions').where({ id: sessionId });
+  const existing = parseJsonField(row?.pendingMeetingSuggestions, []);
+  if (existing.length >= 5) return false;
+  const isDuplicate = existing.some(s => s.status === 'pending' && areSimilar(s.title || '', suggestion.title || '', 0.5));
+  if (isDuplicate) return false;
   await db.raw(
-    `UPDATE "Session" SET "pendingStepSuggestions" = COALESCE("pendingStepSuggestions", '[]'::jsonb) || ?::jsonb WHERE id = ?`,
+    `UPDATE "Session" SET "pendingMeetingSuggestions" = COALESCE("pendingMeetingSuggestions", '[]'::jsonb) || ?::jsonb WHERE id = ?`,
     [JSON.stringify([suggestion]), sessionId]
   );
+  return true;
 }
 
 // ── Appel Anthropic non streamé ────────────────────────────────────────────────
@@ -179,6 +183,6 @@ module.exports = {
   appendTimelineEntry,
   patchTimelineEntry,
   appendMessageEntry,
-  appendPendingStepSuggestion,
+  appendPendingMeetingSuggestion,
   callAgent,
 };

@@ -9,7 +9,7 @@ client/   React 18 + Vite + Tailwind
 server/   Node + Express
           server/src/routes/sessions/   sous-routeur express ("réunions")
           server/src/services/prompts/ construction des prompts (agent, orchestrateur, livrables)
-          server/src/services/markers.js  parsing des marqueurs [DECISION]/[SUGGEST_AGENT]/[SUGGEST_STEP]/[NEED_TOOL]
+          server/src/services/markers.js  parsing des marqueurs [DECISION]/[SUGGEST_AGENT]/[SUGGEST_MEETING]/[NEED_TOOL]
 server/prisma/   schema.prisma + migrations SQL
 ```
 
@@ -22,15 +22,19 @@ server/prisma/   schema.prisma + migrations SQL
 
 | Terme UI | Modèle DB | Sens |
 |---|---|---|
-| **Réunion planifiée** | `Milestone` | Un objectif à traiter, placé dans la timeline du projet (nom de table conservé pour éviter une migration lourde) |
+| **Réunion planifiée** | `Milestone` | Un objectif à traiter, placé dans le plan des réunions du projet (nom de table conservé pour éviter une migration lourde) |
 | **Réunion tenue** | `Session` (mode `meeting`) | La conversation réelle entre l'humain et les agents, liée ou non à une réunion planifiée |
-| **Compte-rendu** | `Session.summary` | Synthèse de la réunion, injectée en mémoire projet (`Project.context`) à la clôture |
-| **Livrable** | `Session.summary` / `Session.planSuggestions` selon le type | Résultat typé produit à la clôture : prompt Claude Code, plan d'étapes, etc. (Phase 3 introduira `Session.deliverable` pour le distinguer proprement du compte-rendu) |
+| **Compte-rendu** | `Session.summary` | Toujours produit à la clôture, injecté en mémoire projet (`Project.context`). Structuré en relevé de décisions pour le type `decision` |
+| **Livrable** | `Session.deliverable` | Résultat typé produit en plus du CR à la clôture — seulement pour `claude_code` aujourd'hui (le prompt) ; `stack` est prévu en phase 4 |
+| **Type d'objectif** | `Milestone.type` / `Session.intention` | `decision` (prise de décision), `claude_code` (prompt Claude Code), `stack` (outils, phase 4) |
 | **Outils** | `User.toolbox`, `Project.techStack` | Stack technique personnelle et par projet (Phase 4 refond ce domaine) |
 
-## Historique récent (v5.0, phase 1)
+## Historique récent (v5.0)
 
-Le projet a longtemps fait coexister deux systèmes de réunion : un pipeline **legacy** (`NewSessionLegacy`, `SessionRunner`, route `/run`, champs `Session.exchanges`/`agents`) et le pipeline **actuel** (`StartMeeting` → `MeetingRoom`, route `/chat`, champs `Session.messages`/`activeAgents`). Le pipeline legacy a été supprimé en phase 1 de la v5.0 après migration des données (`exchanges` → `messages`, voir migration `20261008000001_v5_migrate_legacy_sessions`). Toute session passe désormais par `mode = 'meeting'`.
+- **Phase 1** : suppression du pipeline legacy (`NewSessionLegacy`, `SessionRunner`, route `/run`, champs `Session.exchanges`/`agents`), remplacé par `StartMeeting` → `MeetingRoom` (`/chat`, champs `Session.messages`/`activeAgents`). Toute session passe par `mode = 'meeting'`. Prompts centralisés, parsing des marqueurs centralisé.
+- **Phase 2** : fin du streaming texte (`callAgent` non streamé, bulles multiples séparées par `[NEXT]`), vrai Markdown dans les bulles, curseurs pédagogie/humour (`Project.expertiseLevel`/`humorLevel`, surcharge par `Session`), recherche web câblée (outil `web_search_20260318`, `allowed_callers: ['direct']` requis pour obtenir des citations fiables).
+- **Phase 3** : types d'objectif consolidés en `decision | claude_code | stack` (migration `20261008000003_v5_meeting_types_deliverable` — anciennes valeurs `summary`/`synthesis`/`memory`/`timeline_steps`/`meeting`/`technical`/`milestone` → `decision`, `stack_check` → `stack`). Livrable séparé du compte-rendu (`Session.deliverable`). Le livrable n'est produit qu'à la clôture (« Conclure la réunion », génération automatique, plus de bouton « Générer » séparé). Suggestions de nouvelles réunions via `[SUGGEST_MEETING:{...}]` (remplace `[SUGGEST_STEP]`), stockées dans `Session.pendingMeetingSuggestions`, positionnables via une référence courte (`R1`, `R2`…) résolue au moment du « Plan des réunions » (`server/src/routes/sessions/meetingPlan.js`).
+- `TodoItem`/`PlanView.jsx` (page `/projects/:id/plan`) restent **hors périmètre v5** — non touchés, peuvent afficher des icônes de repli pour les nouveaux types.
 
 ## Conventions
 

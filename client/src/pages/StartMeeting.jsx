@@ -4,15 +4,19 @@ import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
 import api from '../utils/api';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
+// v5.0 phase 3.2 : decision | claude_code (stack : pas encore créable depuis
+// cet écran, son livrable est défini en phase 4)
 const DELIVERABLES = [
-  { id: 'summary',     icon: '📋', label: 'Compte-rendu', desc: 'Synthèse structurée + mémorisée dans le projet' },
-  { id: 'claude_code', icon: '💻', label: 'Claude Code',  desc: 'Prompt prêt pour le développement' },
+  { id: 'decision',    icon: '🤝', label: 'Prise de décision', desc: 'Relevé de décisions structuré + mémorisé dans le projet' },
+  { id: 'claude_code', icon: '💻', label: 'Claude Code',       desc: 'Prompt prêt pour le développement' },
 ];
 
+// Rétrocompat : anciennes valeurs de Milestone.type encore rencontrées (avant migration)
 const MT_MAP = {
-  summary: 'summary', synthesis: 'summary', meeting: 'summary',
-  memory: 'summary', timeline_steps: 'summary',
+  decision: 'decision', synthesis: 'decision', summary: 'decision', meeting: 'decision',
+  memory: 'decision', timeline_steps: 'decision', milestone: 'decision',
   claude_code: 'claude_code', technical: 'claude_code',
+  stack: 'decision', stack_check: 'decision',
 };
 
 function AgentScopeSelector({ scope, onChange, size = 'sm' }) {

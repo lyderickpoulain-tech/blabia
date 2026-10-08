@@ -7,7 +7,6 @@ const { MODEL, updateProjectContext } = require('./helpers');
 const {
   buildSummaryPrompt,
   buildClaudeCodePrompt,
-  buildTimelineStepsPrompt,
 } = require('../../services/prompts/deliverablePrompts');
 const { parseJsonField } = require('../../utils/parseJsonField');
 
@@ -121,19 +120,14 @@ ${summary.substring(0, 3000)}`
   }
 });
 
-// ── POST /:sessionId/generate-deliverable — Génération de livrable ────────────
+// ── POST /:sessionId/generate-deliverable — CR + livrable à la clôture (3.3) ──
+// Le type n'est plus choisi par le client : il vient de session.intention.
+// Toute réunion produit un compte-rendu ; seules claude_code (et plus tard
+// stack, phase 4) produisent en plus un livrable typé dans Session.deliverable.
 
 router.post('/:sessionId/generate-deliverable', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const { deliverableType } = req.body;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-
-  const VALID_TYPES = ['synthesis', 'memory', 'summary', 'claude_code', 'timeline_steps'];
-  if (!VALID_TYPES.includes(deliverableType)) {
-    return res.status(400).json({
-      error: 'deliverableType invalide — valeurs acceptées : summary, synthesis, memory, claude_code, timeline_steps'
-    });
-  }
 
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
@@ -143,10 +137,12 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     if (!session) return res.status(404).json({ error: 'Session introuvable' });
 
     const messages = parseJsonField(session.messages, []);
-
     if (messages.length === 0) {
       return res.status(400).json({ error: 'Aucun message dans cette réunion' });
     }
+
+    const meetingIntention = parseJsonField(session.intention, []);
+    const meetingType = ['decision', 'claude_code', 'stack'].includes(meetingIntention[0]) ? meetingIntention[0] : 'decision';
 
     const historyText = messages
       .filter(m => m.role !== 'system')
@@ -156,81 +152,54 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       .join('\n\n');
 
     const sessionContext = `Objectif de la réunion : ${session.task}\n\nTranscription :\n${historyText}`;
+    const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
 
-    // ── Compte-rendu : synthesis (legacy) | memory (legacy) | summary (v3.3) ──
-    if (['synthesis', 'memory', 'summary'].includes(deliverableType)) {
-      const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
-      const { system, user } = buildSummaryPrompt(sessionContext, expertiseLevel);
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 4000,
-        system,
-        messages: [{ role: 'user', content: user }]
-      });
-      let content = response.content[0].text.trim();
+    // ── Compte-rendu (toujours généré) ─────────────────────────────────────
+    const summaryPrompt = buildSummaryPrompt(sessionContext, expertiseLevel, meetingType);
+    const summaryResponse = await anthropic.messages.create({
+      model: MODEL, max_tokens: 4000,
+      system: summaryPrompt.system,
+      messages: [{ role: 'user', content: summaryPrompt.user }]
+    });
+    let summary = summaryResponse.content[0].text.trim();
 
-      // Sources web citées pendant la réunion (dédupliquées), agrégées en fin de CR
-      const citedSources = new Map();
-      for (const m of messages) {
-        for (const s of (m.webSearch?.sources || [])) {
-          if (s.url && !citedSources.has(s.url)) citedSources.set(s.url, s);
-        }
+    // Sources web citées pendant la réunion (dédupliquées), agrégées en fin de CR
+    const citedSources = new Map();
+    for (const m of messages) {
+      for (const s of (m.webSearch?.sources || [])) {
+        if (s.url && !citedSources.has(s.url)) citedSources.set(s.url, s);
       }
-      if (citedSources.size > 0) {
-        const lines = [...citedSources.values()].map(s => `- [${s.title || s.url}](${s.url})`);
-        content += `\n\n## Sources web consultées\n${lines.join('\n')}`;
-      }
-
-      await db('Session').where({ id: sessionId }).update({ summary: content });
-
-      if (deliverableType === 'summary' || deliverableType === 'memory') {
-        await updateProjectContext(projectId, sessionId, session.task, content);
-      }
-
-      return res.json({ deliverableType, content });
+    }
+    if (citedSources.size > 0) {
+      const lines = [...citedSources.values()].map(s => `- [${s.title || s.url}](${s.url})`);
+      summary += `\n\n## Sources web consultées\n${lines.join('\n')}`;
     }
 
-    if (deliverableType === 'claude_code') {
+    // ── Livrable typé (claude_code uniquement pour l'instant ; stack : phase 4) ──
+    let deliverable = null;
+    if (meetingType === 'claude_code') {
       const devDirectory = project.devDirectory?.trim() || null;
       const stackLines = formatTechStack(project.techStack);
       const decisions = messages.filter(m => m.pinned || m.type === 'decision');
-
-      const { system, user } = buildClaudeCodePrompt({
+      const codePrompt = buildClaudeCodePrompt({
         session, brief: project.brief, devDirectory, stackLines, decisions, historyText
       });
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 4000,
-        system,
-        messages: [{ role: 'user', content: user }]
+      const deliverableResponse = await anthropic.messages.create({
+        model: MODEL, max_tokens: 4000,
+        system: codePrompt.system,
+        messages: [{ role: 'user', content: codePrompt.user }]
       });
-      const content = response.content[0].text.trim();
-      await db('Session').where({ id: sessionId }).update({ summary: content, hasCode: true });
-      return res.json({ deliverableType, content });
+      deliverable = deliverableResponse.content[0].text.trim();
     }
 
-    if (deliverableType === 'timeline_steps') {
-      const { system, user } = buildTimelineStepsPrompt(sessionContext);
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 2048,
-        system,
-        messages: [{ role: 'user', content: user }]
-      });
+    await db('Session').where({ id: sessionId }).update({
+      summary,
+      deliverable,
+      ...(meetingType === 'claude_code' ? { hasCode: true } : {}),
+    });
+    await updateProjectContext(projectId, sessionId, session.task, summary);
 
-      const raw = response.content[0].text.trim()
-        .replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('Réponse JSON invalide depuis Claude');
-      const parsed = JSON.parse(match[0]);
-      const content = {
-        milestones:       Array.isArray(parsed.milestones)       ? parsed.milestones       : [],
-        standalone_todos: Array.isArray(parsed.standalone_todos) ? parsed.standalone_todos : []
-      };
-      await db('Session').where({ id: sessionId }).update({ planSuggestions: JSON.stringify(content) });
-      return res.json({ deliverableType, content });
-    }
-
+    return res.json({ meetingType, summary, deliverable });
   } catch (err) {
     console.error('[sessions/generate-deliverable]', err.message);
     res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });

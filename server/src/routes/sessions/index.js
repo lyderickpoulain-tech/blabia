@@ -10,6 +10,7 @@ router.use(require('./lifecycle'));
 router.use(require('./deliverables'));
 router.use(require('./agents'));
 router.use(require('./decisions'));
+router.use(require('./meetingPlan'));
 router.use(require('./chat'));
 
 module.exports = router;

@@ -16,10 +16,19 @@ describe('parseAgentOutput', () => {
     expect(r.content).toBe('Il manque un expert.');
   });
 
-  it('extrait une étape suggérée', () => {
-    const r = parseAgentOutput('On devrait faire ça ensuite. [SUGGEST_STEP: Valider le budget]');
-    expect(r.suggestedStep).toEqual({ title: 'Valider le budget' });
+  it('extrait une réunion suggérée', () => {
+    const text = 'On devrait faire ça ensuite. [SUGGEST_MEETING:{"title":"Valider le budget","objective":"Arbitrer le budget final","type":"decision","reason":"Nécessaire avant de continuer","after":"R2"}]';
+    const r = parseAgentOutput(text);
+    expect(r.suggestedMeeting).toEqual({
+      title: 'Valider le budget', objective: 'Arbitrer le budget final',
+      type: 'decision', reason: 'Nécessaire avant de continuer', after: 'R2',
+    });
     expect(r.content).toBe('On devrait faire ça ensuite.');
+  });
+
+  it('retombe sur le type decision si le type suggéré est invalide', () => {
+    const r = parseAgentOutput('[SUGGEST_MEETING:{"title":"X","type":"bogus"}]');
+    expect(r.suggestedMeeting).toEqual({ title: 'X', objective: '', type: 'decision', reason: '', after: null });
   });
 
   it('extrait un outil manquant (NEED_TOOL)', () => {
@@ -32,7 +41,7 @@ describe('parseAgentOutput', () => {
     const r = parseAgentOutput('Simple message sans marqueur.');
     expect(r.decision).toBeNull();
     expect(r.suggestedAgent).toBeNull();
-    expect(r.suggestedStep).toBeNull();
+    expect(r.suggestedMeeting).toBeNull();
     expect(r.neededTool).toBeNull();
     expect(r.content).toBe('Simple message sans marqueur.');
   });
@@ -59,10 +68,10 @@ describe('parseAgentOutput', () => {
     expect(r.content).toBe('milieu');
   });
 
-  it('ne garde que la première étape suggérée en cas de doublon et retire toutes les occurrences', () => {
-    const text = '[SUGGEST_STEP: Étape 1] texte [SUGGEST_STEP: Étape 2]';
+  it('ne garde que la première réunion suggérée en cas de doublon et retire toutes les occurrences', () => {
+    const text = '[SUGGEST_MEETING:{"title":"Réunion 1","type":"decision"}] texte [SUGGEST_MEETING:{"title":"Réunion 2","type":"decision"}]';
     const r = parseAgentOutput(text);
-    expect(r.suggestedStep).toEqual({ title: 'Étape 1' });
+    expect(r.suggestedMeeting.title).toBe('Réunion 1');
     expect(r.content).toBe('texte');
   });
 
@@ -71,7 +80,7 @@ describe('parseAgentOutput', () => {
     const r = parseAgentOutput('Les options sont [A, B, C] et il faut choisir.');
     expect(r.decision).toBeNull();
     expect(r.suggestedAgent).toBeNull();
-    expect(r.suggestedStep).toBeNull();
+    expect(r.suggestedMeeting).toBeNull();
     expect(r.neededTool).toBeNull();
     expect(r.content).toBe('Les options sont [A, B, C] et il faut choisir.');
   });
@@ -84,10 +93,10 @@ describe('parseAgentOutput', () => {
     expect(r.content).toBe(text);
   });
 
-  it('laisse un marqueur SUGGEST_STEP coupé tel quel', () => {
-    const text = 'Prochaine étape : [SUGGEST_STEP: Valider le';
+  it('laisse un marqueur SUGGEST_MEETING coupé tel quel', () => {
+    const text = 'Prochaine réunion : [SUGGEST_MEETING:{"title":"Valider le';
     const r = parseAgentOutput(text);
-    expect(r.suggestedStep).toBeNull();
+    expect(r.suggestedMeeting).toBeNull();
     expect(r.content).toBe(text);
   });
 

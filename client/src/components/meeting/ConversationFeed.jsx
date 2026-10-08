@@ -2,22 +2,7 @@ import { useState } from 'react';
 import DecisionCard from '../DecisionCard';
 import AgentScopeSelector from './AgentScopeSelector';
 import Markdown from '../Markdown';
-
-// ── Constantes locales ────────────────────────────────────────────────────────
-
-const MILESTONE_TYPES = [
-  { id: 'meeting',    icon: '🤝', label: 'Réunion'     },
-  { id: 'technical',  icon: '⚙️', label: 'Technique'   },
-  { id: 'milestone',  icon: '🎯', label: 'Jalon'       },
-  { id: 'stack_check',icon: '🔧', label: 'Stack check' },
-  { id: 'synthesis',  icon: '📄', label: 'Synthèse'    },
-  { id: 'claude_code',icon: '💻', label: 'Claude Code' },
-];
-
-const POSITION_OPTIONS = [
-  { id: 'end',   label: 'À la fin de la timeline' },
-  { id: 'after', label: 'Après l\'étape en cours' },
-];
+import MeetingSuggestionCard from './MeetingSuggestionCard';
 
 // ── Recherche web (2.6) ────────────────────────────────────────────────────────
 
@@ -149,105 +134,12 @@ function SuggestionAgentCard({ suggestion, idx, onInvite, onDismiss, onCreateAnd
   );
 }
 
-// ── SuggestionStepCard ────────────────────────────────────────────────────────
-
-function SuggestionStepCard({ suggestion, idx, onAdd, onDismiss }) {
-  const [form, setForm] = useState({
-    title:    suggestion.title || '',
-    type:     suggestion.type || 'meeting',
-    position: 'end',
-  });
-
-  if (suggestion.added) {
-    return (
-      <div className="flex justify-center mx-4">
-        <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-3 py-1">
-          ✅ Étape ajoutée à la timeline
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-4 bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2.5">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-blabia-blue">📅 Étape timeline suggérée</p>
-        <button onClick={() => onDismiss(idx)} className="text-gray-300 hover:text-gray-500 text-xs shrink-0">✕</button>
-      </div>
-
-      {/* Titre éditable */}
-      <input
-        type="text"
-        value={form.title}
-        onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-        placeholder="Titre de l'étape"
-        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-      />
-
-      {/* Sélecteur de type (6 boutons) */}
-      <div className="grid grid-cols-3 gap-1">
-        {MILESTONE_TYPES.map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setForm(p => ({ ...p, type: t.id }))}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition ${
-              form.type === t.id
-                ? 'bg-blabia-blue text-white'
-                : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
-            }`}
-          >
-            <span>{t.icon}</span>
-            <span className="truncate">{t.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Sélecteur de position */}
-      <div className="flex gap-1.5">
-        {POSITION_OPTIONS.map(p => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => setForm(f => ({ ...f, position: p.id }))}
-            className={`flex-1 text-xs py-1.5 rounded-lg border transition ${
-              form.position === p.id
-                ? 'bg-blabia-blue text-white border-blabia-blue'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          onClick={() => onAdd(idx, form)}
-          disabled={!form.title.trim() || suggestion.adding}
-          className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50 flex items-center justify-center gap-1"
-        >
-          {suggestion.adding
-            ? <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : '+ Ajouter à la timeline'}
-        </button>
-        <button
-          onClick={() => onDismiss(idx)}
-          className="border border-blue-300 text-blabia-blue text-xs font-medium py-1.5 px-3 rounded-lg hover:bg-blue-100"
-        >
-          Ignorer
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── ConversationFeed ──────────────────────────────────────────────────────────
 
 export default function ConversationFeed({
   messages, activeAgents, streamingAgent, streamingReason,
   agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite,
-  stepSuggestions, onAddStep, onDismissStep,
+  meetingSuggestions, onKeepMeeting, onDiscardMeeting, onSaveMeeting, meetingSuggestionBusyId,
   session, project, onAutoLaunch, isClosed, isStreaming,
   pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision,
   agentColors, deliverableTypes,
@@ -259,7 +151,7 @@ export default function ConversationFeed({
 
   if (messages.length === 0 && !streamingAgent) {
     const intentionKey0 = Array.isArray(session?.intention) ? session.intention[0]
-      : (() => { try { const p = JSON.parse(session?.intention || '[]'); return p[0] || 'synthesis'; } catch { return 'synthesis'; } })();
+      : (() => { try { const p = JSON.parse(session?.intention || '[]'); return p[0] || 'decision'; } catch { return 'decision'; } })();
     const intentionMeta0 = deliverableTypes.find(d => d.id === intentionKey0) || deliverableTypes[0];
     const modelLabel = session?.model?.includes('opus') ? 'Claude Opus'
       : session?.model?.includes('haiku') ? 'Claude Haiku'
@@ -459,12 +351,14 @@ export default function ConversationFeed({
         />
       ))}
 
-      {/* Cartes suggestion étape timeline (non-bloquantes) */}
-      {stepSuggestions?.filter(s => !s.dismissed).map((s, i) => (
-        <SuggestionStepCard
-          key={i} suggestion={s} idx={i}
-          onAdd={onAddStep}
-          onDismiss={onDismissStep}
+      {/* Cartes suggestion de réunion (non-bloquantes, phase 3.4) */}
+      {meetingSuggestions?.filter(s => s.status !== 'discarded').map(s => (
+        <MeetingSuggestionCard
+          key={s.id} suggestion={s}
+          busy={meetingSuggestionBusyId === s.id}
+          onKeep={onKeepMeeting}
+          onDiscard={onDiscardMeeting}
+          onSave={onSaveMeeting}
         />
       ))}
 

@@ -716,7 +716,7 @@ router.post('/:id/generate-timeline', async (req, res) => {
       const stack = typeof project.techStack === 'string'
         ? project.techStack
         : JSON.stringify(project.techStack, null, 2);
-      stackContext = `\nStack technique déjà définie pour ce projet :\n${stack}\n→ Ne propose PAS d'étape de définition ou découverte de la stack : elle est déjà connue. Si une vérification de l'environnement local est utile, utilise le type "stack_check" avec un titre orienté vérification (ex : "Vérification environnement de développement").\n`;
+      stackContext = `\nStack technique déjà définie pour ce projet :\n${stack}\n→ Ne propose PAS d'étape de définition ou découverte de la stack : elle est déjà connue. Si une vérification de l'environnement local est utile, utilise le type "stack" avec un titre orienté vérification (ex : "Vérification environnement de développement").\n`;
     }
 
     const response = await anthropic.messages.create({
@@ -742,11 +742,11 @@ Chaque étape doit être directement actionnelle pour CE projet spécifique.
 Pour chaque étape :
 - title : titre court et spécifique (max 50 chars)
 - description : ce que cette étape accomplit concrètement (1-2 phrases)
-- type : "synthesis" (réflexion/décision/compte-rendu) | "claude_code" (développement/implémentation technique) | "stack_check" (vérification outils/environnement)
+- type : "decision" (réflexion/décision/compte-rendu) | "claude_code" (développement/implémentation technique) | "stack" (vérification outils/environnement)
 - estimatedOrder : ordre chronologique
 
 Retourne UNIQUEMENT du JSON valide sans markdown :
-{"steps":[{"title":"...","description":"...","type":"synthesis","estimatedOrder":1}]}`
+{"steps":[{"title":"...","description":"...","type":"decision","estimatedOrder":1}]}`
       }]
     });
 
@@ -831,8 +831,8 @@ router.post('/:id/quick-command', async (req, res) => {
 
     const systemPrompt = `Tu es l'assistant du projet "${project.name}".
 Brief : ${project.brief || 'non défini'}
-Timeline : ${milestones.length > 0 ? milestones.map(m => `- ${m.title} (${m.status})`).join('\n') : 'aucune étape'}
-Réunions acceptées : ${sessions.length > 0 ? sessions.map(s => `- ${s.task}`).join('\n') : 'aucune'}
+Réunions planifiées : ${milestones.length > 0 ? milestones.map(m => `- ${m.title} (${m.status})`).join('\n') : 'aucune'}
+Réunions tenues (acceptées) : ${sessions.length > 0 ? sessions.map(s => `- ${s.task}`).join('\n') : 'aucune'}
 Mémoire projet : ${project.context?.slice(0, 1000) || 'aucune'}
 
 IMPORTANT : Ta réponse N'EST PAS stockée dans la mémoire du projet. C'est une réponse ponctuelle.`;
@@ -843,10 +843,10 @@ IMPORTANT : Ta réponse N'EST PAS stockée dans la mémoire du projet. C'est une
     switch (command) {
       case '/ajouteretapes':
         isAddSteps = true;
-        userPrompt = `Génère ${args || 'des étapes pertinentes'} pour ce projet.
+        userPrompt = `Génère ${args || 'des réunions pertinentes'} pour ce projet.
 Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
-{"milestones": [{"title": "...", "type": "summary|claude_code|stack_check"}]}
-Limite à 5 étapes maximum. Titres courts et actionnables (max 50 chars).`;
+{"milestones": [{"title": "...", "type": "decision|claude_code|stack"}]}
+Limite à 5 réunions maximum. Titres courts et actionnables (max 50 chars).`;
         break;
       case '/résumerprojet':
         userPrompt = "Fais un résumé de l'état actuel du projet : avancement, points clés, prochaines priorités.";
@@ -902,7 +902,7 @@ Limite à 5 étapes maximum. Titres courts et actionnables (max 50 chars).`;
               title:        step.title.trim(),
               description:  step.description?.trim() || null,
               status:       'pending',
-              type:         ['summary', 'claude_code', 'stack_check'].includes(step.type) ? step.type : 'summary',
+              type:         ['decision', 'claude_code', 'stack'].includes(step.type) ? step.type : 'decision',
               displayOrder: order++,
               createdAt:    new Date(),
               createdBy:    req.user.id

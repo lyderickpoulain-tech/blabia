@@ -18,6 +18,8 @@ export default function MeetingHeader({
   showLevelsDropdown, setShowLevelsDropdown, levelsDropdownRef,
   // Decisions panel toggle
   showDecisions, setShowDecisions, decisions, pendingDecisionCount,
+  // Réunions suggérées (phase 3.4)
+  meetingSuggestionsCount,
   // Tokens
   tokensUsed,
   // Menu dots
@@ -136,6 +138,16 @@ export default function MeetingHeader({
             </span>
           )}
         </button>
+
+        {/* Badge 💡 Réunions suggérées (phase 3.4) */}
+        {meetingSuggestionsCount > 0 && (
+          <span
+            className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border bg-amber-50 border-amber-200 text-amber-700 cursor-default"
+            title="Réunions suggérées par les agents, à garder/modifier/écarter dans le fil"
+          >
+            💡 {meetingSuggestionsCount}
+          </span>
+        )}
 
         {/* Badge recherche web activée */}
         {session.webSearchEnabled && (
