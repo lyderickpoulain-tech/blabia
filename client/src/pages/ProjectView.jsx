@@ -558,6 +558,7 @@ export default function ProjectView() {
   const [resettingMemory, setResettingMemory] = useState(false);
   const [showResetMemoryModal, setShowResetMemoryModal] = useState(false);
   const [resetMemoryConfirmName, setResetMemoryConfirmName] = useState('');
+  const [resetDeleteMilestones, setResetDeleteMilestones] = useState(false);
   const [showDelete, setShowDelete]     = useState(false);
   const [deleting, setDeleting]         = useState(false);
   const [members, setMembers]           = useState([]);
@@ -593,6 +594,7 @@ export default function ProjectView() {
   const [userGlobalStack, setUserGlobalStack] = useState({});
   const stackTimerRef = useRef(null);
   const isFirstStackLoad = useRef(true);
+  const panelRef = useRef(null); // refreshPanel du <ProjectLayout> rendu ci-dessous (cf. ProjectLayout.jsx)
   // ── Stack v4 : panneau latéral ─────────────────────────────────────────────
   const [showStackPanel, setShowStackPanel]   = useState(false);
   const [userToolbox, setUserToolbox]         = useState({});
@@ -634,6 +636,18 @@ export default function ProjectView() {
     return () => clearTimeout(stackTimerRef.current);
   }, [projectStack, stackLoading]);
 
+  const refetchSessionsAndStats = () => {
+    setSessionsLoading(true);
+    api.get(`/projects/${id}/sessions`)
+      .then(({ data }) => setSessions(data))
+      .catch(() => {})
+      .finally(() => setSessionsLoading(false));
+
+    api.get(`/projects/${id}/stats`)
+      .then(({ data }) => setStats(data))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     api.get(`/projects/${id}`)
       .then(({ data }) => {
@@ -668,14 +682,7 @@ export default function ProjectView() {
       .catch(() => navigate('/dashboard'))
       .finally(() => setLoading(false));
 
-    api.get(`/projects/${id}/sessions`)
-      .then(({ data }) => setSessions(data))
-      .catch(() => {})
-      .finally(() => setSessionsLoading(false));
-
-    api.get(`/projects/${id}/stats`)
-      .then(({ data }) => setStats(data))
-      .catch(() => {});
+    refetchSessionsAndStats();
 
     setAgentsLoading(true);
     api.get(`/projects/${id}/agents`)
@@ -873,10 +880,16 @@ export default function ProjectView() {
   const handleResetMemory = async () => {
     setResettingMemory(true);
     try {
-      await api.delete(`/projects/${id}/memory`);
+      await api.delete(`/projects/${id}/memory`, { params: { deleteMilestones: resetDeleteMilestones } });
       setProject(prev => ({ ...prev, context: null }));
       setShowResetMemoryModal(false);
       setResetMemoryConfirmName('');
+      setResetDeleteMilestones(false);
+      // La réinitialisation touche aussi les sessions et les jalons (côté serveur) :
+      // sans ce refresh, rien ne change visuellement (sessions/stats et panneau
+      // Réunions restent affichés avec leurs anciennes données en mémoire locale).
+      refetchSessionsAndStats();
+      panelRef.current?.();
     } catch {
       alert('Erreur lors de la réinitialisation');
     } finally {
@@ -886,7 +899,7 @@ export default function ProjectView() {
 
   if (loading) {
     return (
-      <ProjectLayout projectId={id}>
+      <ProjectLayout projectId={id} panelRef={panelRef}>
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
         </div>
@@ -900,7 +913,7 @@ export default function ProjectView() {
   const canManage = isOwner || isAdmin;
 
   return (
-    <ProjectLayout projectId={id}>
+    <ProjectLayout projectId={id} panelRef={panelRef}>
       {/* Navigation */}
       <Link to="/dashboard" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-5">
         ← Tableau de bord
@@ -1254,7 +1267,7 @@ export default function ProjectView() {
                 <p className="text-xs text-amber-600 mt-0.5">Efface tout l'historique des réunions, les résumés et remet les étapes à zéro.</p>
               </div>
               <button
-                onClick={() => { setResetMemoryConfirmName(''); setShowResetMemoryModal(true); }}
+                onClick={() => { setResetMemoryConfirmName(''); setResetDeleteMilestones(false); setShowResetMemoryModal(true); }}
                 className="shrink-0 ml-4 px-3 py-1.5 text-sm border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-100 transition"
               >
                 🔄 Réinitialiser
@@ -1307,10 +1320,26 @@ export default function ProjectView() {
               <p className="font-medium">Cette action va :</p>
               <ul className="list-disc pl-4 space-y-0.5 text-amber-700">
                 <li>Effacer la mémoire contextuelle du projet</li>
-                <li>Vider l'historique et les résumés de toutes les réunions</li>
-                <li>Remettre toutes les réunions planifiées à l'état initial</li>
+                <li>Supprimer toutes les réunions tenues (historique, résumés, livrables)</li>
+                <li>
+                  {resetDeleteMilestones
+                    ? 'Supprimer toutes les réunions planifiées (panneau Réunions)'
+                    : 'Remettre toutes les réunions planifiées à « À tenir »'}
+                </li>
               </ul>
             </div>
+            <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={resetDeleteMilestones}
+                onChange={e => setResetDeleteMilestones(e.target.checked)}
+                className="mt-0.5 accent-amber-500"
+              />
+              <span>
+                Supprimer aussi les réunions planifiées
+                <span className="block text-xs text-gray-400">Le plan des réunions sera perdu définitivement et devra être reconstruit.</span>
+              </span>
+            </label>
             <p className="text-sm text-gray-600">
               Pour confirmer, saisissez le nom du projet :{' '}
               <span className="font-semibold text-gray-900">{project.name}</span>

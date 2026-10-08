@@ -393,21 +393,19 @@ router.delete('/:id/memory', async (req, res) => {
     // Effacer project.context
     await db('Project').where({ id: req.params.id }).update({ context: null, updatedAt: new Date() });
 
-    // Vider messages + summary de toutes les sessions du projet
-    await db('Session').where({ projectId: req.params.id }).update({
-      messages: JSON.stringify([]),
-      summary: null,
-      planSuggestions: null,
-      tokensUsed: JSON.stringify({ input: 0, output: 0, total: 0 }),
-      hasCode: false,
-      codeStatus: null,
-      status: 'open'
-    });
+    // Supprimer toutes les réunions tenues du projet (reset complet — pas de
+    // simple vidage de contenu : TodoItem.sessionId et Milestone.createdFromSessionId
+    // passent à NULL via onDelete: SetNull, aucune donnée orpheline)
+    await db('Session').where({ projectId: req.params.id }).delete();
 
-    // Remettre tous les jalons à pending
-    await db('Milestone').where({ projectId: req.params.id }).update({
-      status: 'pending'
-    });
+    // Réunions planifiées : suppression seulement si l'utilisateur l'a cochée
+    // (?deleteMilestones=true), sinon simple remise à "à tenir".
+    // TodoItem.milestoneId passe à NULL via onDelete: SetNull.
+    if (req.query.deleteMilestones === 'true') {
+      await db('Milestone').where({ projectId: req.params.id }).delete();
+    } else {
+      await db('Milestone').where({ projectId: req.params.id }).update({ status: 'pending' });
+    }
 
     res.json({ message: 'Mémoire du projet réinitialisée' });
   } catch (err) {

@@ -6,23 +6,35 @@ const TYPE_META = {
   stack:       { icon: '🔧', label: 'Outils' },
 };
 
+// Résout la référence "after" (ex. "R2") en titre lisible pour affichage.
+function positionLabel(after, meetingRefs) {
+  if (!after) return 'En fin de plan';
+  const found = meetingRefs?.find(r => r.ref === after);
+  return found ? `Après « ${found.title} »` : 'En fin de plan';
+}
+
 // Carte de suggestion de réunion ([SUGGEST_MEETING], phase 3.4) — Garder / Modifier / Écarter.
 // `suggestion` : { id, title, objective, type, reason, after, status, agentName }
-export default function MeetingSuggestionCard({ suggestion, onKeep, onDiscard, onSave, busy }) {
+// `meetingRefs` : [{ ref: "R1", title }, …] — réunions déjà planifiées, même numérotation que côté agent (chat.js)
+export default function MeetingSuggestionCard({ suggestion, onKeep, onDiscard, onSave, busy, meetingRefs = [] }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle]         = useState(suggestion.title);
   const [type, setType]           = useState(suggestion.type);
   const [objective, setObjective] = useState(suggestion.objective || '');
+  const [after, setAfter]         = useState(suggestion.after || '');
 
   if (suggestion.status === 'discarded') return null;
 
   if (suggestion.status === 'kept' && !editing) {
     return (
-      <div className="mx-4 bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
-        <span className="text-base shrink-0">{TYPE_META[suggestion.type]?.icon || '🤝'}</span>
-        <span className="flex-1 text-sm text-green-900 truncate">{suggestion.title}</span>
-        <span className="text-xs text-green-600 font-medium shrink-0">✓ Gardée</span>
-        <button onClick={() => setEditing(true)} className="text-xs text-green-700 hover:underline shrink-0">Modifier</button>
+      <div className="mx-4 bg-green-50 border border-green-200 rounded-xl p-3 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-base shrink-0">{TYPE_META[suggestion.type]?.icon || '🤝'}</span>
+          <span className="flex-1 text-sm text-green-900 truncate">{suggestion.title}</span>
+          <span className="text-xs text-green-600 font-medium shrink-0">✓ Gardée</span>
+          <button onClick={() => setEditing(true)} className="text-xs text-green-700 hover:underline shrink-0">Modifier</button>
+        </div>
+        <p className="text-[10px] text-green-700 pl-6">📍 {positionLabel(suggestion.after, meetingRefs)}</p>
       </div>
     );
   }
@@ -50,9 +62,21 @@ export default function MeetingSuggestionCard({ suggestion, onKeep, onDiscard, o
             </button>
           ))}
         </div>
+        <div>
+          <label className="text-[10px] text-blue-700 font-medium">Positionner après :</label>
+          <select
+            value={after} onChange={e => setAfter(e.target.value)}
+            className="w-full mt-0.5 text-xs border border-blue-200 bg-white rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            <option value="">Fin de plan</option>
+            {meetingRefs.map(r => (
+              <option key={r.ref} value={r.ref}>{r.title}</option>
+            ))}
+          </select>
+        </div>
         <div className="flex gap-2">
           <button
-            onClick={() => { onSave(suggestion.id, { title, type, objective, status: 'kept' }); setEditing(false); }}
+            onClick={() => { onSave(suggestion.id, { title, type, objective, after: after || null, status: 'kept' }); setEditing(false); }}
             disabled={!title.trim() || busy}
             className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
           >
@@ -73,6 +97,7 @@ export default function MeetingSuggestionCard({ suggestion, onKeep, onDiscard, o
           {suggestion.reason && (
             <p className="text-xs text-amber-700 italic mt-0.5 leading-snug">💡 {suggestion.reason}</p>
           )}
+          <p className="text-[10px] text-amber-600 mt-0.5">📍 {positionLabel(suggestion.after, meetingRefs)}</p>
           {suggestion.agentName && (
             <p className="text-[10px] text-gray-400 mt-0.5">Suggéré par {suggestion.agentName}</p>
           )}

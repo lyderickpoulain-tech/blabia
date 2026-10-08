@@ -139,7 +139,7 @@ function SuggestionAgentCard({ suggestion, idx, onInvite, onDismiss, onCreateAnd
 export default function ConversationFeed({
   messages, activeAgents, streamingAgent, streamingReason,
   agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite,
-  meetingSuggestions, onKeepMeeting, onDiscardMeeting, onSaveMeeting, meetingSuggestionBusyId,
+  meetingSuggestions, onKeepMeeting, onDiscardMeeting, onSaveMeeting, meetingSuggestionBusyId, meetingRefs,
   session, project, onAutoLaunch, isClosed, isStreaming,
   pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision,
   agentColors, deliverableTypes,
@@ -359,6 +359,7 @@ export default function ConversationFeed({
           onKeep={onKeepMeeting}
           onDiscard={onDiscardMeeting}
           onSave={onSaveMeeting}
+          meetingRefs={meetingRefs}
         />
       ))}
 

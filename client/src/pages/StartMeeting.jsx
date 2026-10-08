@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
+import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
@@ -51,7 +51,9 @@ export default function StartMeeting() {
   const { id: projectId } = useParams();
   const location = useLocation();
   const navigate  = useNavigate();
-  const { refreshPanel } = useProjectPanel();
+  // StartMeeting rend lui-même <ProjectLayout> plus bas : il ne peut pas consommer
+  // son propre contexte via useProjectPanel() (cf. ProjectLayout.jsx), d'où ce ref.
+  const panelRef = useRef(null);
 
   // Pré-remplissage depuis la timeline (location.state)
   const milestoneId    = location.state?.milestoneId    || null;
@@ -208,7 +210,7 @@ export default function StartMeeting() {
         ...(milestoneId ? { milestoneId } : {})
       });
 
-      if (milestoneId) refreshPanel();
+      if (milestoneId) panelRef.current?.();
       navigate(`/projects/${projectId}/meeting/${data.session.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors du démarrage de la réunion');
@@ -219,7 +221,7 @@ export default function StartMeeting() {
   const canStart = task.trim().length > 0 && selectedAgentIds.size >= 1 && !starting;
 
   return (
-    <ProjectLayout projectId={projectId}>
+    <ProjectLayout projectId={projectId} panelRef={panelRef}>
       <div className="max-w-2xl mx-auto px-4 py-6">
 
         <Link to={`/projects/${projectId}`}

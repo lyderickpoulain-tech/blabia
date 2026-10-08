@@ -7,7 +7,7 @@ const STATUS_LABEL = { pending: 'À tenir', in_progress: 'En cours', done: 'Term
 // Fusionne les réunions réelles du projet avec les suggestions gardées de cette
 // réunion, insérées à la position indiquée par leur référence "after" (R1, R2…
 // — la même numérotation que celle vue par les agents, cf. phase 3.4).
-function buildMergedPlan(milestones, keptSuggestions) {
+export function buildMergedPlan(milestones, keptSuggestions) {
   const sorted = [...milestones].sort((a, b) => a.displayOrder - b.displayOrder);
   const refToId = {};
   sorted.forEach((m, i) => { refToId[`R${i + 1}`] = m.id; });

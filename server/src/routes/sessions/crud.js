@@ -189,7 +189,7 @@ router.patch('/:sessionId', async (req, res) => {
       return res.status(400).json({ error: 'Session déjà close' });
     }
 
-    const updates = { updatedAt: new Date() };
+    const updates = {};
     if (task !== undefined)      updates.task      = task.trim();
     if (intention !== undefined) updates.intention = JSON.stringify(Array.isArray(intention) ? intention : [intention]);
     if (expertiseLevel !== undefined) updates.expertiseLevel = clampLevel(expertiseLevel);

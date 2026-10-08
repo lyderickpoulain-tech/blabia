@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
-import MeetingPlanModal from './meeting/MeetingPlanModal';
+import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 
 const TYPE_META = {
   decision:    { icon: '🤝', label: 'Décision' },
@@ -15,7 +15,7 @@ const STEPS = ['generating', 'review', 'suggestions'];
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
 // à l'ouverture, puis assistant en 3 étapes : relecture CR + livrable → revue
 // des réunions suggérées → validation (statut accepté, CR en mémoire, livrable enregistré).
-export default function MeetingCloseModal({ session, initialSuggestions, projectId, onClose, onClosed }) {
+export default function MeetingCloseModal({ session, initialSuggestions, meetingRefs, projectId, onClose, onClosed }) {
   const [step, setStep] = useState('generating');
   const [meetingType, setMeetingType] = useState(null);
   const [summary, setSummary]         = useState('');
@@ -32,6 +32,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, project
   const [showPlan, setShowPlan] = useState(false);
 
   const [applying,       setApplying]       = useState(false);
+  const [applyError,     setApplyError]     = useState('');
   const [abandonConfirm, setAbandonConfirm] = useState(false);
   const [abandoning,     setAbandoning]     = useState(false);
 
@@ -81,14 +82,31 @@ export default function MeetingCloseModal({ session, initialSuggestions, project
   const handleApply = async () => {
     if (applying) return;
     setApplying(true);
+    setApplyError('');
     try {
       await api.patch(`/projects/${projectId}/sessions/${session.id}`, {
         summary,
         ...(meetingType === 'claude_code' ? { deliverable } : {}),
       });
+
+      // Suggestions gardées pas encore matérialisées → ajoutées au plan à leur
+      // position "after". État relu côté serveur : celles déjà ajoutées via
+      // "Voir le plan des réunions" portent un milestoneId et sont ignorées.
+      const [{ data: fresh }, { data: plan }] = await Promise.all([
+        api.get(`/projects/${projectId}/sessions/${session.id}`),
+        api.get(`/projects/${projectId}/plan`),
+      ]);
+      const toAdd = (fresh.pendingMeetingSuggestions || []).filter(s => s.status === 'kept' && !s.milestoneId);
+      if (toAdd.length > 0) {
+        const order = buildMergedPlan(plan.milestones || [], toAdd)
+          .map(it => it.kind === 'milestone' ? { milestoneId: it.key } : { suggestionId: it.key });
+        await api.post(`/projects/${projectId}/sessions/${session.id}/meeting-plan/validate`, { order });
+      }
+
       await api.patch(`/projects/${projectId}/sessions/${session.id}/status`, { status: 'accepted' });
       onClosed?.('accepted');
-    } catch {
+    } catch (err) {
+      setApplyError(err.response?.data?.error || 'Erreur lors de la validation');
       setApplying(false);
     }
   };
@@ -256,6 +274,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, project
                       onKeep={handleKeepSuggestion}
                       onDiscard={handleDiscardSuggestion}
                       onSave={handleSaveSuggestion}
+                      meetingRefs={meetingRefs}
                     />
                   ))}
                 </div>
@@ -271,6 +290,9 @@ export default function MeetingCloseModal({ session, initialSuggestions, project
 
         {/* Footer */}
         <div className="shrink-0 border-t border-gray-100 p-4 space-y-2">
+          {applyError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {applyError}</p>
+          )}
           {!abandonConfirm ? (
             <div className="flex gap-2">
               {step === 'review' && (

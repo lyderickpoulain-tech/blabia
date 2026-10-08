@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import ProjectLayout, { useProjectPanel } from '../components/ProjectLayout';
+import ProjectLayout from '../components/ProjectLayout';
 import MeetingCloseModal from '../components/MeetingCloseModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
@@ -42,7 +42,10 @@ const DELIVERABLE_TYPES = [
 export default function MeetingRoom() {
   const { id: projectId, sid: sessionId } = useParams();
   const navigate = useNavigate();
-  const { refreshPanel } = useProjectPanel();
+  // MeetingRoom rend lui-même <ProjectLayout> plus bas : il ne peut pas consommer
+  // son propre contexte via useProjectPanel() (cf. ProjectLayout.jsx), d'où ce ref.
+  const panelRef = useRef(null);
+  const refreshPanel = useCallback(() => panelRef.current?.(), []);
 
   const [session,      setSession]      = useState(null);
   const [project,      setProject]      = useState(null);
@@ -105,6 +108,7 @@ export default function MeetingRoom() {
 
   // Réunions suggérées ([SUGGEST_MEETING], phase 3.4)
   const [meetingSuggestions, setStepSuggestions] = useState([]);
+  const [planMilestones, setPlanMilestones] = useState([]); // réunions déjà planifiées (pour résoudre/éditer "after")
 
   // ID de la décision en attente (bloque la saisie jusqu'à réponse/report)
   const [pendingDecisionId,       setPendingDecisionId]       = useState(null);
@@ -440,23 +444,33 @@ export default function MeetingRoom() {
   const handleDiscardMeeting = useCallback((id) => patchMeetingSuggestion(id, { status: 'discarded' }), [patchMeetingSuggestion]);
   const handleSaveMeeting    = useCallback((id, fields) => patchMeetingSuggestion(id, fields), [patchMeetingSuggestion]);
 
-  // Chargement initial : session + projet en parallèle
+  // Chargement initial : session + projet + plan (réunions planifiées, pour les
+  // références R1/R2… utilisées par [SUGGEST_MEETING]) en parallèle
   useEffect(() => {
     setLoading(true);
     Promise.all([
       api.get(`/projects/${projectId}/sessions/${sessionId}`),
       api.get(`/projects/${projectId}`),
+      api.get(`/projects/${projectId}/plan`),
     ])
-      .then(([{ data: sessionData }, { data: projectData }]) => {
+      .then(([{ data: sessionData }, { data: projectData }, { data: planData }]) => {
         setSession(sessionData);
         setProject(projectData);
         setMessages(Array.isArray(sessionData.messages) ? sessionData.messages : []);
         setActiveAgents(Array.isArray(sessionData.activeAgents) ? sessionData.activeAgents : []);
         setStepSuggestions(Array.isArray(sessionData.pendingMeetingSuggestions) ? sessionData.pendingMeetingSuggestions : []);
+        setPlanMilestones(Array.isArray(planData.milestones) ? planData.milestones : []);
       })
       .catch(() => setLoadError('Réunion introuvable ou accès refusé.'))
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
+
+  // Références courtes (R1, R2…) — même numérotation que celle vue par les agents
+  // côté serveur (chat.js), pour afficher/éditer le positionnement des suggestions.
+  const meetingRefs = planMilestones
+    .slice()
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .map((m, i) => ({ ref: `R${i + 1}`, title: m.title }));
 
   const isClosed       = session?.status === 'accepted' || session?.status === 'abandoned';
   const badge          = STATUS_BADGE[session?.status] || STATUS_BADGE.open;
@@ -871,7 +885,7 @@ export default function MeetingRoom() {
 
   if (loading) {
     return (
-      <ProjectLayout projectId={projectId}>
+      <ProjectLayout projectId={projectId} panelRef={panelRef}>
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
         </div>
@@ -881,7 +895,7 @@ export default function MeetingRoom() {
 
   if (loadError || !session) {
     return (
-      <ProjectLayout projectId={projectId}>
+      <ProjectLayout projectId={projectId} panelRef={panelRef}>
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
           <p className="text-sm">{loadError || 'Réunion introuvable.'}</p>
           <Link to={`/projects/${projectId}`} className="text-sm text-blabia-blue hover:underline">
@@ -894,7 +908,7 @@ export default function MeetingRoom() {
 
   return (
     <>
-    <ProjectLayout projectId={projectId}>
+    <ProjectLayout projectId={projectId} panelRef={panelRef}>
       {/*
         Structure flex colonne qui remplit l'espace disponible dans le main
         (100vh - header ~53px - py-6 top/bottom ~48px)
@@ -992,6 +1006,7 @@ export default function MeetingRoom() {
             onDiscardMeeting={handleDiscardMeeting}
             onSaveMeeting={handleSaveMeeting}
             meetingSuggestionBusyId={meetingSuggestionBusyId}
+            meetingRefs={meetingRefs}
             session={session}
             project={project}
             onAutoLaunch={handleAutoLaunch}
@@ -1096,6 +1111,7 @@ export default function MeetingRoom() {
       <MeetingCloseModal
         session={session}
         initialSuggestions={meetingSuggestions}
+        meetingRefs={meetingRefs}
         projectId={projectId}
         onClose={() => setShowCloseModal(false)}
         onClosed={handleSessionClosed}

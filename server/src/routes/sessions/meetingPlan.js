@@ -14,7 +14,7 @@ const VALID_TYPES = ['decision', 'claude_code', 'stack'];
 
 router.patch('/:sessionId/meeting-suggestions/:suggestionId', async (req, res) => {
   const { projectId, sessionId, suggestionId } = req.params;
-  const { status, title, type, objective } = req.body;
+  const { status, title, type, objective, after } = req.body;
   if (status !== undefined && !['pending', 'kept', 'discarded'].includes(status)) {
     return res.status(400).json({ error: 'status invalide — valeurs acceptées : pending, kept, discarded' });
   }
@@ -34,6 +34,7 @@ router.patch('/:sessionId/meeting-suggestions/:suggestionId', async (req, res) =
     if (title !== undefined)     suggestions[idx].title = title.trim();
     if (objective !== undefined) suggestions[idx].objective = objective.trim();
     if (type !== undefined && VALID_TYPES.includes(type)) suggestions[idx].type = type;
+    if (after !== undefined)     suggestions[idx].after = after || null;
 
     await db('Session').where({ id: sessionId }).update({ pendingMeetingSuggestions: JSON.stringify(suggestions) });
     res.json(suggestions[idx]);
