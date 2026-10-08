@@ -12,6 +12,9 @@ const TOOL = {
   type: 'web_search_20260318',
   name: 'web_search',
   max_uses: 3,
+  // Sans ça, le modèle route parfois la recherche via exécution de code et
+  // l'API n'attache alors jamais de citations aux blocs texte (confirmé en test).
+  allowed_callers: ['direct'],
   user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' },
 };
 

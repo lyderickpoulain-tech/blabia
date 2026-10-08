@@ -92,6 +92,13 @@ async function appendPendingStepSuggestion(sessionId, suggestion) {
 // telle quelle pour laisser l'outil terminer, jusqu'à 3 boucles. Seules les
 // sources réellement citées (TextBlock.citations, type web_search_result_location)
 // sont remontées — pas tous les résultats de recherche bruts.
+//
+// allowed_callers: ['direct'] est nécessaire — testé en conditions réelles : sans
+// cette restriction, le modèle route parfois la recherche via exécution de code
+// (il écrit du Python qui appelle web_search() dans un bac à sable), et dans ce
+// cas l'API n'attache JAMAIS de citations aux blocs texte (le modèle lit une
+// sortie de code imprimée, il ne cite pas directement un résultat de recherche).
+// Forcer l'appel direct restaure des citations fiables.
 
 const WEB_SEARCH_MAX_USES    = 3;
 const WEB_SEARCH_MAX_PAUSES  = 3;
@@ -111,6 +118,7 @@ async function callAgent(systemPrompt, userMessage, maxTokens = 600, model = MOD
         type: 'web_search_20260318',
         name: 'web_search',
         max_uses: WEB_SEARCH_MAX_USES,
+        allowed_callers: ['direct'],
         user_location: WEB_SEARCH_USER_LOCATION,
       }];
     }
