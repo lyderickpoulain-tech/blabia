@@ -195,7 +195,7 @@ export default function ConversationFeed({
   messages, activeAgents, streamingAgent, streamingText, streamingReason,
   agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite,
   stepSuggestions, onAddStep, onDismissStep,
-  session, project, onAutoLaunch, isClosed,
+  session, project, onAutoLaunch, isClosed, isStreaming,
   pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision,
   agentColors, deliverableTypes,
 }) {
@@ -246,10 +246,10 @@ export default function ConversationFeed({
             <div className="space-y-2 pt-1">
               <button
                 onClick={onAutoLaunch}
-                disabled={!session || !project}
+                disabled={!session || !project || isStreaming}
                 className="w-full flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue-dark text-white font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                🎙 Lancer automatiquement
+                {isStreaming ? '… En cours' : '🎙 Lancer automatiquement'}
               </button>
               <p className="text-xs text-gray-400 text-center">— ou tape ton premier message —</p>
             </div>

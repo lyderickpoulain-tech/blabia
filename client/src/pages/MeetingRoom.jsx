@@ -475,6 +475,10 @@ export default function MeetingRoom() {
     const currentAttachments = attachmentsRef.current;
     // resume:true = reprise silencieuse après décision, bypass guards normaux
     if (isClosed) return;
+    // Un resume ne doit jamais se superposer à un flux déjà actif (ex. double-clic sur
+    // "Lancer automatiquement") : deux flux SSE concurrents écriraient dans le même
+    // streamingTextRef et produiraient un texte entrelacé/corrompu.
+    if (resume && isStreaming) return;
     if (!resume && !isStreaming && (!text && currentAttachments.length === 0)) return;
 
     // Streaming en cours → abort (déclencheur secondaire si le focus n'a pas suffi)
@@ -1016,6 +1020,7 @@ export default function MeetingRoom() {
             project={project}
             onAutoLaunch={handleAutoLaunch}
             isClosed={isClosed}
+            isStreaming={isStreaming}
             pendingDecisionId={pendingDecisionId}
             onAnswerDecision={handleAnswerDecision}
             onDeferDecision={handleDeferDecision}
