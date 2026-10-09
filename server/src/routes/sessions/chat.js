@@ -17,6 +17,7 @@ const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt')
 const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
 const { decisionBudgetFor } = require('../../services/questionModes');
+const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { parseJsonField } = require('../../utils/parseJsonField');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 const {
@@ -300,6 +301,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     const humorLevel     = session.humorLevel     ?? project.humorLevel     ?? 2;
     // Mode de questions (réunion > projet) : budget de cartes de décision
     const decisionBudget = decisionBudgetFor(session, project);
+    // Registre des décisions du projet (chargé une fois par requête)
+    const decisionRegistry = formatRegistryForPrompt(await listDecisions(projectId));
 
     // Réunions du projet avec référence courte (R1, R2…) — positionnement des
     // suggestions [SUGGEST_MEETING] et dédoublonnage (phase 3.4).
@@ -396,6 +399,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         projectMeetings,
         priorDecisionQuestions,
         decisionBudget: { used: countDecisions(currentMessages), max: decisionBudget },
+        decisionRegistry,
         pastCodePromptsText,
         expertiseLevel,
         humorLevel,

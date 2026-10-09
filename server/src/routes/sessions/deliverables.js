@@ -4,6 +4,7 @@ const db             = require('../../utils/db');
 const anthropic      = require('../../services/anthropic');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { getProjectTools, formatProjectToolsForPrompt } = require('../../services/tools/toolsStore');
+const { extractMeetingDecisions } = require('../../services/decisions');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 
 // Livrable d'une réunion stack : la liste des outils proposés (Markdown), validée
@@ -173,13 +174,20 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     const sessionContext = `Objectif de la réunion : ${session.task}\n\nTranscription :\n${historyText}`;
     const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
 
-    // ── Compte-rendu (toujours généré) ─────────────────────────────────────
+    // ── Compte-rendu (toujours généré) + décisions proposées au registre, en
+    // parallèle. Les décisions ne sont PAS inscrites ici : l'humain les valide
+    // dans la fenêtre de clôture (POST /:sessionId/decisions). Un échec de
+    // l'extraction ne bloque pas la clôture.
     const summaryPrompt = buildSummaryPrompt(sessionContext, expertiseLevel, meetingType);
-    const summaryResponse = await anthropic.messages.create({
-      model: MODEL, max_tokens: 4000,
-      system: summaryPrompt.system,
-      messages: [{ role: 'user', content: summaryPrompt.user }]
-    });
+    const [summaryResponse, decisionProposals] = await Promise.all([
+      anthropic.messages.create({
+        model: MODEL, max_tokens: 4000,
+        system: summaryPrompt.system,
+        messages: [{ role: 'user', content: summaryPrompt.user }]
+      }),
+      extractMeetingDecisions({ session, messages, historyText, projectId })
+        .catch(err => { console.error('[generate-deliverable] extraction décisions :', err.message); return null; }),
+    ]);
     let summary = summaryResponse.content[0].text.trim();
 
     // Sources web citées pendant la réunion (dédupliquées), agrégées en fin de CR
@@ -231,7 +239,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     });
     await updateProjectContext(projectId, sessionId, session.task, summary);
 
-    return res.json({ meetingType, summary, deliverable, toolSuggestions });
+    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals });
   } catch (err) {
     console.error('[sessions/generate-deliverable]', err.message);
     res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });

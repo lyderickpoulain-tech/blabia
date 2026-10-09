@@ -76,6 +76,7 @@ model Project {
   projectAgents ProjectAgent[]
   milestones    Milestone[]
   todos         TodoItem[]
+  decisions     Decision[]
 }
 
 model ProjectAgent {
@@ -180,4 +181,25 @@ model Session {
   continuations   Session[] @relation("SessionContinuation")
   milestone         Milestone? @relation("SessionMilestone", fields: [milestoneId], references: [id], onDelete: SetNull)
   sourcedMilestones Milestone[] @relation("MilestoneSource")
+  decisions         Decision[]
+}
+
+// v5.0 : registre des décisions du projet — alimenté à la clôture des réunions
+// (après validation de l'humain), transmis aux agents pour ne pas reposer ce qui est tranché.
+model Decision {
+  id              String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  projectId       String
+  sessionId       String?
+  statement       String   // la décision, en une phrase
+  rationale       String?  // pourquoi
+  rejectedOptions Json     @default("[]") // options écartées (string[])
+  origin          String   @default("human")  // "human" (arbitrage explicite) | "agents" (hypothèse non contredite)
+  status          String   @default("active") // "active" | "reopened" (remise en question) | "superseded"
+  reopenNote      String?  // raison de la remise en question
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session         Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
 }

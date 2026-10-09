@@ -383,6 +383,9 @@ router.delete('/:id/memory', async (req, res) => {
     // passent à NULL via onDelete: SetNull, aucune donnée orpheline)
     await db('Session').where({ projectId: req.params.id }).delete();
 
+    // Le registre des décisions fait partie de la mémoire du projet
+    await db('Decision').where({ projectId: req.params.id }).delete();
+
     // Réunions planifiées : suppression seulement si l'utilisateur l'a cochée
     // (?deleteMilestones=true), sinon simple remise à "à tenir".
     // TodoItem.milestoneId passe à NULL via onDelete: SetNull.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api';
 import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
@@ -33,6 +33,11 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   // Réunion stack : outils proposés + décision par outil { [id]: 'validated' | 'refused' }
   const [toolSuggestions, setToolSuggestions] = useState(Array.isArray(initialToolSuggestions) ? initialToolSuggestions : []);
   const [toolDecisions, setToolDecisions]     = useState({});
+  // Registre des décisions : proposées par BlabIA, inscrites seulement si gardées
+  // (null = extraction indisponible)
+  const [decisionProposals, setDecisionProposals] = useState([]);
+  const decisionsSavedRef = useRef(false);
+  const updateProposal = (key, patch) => setDecisionProposals(prev => prev.map(d => d.key === key ? { ...d, ...patch } : d));
   const [showPlan, setShowPlan] = useState(false);
 
   const [applying,       setApplying]       = useState(false);
@@ -53,6 +58,9 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       setSummary(data.summary || '');
       setDeliverable(data.deliverable || null);
       if (Array.isArray(data.toolSuggestions)) setToolSuggestions(data.toolSuggestions);
+      setDecisionProposals(Array.isArray(data.decisionProposals)
+        ? data.decisionProposals.map((d, i) => ({ ...d, key: i, keep: true }))
+        : null);
       setStep('review');
     } catch (err) {
       setGenError(err.response?.data?.error || 'Erreur lors de la génération du compte-rendu');
@@ -93,6 +101,17 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
         summary,
         ...(meetingType === 'claude_code' ? { deliverable } : {}),
       });
+
+      // Registre des décisions : seulement celles gardées par l'humain
+      // (une seule fois : si une étape suivante échoue, un nouveau clic ne les réinscrit pas)
+      const kept = (decisionProposals || []).filter(d => d.keep && d.statement.trim());
+      if (kept.length > 0 && !decisionsSavedRef.current) {
+        await api.post(`/projects/${projectId}/decisions/from-session`, {
+          sessionId: session.id,
+          decisions: kept.map(({ statement, rationale, rejectedOptions, origin }) => ({ statement, rationale, rejectedOptions, origin })),
+        });
+        decisionsSavedRef.current = true;
+      }
 
       // Réunion stack : outils reportés dans les outils du projet avec la décision prise
       if (meetingType === 'stack' && toolSuggestions.length > 0) {
@@ -261,6 +280,45 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   </button>
                 </div>
               )}
+
+              {/* Registre des décisions du projet */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📒</span>
+                  <span className="text-sm font-semibold text-gray-700">Décisions à inscrire au registre du projet</span>
+                </div>
+                {decisionProposals === null ? (
+                  <p className="text-xs text-amber-700">L'extraction des décisions n'a pas abouti. Vous pourrez les ajouter à la main dans le registre du projet.</p>
+                ) : decisionProposals.length === 0 ? (
+                  <p className="text-xs text-gray-400">Aucune décision tranchée identifiée dans cette réunion.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-400">Les agents s'y référeront dans les prochaines réunions et ne reposeront plus ces questions. Décochez ce qui n'a pas été vraiment décidé.</p>
+                    {decisionProposals.map(d => (
+                      <div key={d.key} className={`flex items-start gap-2 border rounded-xl p-2.5 ${d.keep ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}`}>
+                        <input type="checkbox" checked={d.keep} onChange={e => updateProposal(d.key, { keep: e.target.checked })} className="mt-1.5 accent-blabia-blue" />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <input
+                            value={d.statement}
+                            onChange={e => updateProposal(d.key, { statement: e.target.value })}
+                            disabled={!d.keep}
+                            className="w-full text-sm border border-transparent hover:border-gray-200 focus:border-blue-300 rounded-md px-1.5 py-0.5 outline-none bg-transparent"
+                          />
+                          <div className="flex items-center gap-2 flex-wrap px-1.5">
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${d.origin === 'human' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                              {d.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des agents'}
+                            </span>
+                            {d.rationale && <span className="text-[11px] text-gray-500">{d.rationale}</span>}
+                          </div>
+                          {d.rejectedOptions?.length > 0 && (
+                            <p className="text-[11px] text-gray-400 px-1.5">Écarté : {d.rejectedOptions.join(', ')}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
 
               {/* Livrable stack : outils proposés, validés un par un (phase 4.3) */}
               {meetingType === 'stack' && (

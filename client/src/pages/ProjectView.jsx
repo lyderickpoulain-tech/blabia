@@ -8,6 +8,7 @@ import GenerateTimelineModal from '../components/GenerateTimelineModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
 import ProjectToolsPanel from '../components/tools/ProjectToolsPanel';
+import DecisionRegistryPanel from '../components/DecisionRegistryPanel';
 import { attentionCount } from '../utils/toolsCatalog';
 import QuestionModePicker from '../components/QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
@@ -523,6 +524,16 @@ export default function ProjectView() {
   // ── Outils du projet (v5.0 phase 4) ────────────────────────────────────────
   const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [suggestedToolsCount, setSuggestedToolsCount] = useState(0);
+  // Registre des décisions : nombre en vigueur + remises en question (badge)
+  const [showDecisionRegistry, setShowDecisionRegistry] = useState(false);
+  const [decisionCounts, setDecisionCounts] = useState({ active: 0, reopened: 0 });
+  const countDecisions = (list) => ({
+    active:   (list || []).filter(d => d.status === 'active').length,
+    reopened: (list || []).filter(d => d.status === 'reopened').length,
+  });
+  const refetchDecisionCounts = () => api.get(`/projects/${id}/decisions`)
+    .then(({ data }) => setDecisionCounts(countDecisions(data)))
+    .catch(() => {});
 
   const refetchSessionsAndStats = () => {
     setSessionsLoading(true);
@@ -553,6 +564,8 @@ export default function ProjectView() {
       .finally(() => setLoading(false));
 
     refetchSessionsAndStats();
+
+    refetchDecisionCounts();
 
     // Badge du bouton Outils : outils complémentaires en attente de validation
     api.get(`/projects/${id}/tools`)
@@ -723,6 +736,7 @@ export default function ProjectView() {
       // sans ce refresh, rien ne change visuellement (sessions/stats et panneau
       // Réunions restent affichés avec leurs anciennes données en mémoire locale).
       refetchSessionsAndStats();
+      refetchDecisionCounts();
       panelRef.current?.();
     } catch {
       alert('Erreur lors de la réinitialisation');
@@ -811,6 +825,18 @@ export default function ProjectView() {
               {suggestedToolsCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none" title="Points d'attention sur les outils">
                   {suggestedToolsCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setShowDecisionRegistry(true)}
+              className="relative text-sm border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
+              title="Registre des décisions du projet"
+            >
+              📒 Décisions{decisionCounts.active > 0 ? ` (${decisionCounts.active})` : ''}
+              {decisionCounts.reopened > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none" title="Décisions remises en question">
+                  {decisionCounts.reopened}
                 </span>
               )}
             </button>
@@ -1152,7 +1178,7 @@ export default function ProjectView() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1 text-sm text-amber-800">
               <p className="font-medium">Cette action va :</p>
               <ul className="list-disc pl-4 space-y-0.5 text-amber-700">
-                <li>Effacer la mémoire contextuelle du projet</li>
+                <li>Effacer la mémoire contextuelle du projet et le registre des décisions</li>
                 <li>Supprimer toutes les réunions tenues (historique, résumés, livrables)</li>
                 <li>
                   {resetDeleteMilestones
@@ -1237,6 +1263,13 @@ export default function ProjectView() {
         );
       })()}
 
+      {showDecisionRegistry && (
+        <DecisionRegistryPanel
+          projectId={id}
+          onClose={() => setShowDecisionRegistry(false)}
+          onChanged={list => setDecisionCounts(countDecisions(list))}
+        />
+      )}
       {showToolsPanel && (
         <ProjectToolsPanel
           projectId={id}

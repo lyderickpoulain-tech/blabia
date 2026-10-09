@@ -70,6 +70,7 @@ const HUMOR_INSTRUCTIONS = {
  * @param {object}  [p.toolReview] - réunion stack : { toolCategories, userToolsText, toolSuggestionsText } (phase 4.3)
  * @param {string|null} [p.artifactRequest] - illustration demandée par l'humain pour ce tour (phase 5), null sinon
  * @param {{used:number, max:number}|null} [p.decisionBudget] - cartes de décision déjà posées / budget de la réunion
+ * @param {{activeText:string, reopenedText:string}|null} [p.decisionRegistry] - registre des décisions du projet (services/decisions.js)
  */
 function buildAgentSystemPrompt({
   agent,
@@ -88,7 +89,13 @@ function buildAgentSystemPrompt({
   toolReview = null,
   artifactRequest = null,
   decisionBudget = null,
+  decisionRegistry = null,
 }) {
+  // Registre des décisions du projet : ce qui est tranché ne se redemande pas ;
+  // ce que l'humain a remis en question est à retraiter en priorité.
+  const registrySection = decisionRegistry && (decisionRegistry.activeText || decisionRegistry.reopenedText)
+    ? `${decisionRegistry.activeText ? `\nREGISTRE DES DÉCISIONS DU PROJET (déjà tranché — ne le redemande pas, ne le rediscute pas sauf risque majeur signalé en une phrase) :\n${decisionRegistry.activeText}\n` : ''}${decisionRegistry.reopenedText ? `\nDÉCISIONS REMISES EN QUESTION PAR L'HUMAIN (à retraiter si elles concernent cette réunion, en tenant compte de son motif) :\n${decisionRegistry.reopenedText}\n` : ''}`
+    : '';
   // Budget de questions de la réunion (mode de questions, cf. services/questionModes.js)
   const remaining = decisionBudget ? Math.max(0, decisionBudget.max - decisionBudget.used) : null;
   const decisionBudgetLine = remaining === null ? ''
@@ -147,7 +154,7 @@ ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. 
 
   return `Tu es ${agent.name}, ${agent.role}.
 ${agent.systemPrompt || ''}
-${briefSection}${meetingsSection}${toolsSection}${memorySection}${pastCodeSection}${toolReviewSection}
+${briefSection}${meetingsSection}${toolsSection}${registrySection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 ${reasonLine}
