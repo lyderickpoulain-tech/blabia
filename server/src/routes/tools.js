@@ -11,15 +11,16 @@ const { analyzeProjectToolNeeds, applyNeedsAnalysis } = require('../services/too
 const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
-router.use(authMiddleware);
+// Monté sur '/api' : l'authentification est posée route par route, pas via router.use,
+// sinon toute requête /api passant par ce routeur (ex. /api/health) exigerait un jeton.
 
 // GET /api/tools/catalog — catalogue partagé (catégories, outils connus, liens de la carte)
-router.get('/tools/catalog', (req, res) => {
+router.get('/tools/catalog', authMiddleware, (req, res) => {
   res.json({ categories: CATEGORIES, links: CATEGORY_LINKS, tools: TOOLS });
 });
 
 // GET /api/tools/me — « Mes outils »
-router.get('/tools/me', async (req, res) => {
+router.get('/tools/me', authMiddleware, async (req, res) => {
   try {
     const tools = await getUserTools(req.user.id);
     if (!tools) return res.status(404).json({ error: 'Utilisateur introuvable' });
@@ -31,7 +32,7 @@ router.get('/tools/me', async (req, res) => {
 });
 
 // PUT /api/tools/me — remplace la liste complète
-router.put('/tools/me', async (req, res) => {
+router.put('/tools/me', authMiddleware, async (req, res) => {
   const tools = sanitizeUserTools(req.body.tools);
   if (!tools) return res.status(400).json({ error: 'tools (tableau) requis' });
   try {
@@ -44,7 +45,7 @@ router.put('/tools/me', async (req, res) => {
 });
 
 // GET /api/projects/:id/tools — outils du projet + total mensuel estimé
-router.get('/projects/:id/tools', async (req, res) => {
+router.get('/projects/:id/tools', authMiddleware, async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
@@ -58,7 +59,7 @@ router.get('/projects/:id/tools', async (req, res) => {
 });
 
 // PUT /api/projects/:id/tools — remplace la liste complète
-router.put('/projects/:id/tools', async (req, res) => {
+router.put('/projects/:id/tools', authMiddleware, async (req, res) => {
   const tools = sanitizeProjectTools(req.body.tools);
   if (!tools) return res.status(400).json({ error: 'tools (tableau) requis' });
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
@@ -75,7 +76,7 @@ router.put('/projects/:id/tools', async (req, res) => {
 
 // POST /api/projects/:id/tools/analyze — BlabIA identifie les types d'outils
 // nécessaires et pré-remplit avec « Mes outils » (sans écraser les choix existants)
-router.post('/projects/:id/tools/analyze', async (req, res) => {
+router.post('/projects/:id/tools/analyze', authMiddleware, async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);

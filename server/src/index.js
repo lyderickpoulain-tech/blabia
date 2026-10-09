@@ -18,6 +18,16 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 
+// ── Routes publiques (avant tout routeur : aucune authentification) ──────────
+// Healthcheck Railway : doit répondre 200 sans jeton, sinon le déploiement échoue.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'BlabIA server en ligne', timestamp: new Date() });
+});
+
+// Endpoint de warm-up — répond < 10ms pour éliminer le cold start Railway.
+// Pour supprimer le cold start définitivement, passer au plan Railway Hobby (5€/mois).
+app.get('/api/ping', (_req, res) => res.json({ ok: true }));
+
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth',                         require('./routes/auth'));
 app.use('/api/admin',                        require('./routes/admin'));
@@ -28,14 +38,6 @@ app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
 app.use('/api/projects',                     require('./routes/plan'));
 app.use('/api',                              require('./routes/tools'));
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'BlabIA server en ligne', timestamp: new Date() });
-});
-
-// Endpoint de warm-up — répond < 10ms pour éliminer le cold start Railway.
-// Pour supprimer le cold start définitivement, passer au plan Railway Hobby (5€/mois).
-app.get('/api/ping', (_req, res) => res.json({ ok: true }));
 
 // ── Production : servir le build Vite ────────────────────────────────────────
 if (isProd) {
