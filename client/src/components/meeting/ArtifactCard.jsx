@@ -64,7 +64,7 @@ function Frame({ artifact, doc, className }) {
   );
 }
 
-export default function ArtifactCard({ artifact }) {
+export default function ArtifactCard({ artifact, tall = false }) {
   const { doc, svg, error } = useArtifactDocument(artifact);
   const [showCode, setShowCode]     = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -91,7 +91,7 @@ export default function ArtifactCard({ artifact }) {
   };
 
   return (
-    <div className="mt-2 border border-gray-200 rounded-xl bg-white overflow-hidden max-w-full">
+    <div className={`border border-line rounded-xl bg-white overflow-hidden max-w-full ${tall ? "" : "mt-2"}`}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
         <span className="text-sm">🎨</span>
         <span className="text-sm font-medium text-gray-800 flex-1 truncate">{artifact.title}</span>
@@ -101,7 +101,7 @@ export default function ArtifactCard({ artifact }) {
       {error ? (
         <p className="text-xs text-amber-800 bg-amber-50 px-3 py-2">⚠️ {error}</p>
       ) : doc ? (
-        <Frame artifact={artifact} doc={doc} className="w-full h-72 bg-white block" />
+        <Frame artifact={artifact} doc={doc} className={`w-full bg-white block ${tall ? "h-[calc(100vh-230px)] min-h-[300px]" : "h-72"}`} />
       ) : (
         <div className="h-72 flex items-center justify-center">
           <div className="w-5 h-5 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />

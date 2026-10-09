@@ -1,24 +1,27 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import ProjectLayout from '../components/ProjectLayout';
 import MeetingCloseModal from '../components/MeetingCloseModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
 import MeetingHeader from '../components/meeting/MeetingHeader';
 import MeetingInputBar from '../components/meeting/MeetingInputBar';
-import { MeetingDecisionPanel, MeetingSuggestCloseBanner } from '../components/meeting/MeetingDecisionFlow';
+import { MeetingSuggestCloseBanner } from '../components/meeting/MeetingDecisionFlow';
+import MeetingSidePanel, { IllustrationPanel } from '../components/meeting/MeetingSidePanel';
+import BriefingView from '../components/meeting/BriefingView';
+import { DELEGATE } from '../components/DecisionCard';
+import ArtifactCard from '../components/meeting/ArtifactCard';
 import ConversationFeed from '../components/meeting/ConversationFeed';
 import api from '../utils/api';
 
 // ── Palette agent (initiale + couleur de bulle) ───────────────────────────────
 
 const AGENT_COLORS = [
-  { bg: 'bg-blue-100',   text: 'text-blue-800',   avatar: 'bg-blue-500'   },
-  { bg: 'bg-purple-100', text: 'text-purple-800',  avatar: 'bg-purple-500' },
-  { bg: 'bg-green-100',  text: 'text-green-800',   avatar: 'bg-green-500'  },
-  { bg: 'bg-rose-100',   text: 'text-rose-800',    avatar: 'bg-rose-500'   },
-  { bg: 'bg-amber-100',  text: 'text-amber-800',   avatar: 'bg-amber-500'  },
-  { bg: 'bg-cyan-100',   text: 'text-cyan-800',    avatar: 'bg-cyan-500'   },
+  { bg: 'bg-blue-100',    text: 'text-blue-700',    avatar: 'bg-blue-600',    soft: 'bg-blue-50 ring-1 ring-blue-100'       },
+  { bg: 'bg-violet-100',  text: 'text-violet-700',  avatar: 'bg-violet-600',  soft: 'bg-violet-50 ring-1 ring-violet-100'   },
+  { bg: 'bg-emerald-100', text: 'text-emerald-700', avatar: 'bg-emerald-700', soft: 'bg-emerald-50 ring-1 ring-emerald-100' },
+  { bg: 'bg-rose-100',    text: 'text-rose-700',    avatar: 'bg-rose-600',    soft: 'bg-rose-50 ring-1 ring-rose-100'       },
+  { bg: 'bg-amber-100',   text: 'text-amber-800',   avatar: 'bg-amber-700',   soft: 'bg-amber-50 ring-1 ring-amber-100'     },
+  { bg: 'bg-cyan-100',    text: 'text-cyan-800',    avatar: 'bg-cyan-700',    soft: 'bg-cyan-50 ring-1 ring-cyan-100'       },
 ];
 
 // ── Statut badge ─────────────────────────────────────────────────────────────
@@ -42,10 +45,6 @@ const DELIVERABLE_TYPES = [
 export default function MeetingRoom() {
   const { id: projectId, sid: sessionId } = useParams();
   const navigate = useNavigate();
-  // MeetingRoom rend lui-même <ProjectLayout> plus bas : il ne peut pas consommer
-  // son propre contexte via useProjectPanel() (cf. ProjectLayout.jsx), d'où ce ref.
-  const panelRef = useRef(null);
-  const refreshPanel = useCallback(() => panelRef.current?.(), []);
 
   const [session,      setSession]      = useState(null);
   const [project,      setProject]      = useState(null);
@@ -127,6 +126,15 @@ export default function MeetingRoom() {
 
   // Modal de clôture
   const [showCloseModal,  setShowCloseModal]  = useState(false);
+  // Refonte UX v5.1 : panneau latéral, illustration ouverte, préparation, briefing
+  const [panelOpen,          setPanelOpen]          = useState(() => typeof window === 'undefined' || window.innerWidth >= 1024);
+  const [openArtifactId,     setOpenArtifactId]     = useState(null);
+  const [prepExpanded,       setPrepExpanded]       = useState(false);
+  const [prepRequested,      setPrepRequested]      = useState(false);
+  const [showDebate,         setShowDebate]         = useState(false);
+  const [briefingSubmitting, setBriefingSubmitting] = useState(false);
+  const inputRef     = useRef(null);
+  const questionsRef = useRef(null);
   // Modal livrable (section isClosed)
   const [showDeliverable, setShowDeliverable] = useState(false);
   // Bannière suggest_close émise par l'orchestrateur
@@ -142,8 +150,7 @@ export default function MeetingRoom() {
   const handleSessionClosed = useCallback((newStatus) => {
     setSession(prev => prev ? { ...prev, status: newStatus } : prev);
     setShowCloseModal(false);
-    refreshPanel();
-  }, [refreshPanel]);
+  }, []);
 
   const handleResetSession = useCallback(async () => {
     setResettingSession(true);
@@ -152,13 +159,12 @@ export default function MeetingRoom() {
       setShowResetModal(false);
       setSession(prev => prev ? { ...prev, status: 'open', summary: null } : prev);
       setMessages([]);
-      refreshPanel();
     } catch {
       // silence — l'utilisateur verra simplement que rien n'a changé
     } finally {
       setResettingSession(false);
     }
-  }, [projectId, sessionId, refreshPanel]);
+  }, [projectId, sessionId]);
 
   // Scroll initial vers le bas dès que le chargement est terminé
   useEffect(() => {
@@ -903,204 +909,286 @@ export default function MeetingRoom() {
     } catch {}
   }, [projectId, sessionId]);
 
+  // ── Refonte UX v5.1 : temps de la réunion, panneau, briefing, illustration ──
+
+  const prepSummaryMsg       = messages.find(m => m.type === 'prep_summary') || null;
+  const prepDecisionMsgs     = messages.filter(m => m.type === 'decision' && m.agentName === 'Préparation');
+  const pendingPrepDecisions = prepDecisionMsgs.filter(d => d.status === 'pending' || d.status === 'deferred');
+  const prepDebateCount      = messages.filter(m => m.role === 'agent' && m.prep).length
+    || (prepSummaryMsg ? messages.slice(0, messages.indexOf(prepSummaryMsg)).filter(m => m.role === 'agent').length : 0);
+  const prepStarted          = prepRequested || messages.some(m => m.prep) || !!prepSummaryMsg;
+
+  let phase = 'exchanges';
+  if (isClosed || showCloseModal)                                  phase = 'conclusion';
+  // Préparation arrêtée avant la synthèse : on passe directement aux échanges
+  else if (prepStarted && !prepSummaryMsg && isStreaming)          phase = 'preparation';
+  else if (prepSummaryMsg && pendingPrepDecisions.length > 0)      phase = 'briefing';
+  const skippedPhases = prepStarted ? [] : ['preparation', 'briefing'];
+
+  const artifactMessages = messages.filter(m => m.artifact);
+  const openArtifact     = artifactMessages.find(m => m.id === openArtifactId) || null;
+  const questionsUsed    = decisions.length;
+
+  // Briefing : toutes les réponses envoyées ensemble, puis une seule reprise
+  const submitBriefing = useCallback(async (answersById) => {
+    if (briefingSubmitting) return;
+    setBriefingSubmitting(true);
+    setSendError('');
+    const anyDelegated = pendingPrepDecisions.some(d => answersById[d.id] === DELEGATE);
+    try {
+      for (const d of pendingPrepDecisions) {
+        const body = answersById[d.id] === DELEGATE
+          ? { messageId: d.id, answer: 'delegated', status: 'delegated' }
+          : { messageId: d.id, answer: answersById[d.id], status: 'answered' };
+        const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/answer-decision`, body);
+        setMessages(prev => {
+          const updated = prev.map(m => m.id === d.id ? { ...m, ...data.message } : m);
+          return data.systemMessage ? [...updated, data.systemMessage] : updated;
+        });
+      }
+      decisionQueueRef.current = [];
+      pendingDecisionIdRef.current = null;
+      setDecisionQueue([]);
+      setPendingDecisionId(null);
+      setShowDebate(false);
+      handleSendRef.current?.('', { resume: true, ...(anyDelegated ? { delegated: true } : {}) });
+    } catch {
+      setSendError('Vos réponses n’ont pas pu être envoyées. Réessayez.');
+    }
+    setBriefingSubmitting(false);
+  }, [briefingSubmitting, pendingPrepDecisions, projectId, sessionId]);
+
+  // « Je contredis » : la saisie s'ouvre adressée à l'agent
+  const handleContradict = useCallback((agentName) => {
+    setInputText(`@${agentName} je ne suis pas d'accord : `);
+    setTimeout(() => {
+      const el = inputRef.current;
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    }, 0);
+  }, []);
+
+  const handleConclude = useCallback(() => {
+    if (pendingDecisionCount > 0 && !window.confirm(
+      `${pendingDecisionCount} question${pendingDecisionCount > 1 ? 's sont' : ' est'} encore sans réponse. Les agents attendent vos arbitrages pour avancer. Conclure quand même ?`
+    )) return;
+    setShowCloseModal(true);
+  }, [pendingDecisionCount]);
+
+  const showQuestionsInPanel = useCallback(() => {
+    setPanelOpen(true);
+    setOpenArtifactId(null);
+    setTimeout(() => questionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }, []);
+
   // ── Rendu ─────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <ProjectLayout projectId={projectId} panelRef={panelRef}>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
-        </div>
-      </ProjectLayout>
+      <div className="h-screen flex items-center justify-center bg-canvas">
+        <div className="w-8 h-8 border-2 border-action border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   if (loadError || !session) {
     return (
-      <ProjectLayout projectId={projectId} panelRef={panelRef}>
-        <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
-          <p className="text-sm">{loadError || 'Réunion introuvable.'}</p>
-          <Link to={`/projects/${projectId}`} className="text-sm text-blabia-blue hover:underline">
-            ← Retour au projet
-          </Link>
-        </div>
-      </ProjectLayout>
+      <div className="h-screen flex flex-col items-center justify-center gap-3 bg-canvas text-ink-muted">
+        <p className="text-sm">{loadError || 'Réunion introuvable.'}</p>
+        <Link to={`/projects/${projectId}`} className="text-sm font-bold">Retour au projet</Link>
+      </div>
     );
   }
 
+  const showBriefing = phase === 'briefing' && !showDebate;
+
   return (
     <>
-    <ProjectLayout projectId={projectId} panelRef={panelRef}>
-      {/*
-        Structure flex colonne qui remplit l'espace disponible dans le main
-        (100vh - header ~53px - py-6 top/bottom ~48px)
-      */}
-      <div className="flex gap-3" style={{ height: 'calc(100vh - 10rem)' }}>
+    <div className="h-screen flex flex-col bg-canvas text-ink overflow-hidden">
+      <MeetingHeader
+        projectId={projectId}
+        session={session}
+        isClosed={isClosed}
+        statusLabel={session.status === 'accepted' ? 'Conclue' : session.status === 'abandoned' ? 'Abandonnée' : badge.label}
+        phase={phase}
+        skippedPhases={skippedPhases}
+        editingTask={editingTask}
+        setEditingTask={setEditingTask}
+        taskDraft={taskDraft}
+        setTaskDraft={setTaskDraft}
+        savingTask={savingTask}
+        handleSaveTask={handleSaveTask}
+        intentionMeta={intentionMeta}
+        currentIntention={currentIntention}
+        deliverableTypes={DELIVERABLE_TYPES}
+        savingIntention={savingIntention}
+        handleSaveIntention={handleSaveIntention}
+        expertiseLevel={effectiveExpertiseLevel}
+        humorLevel={effectiveHumorLevel}
+        questionMode={effectiveQuestionMode}
+        onChangeLevel={handleChangeLevel}
+        questionsUsed={questionsUsed}
+        decisionBudget={session?.decisionBudget}
+        pendingDecisionCount={pendingDecisionCount}
+        tokensUsed={tokensUsed}
+        activeAgents={activeAgents}
+        panelOpen={panelOpen && !openArtifact}
+        onTogglePanel={() => { setOpenArtifactId(null); setPanelOpen(o => !(o && !openArtifact)); }}
+        onShowQuestions={showQuestionsInPanel}
+        onConclude={handleConclude}
+        onReset={() => setShowResetModal(true)}
+      />
 
-        <MeetingDecisionPanel
-          showDecisions={showDecisions}
-          setShowDecisions={setShowDecisions}
-          decisions={decisions}
-          pendingDecisions={pendingDecisions}
-          answeredDecisions={answeredDecisions}
-          delegatedDecisions={delegatedDecisions}
-          isClosed={isClosed}
-          panelExpandedDecisionId={panelExpandedDecisionId}
-          setPanelExpandedDecisionId={setPanelExpandedDecisionId}
-          setPendingDecisionId={setPendingDecisionId}
-          handleAnswerDecision={handleAnswerDecision}
-          handleDeferDecision={handleDeferDecision}
-        />
+      <div className="flex-1 min-h-0 flex">
+        <main className="flex-1 min-w-0 flex flex-col">
+          {showBriefing ? (
+            <BriefingView
+              summary={prepSummaryMsg}
+              decisions={pendingPrepDecisions}
+              debateCount={prepDebateCount}
+              onShowDebate={() => { setShowDebate(true); setPrepExpanded(true); }}
+              onSubmit={submitBriefing}
+              submitting={briefingSubmitting}
+              decisionBudget={session?.decisionBudget}
+              firstNumber={decisions.indexOf(pendingPrepDecisions[0]) + 1}
+            />
+          ) : (
+            <>
+              {phase === 'briefing' && showDebate && (
+                <div className="shrink-0 bg-ai-bg border-b border-ai-border px-4 py-1.5 flex items-center gap-3 text-[13px]">
+                  <span className="flex-1 font-semibold text-ai">Vous consultez le débat de préparation.</span>
+                  <button type="button" onClick={() => setShowDebate(false)} className="min-h-[32px] font-bold text-ai hover:underline">Revenir au briefing</button>
+                </div>
+              )}
 
-        {/* ── Chat principal ────────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-w-0">
+              <MeetingSuggestCloseBanner
+                suggestClose={suggestClose}
+                setSuggestClose={setSuggestClose}
+                isClosed={isClosed}
+                currentIntention={currentIntention}
+                setShowCloseModal={setShowCloseModal}
+              />
 
-        <MeetingHeader
-          projectId={projectId}
-          session={session}
-          isClosed={isClosed}
-          badge={badge}
-          editingTask={editingTask}
-          setEditingTask={setEditingTask}
-          taskDraft={taskDraft}
-          setTaskDraft={setTaskDraft}
-          savingTask={savingTask}
-          handleSaveTask={handleSaveTask}
-          intentionMeta={intentionMeta}
-          currentIntention={currentIntention}
-          deliverableTypes={DELIVERABLE_TYPES}
-          showIntentionDropdown={showIntentionDropdown}
-          setShowIntentionDropdown={setShowIntentionDropdown}
-          savingIntention={savingIntention}
-          handleSaveIntention={handleSaveIntention}
-          intentionDropdownRef={intentionDropdownRef}
-          expertiseLevel={effectiveExpertiseLevel}
-          humorLevel={effectiveHumorLevel}
-          questionMode={effectiveQuestionMode}
-          onChangeLevel={handleChangeLevel}
-          showLevelsDropdown={showLevelsDropdown}
-          setShowLevelsDropdown={setShowLevelsDropdown}
-          levelsDropdownRef={levelsDropdownRef}
-          showDecisions={showDecisions}
-          setShowDecisions={setShowDecisions}
-          decisions={decisions}
-          pendingDecisionCount={pendingDecisionCount}
-          decisionBudget={session?.decisionBudget}
-          meetingSuggestionsCount={meetingSuggestions.filter(s => s.status === 'pending').length}
-          tokensUsed={tokensUsed}
-          showMenuDots={showMenuDots}
-          setShowMenuDots={setShowMenuDots}
-          setShowResetModal={setShowResetModal}
-          menuDotsRef={menuDotsRef}
-          activeAgents={activeAgents}
-          agentColors={AGENT_COLORS}
-          showAgentDropdown={showAgentDropdown}
-          setShowAgentDropdown={setShowAgentDropdown}
-          dropdownRef={dropdownRef}
-          loadingAvailable={loadingAvailable}
-          availableForAdd={availableForAdd}
-          addingAgentId={addingAgentId}
-          handleAddAgent={handleAddAgent}
-          dropdownCreateForm={dropdownCreateForm}
-          setDropdownCreateForm={setDropdownCreateForm}
-          handleDropdownCreateAgent={handleDropdownCreateAgent}
-        />
+              <div ref={feedRef} role="log" aria-label="Fil de la réunion" className="flex-1 min-h-0 overflow-y-auto" onScroll={handleFeedScroll}>
+                <ConversationFeed
+                  messages={messages}
+                  activeAgents={activeAgents}
+                  streamingAgent={streamingAgent}
+                  streamingReason={streamingReason}
+                  session={session}
+                  project={project}
+                  onAutoLaunch={handleAutoLaunch}
+                  onPrepare={() => { setPrepRequested(true); handlePrepare(); }}
+                  isClosed={isClosed}
+                  isStreaming={isStreaming}
+                  pendingDecisionId={pendingDecisionId}
+                  onAnswerDecision={handleAnswerDecision}
+                  onDeferDecision={handleDeferDecision}
+                  onDelegateDecision={handleDelegateDecision}
+                  agentColors={AGENT_COLORS}
+                  deliverableTypes={DELIVERABLE_TYPES}
+                  decisionBudget={session?.decisionBudget}
+                  onOpenArtifact={m => { setOpenArtifactId(id => id === m.id ? null : m.id); }}
+                  openArtifactId={openArtifactId}
+                  onContradict={handleContradict}
+                  prepExpanded={prepExpanded}
+                  onTogglePrep={() => setPrepExpanded(v => !v)}
+                />
+              </div>
 
-        <MeetingSuggestCloseBanner
-          suggestClose={suggestClose}
-          setSuggestClose={setSuggestClose}
-          isClosed={isClosed}
-          currentIntention={currentIntention}
-          setShowCloseModal={setShowCloseModal}
-        />
+              {showNewMessage && (
+                <div className="shrink-0 flex justify-center py-1">
+                  <button type="button"
+                    onClick={() => { feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' }); setShowNewMessage(false); }}
+                    className="h-8 px-3 rounded-full bg-action text-white text-xs font-bold shadow">
+                    Nouveaux messages ↓
+                  </button>
+                </div>
+              )}
 
-        {/* ── Fil de conversation ─────────────────────────────────────────── */}
-        <div ref={feedRef} className="flex-1 overflow-y-auto" onScroll={handleFeedScroll}>
-          <ConversationFeed
-            messages={messages}
-            activeAgents={activeAgents}
-            streamingAgent={streamingAgent}
-            streamingReason={streamingReason}
-            agentSuggestions={agentSuggestions}
-            onInviteSuggested={handleInviteSuggested}
-            onDismissSuggestion={handleDismissSuggestion}
-            onCreateAndInvite={handleCreateAndInvite}
+              {phase === 'preparation' && isStreaming ? (
+                // Préparation en cours : pas de saisie (le focus interromprait le débat)
+                <div className="shrink-0 bg-white border-t border-line px-4 py-2">
+                  <div className="max-w-[820px] mx-auto flex flex-wrap items-center gap-3">
+                    <span className="w-4 h-4 border-2 border-ai border-t-transparent rounded-full animate-spin shrink-0" aria-hidden="true" />
+                    <p className="flex-1 text-sm font-semibold text-ai">Les agents préparent la réunion. Le briefing s'affichera dès qu'ils auront fini.</p>
+                    <button type="button" onClick={() => abortControllerRef.current?.abort()}
+                      className="min-h-[36px] text-[13px] font-bold text-ink-muted hover:text-ink">Arrêter la préparation</button>
+                  </div>
+                </div>
+              ) : (
+              <MeetingInputBar
+                isClosed={isClosed}
+                session={session}
+                currentIntention={currentIntention}
+                handleReopen={handleReopen}
+                setShowDeliverable={setShowDeliverable}
+                sendError={sendError}
+                fileInputRef={fileInputRef}
+                processFiles={processFiles}
+                attachments={attachments}
+                setAttachments={setAttachments}
+                showMentionDropdown={showMentionDropdown}
+                mentionSuggestions={mentionSuggestions}
+                mentionSelectedIdx={mentionSelectedIdx}
+                handleSelectMention={handleSelectMention}
+                activeAgents={activeAgents}
+                agentColors={AGENT_COLORS}
+                handleDragOver={handleDragOver}
+                handleDragLeave={handleDragLeave}
+                handleDrop={handleDrop}
+                isDragging={isDragging}
+                isStreaming={isStreaming}
+                pendingDecisionId={pendingDecisionId}
+                inputText={inputText}
+                handleInputChange={handleInputChange}
+                handleKeyDown={handleKeyDown}
+                handleSend={handleSend}
+                onIllustrate={(request) => handleSend(`🎨 Illustration demandée : ${request}`, { artifactRequest: true })}
+                handleTextareaFocus={handleTextareaFocus}
+                inputRef={inputRef}
+              />
+              )}
+            </>
+          )}
+        </main>
+
+        {openArtifact ? (
+          <IllustrationPanel message={openArtifact} onClose={() => setOpenArtifactId(null)}>
+            <ArtifactCard artifact={openArtifact.artifact} tall />
+          </IllustrationPanel>
+        ) : panelOpen && (
+          <MeetingSidePanel
+            isClosed={isClosed}
+            decisions={decisions}
+            decisionBudget={session?.decisionBudget}
+            onAnswerDecision={handleAnswerDecision}
+            onDeferDecision={handleDeferDecision}
+            onDelegateDecision={handleDelegateDecision}
             meetingSuggestions={meetingSuggestions}
             onKeepMeeting={handleKeepMeeting}
             onDiscardMeeting={handleDiscardMeeting}
             onSaveMeeting={handleSaveMeeting}
             meetingSuggestionBusyId={meetingSuggestionBusyId}
             meetingRefs={meetingRefs}
+            agentSuggestions={agentSuggestions}
+            onInviteSuggested={handleInviteSuggested}
+            onDismissSuggestion={handleDismissSuggestion}
+            onCreateAndInvite={handleCreateAndInvite}
             toolSuggestions={toolSuggestions}
-            session={session}
-            project={project}
-            onAutoLaunch={handleAutoLaunch}
-            onPrepare={handlePrepare}
-            isClosed={isClosed}
-            isStreaming={isStreaming}
-            pendingDecisionId={pendingDecisionId}
-            onAnswerDecision={handleAnswerDecision}
-            onDeferDecision={handleDeferDecision}
-            onDelegateDecision={handleDelegateDecision}
+            activeAgents={activeAgents}
             agentColors={AGENT_COLORS}
-            deliverableTypes={DELIVERABLE_TYPES}
+            agentAddProps={{
+              loadingAvailable, availableForAdd, addingAgentId, handleAddAgent,
+              dropdownCreateForm, setDropdownCreateForm, handleDropdownCreateAgent,
+            }}
+            onOpenAgentAdd={() => loadAvailableForAdd()}
+            artifacts={artifactMessages}
+            onOpenArtifact={m => setOpenArtifactId(m.id)}
+            questionsRef={questionsRef}
           />
-        </div>
-
-        {/* ── Bouton "Nouveau message" flottant ───────────────────────────── */}
-        {showNewMessage && (
-          <div className="shrink-0 flex justify-center py-1.5">
-            <button
-              onClick={() => {
-                feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' });
-                setShowNewMessage(false);
-              }}
-              className="text-xs font-medium text-white bg-blue-500 hover:bg-blabia-blue shadow-md px-3.5 py-1.5 rounded-full transition flex items-center gap-1.5"
-            >
-              ⬇ Nouveau message
-            </button>
-          </div>
         )}
-
-        <MeetingInputBar
-          isClosed={isClosed}
-          session={session}
-          currentIntention={currentIntention}
-          handleReopen={handleReopen}
-          setShowDeliverable={setShowDeliverable}
-          sendError={sendError}
-          fileInputRef={fileInputRef}
-          processFiles={processFiles}
-          attachments={attachments}
-          setAttachments={setAttachments}
-          showMentionDropdown={showMentionDropdown}
-          mentionSuggestions={mentionSuggestions}
-          mentionSelectedIdx={mentionSelectedIdx}
-          handleSelectMention={handleSelectMention}
-          activeAgents={activeAgents}
-          agentColors={AGENT_COLORS}
-          handleDragOver={handleDragOver}
-          handleDragLeave={handleDragLeave}
-          handleDrop={handleDrop}
-          isDragging={isDragging}
-          isStreaming={isStreaming}
-          pendingDecisionId={pendingDecisionId}
-          inputText={inputText}
-          handleInputChange={handleInputChange}
-          handleKeyDown={handleKeyDown}
-          handleSend={handleSend}
-          onIllustrate={(request) => handleSend(`🎨 Illustration demandée : ${request}`, { artifactRequest: true })}
-          handleTextareaFocus={handleTextareaFocus}
-          setShowCloseModal={setShowCloseModal}
-          pendingDecisionsCount={pendingDecisionCount}
-        />
-
-        </div>
-        {/* ── fin chat principal ──────────────────────────────────────── */}
-
       </div>
-      {/* ── fin wrapper flex ────────────────────────────────────────────── */}
-    </ProjectLayout>
+    </div>
 
     {/* Modale réinitialisation réunion */}
     {showResetModal && (

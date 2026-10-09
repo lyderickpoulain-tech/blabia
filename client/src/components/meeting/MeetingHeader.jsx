@@ -1,48 +1,46 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import AgentScopeSelector from './AgentScopeSelector';
+import { ArrowLeft, SlidersHorizontal, PanelRight, Globe, RotateCcw } from 'lucide-react';
+import { Badge, Button, IconButton } from '../ui';
+import PhaseStepper from './PhaseStepper';
 import QuestionModePicker from '../QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../LevelSlider';
 
+// En-tête de réunion sur une ligne (refonte UX v5.1) : retour, objectif
+// (modifiable), quatre temps, compteur de questions, réglages, panneau, conclure.
 export default function MeetingHeader({
-  projectId,
-  session,
-  isClosed,
-  badge,
-  // Task editing
+  projectId, session, isClosed, statusLabel,
+  phase, skippedPhases,
   editingTask, setEditingTask, taskDraft, setTaskDraft, savingTask, handleSaveTask,
-  // Intention
-  intentionMeta, currentIntention, deliverableTypes,
-  showIntentionDropdown, setShowIntentionDropdown, savingIntention, handleSaveIntention,
-  intentionDropdownRef,
-  // Pédagogie / humour
+  intentionMeta, currentIntention, deliverableTypes, savingIntention, handleSaveIntention,
   expertiseLevel, humorLevel, questionMode, onChangeLevel,
-  showLevelsDropdown, setShowLevelsDropdown, levelsDropdownRef,
-  // Decisions panel toggle
-  showDecisions, setShowDecisions, decisions, pendingDecisionCount, decisionBudget,
-  // Réunions suggérées (phase 3.4)
-  meetingSuggestionsCount,
-  // Tokens
-  tokensUsed,
-  // Menu dots
-  showMenuDots, setShowMenuDots, setShowResetModal, menuDotsRef,
-  // Agents
-  activeAgents, agentColors,
-  showAgentDropdown, setShowAgentDropdown, dropdownRef,
-  loadingAvailable, availableForAdd, addingAgentId, handleAddAgent,
-  dropdownCreateForm, setDropdownCreateForm, handleDropdownCreateAgent,
+  questionsUsed, decisionBudget, pendingDecisionCount,
+  tokensUsed, activeAgents,
+  panelOpen, onTogglePanel, onShowQuestions,
+  onConclude, onReset,
 }) {
-  return (
-    <div className="shrink-0 border-b border-gray-100 px-4 py-3 space-y-2">
-      {/* Ligne 1 : retour + titre éditable + badges */}
-      <div className="flex items-center gap-2">
-        <Link
-          to={`/projects/${projectId}`}
-          className="text-gray-400 hover:text-gray-600 transition text-sm shrink-0"
-        >
-          ←
-        </Link>
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef(null);
 
-        {/* Titre / objectif — éditable si réunion ouverte */}
+  useEffect(() => {
+    if (!showSettings) return;
+    const close = e => { if (settingsRef.current && !settingsRef.current.contains(e.target)) setShowSettings(false); };
+    const esc = e => { if (e.key === 'Escape') setShowSettings(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [showSettings]);
+
+  const agentNames = activeAgents.map(a => a.name).join(', ');
+
+  return (
+    <header className="shrink-0 bg-white border-b border-line shadow-[0_1px_3px_rgba(30,34,56,0.06)] px-3 sm:px-4 py-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 relative z-10">
+      <Link to={`/projects/${projectId}`} aria-label="Retour au projet" title="Retour au projet"
+        className="w-11 h-11 -ml-1 shrink-0 inline-flex items-center justify-center rounded-[10px] text-ink-muted hover:bg-muted-light hover:text-ink">
+        <ArrowLeft size={18} />
+      </Link>
+
+      <div className="flex-1 min-w-[200px] flex flex-col min-w-0">
         {editingTask ? (
           <input
             autoFocus
@@ -52,273 +50,89 @@ export default function MeetingHeader({
               if (e.key === 'Enter')  { e.preventDefault(); handleSaveTask(); }
               if (e.key === 'Escape') setEditingTask(false);
             }}
+            onBlur={() => setEditingTask(false)}
             disabled={savingTask}
-            className="flex-1 text-sm font-semibold text-gray-800 bg-gray-50 border border-blue-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-blue-400 min-w-0"
+            aria-label="Objectif de la réunion"
+            className="text-base font-extrabold text-ink border border-action-border rounded-md px-1.5 outline-none focus:ring-2 focus:ring-action-border min-w-0"
           />
         ) : (
-          <p
-            className={`text-sm font-semibold text-gray-800 truncate flex-1 min-w-0 ${!isClosed ? 'cursor-pointer hover:text-blabia-blue transition' : ''}`}
+          <h1
+            className={`text-base font-extrabold text-ink truncate ${!isClosed ? 'cursor-text hover:text-action' : ''}`}
             title={isClosed ? session.task : `${session.task} — cliquer pour modifier`}
             onClick={() => { if (!isClosed) { setTaskDraft(session.task); setEditingTask(true); } }}
           >
-            🎯 {session.task}
-          </p>
+            {session.task}
+          </h1>
         )}
-
-        {/* Badge livrable — dropdown si réunion ouverte */}
-        <div className="relative shrink-0" ref={intentionDropdownRef}>
-          <button
-            onClick={() => { if (!isClosed) setShowIntentionDropdown(v => !v); }}
-            disabled={savingIntention}
-            className={`text-xs font-medium px-2.5 py-1 rounded-full border transition flex items-center gap-1 ${
-              isClosed
-                ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-default'
-                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 cursor-pointer'
-            }`}
-          >
-            {intentionMeta.icon} {intentionMeta.label}
-          </button>
-          {showIntentionDropdown && (
-            <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
-              {deliverableTypes.map(d => (
-                <button
-                  key={d.id}
-                  onClick={() => handleSaveIntention(d.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition ${d.id === currentIntention ? 'font-semibold text-blabia-blue' : 'text-gray-700'}`}
-                >
-                  <span>{d.icon}</span>
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Badge 🎓 Pédagogie/humour — réglage de la réunion en cours */}
-        <div className="relative shrink-0" ref={levelsDropdownRef}>
-          <button
-            onClick={() => setShowLevelsDropdown(v => !v)}
-            className="text-xs font-medium px-2.5 py-1 rounded-full border bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 transition flex items-center gap-1"
-            title="Maîtrise du sujet, humour et questions des agents"
-          >
-            🎓 {HUMOR_ICONS[humorLevel - 1]}
-          </button>
-          {showLevelsDropdown && (
-            <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-4 space-y-4">
-              <LevelSlider
-                label="Maîtrise du sujet"
-                value={expertiseLevel}
-                onChange={v => onChangeLevel('expertiseLevel', v)}
-                labels={EXPERTISE_LABELS}
-              />
-              <LevelSlider
-                label="Humour"
-                value={humorLevel}
-                onChange={v => onChangeLevel('humorLevel', v)}
-                labels={HUMOR_LABELS}
-                icons={HUMOR_ICONS}
-              />
-              <QuestionModePicker value={questionMode} onChange={v => onChangeLevel('questionMode', v)} />
-              <p className="text-[10px] text-gray-400">Effet à partir du prochain message.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Badge 📌 Décisions */}
-        <button
-          onClick={() => setShowDecisions(v => !v)}
-          title={decisionBudget ? `Questions posées par les agents dans cette réunion (budget : ${decisionBudget}). Au-delà, ils tranchent par hypothèse — vous pouvez les contredire.` : 'Décisions'}
-          className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border transition flex items-center gap-1.5 ${
-            showDecisions
-              ? 'bg-amber-200 border-amber-300 text-amber-800'
-              : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
-          }`}
-        >
-          📌 {decisionBudget ? `${decisions.length}/${decisionBudget}` : decisions.length > 0 ? `(${decisions.length})` : ''}
-          {pendingDecisionCount > 0 && (
-            <span className="text-[10px] bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full font-semibold leading-none">
-              ⏸ {pendingDecisionCount}
-            </span>
-          )}
-        </button>
-
-        {/* Badge 💡 Réunions suggérées (phase 3.4) */}
-        {meetingSuggestionsCount > 0 && (
-          <span
-            className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border bg-amber-50 border-amber-200 text-amber-700 cursor-default"
-            title="Réunions suggérées par les agents, à garder/modifier/écarter dans le fil"
-          >
-            💡 {meetingSuggestionsCount}
-          </span>
-        )}
-
-        {/* Badge recherche web activée */}
-        {session.webSearchEnabled && (
-          <span
-            className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border bg-blue-50 border-blue-200 text-blabia-blue cursor-default"
-            title="Les agents peuvent chercher des informations sur le web"
-          >
-            🔎 Recherche web activée
-          </span>
-        )}
-
-        {/* Badge tokens consommés */}
-        {tokensUsed && (
-          <span
-            className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border bg-gray-50 border-gray-200 text-gray-500 cursor-default"
-            title={`Input : ${tokensUsed.input.toLocaleString('fr-FR')} tokens · Output : ${tokensUsed.output.toLocaleString('fr-FR')} tokens`}
-          >
-            🔢 {tokensUsed.total.toLocaleString('fr-FR')}
-          </span>
-        )}
-
-        {/* Badge statut */}
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${badge.cls}`}>
-          {badge.label}
+        <span className="text-xs text-ink-muted truncate flex items-center gap-1.5">
+          {intentionMeta.label}{agentNames && ` · ${agentNames}`}
+          {session.webSearchEnabled && <Globe size={12} className="text-action" aria-label="Recherche web activée" />}
         </span>
-
-        {/* Menu ⋮ */}
-        <div className="relative shrink-0 ml-auto" ref={menuDotsRef}>
-          <button
-            onClick={() => setShowMenuDots(v => !v)}
-            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
-            title="Actions"
-          >
-            ⋮
-          </button>
-          {showMenuDots && (
-            <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1 overflow-hidden">
-              <button
-                onClick={() => { setShowMenuDots(false); setShowResetModal(true); }}
-                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left text-amber-700 hover:bg-amber-50 transition"
-              >
-                🔄 Réinitialiser cette réunion
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Ligne 2 : chips agents */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {activeAgents.map((agent, i) => {
-          const color = agentColors[i % agentColors.length];
-          return (
-            <span
-              key={agent.id || agent.name}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${color.bg} ${color.text}`}
-            >
-              <span>{agent.emoji || '🤖'}</span>
-              {agent.name}
-            </span>
-          );
-        })}
+      <PhaseStepper phase={phase} skipped={skippedPhases} />
 
-        {/* Dropdown + Agent */}
-        {!isClosed && (
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setShowAgentDropdown(v => !v)}
-              className="inline-flex items-center gap-1 text-xs text-blabia-blue border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-full transition"
-            >
-              + Agent
-            </button>
+      <div className="flex items-center gap-1 ml-auto">
+        {decisionBudget ? (
+          <button type="button" onClick={onShowQuestions} className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-action"
+            title={`Questions posées par les agents / budget de la réunion${pendingDecisionCount ? ` — ${pendingDecisionCount} en attente` : ''}. Au-delà, ils tranchent par hypothèse.`}>
+            <Badge tone={pendingDecisionCount ? 'await' : 'muted'}>
+              Questions {questionsUsed}/{decisionBudget}
+            </Badge>
+          </button>
+        ) : null}
 
-            {showAgentDropdown && (
-              <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
-                {loadingAvailable ? (
-                  <div className="flex justify-center py-4">
-                    <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : availableForAdd.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-4 px-3">
-                    Tous les agents du projet sont déjà dans la réunion.
+        <div className="relative" ref={settingsRef}>
+          <IconButton label="Réglages de la réunion" active={showSettings} onClick={() => setShowSettings(v => !v)} aria-expanded={showSettings}>
+            <SlidersHorizontal size={18} />
+          </IconButton>
+          {showSettings && (
+            <div role="dialog" aria-label="Réglages de la réunion"
+              className="absolute right-0 top-full mt-1 w-80 max-w-[calc(100vw-24px)] bg-white border border-line rounded-xl shadow-lg z-30 p-4 space-y-4 max-h-[75vh] overflow-y-auto">
+              <div className="space-y-1.5">
+                <p className="text-sm font-bold text-ink-soft">Type de réunion</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {deliverableTypes.map(d => (
+                    <button key={d.id} type="button" disabled={isClosed || savingIntention}
+                      onClick={() => handleSaveIntention(d.id)}
+                      className={`text-xs rounded-lg border px-2 py-2 font-semibold transition disabled:opacity-50 ${
+                        d.id === currentIntention ? 'bg-action border-action text-white' : 'bg-white border-line text-ink-muted hover:border-action-border'
+                      }`}>
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <LevelSlider label="Maîtrise du sujet" value={expertiseLevel} onChange={v => onChangeLevel('expertiseLevel', v)} labels={EXPERTISE_LABELS} />
+              <LevelSlider label="Humour" value={humorLevel} onChange={v => onChangeLevel('humorLevel', v)} labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
+              <QuestionModePicker value={questionMode} onChange={v => onChangeLevel('questionMode', v)} />
+              <p className="text-[11px] text-ink-faint">Effet à partir du prochain message.</p>
+              <div className="border-t border-line pt-3 space-y-1 text-xs text-ink-muted">
+                <p>Recherche web : {session.webSearchEnabled ? 'activée' : 'désactivée'}</p>
+                {tokensUsed && (
+                  <p title={`Entrée : ${tokensUsed.input.toLocaleString('fr-FR')} · Sortie : ${tokensUsed.output.toLocaleString('fr-FR')}`}>
+                    Consommation : {tokensUsed.total.toLocaleString('fr-FR')} jetons
                   </p>
-                ) : (
-                  <>
-                    <ul className="py-1 max-h-40 overflow-y-auto">
-                      {availableForAdd.map(a => {
-                        const id = a.agentId || a.id;
-                        return (
-                          <li key={id}>
-                            <button
-                              onClick={() => handleAddAgent(id)}
-                              disabled={addingAgentId === id}
-                              className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 text-left transition disabled:opacity-50"
-                            >
-                              <span className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-sm shrink-0">
-                                {a.emoji || a.name?.[0] || '?'}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-800 truncate">{a.name}</p>
-                                <p className="text-xs text-gray-400 truncate">{a.role}</p>
-                              </div>
-                              {addingAgentId === id && (
-                                <span className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
-                              )}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {/* Formulaire création inline */}
-                    <div className="border-t border-gray-100">
-                      {dropdownCreateForm.open ? (
-                        <div className="p-2 space-y-1.5">
-                          <input
-                            autoFocus
-                            type="text" placeholder="Nom de l'agent"
-                            value={dropdownCreateForm.name}
-                            onChange={e => setDropdownCreateForm(p => ({ ...p, name: e.target.value }))}
-                            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
-                          />
-                          <input
-                            type="text" placeholder="Rôle"
-                            value={dropdownCreateForm.role}
-                            onChange={e => setDropdownCreateForm(p => ({ ...p, role: e.target.value }))}
-                            onKeyDown={e => { if (e.key === 'Enter') handleDropdownCreateAgent(); }}
-                            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
-                          />
-                          {dropdownCreateForm.error && (
-                            <p className="text-[10px] text-red-500">{dropdownCreateForm.error}</p>
-                          )}
-                          <AgentScopeSelector
-                            scope={dropdownCreateForm.scope}
-                            onChange={scope => setDropdownCreateForm(p => ({ ...p, scope }))}
-                            size="xs"
-                          />
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={handleDropdownCreateAgent}
-                              disabled={!dropdownCreateForm.name.trim() || !dropdownCreateForm.role.trim() || dropdownCreateForm.creating}
-                              className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
-                            >
-                              {dropdownCreateForm.creating ? '…' : 'Créer et inviter'}
-                            </button>
-                            <button
-                              onClick={() => setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '', scope: 'project' })}
-                              className="text-xs text-gray-400 hover:text-gray-600 px-2"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDropdownCreateForm(p => ({ ...p, open: true }))}
-                          className="w-full text-xs text-gray-400 hover:text-blabia-blue hover:bg-gray-50 py-2 px-3 text-left transition"
-                        >
-                          + Créer un agent…
-                        </button>
-                      )}
-                    </div>
-                  </>
                 )}
               </div>
-            )}
-          </div>
-        )}
+              {!isClosed && (
+                <button type="button" onClick={() => { setShowSettings(false); onReset(); }}
+                  className="w-full inline-flex items-center gap-2 text-sm font-semibold text-await hover:bg-await-bg rounded-lg px-2 py-2">
+                  <RotateCcw size={15} /> Réinitialiser cette réunion
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <IconButton label={panelOpen ? 'Masquer le panneau' : 'Afficher le panneau'} active={panelOpen} onClick={onTogglePanel} aria-pressed={panelOpen}>
+          <PanelRight size={18} />
+        </IconButton>
+
+        {isClosed
+          ? <Badge tone={session.status === 'accepted' ? 'ok' : 'muted'}>{statusLabel}</Badge>
+          : <Button size="md" variant="secondary" onClick={onConclude}>Conclure</Button>}
       </div>
-    </div>
+    </header>
   );
 }

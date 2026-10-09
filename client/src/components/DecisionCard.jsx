@@ -1,169 +1,104 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
+import { Check, Clock, MessagesSquare } from 'lucide-react';
 
-const CUSTOM_OPTION = 'Autre (précise)';
+const isCustom = c => /^autre/i.test(c || '');
 
-export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, disabled }) {
-  const [selected,    setSelected]    = useState(null);
-  const [customText,  setCustomText]  = useState('');
-  const [submitting,  setSubmitting]  = useState(false);
+// Pastille de choix : sélection lisible (fond clair + texte coloré + coche),
+// jamais de texte blanc sur fond coloré.
+export function ChoicePill({ selected, recommended, onClick, children, tone = 'action' }) {
+  const sel = tone === 'ai'
+    ? 'bg-ai-light border-ai text-ai'
+    : 'bg-action-light border-action text-action';
+  return (
+    <button type="button" onClick={onClick} aria-pressed={selected}
+      className={`min-h-[36px] px-3 py-1 rounded-full border text-[13px] font-semibold inline-flex items-center gap-1.5 transition ${
+        selected ? sel : `bg-white text-ink-soft hover:border-action-border hover:bg-action-light/40 ${recommended ? 'border-ai-border' : 'border-line'}`
+      }`}>
+      {selected && <Check size={14} aria-hidden="true" />}
+      <span>{children}</span>
+      {recommended && !selected && <span className="text-[11px] font-bold text-ai">recommandé</span>}
+    </button>
+  );
+}
 
-  // ── Carte compacte après réponse ────────────────────────────────────────────
-  if (message.status === 'delegated') {
+export const DELEGATE = '__delegate__';
+
+// Question soumise à l'humain (refonte UX v5.1, version compacte) :
+// choisir une réponse (ou « Laisser les agents décider »), puis Valider.
+// Le premier choix est la recommandation des agents (consigne du prompt agent).
+export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, disabled, number, budget }) {
+  const [choice, setChoice]     = useState(null);   // texte choisi | DELEGATE | 'custom'
+  const [customText, setCustomText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // ── Questions traitées : une ligne ─────────────────────────────────────────
+  if (message.status === 'answered' || message.status === 'delegated' || message.status === 'deferred') {
+    const meta = {
+      answered:  { icon: <Check size={14} />,          cls: 'text-ok',     text: message.answer },
+      delegated: { icon: <MessagesSquare size={14} />, cls: 'text-action', text: 'les agents décident' },
+      deferred:  { icon: <Clock size={14} />,          cls: 'text-await',  text: 'reportée' },
+    }[message.status];
     return (
-      <div className="mx-4 flex items-start gap-2.5 py-1">
-        <span className="text-blue-500 text-base shrink-0 mt-0.5">💬</span>
-        <div className="min-w-0">
-          <p className="text-xs text-gray-400 font-medium mb-0.5">
-            Décision déléguée aux agents · {message.agentName}
-          </p>
-          <p className="text-sm text-gray-500 italic truncate">{message.question}</p>
-        </div>
+      <div className="ml-[38px] flex items-center gap-2 py-1 text-[13px] min-w-0">
+        <span className={`shrink-0 ${meta.cls}`}>{meta.icon}</span>
+        <span className="text-ink-faint truncate">{message.question}</span>
+        <span className={`font-bold shrink-0 max-w-[45%] truncate ${meta.cls}`}>→ {meta.text}</span>
       </div>
     );
   }
 
-  if (message.status === 'answered') {
-    return (
-      <div className="mx-4 flex items-start gap-2.5 py-1">
-        <span className="text-green-500 text-base shrink-0 mt-0.5">✅</span>
-        <div className="min-w-0">
-          <p className="text-xs text-gray-400 font-medium mb-0.5">
-            Décision actée · {message.agentName}
-          </p>
-          <p className="text-sm text-gray-600 italic truncate">{message.question}</p>
-          <p className="text-sm font-semibold text-green-700 mt-0.5">→ {message.answer}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (message.status === 'deferred') {
-    return (
-      <div className="mx-4 flex items-start gap-2.5 py-1">
-        <span className="text-orange-400 text-base shrink-0 mt-0.5">⏸</span>
-        <div className="min-w-0">
-          <p className="text-xs text-gray-400 font-medium mb-0.5">
-            Décision reportée · {message.agentName}
-          </p>
-          <p className="text-sm text-gray-500 italic truncate">{message.question}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Carte interactive (status === 'pending') ─────────────────────────────────
-  const isCustomSelected = selected === CUSTOM_OPTION;
-  const canSubmit        = selected && (!isCustomSelected || customText.trim());
-
-  const handleValidate = async () => {
-    if (!canSubmit || submitting) return;
+  // ── Question en attente ────────────────────────────────────────────────────
+  const run = async (fn) => {
+    if (submitting || disabled) return;
     setSubmitting(true);
-    await onAnswer(message.id, isCustomSelected ? customText.trim() : selected);
-    setSubmitting(false);
+    try { await fn(); } finally { setSubmitting(false); }
   };
-
-  const handleDefer = async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    await onDefer(message.id);
-    setSubmitting(false);
-  };
-
-  const handleDelegate = async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    await onDelegate?.(message.id);
-    setSubmitting(false);
-  };
+  const choices = (message.choices?.length ? message.choices : ['Autre (précise)']);
+  const ready = choice && (choice !== 'custom' || customText.trim());
+  const validate = () => run(() => {
+    if (choice === DELEGATE) return onDelegate(message.id);
+    return onAnswer(message.id, choice === 'custom' ? customText.trim() : choice);
+  });
 
   return (
-    <div className="mx-4 bg-violet-50 border border-violet-200 rounded-2xl p-4 space-y-3">
+    <fieldset disabled={disabled || submitting}
+      className="ml-[38px] my-1.5 bg-await-bg border border-await-border rounded-xl px-3 py-2.5 space-y-2 min-w-0 disabled:opacity-60">
+      <legend className="float-left w-full text-sm font-bold text-ink leading-snug">
+        <span className="text-[11px] font-extrabold uppercase tracking-wider text-await mr-1.5">
+          Question{number ? ` ${number}${budget ? `/${budget}` : ''}` : ''} · {message.agentName}
+        </span>
+        {message.question}
+      </legend>
+      {message.context && <p className="clear-both text-xs text-ink-muted leading-snug">{message.context}</p>}
 
-      {/* En-tête */}
-      <div className="space-y-1.5">
-        <p className="text-xs font-semibold text-violet-600">
-          🤔 {message.agentName} soumet une décision
-        </p>
-        <p className="text-sm font-semibold text-gray-900 leading-snug">
-          {message.question}
-        </p>
-        {message.context && (
-          <p className="text-xs text-gray-500 flex items-start gap-1 leading-snug">
-            <span className="shrink-0 mt-0.5">💡</span>
-            <span>{message.context}</span>
-          </p>
-        )}
-      </div>
-
-      {/* Choix */}
-      <div className="space-y-1.5">
-        {(message.choices || []).map((choice, i) => (
-          <label
-            key={i}
-            className={`flex items-center gap-2.5 cursor-pointer px-3 py-2 rounded-xl border transition select-none ${
-              selected === choice
-                ? 'bg-violet-100 border-violet-400'
-                : 'bg-white border-gray-200 hover:border-violet-300'
-            } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <input
-              type="radio"
-              name={`decision-${message.id}`}
-              value={choice}
-              checked={selected === choice}
-              onChange={() => { setSelected(choice); setCustomText(''); }}
-              disabled={disabled}
-              className="accent-violet-600 shrink-0"
-            />
-            <span className="text-sm text-gray-700">{choice}</span>
-          </label>
+      <div className="clear-both flex flex-wrap gap-1.5">
+        {choices.map((c, i) => isCustom(c) ? (
+          <ChoicePill key={i} selected={choice === 'custom'} onClick={() => setChoice('custom')}>{c}</ChoicePill>
+        ) : (
+          <ChoicePill key={i} selected={choice === c} recommended={i === 0} onClick={() => setChoice(c)}>{c}</ChoicePill>
         ))}
-
-        {/* Champ texte libre si "Autre" sélectionné */}
-        {isCustomSelected && (
-          <input
-            autoFocus
-            type="text"
-            value={customText}
-            onChange={e => setCustomText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleValidate(); } }}
-            placeholder="Précisez votre choix…"
-            disabled={disabled}
-            className="w-full text-sm border border-violet-300 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-violet-400 bg-white disabled:opacity-50"
-          />
+        {onDelegate && (
+          <ChoicePill tone="ai" selected={choice === DELEGATE} onClick={() => setChoice(DELEGATE)}>Laisser les agents décider</ChoicePill>
         )}
       </div>
 
-      {/* Boutons */}
-      <div className="flex gap-2 pt-0.5">
-        <button
-          onClick={handleValidate}
-          disabled={!canSubmit || submitting || disabled}
-          className="flex-1 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-        >
-          {submitting
-            ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : '✅ Valider mon choix'}
-        </button>
-        <button
-          onClick={handleDefer}
-          disabled={submitting || disabled}
-          className="border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium py-2 px-4 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-        >
-          ⏸ Plus tard
-        </button>
-      </div>
-
-      {/* Déléguer aux agents */}
-      {onDelegate && (
-        <button
-          onClick={handleDelegate}
-          disabled={submitting || disabled}
-          className="w-full border border-blue-200 text-blabia-blue hover:bg-blue-50 text-sm font-medium py-2 px-4 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          💬 Laisser les agents en débattre
-        </button>
+      {choice === 'custom' && (
+        <input autoFocus value={customText} onChange={e => setCustomText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && ready) { e.preventDefault(); validate(); } }}
+          placeholder="Votre réponse…" aria-label="Votre réponse"
+          className="w-full h-9 text-[13px] border border-line rounded-lg px-3 bg-white outline-none focus:ring-2 focus:ring-action-border" />
       )}
-    </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <button type="button" onClick={validate} disabled={!ready}
+          className="h-9 px-4 rounded-lg bg-action text-white text-[13px] font-bold hover:bg-action-dark disabled:opacity-40 disabled:cursor-not-allowed">
+          Valider
+        </button>
+        <button type="button" onClick={() => run(() => onDefer(message.id))} className="min-h-[32px] text-[13px] font-semibold text-ink-muted hover:text-ink">
+          Plus tard
+        </button>
+        {submitting && <span className="w-3.5 h-3.5 border-2 border-action border-t-transparent rounded-full animate-spin" />}
+      </div>
+    </fieldset>
   );
 }

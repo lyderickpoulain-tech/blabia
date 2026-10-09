@@ -137,6 +137,27 @@ const SIZE_VARIANTS = {
     strong: ({ children }) => <strong className="font-semibold text-gray-800">{children}</strong>,
   },
 
+  // Synthèses produites par l'IA (préparation, briefing) : titres violets sans
+  // trait, puces violettes — couleur « ai » de la refonte UX v5.1
+  synthesis: {
+    ...SHARED,
+    h1: ({ children }) => <h3 className="text-xs font-extrabold uppercase tracking-wider text-ai mt-4 mb-1.5 first:mt-0">{children}</h3>,
+    h2: ({ children }) => <h3 className="text-xs font-extrabold uppercase tracking-wider text-ai mt-4 mb-1.5 first:mt-0">{children}</h3>,
+    h3: ({ children }) => <h4 className="text-sm font-bold text-ink mt-3 mb-1">{children}</h4>,
+    p:  ({ children }) => <p className="text-sm text-ink-soft mb-2 leading-relaxed last:mb-0">{children}</p>,
+    ul: ({ children }) => <ul className="mb-2 space-y-1 list-none">{children}</ul>,
+    ol: ({ children }) => <ol className="mb-2 space-y-1 list-decimal list-inside text-sm text-ink-soft">{children}</ol>,
+    li: ({ children }) => (
+      <li className="flex items-start gap-2 text-sm text-ink-soft leading-relaxed">
+        <span className="w-1.5 h-1.5 rounded-full bg-ai mt-[0.55em] shrink-0" aria-hidden="true" />
+        <span>{children}</span>
+      </li>
+    ),
+    strong: ({ children }) => <strong className="font-bold text-ink">{children}</strong>,
+    em:     ({ children }) => <em className="italic">{children}</em>,
+    hr:     () => <hr className="my-3 border-ai-border" />,
+  },
+
   // Bulles de conversation (ConversationFeed) : pas de gros titres, le reste
   // du sous-ensemble markdown autorisé (gras, listes, tableaux, liens, code)
   // suit le même rendu que "compact".

@@ -66,7 +66,9 @@ Maquettes (canevas, privé) : https://claude.ai/artifact/U6WttxzAwX9v24XtQ6WKCs 
 Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour une réunion), Boîte à outils, Environnement, Mémoire du projet (affichée brute).
 
 ### Design system
-- **Couleurs à sens unique** : bleu `#2448C9` = action ; ambre `#92400E` / fond `#FEF3C7` = attend l'arbitrage de l'humain ; vert `#166534` / `#DCFCE7` = validé ; violet `#5B21B6` / `#EDE9FE` = produit par l'IA (synthèse, préparation, illustration) ; gris `#4A4F5C` / `#ECEDF1` = passé, secondaire. Fond de page `#F4F5F7`, texte `#16181D`.
+- **Couleurs à sens unique** (tokens Tailwind `action`, `await`, `ok`, `ai`, `muted`, `ink`, `canvas`, `line` dans `client/tailwind.config.js`) : bleu `#3352E0` = action ; ambre `#9A4A06` / fond `#FFF1D6` = attend l'arbitrage de l'humain ; vert `#15803D` / `#DCFCE7` = validé ; violet `#6D35D9` / `#F0E9FF` = produit par l'IA (synthèse, préparation, illustration) ; gris `#565D78` / `#ECEFF6` = passé, secondaire. Fond de page bleuté `#F3F5FB`, texte ardoise `#1E2238` (retour utilisateur : le gris + noir était « triste »).
+- **Choix sélectionné** : fond clair + texte coloré + coche, jamais de texte blanc sur fond coloré (retour : texte devenu illisible). **Toute question se valide explicitement** (bouton « Valider ») et propose « Laisser les agents décider » question par question.
+- **Agents** : chacun sa couleur (avatar soutenu, nom coloré, bulle pastel).
 - **Typographie** : Manrope seule (Google Fonts).
 - **Icônes** au trait, une seule famille (proposition : `lucide-react`) ; emojis réservés aux avatars d'agents (sinon initiales).
 - **Composants partagés** : carte, badge, bouton, fenêtre, panneau latéral. Zones cliquables ≥ 44 px pour les actions principales.
@@ -86,9 +88,9 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 
 ## 3. Reste à faire (ordre recommandé)
 
-### A. Refonte UX (en cours de démarrage)
-1. Socle : tokens de couleur Tailwind, Manrope, `lucide-react`, composants partagés.
-2. **Salle de réunion** : quatre temps, Briefing comme écran dédié (remplace les corrections transitoires de la préparation), fil compact, panneau repliable, zone Illustration.
+### A. Refonte UX (en cours)
+1. ✅ Socle : tokens de couleur Tailwind, Manrope, `lucide-react` 0.469.0, composants partagés (`client/src/components/ui/index.jsx` : Button, IconButton, Badge, Card, SectionLabel).
+2. ✅ **Salle de réunion** (plein écran, hors `ProjectLayout`) : en-tête sur une ligne (`MeetingHeader`, réglages regroupés), quatre temps (`PhaseStepper`), écran Briefing (`BriefingView`), fil compact avec bulles pastel par agent, séparateur entre interlocuteurs et heure (`ConversationFeed`), hypothèses « D'accord · Je contredis », questions à valider explicitement avec « Laisser les agents décider » (`DecisionCard`), panneau latéral repliable en cartes (`MeetingSidePanel`), zone Illustration (`IllustrationPanel`), saisie compacte (`MeetingInputBar`). Reste à restyler : fenêtres de conclusion et de réinitialisation.
 3. Tableau de bord du projet + navigation par pages (Plan, Historique, Décisions, Outils, Équipe, Paramètres) ; retirer la double liste « Réunions ».
 4. Renommages du glossaire partout (y compris commandes rapides qui parlent encore de « timeline »).
 

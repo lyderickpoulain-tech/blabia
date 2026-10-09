@@ -62,6 +62,8 @@ server/prisma/   schema.prisma + migrations SQL
 # Client
 cd client && npm run dev        # dev server Vite
 cd client && npm run build      # build de prod
+# ⚠️ Après toute modification de client/tailwind.config.js : relancer `npm run dev`
+#    (Vite ne relit pas la config Tailwind à chaud → nouvelles couleurs absentes)
 
 # Serveur
 cd server && npm run dev        # nodemon

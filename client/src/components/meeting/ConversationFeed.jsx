@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { Image as ImageIcon, Sparkles } from 'lucide-react';
 import DecisionCard from '../DecisionCard';
-import AgentScopeSelector from './AgentScopeSelector';
 import Markdown from '../Markdown';
-import MeetingSuggestionCard from './MeetingSuggestionCard';
-import ArtifactCard from './ArtifactCard';
-import { costLabel } from '../../utils/toolsCatalog';
+
+// ── Fil de conversation compact (refonte UX v5.1) ─────────────────────────────
+// Messages façon messagerie : avatar et nom au premier message d'une série.
+// Les suggestions sont dans le panneau latéral ; les illustrations s'ouvrent
+// dans la zone de droite ; la préparation tient en une ligne « Briefing ».
 
 // ── Recherche web (2.6) ────────────────────────────────────────────────────────
 
@@ -33,23 +35,19 @@ function WebSearchBlock({ webSearch }) {
   if (queries.length === 0) return null;
 
   return (
-    <div className="mt-1.5">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1.5"
-      >
-        <span>🔎 {queries.length} recherche{queries.length !== 1 ? 's' : ''}</span>
-        {sources.length > 0 && (
-          <span className="text-gray-400">· Sources ({sources.length}) {open ? '▲' : '▼'}</span>
-        )}
+    <div className="mt-0.5">
+      <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open}
+        className="min-h-[28px] text-xs font-semibold text-action hover:underline">
+        {queries.length} recherche{queries.length !== 1 ? 's' : ''} web
+        {sources.length > 0 && <span className="text-ink-faint"> · {sources.length} source{sources.length !== 1 ? 's' : ''} {open ? '▲' : '▼'}</span>}
       </button>
       {open && sources.length > 0 && (
-        <div className="mt-1 space-y-1 border-l-2 border-blue-100 pl-2">
+        <div className="mt-1 space-y-1 border-l-2 border-action-light pl-2">
           {sources.map((s, i) => (
             <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-              className="flex items-start gap-1.5 text-xs text-blue-600 hover:text-blue-800 hover:underline">
-              <span className="text-gray-400 shrink-0">[{i + 1}]</span>
-              <span className="truncate">{s.title} <span className="text-gray-400">— {extractDomain(s.url)}</span></span>
+              className="flex items-start gap-1.5 text-xs text-action hover:underline">
+              <span className="text-ink-faint shrink-0">[{i + 1}]</span>
+              <span className="truncate">{s.title} <span className="text-ink-faint">— {extractDomain(s.url)}</span></span>
             </a>
           ))}
         </div>
@@ -58,163 +56,70 @@ function WebSearchBlock({ webSearch }) {
   );
 }
 
-// ── SuggestionAgentCard ───────────────────────────────────────────────────────
+// Hypothèse explicite d'un agent (consigne du prompt : « Je pars sur X, sauf avis contraire »)
+const HYPOTHESIS_RE = /sauf avis contraire|^\s*hypoth[eè]se\s*:/i;
+const stripHypothesisPrefix = t => t.replace(/^\s*hypoth[eè]se\s*:\s*/i, '');
+const KIND_LABEL = { mermaid: 'Schéma', html: 'Maquette', svg: 'Visuel' };
+const TURN_SEPARATOR = 'mt-2 pt-2.5 border-t border-line [&:first-child]:mt-0 [&:first-child]:border-t-0';
+const timeOf = ts => {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return isNaN(d) ? '' : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+};
 
-function SuggestionAgentCard({ suggestion, idx, onInvite, onDismiss, onCreateAndInvite }) {
-  const [form,  setForm]  = useState(suggestion.createForm || { name: suggestion.name, role: suggestion.role, systemPrompt: '' });
-  const [scope, setScope] = useState('project');
-
-  if (suggestion.invited) {
-    return (
-      <div className="flex justify-center">
-        <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-3 py-1">
-          ✅ {suggestion.name} a rejoint la réunion
-        </span>
-      </div>
-    );
-  }
-
+function AgentAvatar({ agent, color, name, hidden }) {
   return (
-    <div className="mx-4 bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold text-amber-800">
-            💡 {suggestion.reason || 'Suggestion d\'agent'}
-          </p>
-          <p className="text-sm font-medium text-gray-800 mt-0.5">
-            {suggestion.name}
-            {suggestion.role && <span className="text-xs text-gray-500 font-normal ml-1">— {suggestion.role}</span>}
-          </p>
-        </div>
-        <button onClick={() => onDismiss(idx)} className="text-gray-300 hover:text-gray-500 text-xs shrink-0 mt-0.5">✕</button>
-      </div>
-
-      {suggestion.showCreate ? (
-        <div className="space-y-1.5">
-          <input
-            type="text" placeholder="Nom" value={form.name}
-            onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-          />
-          <input
-            type="text" placeholder="Rôle" value={form.role}
-            onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-          />
-          <textarea
-            placeholder="Prompt système (optionnel)" value={form.systemPrompt}
-            onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))}
-            rows={2} className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-amber-400 bg-white resize-none"
-          />
-          <AgentScopeSelector scope={scope} onChange={setScope} size="xs" />
-          <div className="flex gap-2">
-            <button
-              onClick={() => onCreateAndInvite(idx, form, scope)}
-              disabled={!form.name.trim() || suggestion.inviting}
-              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
-            >
-              {suggestion.inviting ? 'Création…' : 'Créer et inviter'}
-            </button>
-            <button onClick={() => onDismiss(idx)} className="text-xs text-gray-400 hover:text-gray-600 px-2">Annuler</button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <button
-            onClick={() => onInvite(idx)}
-            disabled={suggestion.inviting}
-            className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium py-1.5 rounded-lg disabled:opacity-50"
-          >
-            {suggestion.inviting ? <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : '+ Inviter'}
-          </button>
-          <button onClick={() => onDismiss(idx)} className="border border-amber-300 text-amber-700 text-xs font-medium py-1.5 px-3 rounded-lg hover:bg-amber-100">
-            Ignorer
-          </button>
-        </div>
-      )}
-    </div>
+    <span aria-hidden="true"
+      className={`w-7 h-7 rounded-full ${color.avatar} text-white text-xs font-extrabold flex items-center justify-center shrink-0 ${hidden ? 'invisible' : ''}`}>
+      {agent?.emoji || name?.[0] || '?'}
+    </span>
   );
 }
 
-// ── ConversationFeed ──────────────────────────────────────────────────────────
-
 export default function ConversationFeed({
   messages, activeAgents, streamingAgent, streamingReason,
-  agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite,
-  meetingSuggestions, onKeepMeeting, onDiscardMeeting, onSaveMeeting, meetingSuggestionBusyId, meetingRefs,
-  toolSuggestions,
   session, project, onAutoLaunch, onPrepare, isClosed, isStreaming,
   pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision,
-  agentColors, deliverableTypes,
+  agentColors, deliverableTypes, decisionBudget,
+  onOpenArtifact, openArtifactId, onContradict,
+  prepExpanded, onTogglePrep,
 }) {
-  // Débat de préparation replié par défaut : l'humain arrive sur la synthèse et les décisions
-  const [showPrepDebate, setShowPrepDebate] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(() => new Set()); // hypothèses approuvées
 
   function agentColor(name) {
     const idx = activeAgents.findIndex(a => a.name === name);
     return agentColors[(idx >= 0 ? idx : 0) % agentColors.length];
   }
 
+  // ── Réunion vide : point de départ ─────────────────────────────────────────
   if (messages.length === 0 && !streamingAgent) {
     const intentionKey0 = Array.isArray(session?.intention) ? session.intention[0]
       : (() => { try { const p = JSON.parse(session?.intention || '[]'); return p[0] || 'decision'; } catch { return 'decision'; } })();
     const intentionMeta0 = deliverableTypes.find(d => d.id === intentionKey0) || deliverableTypes[0];
-    const modelLabel = session?.model?.includes('opus') ? 'Claude Opus'
-      : session?.model?.includes('haiku') ? 'Claude Haiku'
-      : 'Claude Sonnet';
-
     return (
-      <div className="flex flex-col items-center justify-center h-full px-6 py-8">
-        <div className="w-full max-w-md bg-white border border-gray-100 rounded-2xl shadow-sm p-5 space-y-4">
-          <h3 className="text-sm font-bold text-gray-800">🎙 Réunion prête à démarrer</h3>
-
-          <div className="space-y-2.5">
-            <div className="flex items-start gap-2">
-              <span className="text-xs text-gray-400 w-16 shrink-0 pt-0.5">Objectif</span>
-              <span className="text-xs text-gray-700 font-medium leading-snug">{session?.task}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 w-16 shrink-0">Livrable</span>
-              <span className="text-xs text-gray-700">{intentionMeta0.icon} {intentionMeta0.label}</span>
-            </div>
-            {activeAgents.length > 0 && (
-              <div className="flex items-start gap-2">
-                <span className="text-xs text-gray-400 w-16 shrink-0 pt-0.5">Agents</span>
-                <div className="flex flex-wrap gap-1">
-                  {activeAgents.map(a => (
-                    <span key={a.id} className="text-xs bg-blabia-blue-light text-blabia-blue px-2 py-0.5 rounded-full font-medium">{a.name}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 w-16 shrink-0">Modèle</span>
-              <span className="text-xs text-gray-700">{modelLabel}</span>
-            </div>
+      <div className="flex flex-col items-center justify-center min-h-full px-4 py-8">
+        <div className="w-full max-w-md bg-white border border-line rounded-2xl p-5 space-y-4">
+          <div className="space-y-1">
+            <p className="text-xs font-extrabold uppercase tracking-wider text-action">Réunion prête</p>
+            <h3 className="text-lg font-extrabold text-ink leading-snug">{session?.task}</h3>
+            <p className="text-[13px] text-ink-muted">{intentionMeta0.label} · {activeAgents.map(a => a.name).join(', ')}</p>
           </div>
-
           {!isClosed && (
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={onAutoLaunch}
-                disabled={!session || !project || isStreaming}
-                className="w-full flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue-dark text-white font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isStreaming ? '… En cours' : '🎙 Lancer automatiquement'}
-              </button>
+            <div className="space-y-2">
               {onPrepare && activeAgents.length >= 2 && (
                 <div className="space-y-1">
-                  <button
-                    onClick={onPrepare}
-                    disabled={!session || !project || isStreaming}
-                    className="w-full flex items-center justify-center gap-2 border border-blabia-blue text-blabia-blue hover:bg-blue-50 font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    🧠 Préparer la réunion avant mon arrivée
+                  <button type="button" onClick={onPrepare} disabled={!session || !project || isStreaming}
+                    className="w-full h-11 rounded-[10px] border border-ai-border text-ai font-bold text-sm hover:bg-ai-bg disabled:opacity-40">
+                    Préparer avant mon arrivée
                   </button>
-                  <p className="text-[11px] text-gray-400 text-center leading-snug">Les agents dégrossissent le sujet entre eux, sans vous poser de questions. À votre arrivée : une synthèse et les seules décisions qui vous reviennent, pour lancer la vraie réunion.</p>
+                  <p className="text-xs text-ink-faint text-center leading-snug">Les agents débattent entre eux sans vous. Vous arrivez sur un briefing : synthèse et décisions à trancher.</p>
                 </div>
               )}
-              <p className="text-xs text-gray-400 text-center">— ou tape ton premier message —</p>
+              <button type="button" onClick={onAutoLaunch} disabled={!session || !project || isStreaming}
+                className="w-full h-11 rounded-[10px] bg-action text-white font-bold text-sm hover:bg-action-dark disabled:opacity-40">
+                {isStreaming ? 'En cours…' : 'Démarrer les échanges'}
+              </button>
+              <p className="text-xs text-ink-faint text-center">ou écrivez votre premier message ci-dessous</p>
             </div>
           )}
         </div>
@@ -222,241 +127,172 @@ export default function ConversationFeed({
     );
   }
 
-  // Préparation sans l'humain : bulles du débat (flag prep, ou toute bulle d'agent
-  // antérieure à la synthèse pour les réunions préparées avant ce flag)
+  // ── Préparation : débat + synthèse + ses décisions repliés en une ligne ─────
   const prepSummaryIdx = messages.findIndex(m => m.type === 'prep_summary');
   const isPrepMessage = (m, i) => m.role === 'agent' && (m.prep || (prepSummaryIdx >= 0 && i < prepSummaryIdx));
-  const prepMessages = messages.filter(isPrepMessage);
-  const firstPrepId = prepMessages[0]?.id;
-  const pendingPrepDecisions = messages.filter(m => m.type === 'decision' && m.agentName === 'Préparation' && (m.status === 'pending' || m.status === 'deferred')).length;
-  const preparing = isStreaming && prepMessages.length > 0 && prepSummaryIdx < 0;
+  const prepDebate = messages.filter(isPrepMessage);
+  const prepSummary = prepSummaryIdx >= 0 ? messages[prepSummaryIdx] : null;
+  const prepDecisions = messages.filter(m => m.type === 'decision' && m.agentName === 'Préparation');
+  const preparing = isStreaming && prepDebate.length > 0 && !prepSummary;
+  const isPrepItem = (m, i) => isPrepMessage(m, i) || m.type === 'prep_summary' || (m.type === 'decision' && m.agentName === 'Préparation');
+  const decisionsOnly = messages.filter(m => m.type === 'decision');
 
-  const renderMessage = (msg) => {
-        // Synthèse de la préparation entre agents (avant l'arrivée de l'humain)
-        if (msg.role === 'system' && msg.type === 'prep_summary') {
-          return (
-            <div key={msg.id} className="border border-blue-200 bg-blue-50/60 rounded-2xl p-4 space-y-2">
-              {pendingPrepDecisions > 0 && (
-                <div className="bg-blabia-blue text-white rounded-xl px-3 py-2 text-sm font-medium">
-                  👉 Préparation terminée — {pendingPrepDecisions} décision{pendingPrepDecisions > 1 ? 's vous attendent' : ' vous attend'} ci-dessous pour lancer la réunion.
-                </div>
-              )}
-              <p className="text-sm font-semibold text-blabia-blue flex items-center gap-2">🧠 Synthèse de la préparation</p>
-              <p className="text-[11px] text-gray-500">Les agents ont débattu entre eux. Voici où ils en sont ; vos réponses aux décisions lancent la réunion.</p>
-              <div className="text-sm text-gray-800">
-                <Markdown size="compact">{msg.content}</Markdown>
-              </div>
+  const decisionCard = (d) => (
+    <DecisionCard key={d.id} message={d} number={decisionsOnly.indexOf(d) + 1} budget={decisionBudget}
+      onAnswer={onAnswerDecision} onDefer={onDeferDecision} onDelegate={onDelegateDecision}
+      disabled={isClosed || (!!pendingDecisionId && pendingDecisionId !== d.id)} />
+  );
+
+  const renderAgentMessage = (msg, grouped) => {
+    const color = agentColor(msg.agentName);
+    const agent = activeAgents.find(a => a.name === msg.agentName);
+    const isHypothesis = HYPOTHESIS_RE.test(msg.content || '');
+    const text = isHypothesis ? stripHypothesisPrefix(msg.content) : msg.content;
+    return (
+      <div key={msg.id} className={`flex gap-2.5 items-start ${grouped ? 'pt-0.5' : TURN_SEPARATOR}`}>
+        <AgentAvatar agent={agent} color={color} name={msg.agentName} hidden={grouped} />
+        <div className="flex-1 min-w-0">
+          {!grouped && (
+            <p className="text-xs text-ink-faint">
+              <strong className={`font-bold ${color.text}`}>{msg.agentName}</strong>
+              {agent?.role && <> · {agent.role}</>}
+              {timeOf(msg.timestamp) && <> · {timeOf(msg.timestamp)}</>}
+              {msg.reason && <span className="italic"> · {msg.reason}</span>}
+            </p>
+          )}
+          <div className={`inline-block max-w-full mt-0.5 px-3 py-1.5 rounded-[12px] ${grouped ? '' : 'rounded-tl-[4px]'} text-sm leading-[1.45] text-ink-soft ${color.soft || 'bg-white ring-1 ring-line'}`}>
+            {isHypothesis && (
+              <span className="inline-block mr-1.5 px-1.5 rounded-md bg-muted-light text-ink-soft text-[11px] font-extrabold uppercase tracking-wider">Hypothèse</span>
+            )}
+            <Markdown size="bubble">
+              {msg.webSearch?.sources?.length > 0 ? annotateWithCitations(text, msg.webSearch.sources) : text}
+            </Markdown>
+          </div>
+          {isHypothesis && !isClosed && !acknowledged.has(msg.id) && (
+            <div className="flex gap-4 text-[13px]">
+              <button type="button" onClick={() => setAcknowledged(s => new Set(s).add(msg.id))}
+                className="min-h-[32px] font-bold text-ok hover:underline">D'accord</button>
+              <button type="button" onClick={() => onContradict?.(msg.agentName)}
+                className="min-h-[32px] font-bold text-await hover:underline">Je contredis</button>
             </div>
-          );
-        }
-
-        // Décision structurée v3.2
-        if (msg.role === 'system' && msg.type === 'decision') {
-          return (
-            <DecisionCard
-              key={msg.id}
-              message={msg}
-              onAnswer={onAnswerDecision}
-              onDefer={onDeferDecision}
-              onDelegate={onDelegateDecision}
-              disabled={!!pendingDecisionId && pendingDecisionId !== msg.id}
-            />
-          );
-        }
-
-        if (msg.role === 'system') {
-          return (
-            <div key={msg.id} className="flex justify-center">
-              <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-3 py-1">
-                {msg.content}
+          )}
+          {msg.webSearch && <WebSearchBlock webSearch={msg.webSearch} />}
+          {msg.artifact && (
+            <button type="button" onClick={() => onOpenArtifact?.(msg)}
+              className={`mt-1 w-full max-w-md flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-left transition ${
+                openArtifactId === msg.id ? 'border-ai bg-ai-light' : 'border-ai-border bg-ai-bg hover:bg-ai-light'
+              }`}>
+              <ImageIcon size={16} className="text-ai shrink-0" aria-hidden="true" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-bold text-ink truncate">{msg.artifact.title}</span>
+                <span className="block text-[11px] text-ink-faint">{KIND_LABEL[msg.artifact.kind]}</span>
               </span>
-            </div>
-          );
-        }
-
-        if (msg.role === 'human') {
-          const hasAttachments = msg.attachments?.length > 0;
-          return (
-            <div key={msg.id} className="flex justify-end">
-              <div className="max-w-[75%] space-y-1.5">
-                {/* Pièces jointes */}
-                {hasAttachments && (
-                  <div className="flex gap-2 flex-wrap justify-end">
-                    {msg.attachments.map((a, i) => {
-                      const fileIcon = a.isPdf ? '📕'
-                        : a.isImage ? '🖼️'
-                        : (a.name?.toLowerCase().endsWith('.docx')) ? '📘'
-                        : (a.name?.toLowerCase().endsWith('.xlsx') || a.name?.toLowerCase().endsWith('.csv')) ? '📗'
-                        : '📄';
-                      return a.isImage && a.dataUrl ? (
-                        <a key={i} href={a.dataUrl} target="_blank" rel="noopener noreferrer" title={a.name}>
-                          <img src={a.dataUrl} alt={a.name} className="w-20 h-20 rounded-xl object-cover border border-blue-200 hover:opacity-90 transition cursor-zoom-in" />
-                        </a>
-                      ) : (
-                        <div key={i} className="flex items-center gap-1.5 bg-blue-100 border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs text-blue-800 max-w-[160px]">
-                          <span>{fileIcon}</span>
-                          <span className="truncate">{a.name}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className={`px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed ${
-                  msg.pinned
-                    ? 'bg-amber-50 border border-amber-200 text-amber-900'
-                    : 'bg-blabia-blue text-white'
-                }`}>
-                  {msg.content || <span className="opacity-60 italic">— fichier joint —</span>}
-                </div>
-                {msg.pinned && (
-                  <p className="text-xs text-amber-600 text-right mt-1 flex items-center justify-end gap-1">
-                    📌 Décision
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        }
-
-        if (msg.role === 'agent') {
-          const color = agentColor(msg.agentName);
-          const agent = activeAgents.find(a => a.name === msg.agentName);
-          const isDecision = msg.type === 'decision' || msg.pinned;
-
-          return (
-            <div key={msg.id} className="flex items-start gap-3 group">
-              {/* Avatar */}
-              <div className={`w-8 h-8 rounded-full ${color.avatar} flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5`}>
-                {agent?.emoji || msg.agentName?.[0] || '?'}
-              </div>
-              <div className={msg.artifact ? "w-full max-w-[92%]" : "max-w-[75%]"}>
-                <p className={`text-xs font-semibold ${msg.reason ? 'mb-0.5' : 'mb-1'} ${color.text}`}>{msg.agentName}</p>
-                {msg.reason && (
-                  <p className={`text-xs italic mb-1 ${/vulgarise|reformule/i.test(msg.reason) ? 'text-blue-400' : 'text-gray-400'}`}>↳ {msg.reason}</p>
-                )}
-                <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed ${
-                  isDecision
-                    ? 'bg-amber-50 border border-amber-200 text-amber-900'
-                    : `${color.bg} ${color.text}`
-                }`}>
-                  <Markdown size="bubble">
-                    {msg.webSearch?.sources?.length > 0 ? annotateWithCitations(msg.content, msg.webSearch.sources) : msg.content}
-                  </Markdown>
-                </div>
-                {msg.webSearch && <WebSearchBlock webSearch={msg.webSearch} />}
-                {msg.artifact && <ArtifactCard artifact={msg.artifact} />}
-                {msg.interrupted ? (
-                  <p className="text-xs text-blabia-orange mt-1 flex items-center gap-1">
-                    ⚠️ Interrompu
-                  </p>
-                ) : isDecision ? (
-                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                    📌 Décision
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          );
-        }
-
-        return null;
+              <span className="text-[13px] font-bold text-ai shrink-0">{openArtifactId === msg.id ? 'Ouverte' : 'Ouvrir'}</span>
+            </button>
+          )}
+          {msg.interrupted && <p className="text-xs text-await mt-0.5">Interrompu</p>}
+        </div>
+      </div>
+    );
   };
 
-  return (
-    <div className="flex flex-col gap-4 py-4 px-4">
-      {messages.map((msg, i) => {
-        if (isPrepMessage(msg, i)) {
-          if (msg.id !== firstPrepId) return null;
-          return (
-            <div key="prep-debate" className="border border-dashed border-gray-300 rounded-2xl">
-              <button
-                onClick={() => setShowPrepDebate(v => !v)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-xs text-gray-600 hover:bg-gray-50 rounded-2xl"
-              >
-                {preparing
-                  ? <span className="w-3 h-3 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin shrink-0" />
-                  : <span>🧠</span>}
-                <span className="flex-1">
-                  {preparing ? 'Les agents préparent la réunion' : 'Débat de préparation des agents'} ({prepMessages.length} message{prepMessages.length > 1 ? 's' : ''})
-                </span>
-                <span className="text-gray-400">{showPrepDebate ? '▲ Masquer' : '▼ Voir'}</span>
-              </button>
-              {showPrepDebate && (
-                <div className="flex flex-col gap-4 px-3 pb-4 pt-1">
-                  {prepMessages.map(renderMessage)}
-                </div>
-              )}
-            </div>
-          );
-        }
-        return renderMessage(msg);
-      })}
+  const renderHuman = (msg) => (
+    <div key={msg.id} className={`flex justify-end ${TURN_SEPARATOR}`}>
+      <div className="max-w-[75%] space-y-1">
+        {msg.attachments?.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            {msg.attachments.map((a, i) => a.isImage && a.dataUrl ? (
+              <a key={i} href={a.dataUrl} target="_blank" rel="noopener noreferrer" title={a.name}>
+                <img src={a.dataUrl} alt={a.name} className="w-16 h-16 rounded-lg object-cover border border-action-border" />
+              </a>
+            ) : (
+              <span key={i} className="text-xs bg-action-light text-action rounded-lg px-2 py-1 max-w-[160px] truncate inline-block">{a.name}</span>
+            ))}
+          </div>
+        )}
+        <p className="bg-action text-white rounded-[14px] rounded-tr-[4px] px-3 py-1.5 text-sm leading-[1.45] whitespace-pre-wrap">
+          {msg.content || <span className="opacity-70 italic">fichier joint</span>}
+        </p>
+      </div>
+    </div>
+  );
 
-      {/* Bulle d'attente (2.1 : plus de texte partiel, juste l'indicateur de frappe) —
-          masquée pendant le débat de préparation (replié), visible pour la synthèse finale */}
-      {streamingAgent && (!preparing || streamingAgent === 'BlabIA') && (
-        <div className="flex items-start gap-3">
-          <div className={`w-8 h-8 rounded-full ${agentColor(streamingAgent).avatar} flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5`}>
-            {activeAgents.find(a => a.name === streamingAgent)?.emoji || streamingAgent?.[0] || '?'}
-          </div>
-          <div className="max-w-[75%]">
-            <p className="text-xs font-semibold mb-1 text-gray-400">{streamingAgent}</p>
-            {streamingReason && (
-              <p className="text-xs italic text-gray-400 mb-1">↳ {streamingReason}</p>
-            )}
-            <div className={`px-4 py-3 rounded-2xl rounded-tl-sm inline-flex items-center gap-1.5 ${agentColor(streamingAgent).bg} ${agentColor(streamingAgent).text}`}>
-              <span className="text-sm">écrit</span>
-              <span className="inline-flex gap-0.5">
-                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+  // Rendu séquentiel avec regroupement des messages consécutifs d'un même agent
+  const items = [];
+  let prevAgent = null;
+  let prepInserted = false;
+  messages.forEach((msg, i) => {
+    if (isPrepItem(msg, i)) {
+      if (!prepInserted) {
+        prepInserted = true;
+        const settledPrep = prepDecisions.filter(d => d.status === 'answered' || d.status === 'delegated').length;
+        let prevDebate = null;
+        items.push(
+          <div key="prep-block" className="pb-1">
+            <button type="button" onClick={onTogglePrep} aria-expanded={!!prepExpanded}
+              className="w-full min-h-[36px] flex items-center gap-2 px-2.5 py-1.5 rounded-[10px] border border-dashed border-ai-border bg-ai-bg text-left text-[13px] font-bold text-ai">
+              {preparing
+                ? <span className="w-3.5 h-3.5 border-2 border-ai border-t-transparent rounded-full animate-spin shrink-0" />
+                : <Sparkles size={15} className="shrink-0" aria-hidden="true" />}
+              <span className="flex-1">
+                {preparing
+                  ? `Les agents préparent la réunion (${prepDebate.length} messages)`
+                  : `Briefing · synthèse de la préparation${prepDecisions.length ? ` et ${settledPrep}/${prepDecisions.length} décisions tranchées` : ''}`}
               </span>
-            </div>
+              <span>{prepExpanded ? 'Masquer' : 'Revoir'}</span>
+            </button>
+            {prepExpanded && (
+              <div className="mt-2 pl-3 border-l-2 border-ai-border space-y-1">
+                {prepSummary && (
+                  <div className="bg-ai-bg border border-ai-border rounded-xl px-4 py-3">
+                    <Markdown size="synthesis">{prepSummary.content}</Markdown>
+                  </div>
+                )}
+                {prepDecisions.map(decisionCard)}
+                {prepDebate.map(m => { const g = prevDebate === m.agentName; prevDebate = m.agentName; return renderAgentMessage(m, g); })}
+              </div>
+            )}
           </div>
+        );
+      }
+      prevAgent = null;
+      return;
+    }
+    if (msg.role === 'system' && msg.type === 'decision') {
+      items.push(decisionCard(msg));
+      prevAgent = null;
+      return;
+    }
+    // Réponses aux questions (decision_answer) : messages techniques pour les
+    // agents, déjà visibles sur la carte de question et dans « Tranché ici »
+    if (msg.role === 'system' && msg.type === 'decision_answer') return;
+    if (msg.role === 'system') {
+      items.push(<p key={msg.id} className="text-center text-xs text-ink-faint py-1">{msg.content}</p>);
+      prevAgent = null;
+      return;
+    }
+    if (msg.role === 'human') {
+      items.push(renderHuman(msg));
+      prevAgent = null;
+      return;
+    }
+    if (msg.role === 'agent') {
+      items.push(renderAgentMessage(msg, prevAgent === msg.agentName));
+      prevAgent = msg.agentName;
+    }
+  });
+
+  const showTyping = streamingAgent && (!preparing || streamingAgent === 'BlabIA');
+
+  return (
+    <div className="max-w-[820px] mx-auto px-4 py-2.5 flex flex-col">
+      {items}
+      {showTyping && (
+        <div className="flex gap-2.5 items-center pt-2.5 text-[13px] text-ink-faint">
+          <AgentAvatar agent={activeAgents.find(a => a.name === streamingAgent)} color={agentColor(streamingAgent)} name={streamingAgent} />
+          <span><strong className="text-ink-soft">{streamingAgent}</strong> écrit…{streamingReason && <span className="italic"> ({streamingReason})</span>}</span>
         </div>
       )}
-
-      {/* Cartes suggestion agent (non-bloquantes) */}
-      {agentSuggestions?.filter(s => !s.dismissed).map((s, i) => (
-        <SuggestionAgentCard
-          key={i} suggestion={s} idx={i}
-          onInvite={onInviteSuggested}
-          onDismiss={onDismissSuggestion}
-          onCreateAndInvite={onCreateAndInvite}
-        />
-      ))}
-
-      {/* Cartes suggestion de réunion (non-bloquantes, phase 3.4) */}
-      {meetingSuggestions?.filter(s => s.status !== 'discarded').map(s => (
-        <MeetingSuggestionCard
-          key={s.id} suggestion={s}
-          busy={meetingSuggestionBusyId === s.id}
-          onKeep={onKeepMeeting}
-          onDiscard={onDiscardMeeting}
-          onSave={onSaveMeeting}
-          meetingRefs={meetingRefs}
-        />
-      ))}
-
-      {/* Outils proposés (réunion de type stack, phase 4.3) — validés un par un à la clôture */}
-      {toolSuggestions?.map(t => (
-        <div key={t.id} className="mx-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🧰</span>
-            <span className="text-sm font-medium text-gray-900 flex-1">{t.name}</span>
-            <span className="text-[10px] text-emerald-700 font-medium">à valider à la clôture</span>
-          </div>
-          {t.need && <p className="text-xs text-gray-700 pl-7">Besoin : {t.need}</p>}
-          <p className="text-xs text-gray-500 pl-7">
-            💶 {costLabel(t.cost)}
-            {t.priceSource
-              ? <> · <a href={t.priceSource} target="_blank" rel="noopener noreferrer" className="text-blabia-blue hover:underline">source</a></>
-              : <span className="text-amber-600"> · indicatif, à vérifier</span>}
-          </p>
-          {t.agentName && <p className="text-[10px] text-gray-400 pl-7">Proposé par {t.agentName}</p>}
-        </div>
-      ))}
-
     </div>
   );
 }
