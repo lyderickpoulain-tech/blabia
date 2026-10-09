@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 export default function MeetingInputBar({
   onIllustrate,
+  pendingDecisionsCount = 0,
   isClosed,
   session,
   currentIntention,
@@ -225,7 +226,13 @@ export default function MeetingInputBar({
 
           {/* Bouton Clore la réunion */}
           <button
-            onClick={() => setShowCloseModal(true)}
+            onClick={() => {
+              // Décisions encore sans réponse (dont celles de la préparation) : confirmer avant de clore
+              if (pendingDecisionsCount > 0 && !window.confirm(
+                `${pendingDecisionsCount} décision${pendingDecisionsCount > 1 ? 's sont' : ' est'} encore sans réponse. Les agents attendent vos arbitrages pour avancer. Clore la réunion quand même ?`
+              )) return;
+              setShowCloseModal(true);
+            }}
             disabled={isStreaming || !!pendingDecisionId}
             className="w-full text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
           >

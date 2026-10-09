@@ -2,6 +2,8 @@
 
 Plateforme de réunions virtuelles entre un humain et des agents IA orchestrés, au service d'un objectif de projet. Usage personnel : on privilégie la simplicité et la robustesse à la généricité.
 
+**Feuille de route en cours** : `docs/feuille-de-route-v5.1.md` (état, refonte UX validée, reste à faire) — à lire en début de session.
+
 ## Architecture
 
 ```
@@ -28,6 +30,7 @@ server/prisma/   schema.prisma + migrations SQL
 | **Livrable** | `Session.deliverable` | Résultat typé produit en plus du CR à la clôture : prompt (`claude_code`) ou liste d'outils proposés (`stack`) |
 | **Type d'objectif** | `Milestone.type` / `Session.intention` | `decision` (prise de décision), `claude_code` (prompt Claude Code), `stack` (revue des outils) |
 | **Registre des décisions** | table `Decision` | Ce qui est tranché pour le projet (`origin` human/agents, `status` active/reopened/superseded). Proposé à la clôture (`services/decisions.js#extractMeetingDecisions`), inscrit seulement après validation (`POST /projects/:id/decisions/from-session`), transmis aux agents ; vidé par la réinitialisation de la mémoire |
+| **Préparation sans l'humain** | `/chat` avec `prepare: true` | En début de réunion (≥ 2 agents) : débat entre agents (2 tours/agent, 4 à 8), sans carte de décision, puis synthèse (`type: 'prep_summary'`) et décisions regroupées pour l'humain, dans le budget de questions — `services/prompts/preparationPrompt.js` |
 | **Questions des agents** | `Project.questionMode` / `Session.questionMode` | Budget de cartes de décision par réunion : `delegate` (4), `balanced` (8), `control` (15) — `services/questionModes.js`. Au-delà, les agents tranchent par hypothèse explicite que l'humain peut contredire |
 | **Mes outils** | `User.tools` | Outils de l'utilisateur, tous projets (statut j'utilise / j'ai un compte / à essayer, coût, note) |
 | **Outils du projet** | `Project.tools` | Sélection parmi « Mes outils » + outils complémentaires (suggéré / validé / refusé, coût) |

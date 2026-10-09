@@ -18,6 +18,10 @@ const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/o
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
 const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
+const {
+  prepTurnsFor, AGENT_PREPARATION_SECTION, ORCHESTRATOR_PREPARATION_NOTE,
+  buildPrepSynthesisPrompt, parsePrepSynthesis,
+} = require('../../services/prompts/preparationPrompt');
 const { parseJsonField } = require('../../utils/parseJsonField');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 const {
@@ -54,9 +58,9 @@ async function loadMessages(sessionId) {
 
 async function orchestrate({ session, project, messages, activeAgents,
   lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false,
-  artifactRequested = false, decisionBudget }) {
+  artifactRequested = false, decisionBudget, preparing = false }) {
 
-  if (activeAgents.length === 1) {
+  if (activeAgents.length === 1 && !preparing) {
     return { agentId: activeAgents[0].id, reason: '', shouldClose: false };
   }
 
@@ -112,7 +116,8 @@ async function orchestrate({ session, project, messages, activeAgents,
     + (artifactRequested
       ? `\n🎨 L'humain demande une ILLUSTRATION (schéma, maquette ou visuel) : choisis l'agent le plus compétent pour la produire sur ce sujet. Ne propose pas shouldClose.\n`
       : '')
-    + resumeNote;
+    + resumeNote
+    + (preparing ? ORCHESTRATOR_PREPARATION_NOTE : '');
 
   // Tours comptés sur toute la réunion : le compteur de la requête repart à 0
   // après chaque réponse de l'humain, la suggestion de clôture ne se déclenchait jamais.
@@ -187,7 +192,7 @@ router.post('/:sessionId/extract-file', upload.single('file'), async (req, res) 
 
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated, artifactRequest } = req.body;
+  const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated, artifactRequest, prepare } = req.body;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const hasText        = !!humanMessage?.trim();
@@ -227,6 +232,16 @@ router.post('/:sessionId/chat', async (req, res) => {
 
     if (activeAgents.length === 0) {
       return res.status(400).json({ error: 'Aucun agent actif dans cette réunion' });
+    }
+
+    // Préparation sans l'humain : seulement au début de la réunion, à plusieurs agents
+    if (prepare) {
+      if (activeAgents.length < 2) {
+        return res.status(400).json({ error: 'La préparation demande au moins 2 agents dans la réunion' });
+      }
+      if (parseJsonField(s.messages, []).length > 0) {
+        return res.status(400).json({ error: "La préparation n'est possible qu'au début de la réunion" });
+      }
     }
 
     projectMilestones = await db('Milestone')
@@ -345,7 +360,36 @@ router.post('/:sessionId/chat', async (req, res) => {
     let turnInputTokens  = 0;
     let turnOutputTokens = 0;
 
-    while (turnCount < MAX_TURNS && !conversationDone && !abortController.signal.aborted) {
+    // Carte de décision : enregistrée dans le fil puis envoyée au client
+    const emitDecision = async (decision, agentName, decisionsLeft) => {
+      const decisionMsg = {
+        id:         randomUUID(),
+        role:       'system',
+        type:       'decision',
+        question:   decision.question,
+        choices:    decision.choices,
+        context:    decision.context,
+        status:     'pending',
+        answer:     null,
+        answeredAt: null,
+        agentName,
+        timestamp:  new Date().toISOString(),
+      };
+      await appendMessageEntry(sessionId, decisionMsg);
+      send('decision', {
+        messageId: decisionMsg.id,
+        question:  decisionMsg.question,
+        choices:   decisionMsg.choices,
+        context:   decisionMsg.context,
+        agentName,
+        decisionsLeft,
+      });
+      decisionEmitted = true;
+    };
+
+    // Préparation : nombre de tours fixe (débat complet), pas de clôture anticipée
+    const maxTurns = prepare ? prepTurnsFor(activeAgents.length) : MAX_TURNS;
+    while (turnCount < maxTurns && !conversationDone && !abortController.signal.aborted) {
 
       // Recharger depuis la DB à chaque début de tour — garantit que l'historique
       // est à jour même si le rechargement de fin de tour précédent était caduc.
@@ -360,13 +404,14 @@ router.post('/:sessionId/chat', async (req, res) => {
         delegated:            turnCount === 0 && !!delegated,
         artifactRequested:    turnCount === 0 && wantsArtifact,
         decisionBudget,
+        preparing:            !!prepare,
       });
       const turnArtifact = turnCount === 0 && wantsArtifact ? artifactText : null;
 
       turnInputTokens  += next.usage?.inputTokens  || 0;
       turnOutputTokens += next.usage?.outputTokens || 0;
 
-      if (next.shouldClose && !turnArtifact) {
+      if (next.shouldClose && !turnArtifact && !prepare) {
         send('suggest_close', { reason: next.reason });
         conversationDone = true;
         break;
@@ -380,10 +425,11 @@ router.post('/:sessionId/chat', async (req, res) => {
 
       const historyLines = currentMessages
         .slice(-10)
-        .filter(m => m.role !== 'system' || m.type === 'decision_answer')
+        .filter(m => m.role !== 'system' || m.type === 'decision_answer' || m.type === 'prep_summary')
         .map(m => {
           if (m.role === 'human')                                  return `Participant : ${m.content}`;
           if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
+          if (m.role === 'system' && m.type === 'prep_summary')    return `[Synthèse de la préparation entre agents]\n${m.content}`;
           return `${m.agentName} : ${m.content}${m.artifact ? ` [Illustration produite : « ${m.artifact.title} »]` : ''}`;
         });
       const historyText  = historyLines.join('\n\n');
@@ -400,6 +446,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         priorDecisionQuestions,
         decisionBudget: { used: countDecisions(currentMessages), max: decisionBudget },
         decisionRegistry,
+        preparationSection: prepare ? AGENT_PREPARATION_SECTION : '',
         pastCodePromptsText,
         expertiseLevel,
         humorLevel,
@@ -488,7 +535,8 @@ router.post('/:sessionId/chat', async (req, res) => {
       // budget de la réunion. Au-delà, les cartes sont ignorées (le texte reste
       // nettoyé des marqueurs) : l'agent a pour consigne de trancher par hypothèse.
       const budgetLeft = Math.max(0, decisionBudget - countDecisions(currentMessages));
-      const decisions  = parsed.decisions.slice(0, budgetLeft);
+      // Pendant la préparation, aucune carte : les décisions viennent de la synthèse finale
+      const decisions  = prepare ? [] : parsed.decisions.slice(0, budgetLeft);
 
       // Découpage en bulles (séparateur [NEXT], cf. phase 2.2) — même turnId,
       // un message distinct par bulle, affichées l'une après l'autre côté client.
@@ -512,6 +560,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         type:      'message',
         pinned:    false,
         ...(artifact && i === bubbles.length - 1 ? { artifact } : {}),
+        // Bulles du débat de préparation : repliées côté client derrière la synthèse
+        ...(prepare ? { prep: true } : {}),
       }));
       for (const m of agentMessages) await appendMessageEntry(sessionId, m);
 
@@ -520,29 +570,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       }
 
       for (const decision of decisions) {
-        const decisionMsg = {
-          id:         randomUUID(),
-          role:       'system',
-          type:       'decision',
-          question:   decision.question,
-          choices:    decision.choices,
-          context:    decision.context,
-          status:     'pending',
-          answer:     null,
-          answeredAt: null,
-          agentName:  agent.name,
-          timestamp:  new Date().toISOString(),
-        };
-        await appendMessageEntry(sessionId, decisionMsg);
-        send('decision', {
-          messageId: decisionMsg.id,
-          question:  decisionMsg.question,
-          choices:   decisionMsg.choices,
-          context:   decisionMsg.context,
-          agentName: agent.name,
-          decisionsLeft: Math.max(0, budgetLeft - decisions.length),
-        });
-        decisionEmitted = true;
+        await emitDecision(decision, agent.name, Math.max(0, budgetLeft - decisions.length));
       }
 
       if (decisionEmitted) { conversationDone = true; break; }
@@ -585,6 +613,43 @@ router.post('/:sessionId/chat', async (req, res) => {
       lastAgentId      = next.agentId;
       turnCount++;
       currentMessages  = await loadMessages(sessionId);
+    }
+
+    // Fin de préparation : synthèse pour l'humain + décisions qui lui reviennent
+    // (regroupées, dans la limite du budget de questions de la réunion)
+    if (prepare && !abortController.signal.aborted) {
+      send('agent_typing', { agentName: 'BlabIA', agentEmoji: '🧠', agentRole: 'Synthèse', reason: 'Prépare la synthèse pour votre arrivée' });
+      const prepMessages = await loadMessages(sessionId);
+      const transcript = prepMessages
+        .filter(m => m.role === 'agent')
+        .map(m => `${m.agentName} : ${m.content}`)
+        .join('\n\n');
+      const synthPrompt = buildPrepSynthesisPrompt({
+        task: session.task,
+        transcript,
+        registryText: decisionRegistry.activeText,
+        maxDecisions: decisionBudget - countDecisions(prepMessages),
+      });
+      const synthResponse = await anthropic.messages.create({
+        model: session.model || MODEL, max_tokens: 3000,
+        system: synthPrompt.system,
+        messages: [{ role: 'user', content: synthPrompt.user }],
+      }, { signal: abortController.signal });
+      turnInputTokens  += synthResponse.usage?.input_tokens  || 0;
+      turnOutputTokens += synthResponse.usage?.output_tokens || 0;
+      const synthText = synthResponse.content.filter(b => b.type === 'text').map(b => b.text).join('');
+      const { summary: prepSummary, decisions: prepDecisions } = parsePrepSynthesis(synthText, synthPrompt.max);
+      if (prepSummary) {
+        const summaryMsg = {
+          id: randomUUID(), role: 'system', type: 'prep_summary', agentName: null,
+          content: prepSummary, timestamp: new Date().toISOString(), pinned: false,
+        };
+        await appendMessageEntry(sessionId, summaryMsg);
+        send('prep_summary', { message: summaryMsg });
+      }
+      for (const d of prepDecisions) {
+        await emitDecision(d, 'Préparation', Math.max(0, synthPrompt.max - prepDecisions.length));
+      }
     }
 
     try {

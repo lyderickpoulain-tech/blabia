@@ -496,7 +496,7 @@ export default function MeetingRoom() {
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
-  const handleSend = useCallback(async (overrideText, { resume = false, delegated = false, artifactRequest = false } = {}) => {
+  const handleSend = useCallback(async (overrideText, { resume = false, delegated = false, artifactRequest = false, prepare = false } = {}) => {
     const text              = (typeof overrideText === 'string' ? overrideText : inputText).trim();
     const currentAttachments = attachmentsRef.current;
     // resume:true = reprise silencieuse après décision, bypass guards normaux
@@ -569,6 +569,7 @@ export default function MeetingRoom() {
             ...(resume    ? { resume: true }    : {}),
             ...(delegated ? { delegated: true } : {}),
             ...(artifactRequest ? { artifactRequest: true } : {}),
+            ...(prepare ? { prepare: true } : {}),
           }),
           signal: ac.signal,
         }
@@ -667,6 +668,9 @@ export default function MeetingRoom() {
 
             } else if (ev.type === 'suggest_meeting') {
               setStepSuggestions(prev => [...prev, ev.suggestion]);
+
+            } else if (ev.type === 'prep_summary') {
+              setMessages(prev => [...prev, ev.message]);
 
             } else if (ev.type === 'suggest_tool') {
               setToolSuggestions(prev => [...prev, ev.tool]);
@@ -775,6 +779,11 @@ export default function MeetingRoom() {
   // déclenche la première contribution des agents.
   const handleAutoLaunch = useCallback(() => {
     handleSend('', { resume: true });
+  }, [handleSend]);
+
+  // Préparation sans l'humain : les agents débattent, puis synthèse + décisions
+  const handlePrepare = useCallback(() => {
+    handleSend('', { resume: true, prepare: true });
   }, [handleSend]);
 
   const processFiles = useCallback(async (fileList) => {
@@ -1026,6 +1035,7 @@ export default function MeetingRoom() {
             session={session}
             project={project}
             onAutoLaunch={handleAutoLaunch}
+            onPrepare={handlePrepare}
             isClosed={isClosed}
             isStreaming={isStreaming}
             pendingDecisionId={pendingDecisionId}
@@ -1082,6 +1092,7 @@ export default function MeetingRoom() {
           onIllustrate={(request) => handleSend(`🎨 Illustration demandée : ${request}`, { artifactRequest: true })}
           handleTextareaFocus={handleTextareaFocus}
           setShowCloseModal={setShowCloseModal}
+          pendingDecisionsCount={pendingDecisionCount}
         />
 
         </div>

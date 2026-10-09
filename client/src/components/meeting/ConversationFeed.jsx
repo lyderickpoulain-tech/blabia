@@ -143,10 +143,13 @@ export default function ConversationFeed({
   agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite,
   meetingSuggestions, onKeepMeeting, onDiscardMeeting, onSaveMeeting, meetingSuggestionBusyId, meetingRefs,
   toolSuggestions,
-  session, project, onAutoLaunch, isClosed, isStreaming,
+  session, project, onAutoLaunch, onPrepare, isClosed, isStreaming,
   pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision,
   agentColors, deliverableTypes,
 }) {
+  // Débat de préparation replié par défaut : l'humain arrive sur la synthèse et les décisions
+  const [showPrepDebate, setShowPrepDebate] = useState(false);
+
   function agentColor(name) {
     const idx = activeAgents.findIndex(a => a.name === name);
     return agentColors[(idx >= 0 ? idx : 0) % agentColors.length];
@@ -199,6 +202,18 @@ export default function ConversationFeed({
               >
                 {isStreaming ? '… En cours' : '🎙 Lancer automatiquement'}
               </button>
+              {onPrepare && activeAgents.length >= 2 && (
+                <div className="space-y-1">
+                  <button
+                    onClick={onPrepare}
+                    disabled={!session || !project || isStreaming}
+                    className="w-full flex items-center justify-center gap-2 border border-blabia-blue text-blabia-blue hover:bg-blue-50 font-semibold py-3 px-4 rounded-xl transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    🧠 Préparer la réunion avant mon arrivée
+                  </button>
+                  <p className="text-[11px] text-gray-400 text-center leading-snug">Les agents dégrossissent le sujet entre eux, sans vous poser de questions. À votre arrivée : une synthèse et les seules décisions qui vous reviennent, pour lancer la vraie réunion.</p>
+                </div>
+              )}
               <p className="text-xs text-gray-400 text-center">— ou tape ton premier message —</p>
             </div>
           )}
@@ -207,9 +222,34 @@ export default function ConversationFeed({
     );
   }
 
-  return (
-    <div className="flex flex-col gap-4 py-4 px-4">
-      {messages.map((msg) => {
+  // Préparation sans l'humain : bulles du débat (flag prep, ou toute bulle d'agent
+  // antérieure à la synthèse pour les réunions préparées avant ce flag)
+  const prepSummaryIdx = messages.findIndex(m => m.type === 'prep_summary');
+  const isPrepMessage = (m, i) => m.role === 'agent' && (m.prep || (prepSummaryIdx >= 0 && i < prepSummaryIdx));
+  const prepMessages = messages.filter(isPrepMessage);
+  const firstPrepId = prepMessages[0]?.id;
+  const pendingPrepDecisions = messages.filter(m => m.type === 'decision' && m.agentName === 'Préparation' && (m.status === 'pending' || m.status === 'deferred')).length;
+  const preparing = isStreaming && prepMessages.length > 0 && prepSummaryIdx < 0;
+
+  const renderMessage = (msg) => {
+        // Synthèse de la préparation entre agents (avant l'arrivée de l'humain)
+        if (msg.role === 'system' && msg.type === 'prep_summary') {
+          return (
+            <div key={msg.id} className="border border-blue-200 bg-blue-50/60 rounded-2xl p-4 space-y-2">
+              {pendingPrepDecisions > 0 && (
+                <div className="bg-blabia-blue text-white rounded-xl px-3 py-2 text-sm font-medium">
+                  👉 Préparation terminée — {pendingPrepDecisions} décision{pendingPrepDecisions > 1 ? 's vous attendent' : ' vous attend'} ci-dessous pour lancer la réunion.
+                </div>
+              )}
+              <p className="text-sm font-semibold text-blabia-blue flex items-center gap-2">🧠 Synthèse de la préparation</p>
+              <p className="text-[11px] text-gray-500">Les agents ont débattu entre eux. Voici où ils en sont ; vos réponses aux décisions lancent la réunion.</p>
+              <div className="text-sm text-gray-800">
+                <Markdown size="compact">{msg.content}</Markdown>
+              </div>
+            </div>
+          );
+        }
+
         // Décision structurée v3.2
         if (msg.role === 'system' && msg.type === 'decision') {
           return (
@@ -320,10 +360,41 @@ export default function ConversationFeed({
         }
 
         return null;
+  };
+
+  return (
+    <div className="flex flex-col gap-4 py-4 px-4">
+      {messages.map((msg, i) => {
+        if (isPrepMessage(msg, i)) {
+          if (msg.id !== firstPrepId) return null;
+          return (
+            <div key="prep-debate" className="border border-dashed border-gray-300 rounded-2xl">
+              <button
+                onClick={() => setShowPrepDebate(v => !v)}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-xs text-gray-600 hover:bg-gray-50 rounded-2xl"
+              >
+                {preparing
+                  ? <span className="w-3 h-3 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin shrink-0" />
+                  : <span>🧠</span>}
+                <span className="flex-1">
+                  {preparing ? 'Les agents préparent la réunion' : 'Débat de préparation des agents'} ({prepMessages.length} message{prepMessages.length > 1 ? 's' : ''})
+                </span>
+                <span className="text-gray-400">{showPrepDebate ? '▲ Masquer' : '▼ Voir'}</span>
+              </button>
+              {showPrepDebate && (
+                <div className="flex flex-col gap-4 px-3 pb-4 pt-1">
+                  {prepMessages.map(renderMessage)}
+                </div>
+              )}
+            </div>
+          );
+        }
+        return renderMessage(msg);
       })}
 
-      {/* Bulle d'attente (2.1 : plus de texte partiel, juste l'indicateur de frappe) */}
-      {streamingAgent && (
+      {/* Bulle d'attente (2.1 : plus de texte partiel, juste l'indicateur de frappe) —
+          masquée pendant le débat de préparation (replié), visible pour la synthèse finale */}
+      {streamingAgent && (!preparing || streamingAgent === 'BlabIA') && (
         <div className="flex items-start gap-3">
           <div className={`w-8 h-8 rounded-full ${agentColor(streamingAgent).avatar} flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5`}>
             {activeAgents.find(a => a.name === streamingAgent)?.emoji || streamingAgent?.[0] || '?'}

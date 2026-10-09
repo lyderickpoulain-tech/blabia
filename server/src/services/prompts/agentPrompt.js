@@ -71,6 +71,7 @@ const HUMOR_INSTRUCTIONS = {
  * @param {string|null} [p.artifactRequest] - illustration demandée par l'humain pour ce tour (phase 5), null sinon
  * @param {{used:number, max:number}|null} [p.decisionBudget] - cartes de décision déjà posées / budget de la réunion
  * @param {{activeText:string, reopenedText:string}|null} [p.decisionRegistry] - registre des décisions du projet (services/decisions.js)
+ * @param {string}  [p.preparationSection] - consigne de préparation sans l'humain (services/prompts/preparationPrompt.js)
  */
 function buildAgentSystemPrompt({
   agent,
@@ -90,6 +91,7 @@ function buildAgentSystemPrompt({
   artifactRequest = null,
   decisionBudget = null,
   decisionRegistry = null,
+  preparationSection = '',
 }) {
   // Registre des décisions du projet : ce qui est tranché ne se redemande pas ;
   // ce que l'humain a remis en question est à retraiter en priorité.
@@ -164,7 +166,7 @@ Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarq
 Ne répète PAS ce que les autres agents ont déjà dit.
 
 RÈGLE ABSOLUE : cette réunion sert à vous organiser — échanger, clarifier, décider. PERSONNE ne rédige le livrable final (prompt Claude Code, document, etc.) pendant les échanges : il sera généré automatiquement à la clôture, à partir de la conversation.
-${webSearchSection}${artifactSection}
+${preparationSection}${webSearchSection}${artifactSection}
 FORMAT DE TES MESSAGES :
 - Une idée par bulle, 50 mots maximum par bulle, 3 bulles maximum par tour
 - Sépare chaque bulle par une ligne contenant uniquement [NEXT]
