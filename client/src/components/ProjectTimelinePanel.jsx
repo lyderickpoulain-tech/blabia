@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import ExportModal from './ExportModal';
 import SummaryDisplayModal from './SummaryDisplayModal';
-import StackCheckModal from './StackCheckModal';
 import QuickExportModal from './QuickExportModal';
 import { SessionDrawer, STATUS_LABELS, TYPE_ICON, TYPE_LABEL, trunc } from './meeting/MilestoneDrawers';
 import { InsertButton, InsertForm } from './meeting/MeetingInsertControls';
@@ -254,7 +253,6 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   const [promptViewSession,  setPromptViewSession]  = useState(null); // prompt (deliverable) → ExportModal
   const [summaryViewSession, setSummaryViewSession] = useState(null); // compte-rendu → SummaryDisplayModal
   const [sessionDrawer, setSessionDrawer]             = useState(null); // { milestone, linked }
-  const [stackCheckMilestone, setStackCheckMilestone] = useState(null);
   const [techChoiceMilestone, setTechChoiceMilestone] = useState(null);
   const [quickExportMilestone, setQuickExportMilestone] = useState(null);
 
@@ -295,7 +293,8 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
   // ── Comportement au clic selon le type ──────────────────────────────────────
   const handleMilestoneClick = async (m, linked) => {
     const t = m.type;
-    if (t === 'decision') {
+    // decision et stack (phase 4 : vraie réunion « Outils », plus de checklist StackCheckModal)
+    if (t === 'decision' || t === 'stack') {
       setSessionDrawer({ milestone: m, linked: linked || null });
       return;
     }
@@ -305,13 +304,6 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
       } else {
         setSessionDrawer({ milestone: m, linked });
       }
-      return;
-    }
-    if (t === 'stack') {
-      try {
-        const { data: full } = await api.get(`/projects/${projectId}/milestones/${m.id}`);
-        setStackCheckMilestone(full);
-      } catch { setStackCheckMilestone(m); }
       return;
     }
     // fallback (anciennes valeurs non encore migrées, défensif)
@@ -416,16 +408,6 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
             : ''}
           content={summaryViewSession.summary}
           onClose={() => setSummaryViewSession(null)}
-        />
-      )}
-
-      {/* ── StackCheckModal (type stack) ──────────────────────────────────── */}
-      {stackCheckMilestone && (
-        <StackCheckModal
-          milestone={stackCheckMilestone}
-          projectId={projectId}
-          onClose={() => setStackCheckMilestone(null)}
-          onRefresh={loadMilestones}
         />
       )}
 

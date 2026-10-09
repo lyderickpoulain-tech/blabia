@@ -4,7 +4,6 @@ const db         = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { computeMilestoneStatus } = require('../utils/milestones');
 const { findProject } = require('../utils/projectHelpers');
-const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -153,7 +152,7 @@ router.patch('/:id/milestones/:mid', async (req, res) => {
   }
 });
 
-// GET /api/projects/:id/milestones/:mid — jalon unique (breadcrumb, panel, StackCheckModal)
+// GET /api/projects/:id/milestones/:mid — jalon unique (breadcrumb, panel)
 router.get('/:id/milestones/:mid', async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
@@ -161,68 +160,16 @@ router.get('/:id/milestones/:mid', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
     const [milestone] = await db('Milestone')
-      .select(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'checklistData'])
+      .select(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder'])
       .where({ id: req.params.mid, projectId: req.params.id })
       .limit(1);
     if (!milestone) return res.status(404).json({ error: 'Jalon introuvable' });
 
-    // Données supplémentaires pour StackCheckModal
-    const [ownerUser] = await db('User').select(['techStack']).where({ id: project.userId }).limit(1);
-
-    const [linkedSession] = await db('Session')
-      .select(['suggestedTools'])
-      .where({ milestoneId: req.params.mid })
-      .orderBy('createdAt', 'desc')
-      .limit(1);
-
-    const parsedSuggested = parseJsonField(linkedSession?.suggestedTools, {});
-
     res.json({
       ...milestone,
-      userTechStack:    parseJsonField(ownerUser?.techStack, {}),
-      projectTechStack: parseJsonField(project.techStack, {}),
-      suggestedTools:   parsedSuggested.suggestedTools || [],
-      missingTools:     parsedSuggested.missingTools   || [],
     });
   } catch (err) {
     console.error('[milestones/:mid GET]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// PATCH /api/projects/:id/milestones/:mid/checklist — mise à jour de la checklist stack_check
-router.patch('/:id/milestones/:mid/checklist', async (req, res) => {
-  const { items, finalStatus } = req.body;
-  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  if (!Array.isArray(items)) return res.status(400).json({ error: 'items (tableau) requis' });
-
-  const VALID_STATUSES = ['pending', 'in_progress', 'done', 'blocked'];
-  try {
-    const project = await findProject(req.params.id, req.user.id, isAdmin);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
-
-    const [milestone] = await db('Milestone').where({ id: req.params.mid, projectId: req.params.id }).limit(1);
-    if (!milestone) return res.status(404).json({ error: 'Jalon introuvable' });
-
-    // Calcul automatique du statut sauf si forcé
-    let newStatus;
-    if (finalStatus && VALID_STATUSES.includes(finalStatus)) {
-      newStatus = finalStatus;
-    } else {
-      const checkedCount = items.filter(i => i.checked).length;
-      if (checkedCount === items.length && items.length > 0) newStatus = 'done';
-      else if (checkedCount > 0) newStatus = 'in_progress';
-      else newStatus = 'pending';
-    }
-
-    const [updated] = await db('Milestone')
-      .where({ id: req.params.mid })
-      .update({ checklistData: JSON.stringify({ items }), status: newStatus })
-      .returning(['id', 'title', 'status', 'type', 'checklistData']);
-
-    res.json(updated);
-  } catch (err) {
-    console.error('[milestones/:mid/checklist PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

@@ -1,7 +1,6 @@
 const express = require('express');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
-const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -72,64 +71,6 @@ router.get('/by-username/:username', async (req, res) => {
     res.json(user);
   } catch (err) {
     console.error('[users/by-username GET]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// GET /api/users/me/tech-stack — environnement technique
-router.get('/me/tech-stack', async (req, res) => {
-  try {
-    const [user] = await db('User').select(['techStack']).where({ id: req.user.id }).limit(1);
-    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    res.json(parseJsonField(user.techStack, {}));
-  } catch (err) {
-    console.error('[users/me/tech-stack GET]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// PATCH /api/users/me/tech-stack — sauvegarder l'environnement technique
-router.patch('/me/tech-stack', async (req, res) => {
-  const { techStack } = req.body;
-  if (!techStack || typeof techStack !== 'object' || Array.isArray(techStack)) {
-    return res.status(400).json({ error: 'techStack invalide' });
-  }
-  try {
-    await db('User').where({ id: req.user.id }).update({
-      techStack: JSON.stringify(techStack)
-    });
-    res.json({ message: 'Environnement sauvegardé' });
-  } catch (err) {
-    console.error('[users/me/tech-stack PATCH]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// GET /api/users/me/toolbox — boîte à outils personnelle
-router.get('/me/toolbox', async (req, res) => {
-  try {
-    const [user] = await db('User').select(['toolbox']).where({ id: req.user.id }).limit(1);
-    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    res.json(parseJsonField(user.toolbox, {}));
-  } catch (err) {
-    console.error('[users/me/toolbox GET]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// PATCH /api/users/me/toolbox — sauvegarder la boîte à outils
-router.patch('/me/toolbox', async (req, res) => {
-  const { toolbox } = req.body;
-  if (!toolbox || typeof toolbox !== 'object' || Array.isArray(toolbox)) {
-    return res.status(400).json({ error: 'toolbox invalide' });
-  }
-  try {
-    await db('User').where({ id: req.user.id }).update({
-      toolbox: JSON.stringify(toolbox)
-    });
-    res.json({ message: 'Boîte à outils sauvegardée' });
-  } catch (err) {
-    console.error('[users/me/toolbox PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

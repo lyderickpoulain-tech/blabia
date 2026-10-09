@@ -69,28 +69,4 @@ router.post('/:sessionId/add-agent', async (req, res) => {
   }
 });
 
-// ── PATCH /:sessionId/pending-tool — Suppression d'une suggestion d'outil ──────
-
-router.patch('/:sessionId/pending-tool', async (req, res) => {
-  const { sessionId } = req.params;
-  const { toolId } = req.body;
-  if (!toolId) return res.status(400).json({ error: 'toolId requis' });
-  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  try {
-    const [session] = await db('Session').select(['id', 'pendingToolSuggestions', 'projectId']).where({ id: sessionId }).limit(1);
-    if (!session) return res.status(404).json({ error: 'Session introuvable' });
-    const project = await getProject(session.projectId, req.user.id, isAdmin);
-    if (!project) return res.status(403).json({ error: 'Accès refusé' });
-
-    const existing = parseJsonField(session.pendingToolSuggestions, []);
-    await db('Session').where({ id: sessionId }).update({
-      pendingToolSuggestions: JSON.stringify(existing.filter(t => t.id !== toolId))
-    });
-    res.json({ message: 'Suggestion supprimée' });
-  } catch (err) {
-    console.error('[sessions/:id/pending-tool PATCH]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
 module.exports = router;

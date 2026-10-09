@@ -8,8 +8,28 @@
 const INTENTION_INSTRUCTIONS = {
   claude_code: '\nINTENTION DE CETTE RÉUNION : préparer un prompt pour Claude Code. Pose des questions pour clarifier le besoin, ne discute pas d\'implémentation ligne par ligne.',
   decision: '\nINTENTION DE CETTE RÉUNION : aboutir à une ou plusieurs décisions. Le compte-rendu prendra automatiquement la forme d\'un relevé de décisions à la clôture.',
-  stack: '\nINTENTION DE CETTE RÉUNION : faire le point sur les outils du projet, catégorie par catégorie.',
+  stack: '\nINTENTION DE CETTE RÉUNION : faire le point sur les outils du projet, catégorie par catégorie (grille ci-dessus). Pour chaque catégorie, conclure avec l\'humain : besoin couvert par un outil existant, outil complémentaire nécessaire, ou pas nécessaire pour ce projet. Avance une catégorie à la fois, en commençant par celles qui comptent vraiment pour ce projet.',
 };
+
+// v5.0 phase 4.3 : section propre aux réunions de type stack
+function buildToolReviewSection({ toolCategories, userToolsText, toolSuggestionsText, webSearchEnabled }) {
+  const grid = toolCategories.map(c => `- ${c.label} (${c.technical})`).join('\n');
+  const priceRule = webSearchEnabled
+    ? 'Les prix DOIVENT venir d\'une recherche web : renseigne "priceSource" avec l\'URL de la page de tarifs consultée.'
+    : 'Recherche web indisponible : donne une estimation prudente, mets "priceSource": null — elle sera affichée comme « indicatif, à vérifier ».';
+  return `
+GRILLE DES CATÉGORIES D'OUTILS :
+${grid}
+
+OUTILS PERSONNELS DE L'HUMAIN (« Mes outils », à privilégier s'ils conviennent) :
+${userToolsText || '(aucun renseigné)'}
+${toolSuggestionsText ? `\nOUTILS DÉJÀ PROPOSÉS DANS CETTE RÉUNION — ne les repropose pas :\n${toolSuggestionsText}\n` : ''}
+Quand un outil complémentaire est nécessaire, ajoute EXACTEMENT ce format (JSON valide, une seule ligne, un seul par réponse) :
+[NEED_TOOL:{"name":"Nom de l'outil","category":"<id de catégorie : ${toolCategories.map(c => c.id).join('|')}>","need":"Besoin couvert, en une phrase simple","why":"Pourquoi cet outil plutôt qu'un autre","costMin":0,"costMax":25,"freeTier":"Limite gratuite ou null","priceSource":"URL ou null"}]
+Montants en euros par mois (fourchette). ${priceRule}
+Ne propose pas d'outil quand un outil de l'humain couvre déjà le besoin. L'humain validera chaque outil un par un à la clôture.
+`;
+}
 
 // ── Curseur « maîtrise du sujet » (1 → 5) ──────────────────────────────────────
 const EXPERTISE_INSTRUCTIONS = {
@@ -44,6 +64,8 @@ const HUMOR_INSTRUCTIONS = {
  * @param {number}  [p.humorLevel] - 1 (sobre) à 5 (réunion de potes), défaut 2
  * @param {boolean} [p.webSearchEnabled] - recherche web disponible pour cette réunion (2.6)
  * @param {Array<{ref:string, title:string, status:string, type:string}>} [p.projectMeetings] - réunions du projet (phase 3.4, pour positionner [SUGGEST_MEETING])
+ * @param {string}  [p.projectToolsText] - outils validés du projet, par catégorie (phase 4)
+ * @param {object}  [p.toolReview] - réunion stack : { toolCategories, userToolsText, toolSuggestionsText } (phase 4.3)
  */
 function buildAgentSystemPrompt({
   agent,
@@ -58,7 +80,13 @@ function buildAgentSystemPrompt({
   humorLevel = 2,
   webSearchEnabled = false,
   projectMeetings = [],
+  projectToolsText = '',
+  toolReview = null,
 }) {
+  const toolsSection = projectToolsText ? `\nOutils retenus pour ce projet :\n${projectToolsText}\n` : '';
+  const toolReviewSection = intention[0] === 'stack' && toolReview
+    ? buildToolReviewSection({ ...toolReview, webSearchEnabled })
+    : '';
   const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
   const memorySection   = project.context ? `\nMémoire du projet :\n${project.context.substring(0, 1500)}\n` : '';
   const pastCodeSection = pastCodePromptsText
@@ -93,7 +121,7 @@ function buildAgentSystemPrompt({
 
   return `Tu es ${agent.name}, ${agent.role}.
 ${agent.systemPrompt || ''}
-${briefSection}${meetingsSection}${memorySection}${pastCodeSection}
+${briefSection}${meetingsSection}${toolsSection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 ${reasonLine}

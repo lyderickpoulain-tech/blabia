@@ -4,11 +4,10 @@ import Markdown from '../components/Markdown';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
-import { getPricing, PRICING_CONFIG } from '../utils/techStack';
 import GenerateTimelineModal from '../components/GenerateTimelineModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
-import StackPanel from '../components/StackPanel';
+import ProjectToolsPanel from '../components/tools/ProjectToolsPanel';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 const QUICK_COMMANDS = [
@@ -22,75 +21,6 @@ const QUICK_COMMANDS = [
   { cmd: '/rechercher',       label: 'Rechercher 🌐',         placeholder: '/rechercher ' },
   { cmd: '/aide',             label: 'Aide' },
 ];
-
-// ── Définition des catégories de stack (idem EnvironmentPage) ─────────────────
-const CATEGORIES = [
-  { id: 'hebergement', label: 'Hébergement',             icon: '🖥️', options: ['Railway','Vercel','Netlify','OVH mutualisé','OVH VPS','AWS'], hasAutre: true, autrePlaceholder: 'Ex : DigitalOcean…' },
-  { id: 'bdd',         label: 'Base de données',          icon: '🗄️', options: ['PostgreSQL','MySQL','MongoDB','SQLite','Supabase','PlanetScale'], hasAutre: true, autrePlaceholder: 'Ex : Redis…' },
-  { id: 'frontend',    label: 'Framework frontend',       icon: '🎨', options: ['React','Vue.js','Next.js','Nuxt','Svelte','HTML/CSS vanilla'], hasAutre: true, autrePlaceholder: 'Ex : Angular…' },
-  { id: 'backend',     label: 'Framework backend',        icon: '⚙️', options: ['Node.js/Express','Python/FastAPI','Python/Django','PHP/Laravel'], hasAutre: true, autrePlaceholder: 'Ex : Ruby on Rails…' },
-  { id: 'auth',        label: 'Authentification',         icon: '🔐', options: ['JWT maison','Auth0','Clerk','Supabase Auth'], hasAutre: true, autrePlaceholder: 'Ex : Keycloak…' },
-  { id: 'emails',      label: "Envoi d'emails",           icon: '📧', options: ['Nodemailer/SMTP','Resend','SendGrid','Mailgun'], hasAutre: true, autrePlaceholder: 'Ex : Postmark…' },
-  { id: 'devtools',    label: 'Outils de développement',  icon: '🛠️', options: ['VS Code','Claude Code','GitHub','GitLab','Docker'], hasAutre: true, autrePlaceholder: 'Ex : Cursor…' },
-  { id: 'domaine',     label: 'Domaine',                  icon: '🌐', options: ['OVH','Namecheap','Cloudflare'], hasAutre: true, autrePlaceholder: 'Ex : GoDaddy…' }
-];
-
-function CategoryCard({ category, stack, onToggle, onAutreChange }) {
-  const selected  = stack[category.id] || [];
-  const autreText = stack[`${category.id}_autre`] || '';
-  const autreChecked = selected.includes('Autre');
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-lg">{category.icon}</span>
-        <h3 className="font-semibold text-gray-900 text-sm">{category.label}</h3>
-        {selected.length > 0 && (
-          <span className="ml-auto text-xs font-medium bg-blue-100 text-blabia-blue px-2 py-0.5 rounded-full">
-            {selected.filter(x => x !== 'Autre').length + (autreChecked && autreText ? 1 : 0)}
-          </span>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        {category.options.map(option => (
-          <label key={option} className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition select-none text-xs font-medium ${
-            selected.includes(option) ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-          }`}>
-            <input type="checkbox" checked={selected.includes(option)} onChange={() => onToggle(category.id, option)} className="w-3 h-3 accent-blabia-blue shrink-0" />
-            <span className="flex-1 truncate">{option}</span>
-            {(() => {
-              const p = getPricing(option);
-              const cfg = p && PRICING_CONFIG[p];
-              return cfg ? <span className={`text-xs px-1 py-0.5 rounded shrink-0 ${cfg.color}`}>{cfg.dot}</span> : null;
-            })()}
-          </label>
-        ))}
-        {category.hasAutre && (
-          <label className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition select-none text-xs font-medium ${
-            autreChecked ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-          }`}>
-            <input type="checkbox" checked={autreChecked} onChange={() => onToggle(category.id, 'Autre')} className="w-3 h-3 accent-blabia-blue shrink-0" />
-            Autre
-          </label>
-        )}
-      </div>
-      {category.hasAutre && autreChecked && (
-        <input type="text" value={autreText} onChange={e => onAutreChange(category.id, e.target.value)}
-          placeholder={category.autrePlaceholder}
-          className="mt-2 w-full px-3 py-1.5 text-xs border border-blue-200 bg-blue-50 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none" />
-      )}
-    </div>
-  );
-}
-
-// Cherche si un outil correspond à une option connue dans les catégories
-function findToolInCategories(toolName) {
-  for (const cat of CATEGORIES) {
-    if (cat.options.some(o => o.toLowerCase() === toolName.toLowerCase())) {
-      return { categoryId: cat.id, option: cat.options.find(o => o.toLowerCase() === toolName.toLowerCase()) };
-    }
-  }
-  return null;
-}
 
 function RenameModal({ project, onSave, onClose }) {
   const [name, setName] = useState(project.name);
@@ -585,56 +515,11 @@ export default function ProjectView() {
   const [quickHistory, setQuickHistory] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem(`blabia-qh-${id}`) || '[]'); } catch { return []; }
   });
-  // ── Stack technique ────────────────────────────────────────────────────────
-  const [projectStack, setProjectStack] = useState({});
-  const [stackLoading, setStackLoading] = useState(false);
-  const [savingStack, setSavingStack]   = useState(false);
-  const [savedStack, setSavedStack]     = useState(false);
-  const [stackError, setStackError]     = useState('');
-  const [userGlobalStack, setUserGlobalStack] = useState({});
-  const stackTimerRef = useRef(null);
-  const isFirstStackLoad = useRef(true);
   const panelRef = useRef(null); // refreshPanel du <ProjectLayout> rendu ci-dessous (cf. ProjectLayout.jsx)
-  // ── Stack v4 : panneau latéral ─────────────────────────────────────────────
-  const [showStackPanel, setShowStackPanel]   = useState(false);
-  const [userToolbox, setUserToolbox]         = useState({});
-  const [stackOverrides, setStackOverrides]   = useState({});
-  const [pendingToolsCount, setPendingToolsCount] = useState(0);
-
-  // Charger le stack projet + stack global utilisateur + boîte à outils v4
-  useEffect(() => {
-    setStackLoading(true);
-    Promise.all([
-      api.get(`/users/me/tech-stack`),
-      api.get(`/users/me/toolbox`),
-    ]).then(([userRes, toolboxRes]) => {
-      setUserGlobalStack(userRes.data || {});
-      setUserToolbox(toolboxRes.data || {});
-    }).catch(() => {}).finally(() => setStackLoading(false));
-  }, []);
-
-  // Auto-save stack projet (debounce 1s)
-  useEffect(() => {
-    if (stackLoading) return;
-    if (isFirstStackLoad.current) { isFirstStackLoad.current = false; return; }
-    setSavedStack(false);
-    if (stackTimerRef.current) clearTimeout(stackTimerRef.current);
-    stackTimerRef.current = setTimeout(async () => {
-      setSavingStack(true);
-      setStackError('');
-      try {
-        await api.patch(`/projects/${id}/tech-stack`, { techStack: projectStack });
-        setProject(prev => ({ ...prev, techStack: projectStack }));
-        setSavedStack(true);
-        setTimeout(() => setSavedStack(false), 3000);
-      } catch {
-        setStackError('Erreur lors de la sauvegarde');
-      } finally {
-        setSavingStack(false);
-      }
-    }, 1000);
-    return () => clearTimeout(stackTimerRef.current);
-  }, [projectStack, stackLoading]);
+  // ── Outils du projet (v5.0 phase 4) ────────────────────────────────────────
+  const [showToolsPanel, setShowToolsPanel] = useState(false);
+  const [suggestedToolsCount, setSuggestedToolsCount] = useState(0);
+  const countSuggested = (tools) => (tools || []).filter(t => t.status === 'suggested').length;
 
   const refetchSessionsAndStats = () => {
     setSessionsLoading(true);
@@ -652,18 +537,6 @@ export default function ProjectView() {
     api.get(`/projects/${id}`)
       .then(({ data }) => {
         setProject(data);
-        // Initialiser les ajustements v4 (panneau Stack)
-        const ts = typeof data.techStack === 'object' ? (data.techStack || {}) : {};
-        setStackOverrides(ts.v4?.overrides || {});
-        // Initialiser la stack legacy (projet non-technique ou projets existants)
-        if (!data.hasTechnicalStack) {
-          if (data.techStack && typeof data.techStack === 'object') {
-            setProjectStack(data.techStack);
-            isFirstStackLoad.current = false;
-          } else if (data.techStack) {
-            try { setProjectStack(JSON.parse(data.techStack)); isFirstStackLoad.current = false; } catch {}
-          }
-        }
         // Charger les membres si owner ou admin
         if (data.userId === user?.id || user?.role === 'admin' || user?.role === 'supervisor') {
           setMembersLoading(true);
@@ -672,17 +545,16 @@ export default function ProjectView() {
             .catch(() => {})
             .finally(() => setMembersLoading(false));
         }
-        // Badge pending tools si projet technique
-        if (data.hasTechnicalStack) {
-          api.get(`/projects/${id}/pending-tools`)
-            .then(({ data: pt }) => setPendingToolsCount(Array.isArray(pt) ? pt.length : 0))
-            .catch(() => {});
-        }
       })
       .catch(() => navigate('/dashboard'))
       .finally(() => setLoading(false));
 
     refetchSessionsAndStats();
+
+    // Badge du bouton Outils : outils complémentaires en attente de validation
+    api.get(`/projects/${id}/tools`)
+      .then(({ data }) => setSuggestedToolsCount(countSuggested(data.tools)))
+      .catch(() => {});
 
     setAgentsLoading(true);
     api.get(`/projects/${id}/agents`)
@@ -753,37 +625,6 @@ export default function ProjectView() {
     }
   };
 
-  const toggleStackOption = (categoryId, option) => {
-    setProjectStack(prev => {
-      const current = prev[categoryId] || [];
-      return { ...prev, [categoryId]: current.includes(option) ? current.filter(x => x !== option) : [...current, option] };
-    });
-  };
-
-  const setStackAutre = (categoryId, value) => {
-    setProjectStack(prev => ({ ...prev, [`${categoryId}_autre`]: value }));
-  };
-
-  const addToolToStack = (toolName) => {
-    const match = findToolInCategories(toolName);
-    if (match) {
-      setProjectStack(prev => {
-        const current = prev[match.categoryId] || [];
-        if (current.includes(match.option)) return prev;
-        return { ...prev, [match.categoryId]: [...current, match.option] };
-      });
-    } else {
-      setProjectStack(prev => {
-        const existing = prev['devtools_autre'] || '';
-        const list = existing ? existing.split(', ') : [];
-        if (list.some(t => t.toLowerCase() === toolName.toLowerCase())) return prev;
-        const current = prev['devtools'] || [];
-        const withAutre = current.includes('Autre') ? current : [...current, 'Autre'];
-        return { ...prev, devtools: withAutre, devtools_autre: [...list, toolName].join(', ') };
-      });
-    }
-  };
-
   const handleQuickCommand = async (e) => {
     e?.preventDefault();
     const input = quickInput.trim();
@@ -802,16 +643,6 @@ export default function ProjectView() {
     } finally {
       setQuickLoading(false);
     }
-  };
-
-  const handleSaveOverrides = async (newOverrides) => {
-    setStackOverrides(newOverrides);
-    try {
-      const base = typeof projectStack === 'object' ? projectStack : {};
-      const merged = { ...base, v4: { overrides: newOverrides } };
-      await api.patch(`/projects/${id}/tech-stack`, { techStack: merged });
-      setProject(prev => ({ ...prev, techStack: merged }));
-    } catch {}
   };
 
   const handleArchive = async () => {
@@ -968,19 +799,18 @@ export default function ProjectView() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 self-start flex-wrap">
-            {project.hasTechnicalStack && (
-              <button
-                onClick={() => setShowStackPanel(true)}
-                className="relative text-sm border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
-              >
-                🔧 Stack
-                {pendingToolsCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
-                    {pendingToolsCount}
-                  </span>
-                )}
-              </button>
-            )}
+            <button
+              onClick={() => setShowToolsPanel(true)}
+              className="relative text-sm border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
+              title="Outils du projet"
+            >
+              🧰 Outils
+              {suggestedToolsCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none" title="Outils suggérés à valider">
+                  {suggestedToolsCount}
+                </span>
+              )}
+            </button>
             <Link
               to={`/projects/${id}/plan`}
               className="text-sm border border-blue-200 text-blabia-blue hover:bg-blue-50 px-3 py-2 rounded-lg transition min-h-[40px] flex items-center gap-1.5 font-medium"
@@ -1404,15 +1234,11 @@ export default function ProjectView() {
         );
       })()}
 
-      {showStackPanel && (
-        <StackPanel
-          project={project}
-          toolbox={userToolbox}
-          overrides={stackOverrides}
-          onSaveOverrides={handleSaveOverrides}
-          onClose={() => setShowStackPanel(false)}
-          onToolboxUpdate={newToolbox => setUserToolbox(newToolbox)}
-          onPendingToolsChange={count => setPendingToolsCount(count)}
+      {showToolsPanel && (
+        <ProjectToolsPanel
+          projectId={id}
+          onClose={() => setShowToolsPanel(false)}
+          onChanged={tools => setSuggestedToolsCount(countSuggested(tools))}
         />
       )}
     </ProjectLayout>

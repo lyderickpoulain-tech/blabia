@@ -109,6 +109,8 @@ export default function MeetingRoom() {
   // Réunions suggérées ([SUGGEST_MEETING], phase 3.4)
   const [meetingSuggestions, setStepSuggestions] = useState([]);
   const [planMilestones, setPlanMilestones] = useState([]); // réunions déjà planifiées (pour résoudre/éditer "after")
+  // Outils proposés via [NEED_TOOL] (réunion de type stack, phase 4.3) — validés à la clôture
+  const [toolSuggestions, setToolSuggestions] = useState([]);
 
   // ID de la décision en attente (bloque la saisie jusqu'à réponse/report)
   const [pendingDecisionId,       setPendingDecisionId]       = useState(null);
@@ -459,6 +461,7 @@ export default function MeetingRoom() {
         setMessages(Array.isArray(sessionData.messages) ? sessionData.messages : []);
         setActiveAgents(Array.isArray(sessionData.activeAgents) ? sessionData.activeAgents : []);
         setStepSuggestions(Array.isArray(sessionData.pendingMeetingSuggestions) ? sessionData.pendingMeetingSuggestions : []);
+        setToolSuggestions(Array.isArray(sessionData.pendingToolSuggestions) ? sessionData.pendingToolSuggestions : []);
         setPlanMilestones(Array.isArray(planData.milestones) ? planData.milestones : []);
       })
       .catch(() => setLoadError('Réunion introuvable ou accès refusé.'))
@@ -659,6 +662,9 @@ export default function MeetingRoom() {
 
             } else if (ev.type === 'suggest_meeting') {
               setStepSuggestions(prev => [...prev, ev.suggestion]);
+
+            } else if (ev.type === 'suggest_tool') {
+              setToolSuggestions(prev => [...prev, ev.tool]);
 
             } else if (ev.type === 'error') {
               setSendError(ev.message || 'Erreur inconnue');
@@ -1007,6 +1013,7 @@ export default function MeetingRoom() {
             onSaveMeeting={handleSaveMeeting}
             meetingSuggestionBusyId={meetingSuggestionBusyId}
             meetingRefs={meetingRefs}
+            toolSuggestions={toolSuggestions}
             session={session}
             project={project}
             onAutoLaunch={handleAutoLaunch}
@@ -1112,6 +1119,7 @@ export default function MeetingRoom() {
         session={session}
         initialSuggestions={meetingSuggestions}
         meetingRefs={meetingRefs}
+        initialToolSuggestions={toolSuggestions}
         projectId={projectId}
         onClose={() => setShowCloseModal(false)}
         onClosed={handleSessionClosed}

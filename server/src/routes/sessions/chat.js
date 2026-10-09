@@ -17,6 +17,11 @@ const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt')
 const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
 const { parseAgentOutput } = require('../../services/markers');
 const { parseJsonField } = require('../../utils/parseJsonField');
+const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
+const {
+  getProjectTools, getUserTools, formatProjectToolsForPrompt, formatUserToolsForPrompt,
+  toolSuggestionFromMarker, appendToolSuggestion,
+} = require('../../services/tools/toolsStore');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -289,6 +294,19 @@ router.post('/:sessionId/chat', async (req, res) => {
         .join('\n\n');
     }
 
+    // Outils (phase 4) : outils validés du projet pour toutes les réunions ;
+    // grille + « Mes outils » + outils déjà proposés pour les réunions de type stack.
+    const projectToolsText = formatProjectToolsForPrompt(await getProjectTools(project));
+    let toolReview = null;
+    if (intention[0] === 'stack') {
+      const userTools = (await getUserTools(req.user.id)) || [];
+      toolReview = {
+        toolCategories: TOOL_CATEGORIES,
+        userToolsText: formatUserToolsForPrompt(userTools),
+        suggested: parseJsonField(session.pendingToolSuggestions, []).map(t => t.name || t.label).filter(Boolean),
+      };
+    }
+
     const resumeAfterDecision = !!resume;
     let turnCount        = 0;
     let lastAgentId      = null;
@@ -354,6 +372,11 @@ router.post('/:sessionId/chat', async (req, res) => {
         expertiseLevel,
         humorLevel,
         webSearchEnabled: session.webSearchEnabled === true,
+        projectToolsText,
+        toolReview: toolReview && {
+          ...toolReview,
+          toolSuggestionsText: toolReview.suggested.map(n => `- ${n}`).join('\n'),
+        },
       });
 
       const baseText = historyText
@@ -506,6 +529,16 @@ router.post('/:sessionId/chat', async (req, res) => {
         // Nesté sous "suggestion" : le champ suggestion.type (decision|claude_code|stack)
         // entrerait sinon en collision avec le type d'événement SSE lui-même.
         if (stored) send('suggest_meeting', { suggestion });
+      }
+
+      // Outil complémentaire proposé (réunion de type stack uniquement, phase 4.3) :
+      // stocké sur la réunion, validé un par un par l'humain à la clôture.
+      if (parsed.neededTool && toolReview) {
+        const tool = toolSuggestionFromMarker(parsed.neededTool, agent.name);
+        if (await appendToolSuggestion(sessionId, tool)) {
+          toolReview.suggested.push(tool.name);
+          send('suggest_tool', { tool });
+        }
       }
 
       consecutiveCount = next.agentId === lastAgentId ? consecutiveCount + 1 : 1;

@@ -69,8 +69,23 @@ function parseAgentOutput(text) {
       }
     : null;
 
+  // v5.0 phase 4.3 : NEED_TOOL enrichi du coût (accepte aussi l'ancien format v4 label/reason)
   const needToolMatch = raw.match(NEED_TOOL_RE);
-  const neededTool = needToolMatch ? safeJsonParse(needToolMatch[1]) : null;
+  const needToolData  = needToolMatch ? safeJsonParse(needToolMatch[1]) : null;
+  const toolName      = needToolData && (needToolData.name || needToolData.label);
+  const toNum = v => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Math.max(0, Number(v)));
+  const neededTool = toolName
+    ? {
+        name:        String(toolName).trim(),
+        category:    needToolData.category || null,
+        need:        needToolData.need || '',
+        why:         needToolData.why || needToolData.reason || '',
+        costMin:     toNum(needToolData.costMin),
+        costMax:     toNum(needToolData.costMax),
+        freeTier:    needToolData.freeTier || null,
+        priceSource: typeof needToolData.priceSource === 'string' && /^https?:\/\//.test(needToolData.priceSource) ? needToolData.priceSource : null,
+      }
+    : null;
 
   const content = raw
     .replace(DECISION_STRIP_RE, '')

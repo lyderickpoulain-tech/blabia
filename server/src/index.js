@@ -27,6 +27,7 @@ app.use('/api/users',                        require('./routes/users'));
 app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
 app.use('/api/projects',                     require('./routes/plan'));
+app.use('/api',                              require('./routes/tools'));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'BlabIA server en ligne', timestamp: new Date() });

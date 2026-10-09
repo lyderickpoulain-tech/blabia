@@ -10,8 +10,7 @@ import ProfilePage from './pages/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import AgentsPage from './pages/AgentsPage';
-import EnvironmentPage from './pages/EnvironmentPage';
-import MyToolbox from './pages/MyToolbox';
+import MyTools from './pages/MyTools';
 import PlanView from './pages/PlanView';
 import StartMeeting from './pages/StartMeeting';
 import MeetingRoom from './pages/MeetingRoom';
@@ -48,12 +47,11 @@ export default function App() {
         <Route path="/agents" element={
           <ProtectedRoute><AgentsPage /></ProtectedRoute>
         } />
-        <Route path="/profile/environment" element={
-          <ProtectedRoute><EnvironmentPage /></ProtectedRoute>
+        <Route path="/outils" element={
+          <ProtectedRoute><MyTools /></ProtectedRoute>
         } />
-        <Route path="/profile/toolbox" element={
-          <ProtectedRoute><MyToolbox /></ProtectedRoute>
-        } />
+        <Route path="/profile/environment" element={<Navigate to="/outils" replace />} />
+        <Route path="/profile/toolbox" element={<Navigate to="/outils" replace />} />
         <Route path="/admin/invitations" element={
           <ProtectedRoute adminOnly><AdminInvitations /></ProtectedRoute>
         } />

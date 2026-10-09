@@ -1,9 +1,8 @@
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const anthropic = require('../services/anthropic');
-const db = require('../utils/db');
-const { formatTechStack } = require('../utils/projectHelpers');
-const { parseJsonField } = require('../utils/parseJsonField');
+const { findProject } = require('../utils/projectHelpers');
+const { getProjectTools, getUserTools, formatProjectToolsForPrompt } = require('../services/tools/toolsStore');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -18,24 +17,22 @@ router.post('/claude-code', async (req, res) => {
   }
 
   try {
-    // Récupérer l'environnement technique : project.techStack ?? user.techStack
-    const [user] = await db('User').select(['techStack']).where({ id: req.user.id }).limit(1);
-    const userStack = parseJsonField(user?.techStack, {});
-
-    let effectiveStack = userStack;
+    // Outils : ceux du projet (phase 4), sinon « Mes outils » de l'utilisateur
+    let stackLines = [];
     let devDirectory = null;
     let projectBrief = null;
     if (projectId) {
-      const [project] = await db('Project').select(['techStack', 'devDirectory', 'brief']).where({ id: projectId }).limit(1);
-      if (project?.techStack) {
-        effectiveStack = parseJsonField(project.techStack, {});
-      }
-      devDirectory  = project?.devDirectory?.trim() || null;
-      projectBrief  = project?.brief?.trim()        || null;
+      const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+      const project = await findProject(projectId, req.user.id, isAdmin);
+      if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+      stackLines   = formatProjectToolsForPrompt(await getProjectTools(project)).split('\n').filter(Boolean);
+      devDirectory = project.devDirectory?.trim() || null;
+      projectBrief = project.brief?.trim()        || null;
     }
-
-    const techStack = effectiveStack;
-    const stackLines = formatTechStack(techStack);
+    if (stackLines.length === 0) {
+      const mine = ((await getUserTools(req.user.id)) || []).filter(t => t.status === 'using');
+      stackLines = formatProjectToolsForPrompt(mine.map(t => ({ ...t, status: 'validated' }))).split('\n').filter(Boolean);
+    }
     const stackSection = stackLines.length > 0
       ? `\nStack technique du projet :\n${stackLines.join('\n')}\nAdapte toutes tes suggestions à cet environnement. Ne propose pas d'alternatives sauf si l'outil choisi est inadapté à la tâche.\n`
       : '';

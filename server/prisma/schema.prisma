@@ -13,8 +13,9 @@ model User {
   password         String
   role             String          @default("member") // "user" | "member" | "admin" | "supervisor"
   username         String?         @unique
-  techStack        Json            @default("{}")    // Environnement technique personnel
-  toolbox          Json            @default("{}")    // v4.0 : boîte à outils { categoryId: { selected, status, addedAt } }
+  techStack        Json            @default("{}")    // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule
+  toolbox          Json            @default("{}")    // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule
+  tools            Json?           // v5.0 phase 4 : « Mes outils » [{ id, catalogId, name, category, cost, status: using|account|to_try, note }] — NULL = pas encore migré (cf. toolsStore.js)
   createdAt        DateTime        @default(now())
   projects           Project[]
   invitations        Invitation[]
@@ -58,8 +59,9 @@ model Project {
   brief             String?   // Brief structuré : objectif, contexte, notes — ajouté migration 20260603000012
   devDirectory      String?   // Répertoire de développement local — ajouté migration 20260613000003
   context           String?   // Mémoire cumulée des sessions précédentes
-  techStack         Json?     // Surcharge de la stack technique de l'utilisateur
-  hasTechnicalStack Boolean   @default(false) // v4.0 : projet implique du développement technique
+  techStack         Json?     // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule
+  hasTechnicalStack Boolean   @default(false) // DEPRECATED v5.0 — remplacé par tools (phase 4) ; seulement lu par la migration
+  tools             Json?     // v5.0 phase 4 : outils du projet [{ id, catalogId, name, category, origin: mine|complementary, status: suggested|validated|refused, need, why, cost, priceSource, sessionId }] — NULL = pas encore migré
   expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
   humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
   createdAt         DateTime  @default(now())
@@ -95,7 +97,7 @@ model Milestone {
   dueDate      DateTime?
   status              String     @default("pending") // "pending" | "in_progress" | "done" | "blocked"
   type                String     @default("decision") // v5.0 phase 3 : "decision" | "claude_code" | "stack" — anciennes valeurs ("meeting" | "synthesis" | "stack_check" | "technical" | "memory" | "timeline_steps" | "milestone") migrées en phase 3 (stack_check -> stack, tout le reste -> decision)
-  checklistData       Json?      // { items: [{ id, label, category, checked, notes }] }
+  checklistData       Json?      // DEPRECATED v5.0 — checklist stack_check, remplacée par les réunions de type stack (phase 4)
   createdFromSessionId String?
   displayOrder        Int        @default(0)
   createdAt    DateTime   @default(now())
@@ -152,7 +154,7 @@ model Session {
   codeStatus      String?   // null | "implemented" | "not_generated"
   model           String    @default("claude-sonnet-4-6")
   fullContext     Boolean   @default(false)
-  suggestedTools  Json?     // { suggestedTools: string[], missingTools: string[] }
+  suggestedTools  Json?     // DEPRECATED v5.0 — remplacé par pendingToolSuggestions (phase 4)
   planSuggestions Json?     // { milestones: [...], standalone_todos: [...] }
   timeline        Json      @default("[]") // [ { id, type, label, status, timestamp, meta } ]
   intention       Json?     @default("[]") // v5.0 phase 3 : livrable attendu, un seul élément : "decision" | "claude_code" | "stack" (seuls choix proposés à la création depuis StartMeeting.jsx) — anciennes valeurs ("summary" | "synthesis" | "memory" | "timeline_steps" | "meeting" | "technical") migrées vers "decision" (claude_code conservé)
@@ -161,7 +163,7 @@ model Session {
   pendingStepSuggestions  Json?     @default("[]")                                      // DEPRECATED v5.0 — remplacé par pendingMeetingSuggestions (phase 3.4), conservé en lecture seule pour les anciennes réunions non closes
   pendingMeetingSuggestions Json?   @default("[]")                                      // v5.0 phase 3.4 : [{ id, title, objective, type, reason, after, status: pending|kept|discarded, agentName, timestamp, editedTitle?, editedType? }]
   tokensUsed              Json?     @default("{\"input\":0,\"output\":0,\"total\":0}")  // v3.6 : tokens Anthropic cumulés { input, output, total }
-  pendingToolSuggestions  Json?     @default("[]")    // v4.0 : outils détectés via [NEED_TOOL:...] [{ name, reason, required, agentName, timestamp }]
+  pendingToolSuggestions  Json?     @default("[]")    // v5.0 phase 4 : outils signalés via [NEED_TOOL:...] [{ id, name, category, need, why, cost, priceSource, agentName, timestamp }] — validés un par un à la clôture (anciennes entrées v4 { id, label, category, required, reason } lues par la migration)
   webSearchEnabled        Boolean   @default(false)   // v4.0 (Év.6) : activer la recherche web pour cette réunion
   expertiseLevel          Int?      // v5.0 : 1 à 5, null = hérite de Project.expertiseLevel
   humorLevel              Int?      // v5.0 : 1 à 5, null = hérite de Project.humorLevel

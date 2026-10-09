@@ -3,6 +3,7 @@ import DecisionCard from '../DecisionCard';
 import AgentScopeSelector from './AgentScopeSelector';
 import Markdown from '../Markdown';
 import MeetingSuggestionCard from './MeetingSuggestionCard';
+import { costLabel } from '../../utils/toolsCatalog';
 
 // ── Recherche web (2.6) ────────────────────────────────────────────────────────
 
@@ -140,6 +141,7 @@ export default function ConversationFeed({
   messages, activeAgents, streamingAgent, streamingReason,
   agentSuggestions, onInviteSuggested, onDismissSuggestion, onCreateAndInvite,
   meetingSuggestions, onKeepMeeting, onDiscardMeeting, onSaveMeeting, meetingSuggestionBusyId, meetingRefs,
+  toolSuggestions,
   session, project, onAutoLaunch, isClosed, isStreaming,
   pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision,
   agentColors, deliverableTypes,
@@ -361,6 +363,25 @@ export default function ConversationFeed({
           onSave={onSaveMeeting}
           meetingRefs={meetingRefs}
         />
+      ))}
+
+      {/* Outils proposés (réunion de type stack, phase 4.3) — validés un par un à la clôture */}
+      {toolSuggestions?.map(t => (
+        <div key={t.id} className="mx-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🧰</span>
+            <span className="text-sm font-medium text-gray-900 flex-1">{t.name}</span>
+            <span className="text-[10px] text-emerald-700 font-medium">à valider à la clôture</span>
+          </div>
+          {t.need && <p className="text-xs text-gray-700 pl-7">Besoin : {t.need}</p>}
+          <p className="text-xs text-gray-500 pl-7">
+            💶 {costLabel(t.cost)}
+            {t.priceSource
+              ? <> · <a href={t.priceSource} target="_blank" rel="noopener noreferrer" className="text-blabia-blue hover:underline">source</a></>
+              : <span className="text-amber-600"> · indicatif, à vérifier</span>}
+          </p>
+          {t.agentName && <p className="text-[10px] text-gray-400 pl-7">Proposé par {t.agentName}</p>}
+        </div>
       ))}
 
     </div>

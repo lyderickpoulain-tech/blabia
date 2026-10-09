@@ -2,7 +2,26 @@ const express        = require('express');
 const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const anthropic      = require('../../services/anthropic');
-const { findProject: getProject, formatTechStack } = require('../../utils/projectHelpers');
+const { findProject: getProject } = require('../../utils/projectHelpers');
+const { getProjectTools, formatProjectToolsForPrompt } = require('../../services/tools/toolsStore');
+const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
+
+// Livrable d'une réunion stack : la liste des outils proposés (Markdown), validée
+// outil par outil par l'humain à la clôture (POST /:sessionId/tools/apply).
+function buildToolsDeliverable(tools) {
+  if (tools.length === 0) return '## Outils proposés\n\nAucun outil complémentaire proposé : les outils actuels couvrent les besoins discutés.';
+  const euros = n => `${n} €`;
+  const lines = tools.map(t => {
+    const cat = TOOL_CATEGORIES.find(c => c.id === t.category);
+    const c = t.cost;
+    const cost = !c ? 'coût non renseigné'
+      : c.type === 'free' ? 'gratuit'
+      : `${euros(c.monthlyMin ?? 0)} à ${euros(c.monthlyMax ?? c.monthlyMin ?? 0)}/mois${c.freeTier ? ` (gratuit jusqu'à : ${c.freeTier})` : ''}`;
+    const source = t.priceSource ? `[source](${t.priceSource})` : 'indicatif, à vérifier';
+    return `- **${t.name}** — ${cat ? cat.label : t.category}\n  - Besoin : ${t.need || '—'}\n  - Pourquoi : ${t.why || '—'}\n  - Coût : ${cost} — ${source}`;
+  });
+  return `## Outils proposés\n\n${lines.join('\n')}`;
+}
 const { MODEL, updateProjectContext } = require('./helpers');
 const {
   buildSummaryPrompt,
@@ -175,11 +194,16 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       summary += `\n\n## Sources web consultées\n${lines.join('\n')}`;
     }
 
-    // ── Livrable typé (claude_code uniquement pour l'instant ; stack : phase 4) ──
+    // ── Livrable typé : prompt (claude_code) ou liste d'outils proposés (stack) ──
     let deliverable = null;
+    let toolSuggestions = [];
+    if (meetingType === 'stack') {
+      toolSuggestions = parseJsonField(session.pendingToolSuggestions, []).filter(t => t && t.name);
+      deliverable = buildToolsDeliverable(toolSuggestions);
+    }
     if (meetingType === 'claude_code') {
       const devDirectory = project.devDirectory?.trim() || null;
-      const stackLines = formatTechStack(project.techStack);
+      const stackLines = formatProjectToolsForPrompt(await getProjectTools(project)).split('\n').filter(Boolean);
       const decisions = messages.filter(m => m.pinned || m.type === 'decision');
       const codePrompt = buildClaudeCodePrompt({
         session, brief: project.brief, devDirectory, stackLines, decisions, historyText
@@ -199,7 +223,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     });
     await updateProjectContext(projectId, sessionId, session.task, summary);
 
-    return res.json({ meetingType, summary, deliverable });
+    return res.json({ meetingType, summary, deliverable, toolSuggestions });
   } catch (err) {
     console.error('[sessions/generate-deliverable]', err.message);
     res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });

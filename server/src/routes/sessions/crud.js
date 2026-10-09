@@ -134,6 +134,7 @@ router.get('/:sessionId', async (req, res) => {
       messages:        parseJsonField(session.messages, []),
       activeAgents:    parseJsonField(session.activeAgents, []),
       pendingMeetingSuggestions: parseJsonField(session.pendingMeetingSuggestions, []),
+      pendingToolSuggestions: parseJsonField(session.pendingToolSuggestions, []).filter(t => t && t.name),
       planAlreadyAdded: parseInt(planCount || 0) > 0,
     });
   } catch (err) {

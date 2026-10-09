@@ -4,6 +4,7 @@ const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { sendInvitation } = require('../services/email');
 const anthropic = require('../services/anthropic');
+const { getProjectTools, formatProjectToolsForPrompt } = require('../services/tools/toolsStore');
 const { findProject } = require('../utils/projectHelpers');
 const { parseJsonField } = require('../utils/parseJsonField');
 
@@ -11,7 +12,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
-  'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context', 'techStack', 'hasTechnicalStack',
+  'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context',
   'expertiseLevel', 'humorLevel', 'createdAt', 'updatedAt', 'userId'
 ];
 
@@ -312,25 +313,6 @@ router.delete('/:id', async (req, res) => {
     res.json({ message: 'Projet supprimé' });
   } catch (err) {
     console.error('[projects/:id DELETE]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// PATCH /api/projects/:id/tech-stack — sauvegarder la stack technique du projet
-router.patch('/:id/tech-stack', async (req, res) => {
-  const { techStack } = req.body;
-  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  try {
-    const project = await findProject(req.params.id, req.user.id, isAdmin);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
-
-    await db('Project').where({ id: req.params.id }).update({
-      techStack: techStack !== undefined ? JSON.stringify(techStack) : null,
-      updatedAt: new Date()
-    });
-    res.json({ message: 'Stack sauvegardée' });
-  } catch (err) {
-    console.error('[projects/:id/tech-stack PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -708,13 +690,11 @@ router.post('/:id/generate-timeline', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     if (!project.brief) return res.status(400).json({ error: 'Brief manquant — définissez un brief avant de générer une timeline' });
 
-    // Contexte stack technique si déjà défini
+    // Outils déjà retenus pour ce projet (phase 4)
     let stackContext = '';
-    if (project.hasTechnicalStack && project.techStack) {
-      const stack = typeof project.techStack === 'string'
-        ? project.techStack
-        : JSON.stringify(project.techStack, null, 2);
-      stackContext = `\nStack technique déjà définie pour ce projet :\n${stack}\n→ Ne propose PAS d'étape de définition ou découverte de la stack : elle est déjà connue. Si une vérification de l'environnement local est utile, utilise le type "stack" avec un titre orienté vérification (ex : "Vérification environnement de développement").\n`;
+    const toolsText = formatProjectToolsForPrompt(await getProjectTools(project));
+    if (toolsText) {
+      stackContext = `\nOutils déjà retenus pour ce projet :\n${toolsText}\n→ Ne propose PAS de réunion de découverte des outils : ils sont déjà connus. Une réunion de type "stack" n'est utile que pour compléter un besoin non couvert.\n`;
     }
 
     const response = await anthropic.messages.create({
@@ -932,84 +912,6 @@ Limite à 5 réunions maximum. Titres courts et actionnables (max 50 chars).`;
     });
   } catch (err) {
     console.error('[projects/:id/quick-command POST]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// GET /api/projects/:id/pending-tools — agrège les outils suggérés par les réunions
-router.get('/:id/pending-tools', async (req, res) => {
-  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  try {
-    const project = await findProject(req.params.id, req.user.id, isAdmin);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
-
-    const sessions = await db('Session')
-      .select(['id', 'task', 'pendingToolSuggestions'])
-      .where({ projectId: req.params.id })
-      .whereNotNull('pendingToolSuggestions');
-
-    const tools = [];
-    for (const s of sessions) {
-      const list = parseJsonField(s.pendingToolSuggestions, []);
-      for (const t of list) {
-        if (!tools.some(x => x.id === t.id)) {
-          tools.push({ ...t, sessionId: s.id, sessionTitle: s.task });
-        }
-      }
-    }
-
-    res.json(tools);
-  } catch (err) {
-    console.error('[projects/:id/pending-tools GET]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// POST /api/projects/:id/suggest-stack — suggestion de stack via Claude (boîte à outils prioritaire)
-router.post('/:id/suggest-stack', async (req, res) => {
-  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  try {
-    const project = await findProject(req.params.id, req.user.id, isAdmin);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
-
-    const { toolboxSummary = {} } = req.body;
-    const owned      = (toolboxSummary.owned      || []).join(', ') || 'aucun';
-    const planned    = (toolboxSummary.planned    || []).join(', ') || 'aucun';
-    const evaluating = (toolboxSummary.evaluating || []).join(', ') || 'aucun';
-
-    const userPrompt = `Analyse ce projet et suggère la stack technique la plus adaptée.
-
-Brief du projet : ${project.brief || 'Non défini'}
-Description : ${project.description || 'Non définie'}
-
-Boîte à outils de l'utilisateur :
-- Outils possédés : ${owned}
-- Outils prévus : ${planned}
-- Outils en évaluation : ${evaluating}
-
-Règles :
-1. Priorise TOUJOURS les outils déjà possédés — ne propose pas d'alternative si l'outil possédé convient
-2. Suggère un outil supplémentaire SEULEMENT s'il manque quelque chose d'essentiel
-3. Explique brièvement pourquoi chaque outil est adapté (1-2 phrases)
-4. Si la boîte à outils couvre bien le projet, dis-le explicitement
-
-Format de réponse (Markdown) :
-## Stack recommandée
-[Liste des outils recommandés avec courte justification]
-
-## Outils manquants (si nécessaire)
-[SEULEMENT si un outil essentiel manque dans la boîte à outils — sinon omets cette section]`;
-
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 600,
-      system: 'Tu es un expert en architecture logicielle. Tes réponses sont concises et directes.',
-      messages: [{ role: 'user', content: userPrompt }]
-    });
-
-    res.json({ suggestion: response.content[0].text });
-  } catch (err) {
-    console.error('[projects/:id/suggest-stack POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

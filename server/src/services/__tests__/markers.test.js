@@ -31,10 +31,18 @@ describe('parseAgentOutput', () => {
     expect(r.suggestedMeeting).toEqual({ title: 'X', objective: '', type: 'decision', reason: '', after: null });
   });
 
-  it('extrait un outil manquant (NEED_TOOL)', () => {
-    const r = parseAgentOutput('Il faudrait un outil. [NEED_TOOL:{"id":"docker","label":"Docker","required":true}]');
-    expect(r.neededTool).toEqual({ id: 'docker', label: 'Docker', required: true });
+  it('extrait un outil manquant enrichi du coût (NEED_TOOL, phase 4)', () => {
+    const r = parseAgentOutput('Il faudrait un outil. [NEED_TOOL:{"name":"Resend","category":"messaging","need":"Envoyer les confirmations","why":"API simple","costMin":0,"costMax":"20","freeTier":"3 000 emails/mois","priceSource":"https://resend.com/pricing"}]');
+    expect(r.neededTool).toEqual({
+      name: 'Resend', category: 'messaging', need: 'Envoyer les confirmations', why: 'API simple',
+      costMin: 0, costMax: 20, freeTier: '3 000 emails/mois', priceSource: 'https://resend.com/pricing',
+    });
     expect(r.content).toBe('Il faudrait un outil.');
+  });
+
+  it('accepte l\'ancien format NEED_TOOL v4 et rejette une source non http', () => {
+    const r = parseAgentOutput('[NEED_TOOL:{"id":"docker","label":"Docker","reason":"Déploiement","priceSource":"javascript:x"}]');
+    expect(r.neededTool).toMatchObject({ name: 'Docker', why: 'Déploiement', priceSource: null, costMin: null });
   });
 
   it('ignore un marqueur sans aucun contenu et renvoie un objet neutre', () => {

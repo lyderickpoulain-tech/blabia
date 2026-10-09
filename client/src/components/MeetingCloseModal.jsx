@@ -3,6 +3,7 @@ import api from '../utils/api';
 import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
 import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
+import { costLabel } from '../utils/toolsCatalog';
 
 const TYPE_META = {
   decision:    { icon: '🤝', label: 'Décision' },
@@ -15,7 +16,7 @@ const STEPS = ['generating', 'review', 'suggestions'];
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
 // à l'ouverture, puis assistant en 3 étapes : relecture CR + livrable → revue
 // des réunions suggérées → validation (statut accepté, CR en mémoire, livrable enregistré).
-export default function MeetingCloseModal({ session, initialSuggestions, meetingRefs, projectId, onClose, onClosed }) {
+export default function MeetingCloseModal({ session, initialSuggestions, meetingRefs, initialToolSuggestions, projectId, onClose, onClosed }) {
   const [step, setStep] = useState('generating');
   const [meetingType, setMeetingType] = useState(null);
   const [summary, setSummary]         = useState('');
@@ -29,6 +30,9 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       : (Array.isArray(session.pendingMeetingSuggestions) ? session.pendingMeetingSuggestions : [])
   );
   const [suggestionBusyId, setSuggestionBusyId] = useState(null);
+  // Réunion stack : outils proposés + décision par outil { [id]: 'validated' | 'refused' }
+  const [toolSuggestions, setToolSuggestions] = useState(Array.isArray(initialToolSuggestions) ? initialToolSuggestions : []);
+  const [toolDecisions, setToolDecisions]     = useState({});
   const [showPlan, setShowPlan] = useState(false);
 
   const [applying,       setApplying]       = useState(false);
@@ -48,6 +52,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       setMeetingType(data.meetingType);
       setSummary(data.summary || '');
       setDeliverable(data.deliverable || null);
+      if (Array.isArray(data.toolSuggestions)) setToolSuggestions(data.toolSuggestions);
       setStep('review');
     } catch (err) {
       setGenError(err.response?.data?.error || 'Erreur lors de la génération du compte-rendu');
@@ -88,6 +93,13 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
         summary,
         ...(meetingType === 'claude_code' ? { deliverable } : {}),
       });
+
+      // Réunion stack : outils reportés dans les outils du projet avec la décision prise
+      if (meetingType === 'stack' && toolSuggestions.length > 0) {
+        await api.post(`/projects/${projectId}/sessions/${session.id}/tools/apply`, {
+          decisions: Object.entries(toolDecisions).map(([id, status]) => ({ id, status })),
+        });
+      }
 
       // Suggestions gardées pas encore matérialisées → ajoutées au plan à leur
       // position "after". État relu côté serveur : celles déjà ajoutées via
@@ -247,6 +259,51 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   >
                     {copied ? '✓ Copié !' : '📋 Copier le prompt'}
                   </button>
+                </div>
+              )}
+
+              {/* Livrable stack : outils proposés, validés un par un (phase 4.3) */}
+              {meetingType === 'stack' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🧰</span>
+                    <span className="text-sm font-semibold text-gray-700">Outils proposés ({toolSuggestions.length})</span>
+                  </div>
+                  {toolSuggestions.length === 0 && (
+                    <p className="text-xs text-gray-400">Aucun outil complémentaire proposé : vos outils actuels couvrent les besoins discutés.</p>
+                  )}
+                  {toolSuggestions.map(t => {
+                    const decision = toolDecisions[t.id];
+                    return (
+                      <div key={t.id} className={`border rounded-xl p-3 space-y-1 ${
+                        decision === 'validated' ? 'border-green-300 bg-green-50'
+                          : decision === 'refused' ? 'border-gray-200 bg-gray-50 opacity-70' : 'border-gray-200 bg-white'
+                      }`}>
+                        <p className="text-sm font-semibold text-gray-900">{t.name}</p>
+                        {t.need && <p className="text-xs text-gray-700"><span className="text-gray-400">Besoin :</span> {t.need}</p>}
+                        {t.why && <p className="text-xs text-gray-600"><span className="text-gray-400">Pourquoi :</span> {t.why}</p>}
+                        <p className="text-xs text-gray-500">
+                          💶 {costLabel(t.cost)}{t.cost?.freeTier && ` · gratuit jusqu'à : ${t.cost.freeTier}`}
+                          {t.priceSource
+                            ? <> · <a href={t.priceSource} target="_blank" rel="noopener noreferrer" className="text-blabia-blue hover:underline">source</a></>
+                            : <span className="text-amber-600"> · indicatif, à vérifier</span>}
+                        </p>
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={() => setToolDecisions(d => ({ ...d, [t.id]: 'validated' }))}
+                            className={`text-xs px-3 py-1 rounded-lg border ${decision === 'validated' ? 'bg-green-600 border-green-600 text-white' : 'border-green-300 text-green-700 hover:bg-green-50'}`}>
+                            ✓ Valider
+                          </button>
+                          <button onClick={() => setToolDecisions(d => ({ ...d, [t.id]: 'refused' }))}
+                            className={`text-xs px-3 py-1 rounded-lg border ${decision === 'refused' ? 'bg-gray-600 border-gray-600 text-white' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                            ✕ Refuser
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {toolSuggestions.some(t => !toolDecisions[t.id]) && (
+                    <p className="text-xs text-amber-600">Les outils sans décision restent « suggérés » dans les outils du projet.</p>
+                  )}
                 </div>
               )}
             </>
