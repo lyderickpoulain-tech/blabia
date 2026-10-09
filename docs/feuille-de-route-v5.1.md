@@ -13,7 +13,9 @@ Document de reprise : à lire en début de session (avec `CLAUDE.md`, qui décri
 ### Committé, pas encore poussé
 - `ed98f83` **Registre des décisions du projet** : table `Decision` (migration `20261009000003_v5_decision_registry`), extraction à la clôture (validée par l'humain), transmis aux agents, panneau « 📒 Décisions », vidé par la réinitialisation de la mémoire.
 
-### Pas encore committé (testé en local, à valider)
+- `a4541ac` **Préparation de réunion sans l'humain**, avec ses corrections d'affichage (détail ci-dessous).
+
+### Détail de la préparation
 - **Préparation de réunion sans l'humain** (`/chat` avec `prepare: true`, `services/prompts/preparationPrompt.js`) : débat entre agents (2 tours/agent, 4 à 8), sans carte, puis synthèse `prep_summary` + décisions regroupées dans le budget.
 - **Corrections UX de la préparation** (retour utilisateur : « la réunion s'est faite sans moi ») : bulles du débat marquées `prep: true` et repliées derrière un bloc « Débat de préparation des agents (N messages) » ; bandeau « 👉 Préparation terminée — N décisions vous attendent » ; « Clore la réunion » demande confirmation s'il reste des décisions sans réponse ; bouton renommé « 🧠 Préparer la réunion avant mon arrivée ».
 - Ces corrections sont transitoires : la refonte UX (section 2) remplace l'affichage de la préparation par l'écran **Briefing**.
