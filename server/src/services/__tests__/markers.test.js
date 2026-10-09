@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAgentOutput } from '../markers.js';
+import { parseAgentOutput, detectArtifactRequest } from '../markers.js';
 
 describe('parseAgentOutput', () => {
   it('extrait une décision valide et nettoie le texte', () => {
@@ -116,5 +116,41 @@ describe('parseAgentOutput', () => {
   it('renvoie une seule bulle quand [NEXT] est absent', () => {
     const r = parseAgentOutput('Une seule idée.');
     expect(r.bubbles).toEqual(['Une seule idée.']);
+  });
+});
+
+describe('illustrations (phase 5)', () => {
+  it('extrait un schéma mermaid titré et le retire des bulles', () => {
+    const r = parseAgentOutput('Voici le parcours.\n[ARTIFACT_TITLE: Parcours client]\n```mermaid\ngraph LR\n  A[Accueil] --> B[Panier]\n```\n[NEXT]\nOn en parle ?');
+    expect(r.artifact).toEqual({ kind: 'mermaid', title: 'Parcours client', code: 'graph LR\n  A[Accueil] --> B[Panier]' });
+    expect(r.bubbles).toEqual(['Voici le parcours.', 'On en parle ?']);
+  });
+
+  it('ne confond pas les crochets du HTML avec un marqueur et garde la décision', () => {
+    const r = parseAgentOutput('Maquette :\n```html\n<div data-x="[DECISION:{}]">[a]</div>\n```\n[DECISION:{"question":"Q ?","choices":["A","Autre (précise)"],"context":"c"}]');
+    expect(r.artifact.kind).toBe('html');
+    expect(r.artifact.title).toBe('Maquette');
+    expect(r.decision.question).toBe('Q ?');
+    expect(r.content).toBe('Maquette :');
+  });
+
+  it('retire aussi un bloc non refermé (réponse tronquée)', () => {
+    const r = parseAgentOutput('Début.\n```svg\n<svg><rect');
+    expect(r.artifact).toBeNull();
+    expect(r.content).toBe('Début.');
+  });
+
+  it('laisse les autres blocs de code intacts', () => {
+    const r = parseAgentOutput('```js\nconst a = 1;\n```');
+    expect(r.artifact).toBeNull();
+    expect(r.content).toContain('const a = 1;');
+  });
+
+  it('détecte une demande explicite, pas une simple mention', () => {
+    expect(detectArtifactRequest('Fais-moi un schéma du parcours')).toBe(true);
+    expect(detectArtifactRequest('Peux-tu me montrer une maquette de la page ?')).toBe(true);
+    expect(detectArtifactRequest('/illustrer les étapes')).toBe(true);
+    expect(detectArtifactRequest('Le schéma de la base est déjà validé.')).toBe(false);
+    expect(detectArtifactRequest('On garde la maquette actuelle')).toBe(false);
   });
 });

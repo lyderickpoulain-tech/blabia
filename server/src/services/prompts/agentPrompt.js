@@ -66,6 +66,7 @@ const HUMOR_INSTRUCTIONS = {
  * @param {Array<{ref:string, title:string, status:string, type:string}>} [p.projectMeetings] - réunions du projet (phase 3.4, pour positionner [SUGGEST_MEETING])
  * @param {string}  [p.projectToolsText] - outils validés du projet, par catégorie (phase 4)
  * @param {object}  [p.toolReview] - réunion stack : { toolCategories, userToolsText, toolSuggestionsText } (phase 4.3)
+ * @param {string|null} [p.artifactRequest] - illustration demandée par l'humain pour ce tour (phase 5), null sinon
  */
 function buildAgentSystemPrompt({
   agent,
@@ -82,7 +83,22 @@ function buildAgentSystemPrompt({
   projectMeetings = [],
   projectToolsText = '',
   toolReview = null,
+  artifactRequest = null,
 }) {
+  // v5.0 phase 5 : illustration uniquement sur demande de l'humain
+  const artifactSection = artifactRequest
+    ? `
+ILLUSTRATION DEMANDÉE PAR L'HUMAIN : « ${artifactRequest} »
+Produis UNE illustration dans ce tour, en choisissant le format le plus adapté :
+- un schéma (étapes, flux, organisation, chronologie, relations) → bloc \`\`\`mermaid (syntaxe Mermaid valide, libellés courts entre guillemets si accents ou ponctuation) ;
+- une maquette d'écran ou de page → bloc \`\`\`html autonome (styles inline ou balise <style>, aucune ressource externe, aucun script réseau) ;
+- un visuel simple → bloc \`\`\`svg autonome (attributs viewBox, width et height).
+Juste avant le bloc, donne-lui un titre court sur une ligne : [ARTIFACT_TITLE: Titre]
+Accompagne-le d'UNE bulle courte (une phrase) qui dit ce que montre l'illustration. Le bloc ne compte pas dans la limite de mots.
+`
+    : `
+ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. Si un schéma ou une maquette aiderait, propose-le en une phrase : l'humain peut le demander avec le bouton « 🎨 Illustrer ».
+`;
   const toolsSection = projectToolsText ? `\nOutils retenus pour ce projet :\n${projectToolsText}\n` : '';
   const toolReviewSection = intention[0] === 'stack' && toolReview
     ? buildToolReviewSection({ ...toolReview, webSearchEnabled })
@@ -131,7 +147,7 @@ Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarq
 Ne répète PAS ce que les autres agents ont déjà dit.
 
 RÈGLE ABSOLUE : cette réunion sert à vous organiser — échanger, clarifier, décider. PERSONNE ne rédige le livrable final (prompt Claude Code, document, etc.) pendant les échanges : il sera généré automatiquement à la clôture, à partir de la conversation.
-${webSearchSection}
+${webSearchSection}${artifactSection}
 FORMAT DE TES MESSAGES :
 - Une idée par bulle, 50 mots maximum par bulle, 3 bulles maximum par tour
 - Sépare chaque bulle par une ligne contenant uniquement [NEXT]

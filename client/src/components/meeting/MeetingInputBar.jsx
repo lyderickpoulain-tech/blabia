@@ -1,4 +1,7 @@
+import { useState } from 'react';
+
 export default function MeetingInputBar({
+  onIllustrate,
   isClosed,
   session,
   currentIntention,
@@ -28,6 +31,17 @@ export default function MeetingInputBar({
   handleTextareaFocus,
   setShowCloseModal,
 }) {
+  // v5.0 phase 5 : demande d'illustration (bouton 🎨)
+  const [showIllustrate, setShowIllustrate] = useState(false);
+  const [illustrateText, setIllustrateText] = useState('');
+  const submitIllustrate = () => {
+    const request = illustrateText.trim();
+    if (!request) return;
+    onIllustrate?.(request);
+    setIllustrateText('');
+    setShowIllustrate(false);
+  };
+
   function agentColor(name) {
     const idx = activeAgents.findIndex(a => a.name === name);
     return agentColors[(idx >= 0 ? idx : 0) % agentColors.length];
@@ -133,6 +147,28 @@ export default function MeetingInputBar({
             </div>
           )}
 
+          {showIllustrate && (
+            <div className="flex flex-wrap items-center gap-2 bg-purple-50 border border-purple-200 rounded-xl p-2">
+              <span className="text-sm">🎨</span>
+              <input
+                autoFocus
+                value={illustrateText}
+                onChange={e => setIllustrateText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitIllustrate(); if (e.key === 'Escape') setShowIllustrate(false); }}
+                placeholder="Que veux-tu voir ? (ex. le parcours d'un client, la maquette de l'accueil…)"
+                className="flex-1 min-w-[200px] text-sm border border-purple-200 bg-white rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-purple-300"
+              />
+              <button
+                onClick={submitIllustrate}
+                disabled={!illustrateText.trim() || isStreaming || !!pendingDecisionId}
+                className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-40"
+              >
+                Illustrer
+              </button>
+              <button onClick={() => setShowIllustrate(false)} className="text-xs text-gray-400 hover:text-gray-600">Annuler</button>
+            </div>
+          )}
+
           {/* Zone drag + saisie */}
           <div
             onDragOver={handleDragOver}
@@ -149,6 +185,18 @@ export default function MeetingInputBar({
               className="shrink-0 w-9 h-9 flex items-center justify-center text-gray-400 hover:text-blabia-blue hover:bg-blue-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               📎
+            </button>
+            {/* Bouton 🎨 Illustrer */}
+            <button
+              type="button"
+              onClick={() => setShowIllustrate(s => !s)}
+              disabled={isStreaming || !!pendingDecisionId}
+              title="Illustrer : demander un schéma, une maquette ou un visuel"
+              className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                showIllustrate ? 'bg-purple-100 text-purple-700' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'
+              }`}
+            >
+              🎨
             </button>
             <textarea
               value={inputText}

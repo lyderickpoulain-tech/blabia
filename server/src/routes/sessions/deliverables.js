@@ -167,7 +167,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       .filter(m => m.role !== 'system')
       .map(m => m.role === 'human'
         ? `Participant : ${m.content}`
-        : `${m.agentName} : ${m.content}`)
+        : `${m.agentName} : ${m.content}${m.artifact ? ` [Illustration produite : « ${m.artifact.title} »]` : ''}`)
       .join('\n\n');
 
     const sessionContext = `Objectif de la réunion : ${session.task}\n\nTranscription :\n${historyText}`;
@@ -192,6 +192,14 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     if (citedSources.size > 0) {
       const lines = [...citedSources.values()].map(s => `- [${s.title || s.url}](${s.url})`);
       summary += `\n\n## Sources web consultées\n${lines.join('\n')}`;
+    }
+
+    // Illustrations produites pendant la réunion (phase 5) — titres seulement
+    const ARTIFACT_KIND = { mermaid: 'schéma', html: 'maquette', svg: 'visuel' };
+    const artifacts = messages.filter(m => m.artifact?.title);
+    if (artifacts.length > 0) {
+      const lines = artifacts.map(m => `- ${m.artifact.title} (${ARTIFACT_KIND[m.artifact.kind] || m.artifact.kind}, par ${m.agentName})`);
+      summary += `\n\n## Illustrations produites\n${lines.join('\n')}`;
     }
 
     // ── Livrable typé : prompt (claude_code) ou liste d'outils proposés (stack) ──

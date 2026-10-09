@@ -3,6 +3,7 @@ import DecisionCard from '../DecisionCard';
 import AgentScopeSelector from './AgentScopeSelector';
 import Markdown from '../Markdown';
 import MeetingSuggestionCard from './MeetingSuggestionCard';
+import ArtifactCard from './ArtifactCard';
 import { costLabel } from '../../utils/toolsCatalog';
 
 // ── Recherche web (2.6) ────────────────────────────────────────────────────────
@@ -288,7 +289,7 @@ export default function ConversationFeed({
               <div className={`w-8 h-8 rounded-full ${color.avatar} flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5`}>
                 {agent?.emoji || msg.agentName?.[0] || '?'}
               </div>
-              <div className="max-w-[75%]">
+              <div className={msg.artifact ? "w-full max-w-[92%]" : "max-w-[75%]"}>
                 <p className={`text-xs font-semibold ${msg.reason ? 'mb-0.5' : 'mb-1'} ${color.text}`}>{msg.agentName}</p>
                 {msg.reason && (
                   <p className={`text-xs italic mb-1 ${/vulgarise|reformule/i.test(msg.reason) ? 'text-blue-400' : 'text-gray-400'}`}>↳ {msg.reason}</p>
@@ -303,6 +304,7 @@ export default function ConversationFeed({
                   </Markdown>
                 </div>
                 {msg.webSearch && <WebSearchBlock webSearch={msg.webSearch} />}
+                {msg.artifact && <ArtifactCard artifact={msg.artifact} />}
                 {msg.interrupted ? (
                   <p className="text-xs text-blabia-orange mt-1 flex items-center gap-1">
                     ⚠️ Interrompu

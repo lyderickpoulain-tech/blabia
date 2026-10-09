@@ -495,7 +495,7 @@ export default function MeetingRoom() {
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
-  const handleSend = useCallback(async (overrideText, { resume = false, delegated = false } = {}) => {
+  const handleSend = useCallback(async (overrideText, { resume = false, delegated = false, artifactRequest = false } = {}) => {
     const text              = (typeof overrideText === 'string' ? overrideText : inputText).trim();
     const currentAttachments = attachmentsRef.current;
     // resume:true = reprise silencieuse après décision, bypass guards normaux
@@ -567,6 +567,7 @@ export default function MeetingRoom() {
             attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
             ...(resume    ? { resume: true }    : {}),
             ...(delegated ? { delegated: true } : {}),
+            ...(artifactRequest ? { artifactRequest: true } : {}),
           }),
           signal: ac.signal,
         }
@@ -1070,6 +1071,7 @@ export default function MeetingRoom() {
           handleInputChange={handleInputChange}
           handleKeyDown={handleKeyDown}
           handleSend={handleSend}
+          onIllustrate={(request) => handleSend(`🎨 Illustration demandée : ${request}`, { artifactRequest: true })}
           handleTextareaFocus={handleTextareaFocus}
           setShowCloseModal={setShowCloseModal}
         />

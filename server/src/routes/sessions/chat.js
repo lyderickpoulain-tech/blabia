@@ -15,7 +15,7 @@ const {
 } = require('./helpers');
 const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt');
 const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
-const { parseAgentOutput } = require('../../services/markers');
+const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
 const { parseJsonField } = require('../../utils/parseJsonField');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 const {
@@ -48,7 +48,8 @@ async function loadMessages(sessionId) {
 // ── orchestrate ───────────────────────────────────────────────────────────────
 
 async function orchestrate({ session, project, messages, activeAgents,
-  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false, turnCount = 0 }) {
+  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false, turnCount = 0,
+  artifactRequested = false }) {
 
   if (activeAgents.length === 1) {
     return { agentId: activeAgents[0].id, reason: '', shouldClose: false };
@@ -94,9 +95,12 @@ async function orchestrate({ session, project, messages, activeAgents,
 
   const lastMsg     = messages[messages.length - 1];
   const lastIsHuman = lastMsg?.role === 'human';
-  const humanPriorityNote = lastIsHuman
+  const humanPriorityNote = (lastIsHuman
     ? `\n⚠️ PRIORITÉ ABSOLUE : Le dernier message dans l'historique est un message humain ("${(lastMsg.content || '').slice(0, 120)}"). L'agent le plus pertinent pour répondre directement à CE message doit prendre la parole en premier.\n`
-    : '';
+    : '')
+    + (artifactRequested
+      ? `\n🎨 L'humain demande une ILLUSTRATION (schéma, maquette ou visuel) : choisis l'agent le plus compétent pour la produire sur ce sujet. Ne propose pas shouldClose.\n`
+      : '');
 
   const prompt = buildOrchestratorPrompt({
     session,
@@ -168,10 +172,16 @@ router.post('/:sessionId/extract-file', upload.single('file'), async (req, res) 
 
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated } = req.body;
+  const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated, artifactRequest } = req.body;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const hasText        = !!humanMessage?.trim();
+  // Illustration (phase 5) : bouton « 🎨 Illustrer » (artifactRequest=true) ou demande
+  // explicite dans le message. Ne vaut que pour le premier agent qui répond.
+  const wantsArtifact  = hasText && (artifactRequest === true || detectArtifactRequest(humanMessage));
+  const artifactText   = wantsArtifact
+    ? humanMessage.trim().replace(/^\s*(\/illustrer|🎨\s*Illustration demandée\s*:)\s*/i, '').slice(0, 500) || 'une illustration utile à la réunion'
+    : null;
   const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.length > 0;
   console.log(`[chat] session=${sessionId} resume=${!!resume} hasText=${hasText} hasAtt=${hasAttachments}`);
   if (!hasText && !hasAttachments && !resume) {
@@ -331,12 +341,14 @@ router.post('/:sessionId/chat', async (req, res) => {
         resumeAfterDecision:  turnCount === 0 && resumeAfterDecision,
         delegated:            turnCount === 0 && !!delegated,
         turnCount,
+        artifactRequested:    turnCount === 0 && wantsArtifact,
       });
+      const turnArtifact = turnCount === 0 && wantsArtifact ? artifactText : null;
 
       turnInputTokens  += next.usage?.inputTokens  || 0;
       turnOutputTokens += next.usage?.outputTokens || 0;
 
-      if (next.shouldClose) {
+      if (next.shouldClose && !turnArtifact) {
         send('suggest_close', { reason: next.reason });
         conversationDone = true;
         break;
@@ -354,7 +366,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         .map(m => {
           if (m.role === 'human')                                  return `Participant : ${m.content}`;
           if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
-          return `${m.agentName} : ${m.content}`;
+          return `${m.agentName} : ${m.content}${m.artifact ? ` [Illustration produite : « ${m.artifact.title} »]` : ''}`;
         });
       const historyText  = historyLines.join('\n\n');
 
@@ -373,6 +385,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         humorLevel,
         webSearchEnabled: session.webSearchEnabled === true,
         projectToolsText,
+        artifactRequest: turnArtifact,
         toolReview: toolReview && {
           ...toolReview,
           toolSuggestionsText: toolReview.suggested.map(n => `- ${n}`).join('\n'),
@@ -414,8 +427,9 @@ router.post('/:sessionId/chat', async (req, res) => {
       let agentUsage = { inputTokens: 0, outputTokens: 0 };
       let agentWebSearch = null;
       try {
+        // Tour avec illustration demandée : marge de tokens pour le code (phase 5)
         const agentResult = await callAgent(
-          systemPrompt, userMessage, 600, session.model || MODEL, abortController.signal,
+          systemPrompt, userMessage, turnArtifact ? 4000 : 600, session.model || MODEL, abortController.signal,
           session.webSearchEnabled === true
         );
         agentFullText   = agentResult.text;
@@ -423,7 +437,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         agentWebSearch  = agentResult.webSearch;
 
         // Garde-fou 3.3 : relance unique si l'agent rédige déjà le livrable
-        if (intention[0] === 'claude_code' && looksLikeDeliverable(agentFullText)) {
+        // (pas sur un tour d'illustration, dont le bloc de code est attendu)
+        if (intention[0] === 'claude_code' && !turnArtifact && looksLikeDeliverable(agentFullText)) {
           const retryMessage = Array.isArray(userMessage)
             ? [...userMessage, { type: 'text', text: 'Reformule sans rédiger le livrable : pose plutôt une question pour clarifier le besoin.' }]
             : `${userMessage}\n\nReformule sans rédiger le livrable : pose plutôt une question pour clarifier le besoin.`;
@@ -462,7 +477,11 @@ router.post('/:sessionId/chat', async (req, res) => {
       // la première bulle du tour.
       const turnId = randomUUID();
       const hasWebSearchSources = agentWebSearch?.sources?.length > 0;
-      const agentMessages = parsed.bubbles.map((bubbleContent, i) => ({
+      // Illustration gardée seulement si demandée pour ce tour ; sinon le bloc a
+      // déjà été retiré du texte par parseAgentOutput et est ignoré (phase 5).
+      const artifact = turnArtifact ? parsed.artifact : null;
+      const bubbles = parsed.bubbles.length > 0 || !artifact ? parsed.bubbles : [`🎨 ${artifact.title}`];
+      const agentMessages = bubbles.map((bubbleContent, i) => ({
         id:        randomUUID(),
         role:      'agent',
         agentName: agent.name,
@@ -473,6 +492,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         timestamp: new Date().toISOString(),
         type:      'message',
         pinned:    false,
+        ...(artifact && i === bubbles.length - 1 ? { artifact } : {}),
       }));
       for (const m of agentMessages) await appendMessageEntry(sessionId, m);
 
