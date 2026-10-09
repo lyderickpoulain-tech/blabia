@@ -65,6 +65,7 @@ model Project {
   toolNeeds         Json?     // v5.0 phase 4 : besoins en outils analysés par BlabIA [{ category, need, fit: ok|unsuited|none, warning, examples }] — NULL = jamais analysé
   expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
   humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
+  questionMode      String    @default("balanced") // v5.0 : "delegate" (4 questions) | "balanced" (8) | "control" (15) — défaut des réunions du projet
   createdAt         DateTime  @default(now())
   updatedAt     DateTime        @updatedAt
   userId        String
@@ -168,6 +169,7 @@ model Session {
   webSearchEnabled        Boolean   @default(false)   // v4.0 (Év.6) : activer la recherche web pour cette réunion
   expertiseLevel          Int?      // v5.0 : 1 à 5, null = hérite de Project.expertiseLevel
   humorLevel              Int?      // v5.0 : 1 à 5, null = hérite de Project.humorLevel
+  questionMode            String?   // v5.0 : "delegate" | "balanced" | "control" (budget de questions 4 / 8 / 15), null = hérite de Project.questionMode
   milestoneId     String?
   todos           TodoItem[]
   createdAt       DateTime  @default(now())

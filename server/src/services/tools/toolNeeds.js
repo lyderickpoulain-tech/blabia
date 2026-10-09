@@ -6,6 +6,7 @@
 const { randomUUID } = require('crypto');
 const anthropic = require('../anthropic');
 const { CATEGORIES, CATEGORY_IDS, findCatalogTool, normalize } = require('./catalog');
+const { recentMemory } = require('../../utils/projectMemory');
 
 const MODEL = 'claude-sonnet-4-6';
 const FITS = ['ok', 'unsuited', 'none'];
@@ -19,7 +20,7 @@ function buildAnalysisPrompt(project, userTools) {
   return {
     system: 'Tu es un conseiller en outils numériques. Tu réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.',
     user: `Projet : ${project.name}
-${project.description ? `Description : ${project.description}\n` : ''}${project.brief ? `Brief :\n${project.brief}\n` : ''}${project.context ? `Mémoire du projet :\n${String(project.context).slice(0, 1500)}\n` : ''}
+${project.description ? `Description : ${project.description}\n` : ''}${project.brief ? `Brief :\n${project.brief}\n` : ''}${project.context ? `Mémoire du projet :\n${recentMemory(project.context, 2000)}\n` : ''}
 Catégories d'outils possibles :
 ${cats}
 

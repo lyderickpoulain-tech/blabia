@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { MODEL } = require('./helpers');
+const { isQuestionMode, decisionBudgetFor } = require('../../services/questionModes');
 const { parseJsonField } = require('../../utils/parseJsonField');
 
 const router = express.Router({ mergeParams: true });
@@ -20,6 +21,7 @@ router.post('/', async (req, res) => {
     webSearchEnabled: webSearchEnabledParam = false,
     expertiseLevel: expertiseLevelParam,
     humorLevel: humorLevelParam,
+    questionMode: questionModeParam,
   } = req.body;
   const { projectId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
@@ -33,6 +35,7 @@ router.post('/', async (req, res) => {
   };
   const expertiseLevel = clampLevel(expertiseLevelParam);
   const humorLevel     = clampLevel(humorLevelParam);
+  const questionMode   = isQuestionMode(questionModeParam) ? questionModeParam : null;
 
   if (!task?.trim()) return res.status(400).json({ error: 'La tâche est requise' });
   if (!Array.isArray(activeAgentsParam) || activeAgentsParam.length === 0) {
@@ -63,11 +66,12 @@ router.post('/', async (req, res) => {
         webSearchEnabled: webSearchEnabledParam === true,
         expertiseLevel,
         humorLevel,
+        questionMode,
         projectId,
         milestoneId: milestoneId || null,
         createdAt: now
       })
-      .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId', 'webSearchEnabled', 'expertiseLevel', 'humorLevel']);
+      .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId', 'webSearchEnabled', 'expertiseLevel', 'humorLevel', 'questionMode']);
     await db('Project').where({ id: projectId }).update({ updatedAt: now });
     if (milestoneId) {
       try { await db('Milestone').where({ id: milestoneId, projectId }).update({ status: 'in_progress' }); } catch {}
@@ -135,6 +139,8 @@ router.get('/:sessionId', async (req, res) => {
       activeAgents:    parseJsonField(session.activeAgents, []),
       pendingMeetingSuggestions: parseJsonField(session.pendingMeetingSuggestions, []),
       pendingToolSuggestions: parseJsonField(session.pendingToolSuggestions, []).filter(t => t && t.name),
+      decisionBudget: decisionBudgetFor(session, project),
+      projectQuestionMode: project.questionMode,
       planAlreadyAdded: parseInt(planCount || 0) > 0,
     });
   } catch (err) {
@@ -170,10 +176,10 @@ router.delete('/:sessionId', async (req, res) => {
 router.patch('/:sessionId', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-  const { task, intention, expertiseLevel, humorLevel, summary, deliverable } = req.body;
+  const { task, intention, expertiseLevel, humorLevel, questionMode, summary, deliverable } = req.body;
 
-  if ([task, intention, expertiseLevel, humorLevel, summary, deliverable].every(v => v === undefined)) {
-    return res.status(400).json({ error: 'Champ requis : task, intention, expertiseLevel, humorLevel, summary ou deliverable' });
+  if ([task, intention, expertiseLevel, humorLevel, questionMode, summary, deliverable].every(v => v === undefined)) {
+    return res.status(400).json({ error: 'Champ requis : task, intention, expertiseLevel, humorLevel, questionMode, summary ou deliverable' });
   }
   const clampLevel = (v) => {
     const n = Number(v);
@@ -195,6 +201,7 @@ router.patch('/:sessionId', async (req, res) => {
     if (intention !== undefined) updates.intention = JSON.stringify(Array.isArray(intention) ? intention : [intention]);
     if (expertiseLevel !== undefined) updates.expertiseLevel = clampLevel(expertiseLevel);
     if (humorLevel !== undefined)     updates.humorLevel     = clampLevel(humorLevel);
+    if (questionMode !== undefined)   updates.questionMode   = isQuestionMode(questionMode) ? questionMode : null;
     // Édition du CR / livrable à la relecture, avant validation (3.3)
     if (summary !== undefined)     updates.summary     = summary;
     if (deliverable !== undefined) updates.deliverable = deliverable;
@@ -203,7 +210,8 @@ router.patch('/:sessionId', async (req, res) => {
     const [updated] = await db('Session').where({ id: sessionId }).limit(1);
     return res.json({
       id: updated.id, task: updated.task, intention: updated.intention,
-      expertiseLevel: updated.expertiseLevel, humorLevel: updated.humorLevel,
+      expertiseLevel: updated.expertiseLevel, humorLevel: updated.humorLevel, questionMode: updated.questionMode,
+      decisionBudget: decisionBudgetFor(updated, project),
       summary: updated.summary, deliverable: updated.deliverable,
     });
   } catch (err) {

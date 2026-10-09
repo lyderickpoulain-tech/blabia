@@ -2,6 +2,7 @@
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import ProjectLayout from '../components/ProjectLayout';
 import api from '../utils/api';
+import QuestionModePicker from '../components/QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 // v5.0 : decision | claude_code | stack (phase 4)
@@ -79,6 +80,7 @@ export default function StartMeeting() {
   const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
   const [expertiseLevel,    setExpertiseLevel]    = useState(3);
   const [humorLevel,        setHumorLevel]        = useState(2);
+  const [questionMode,      setQuestionMode]      = useState('balanced');
   const [starting,          setStarting]          = useState(false);
   const [error,             setError]             = useState('');
 
@@ -101,6 +103,7 @@ export default function StartMeeting() {
       .then(({ data }) => {
         if (data.expertiseLevel) setExpertiseLevel(data.expertiseLevel);
         if (data.humorLevel)     setHumorLevel(data.humorLevel);
+        if (data.questionMode)   setQuestionMode(data.questionMode);
       })
       .catch(() => {});
   }, [projectId]);
@@ -207,6 +210,7 @@ export default function StartMeeting() {
         webSearchEnabled: webSearchEnabled === true,
         expertiseLevel,
         humorLevel,
+        questionMode,
         ...(milestoneId ? { milestoneId } : {})
       });
 
@@ -441,6 +445,7 @@ export default function StartMeeting() {
               labels={HUMOR_LABELS}
               icons={HUMOR_ICONS}
             />
+            <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
           </div>
 
           {/* ── Section C : Modèle + Recherche web ─────────────────────────── */}

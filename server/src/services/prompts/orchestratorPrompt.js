@@ -12,9 +12,10 @@ const CLOSE_INSTRUCTIONS = {
 const DEFAULT_CLOSE_INSTRUCTION = "seulement si l'objectif est clairement atteint ET que les agents ont tourné en rond sur les mêmes points";
 
 const TOUR_NOTES = {
-  claude_code: { minTurn: 4, text: 'Si les besoins principaux ont été clarifiés, tu DOIS proposer shouldClose=true.' },
-  decision:    { minTurn: 3, text: 'Si les décisions, options écartées et actions ont été couvertes, tu DOIS proposer shouldClose=true.' },
-  stack:       { minTurn: 4, text: 'Si les catégories pertinentes ont été passées en revue, tu DOIS proposer shouldClose=true.' },
+  // minTurn : tours d'agents depuis le début de la réunion (plus par requête)
+  claude_code: { minTurn: 8,  text: 'Si les besoins principaux ont été clarifiés, tu DOIS proposer shouldClose=true.' },
+  decision:    { minTurn: 6,  text: 'Si les décisions, options écartées et actions ont été couvertes, tu DOIS proposer shouldClose=true.' },
+  stack:       { minTurn: 10, text: 'Si les catégories pertinentes ont été passées en revue, tu DOIS proposer shouldClose=true.' },
 };
 
 /**
@@ -27,7 +28,8 @@ const TOUR_NOTES = {
  * @param {number} [p.blockedAgentCount] - nombre de fois consécutives où il a parlé
  * @param {string} [p.humanPriorityNote]
  * @param {boolean} [p.delegated]
- * @param {number} p.turnCount
+ * @param {number} p.turnCount - tours d'agents depuis le début de la réunion
+ * @param {number|null} [p.decisionsLeft] - cartes de décision restantes dans le budget
  */
 function buildOrchestratorPrompt({
   session,
@@ -38,6 +40,7 @@ function buildOrchestratorPrompt({
   humanPriorityNote = '',
   delegated = false,
   turnCount,
+  decisionsLeft = null,
 }) {
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
   const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
@@ -53,7 +56,9 @@ function buildOrchestratorPrompt({
 
 Objectif de la réunion : "${session.task}"
 Livrable attendu : ${intentionKey || 'compte-rendu'}
-Tour actuel : ${turnCount} / ${MAX_TURNS}${tourNote}
+Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${decisionsLeft === 0
+    ? "\n⚠️ Le budget de questions à l'humain est épuisé : privilégie les agents qui concluent, et propose shouldClose=true dès que l'essentiel est couvert."
+    : ''}
 
 Agents disponibles :
 ${agentList}

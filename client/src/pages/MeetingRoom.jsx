@@ -391,15 +391,15 @@ export default function MeetingRoom() {
     setMessages(prev => prev.map(m =>
       m.id === messageId ? { ...m, status: 'deferred' } : m
     ));
-    setPendingDecisionId(null);
-    // Dépiler la prochaine décision en attente si elle existe
-    setDecisionQueue(prev => {
-      if (prev.length > 0) {
-        setPendingDecisionId(prev[0].messageId);
-        return prev.slice(1);
-      }
-      return prev;
-    });
+    // Dépiler la prochaine décision en attente si elle existe (lecture via ref :
+    // pas d'effet de bord dans un updater, qui peut être rejoué par React)
+    const queue = decisionQueueRef.current;
+    if (queue.length > 0) {
+      setPendingDecisionId(queue[0].messageId);
+      setDecisionQueue(queue.slice(1));
+    } else {
+      setPendingDecisionId(null);
+    }
   }, [projectId, sessionId]);
 
   // Déléguer une décision aux agents
@@ -492,6 +492,7 @@ export default function MeetingRoom() {
   const intentionMeta = DELIVERABLE_TYPES.find(d => d.id === currentIntention) || DELIVERABLE_TYPES[0];
   const effectiveExpertiseLevel = session?.expertiseLevel ?? project?.expertiseLevel ?? 3;
   const effectiveHumorLevel     = session?.humorLevel     ?? project?.humorLevel     ?? 2;
+  const effectiveQuestionMode   = session?.questionMode   ?? project?.questionMode   ?? 'balanced';
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
@@ -630,15 +631,18 @@ export default function MeetingRoom() {
                 agentName: ev.agentName || '',
                 timestamp: new Date().toISOString(),
               }]);
-              // Interrompre les agents encore en streaming
-              abortControllerRef.current?.abort();
-              // File d'attente si une autre décision est déjà ouverte
+              // Plusieurs cartes peuvent arriver dans le même tour (questions regroupées) :
+              // pas d'abort (le serveur s'arrête de lui-même après les décisions), et la
+              // ref est mise à jour tout de suite pour que les cartes suivantes partent en file.
               if (pendingDecisionIdRef.current) {
-                setDecisionQueue(prev => [...prev, {
+                const queued = {
                   messageId: ev.messageId, question: ev.question || '',
                   choices: ev.choices || [], context: ev.context || '', agentName: ev.agentName || '',
-                }]);
+                };
+                decisionQueueRef.current = [...decisionQueueRef.current, queued];
+                setDecisionQueue(decisionQueueRef.current);
               } else {
+                pendingDecisionIdRef.current = ev.messageId;
                 setPendingDecisionId(ev.messageId);
               }
 
@@ -884,7 +888,9 @@ export default function MeetingRoom() {
   const handleChangeLevel = useCallback(async (field, value) => {
     setSession(prev => ({ ...prev, [field]: value })); // optimiste
     try {
-      await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { [field]: value });
+      const { data } = await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { [field]: value });
+      // Le mode de questions change le budget : le serveur renvoie le nouveau
+      if (data?.decisionBudget) setSession(prev => ({ ...prev, decisionBudget: data.decisionBudget }));
     } catch {}
   }, [projectId, sessionId]);
 
@@ -961,6 +967,7 @@ export default function MeetingRoom() {
           intentionDropdownRef={intentionDropdownRef}
           expertiseLevel={effectiveExpertiseLevel}
           humorLevel={effectiveHumorLevel}
+          questionMode={effectiveQuestionMode}
           onChangeLevel={handleChangeLevel}
           showLevelsDropdown={showLevelsDropdown}
           setShowLevelsDropdown={setShowLevelsDropdown}
@@ -969,6 +976,7 @@ export default function MeetingRoom() {
           setShowDecisions={setShowDecisions}
           decisions={decisions}
           pendingDecisionCount={pendingDecisionCount}
+          decisionBudget={session?.decisionBudget}
           meetingSuggestionsCount={meetingSuggestions.filter(s => s.status === 'pending').length}
           tokensUsed={tokensUsed}
           showMenuDots={showMenuDots}

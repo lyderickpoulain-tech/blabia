@@ -16,6 +16,7 @@ const {
 const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt');
 const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
+const { decisionBudgetFor } = require('../../services/questionModes');
 const { parseJsonField } = require('../../utils/parseJsonField');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 const {
@@ -28,6 +29,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const router = express.Router({ mergeParams: true });
 
 const MAX_CONSECUTIVE = 2;
+const countDecisions = (messages) => messages.filter(m => m.type === 'decision').length;
+// Tours d'agents depuis le début de la réunion (un tour = un turnId, plusieurs bulles)
+const countAgentTurns = (messages) => new Set(messages.filter(m => m.role === 'agent').map(m => m.turnId || m.id)).size;
 
 // ── Garde-fou 3.3 : repère un message qui rédige déjà le livrable claude_code
 // (bloc de code de plus de 15 lignes, ou texte qui ressemble à un prompt complet)
@@ -48,18 +52,23 @@ async function loadMessages(sessionId) {
 // ── orchestrate ───────────────────────────────────────────────────────────────
 
 async function orchestrate({ session, project, messages, activeAgents,
-  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false, turnCount = 0,
-  artifactRequested = false }) {
+  lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false,
+  artifactRequested = false, decisionBudget }) {
 
   if (activeAgents.length === 1) {
     return { agentId: activeAgents[0].id, reason: '', shouldClose: false };
   }
 
+  // Après une réponse de l'humain, c'est un AUTRE agent qui reprend : celui qui a
+  // posé la question enchaînait sinon sur une question de précision.
+  let askingAgentId = null;
+  let resumeNote = '';
   if (resumeAfterDecision) {
     const lastDecision = [...messages].reverse().find(m => m.type === 'decision');
-    if (lastDecision) {
-      const agent = activeAgents.find(a => a.name === lastDecision.agentName);
-      if (agent) return { agentId: agent.id, reason: 'Reprend après sa question', shouldClose: false };
+    const asker = lastDecision && activeAgents.find(a => a.name === lastDecision.agentName);
+    if (asker) {
+      askingAgentId = asker.id;
+      resumeNote = `\n↪️ L'humain vient de répondre à la question de ${asker.name}. Choisis l'agent qui fera AVANCER le sujet en tenant compte de cette réponse (pas une nouvelle question).\n`;
     }
   }
 
@@ -82,6 +91,7 @@ async function orchestrate({ session, project, messages, activeAgents,
       if (areSimilar(lastQ, prevQ)) excludedAgentIds.add(agent.id);
     }
   }
+  if (askingAgentId) excludedAgentIds.add(askingAgentId);
   const candidateAgents    = activeAgents.filter(a => !excludedAgentIds.has(a.id));
   const agentsForSelection = candidateAgents.length > 0 ? candidateAgents : activeAgents;
 
@@ -100,8 +110,11 @@ async function orchestrate({ session, project, messages, activeAgents,
     : '')
     + (artifactRequested
       ? `\n🎨 L'humain demande une ILLUSTRATION (schéma, maquette ou visuel) : choisis l'agent le plus compétent pour la produire sur ce sujet. Ne propose pas shouldClose.\n`
-      : '');
+      : '')
+    + resumeNote;
 
+  // Tours comptés sur toute la réunion : le compteur de la requête repart à 0
+  // après chaque réponse de l'humain, la suggestion de clôture ne se déclenchait jamais.
   const prompt = buildOrchestratorPrompt({
     session,
     agentsForSelection,
@@ -110,7 +123,8 @@ async function orchestrate({ session, project, messages, activeAgents,
     blockedAgentCount: consecutiveCount,
     humanPriorityNote,
     delegated,
-    turnCount,
+    turnCount: countAgentTurns(messages),
+    decisionsLeft: Math.max(0, decisionBudget - countDecisions(messages)),
   });
 
   try {
@@ -284,6 +298,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     // Surcharge réunion > défaut projet (2.4 / 2.5)
     const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
     const humorLevel     = session.humorLevel     ?? project.humorLevel     ?? 2;
+    // Mode de questions (réunion > projet) : budget de cartes de décision
+    const decisionBudget = decisionBudgetFor(session, project);
 
     // Réunions du projet avec référence courte (R1, R2…) — positionnement des
     // suggestions [SUGGEST_MEETING] et dédoublonnage (phase 3.4).
@@ -323,7 +339,6 @@ router.post('/:sessionId/chat', async (req, res) => {
     let consecutiveCount = 0;
     let conversationDone = false;
     let decisionEmitted  = false;
-    const decisionCountPerAgent = {};
     let turnInputTokens  = 0;
     let turnOutputTokens = 0;
 
@@ -340,8 +355,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         humanMessage:         hasText ? humanMessage : null,
         resumeAfterDecision:  turnCount === 0 && resumeAfterDecision,
         delegated:            turnCount === 0 && !!delegated,
-        turnCount,
         artifactRequested:    turnCount === 0 && wantsArtifact,
+        decisionBudget,
       });
       const turnArtifact = turnCount === 0 && wantsArtifact ? artifactText : null;
 
@@ -380,6 +395,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         reason: next.reason || '',
         projectMeetings,
         priorDecisionQuestions,
+        decisionBudget: { used: countDecisions(currentMessages), max: decisionBudget },
         pastCodePromptsText,
         expertiseLevel,
         humorLevel,
@@ -464,12 +480,11 @@ router.post('/:sessionId/chat', async (req, res) => {
       turnOutputTokens += agentUsage.outputTokens || 0;
 
       const parsed = parseAgentOutput(agentFullText);
-      // Un seul [DECISION] accepté par agent et par réunion — le texte reste
-      // nettoyé du marqueur dans tous les cas, seule la carte de décision est supprimée.
-      const decision = parsed.decision && (decisionCountPerAgent[agent.name] || 0) < 1
-        ? parsed.decision
-        : null;
-      if (parsed.decision) decisionCountPerAgent[agent.name] = (decisionCountPerAgent[agent.name] || 0) + 1;
+      // Cartes de décision : regroupées (jusqu'à 3 par message) et plafonnées par le
+      // budget de la réunion. Au-delà, les cartes sont ignorées (le texte reste
+      // nettoyé des marqueurs) : l'agent a pour consigne de trancher par hypothèse.
+      const budgetLeft = Math.max(0, decisionBudget - countDecisions(currentMessages));
+      const decisions  = parsed.decisions.slice(0, budgetLeft);
 
       // Découpage en bulles (séparateur [NEXT], cf. phase 2.2) — même turnId,
       // un message distinct par bulle, affichées l'une après l'autre côté client.
@@ -500,7 +515,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         send('agent_message', { agentName: agent.name, messages: agentMessages });
       }
 
-      if (decision) {
+      for (const decision of decisions) {
         const decisionMsg = {
           id:         randomUUID(),
           role:       'system',
@@ -521,6 +536,7 @@ router.post('/:sessionId/chat', async (req, res) => {
           choices:   decisionMsg.choices,
           context:   decisionMsg.context,
           agentName: agent.name,
+          decisionsLeft: Math.max(0, budgetLeft - decisions.length),
         });
         decisionEmitted = true;
       }

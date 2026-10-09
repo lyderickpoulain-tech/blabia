@@ -2,6 +2,8 @@
 // Centralise : rôle, brief projet, mémoire projet, timeline, objectif, règles de
 // format, marqueurs autorisés. Rien de tout cela ne doit être reconstruit côté client.
 
+const { recentMemory } = require('../../utils/projectMemory');
+
 // v5.0 phase 3.2 : decision | claude_code | stack. Nuance spécifique par type —
 // la règle générale "pas de livrable pendant les échanges" (3.3) est universelle,
 // posée plus bas dans le prompt.
@@ -67,6 +69,7 @@ const HUMOR_INSTRUCTIONS = {
  * @param {string}  [p.projectToolsText] - outils validés du projet, par catégorie (phase 4)
  * @param {object}  [p.toolReview] - réunion stack : { toolCategories, userToolsText, toolSuggestionsText } (phase 4.3)
  * @param {string|null} [p.artifactRequest] - illustration demandée par l'humain pour ce tour (phase 5), null sinon
+ * @param {{used:number, max:number}|null} [p.decisionBudget] - cartes de décision déjà posées / budget de la réunion
  */
 function buildAgentSystemPrompt({
   agent,
@@ -84,7 +87,14 @@ function buildAgentSystemPrompt({
   projectToolsText = '',
   toolReview = null,
   artifactRequest = null,
+  decisionBudget = null,
 }) {
+  // Budget de questions de la réunion (mode de questions, cf. services/questionModes.js)
+  const remaining = decisionBudget ? Math.max(0, decisionBudget.max - decisionBudget.used) : null;
+  const decisionBudgetLine = remaining === null ? ''
+    : remaining === 0
+      ? `- BUDGET DE QUESTIONS ÉPUISÉ (${decisionBudget.max} cartes déjà posées dans cette réunion) : n'utilise PLUS AUCUNE carte [DECISION]. Tranche par hypothèse explicite ou propose de conclure la réunion.`
+      : `- Budget de la réunion : il reste ${remaining} carte${remaining > 1 ? 's' : ''} de décision sur ${decisionBudget.max}. Garde-les pour l'essentiel.`;
   // v5.0 phase 5 : illustration uniquement sur demande de l'humain
   const artifactSection = artifactRequest
     ? `
@@ -104,7 +114,7 @@ ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. 
     ? buildToolReviewSection({ ...toolReview, webSearchEnabled })
     : '';
   const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
-  const memorySection   = project.context ? `\nMémoire du projet :\n${project.context.substring(0, 1500)}\n` : '';
+  const memorySection   = project.context ? `\nMémoire du projet (réunions les plus récentes — ne redemande pas ce qui y est déjà décidé) :\n${recentMemory(project.context)}\n` : '';
   const pastCodeSection = pastCodePromptsText
     ? `\nPrompts Claude Code des réunions précédentes :\n${pastCodePromptsText}\n` : '';
   const MEETING_STATUS_LABEL = { pending: 'à tenir', in_progress: 'en cours', done: 'terminée', blocked: 'bloquée' };
@@ -142,7 +152,7 @@ Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 ${reasonLine}
 Tu participes à une réunion collaborative avec d'autres agents.
-Tu peux rebondir sur ce qu'un autre agent vient de dire, lui poser une question directement, ou demander une précision à l'humain.
+Tu peux rebondir sur ce qu'un autre agent vient de dire ou lui poser une question directement. Les questions à l'humain passent UNIQUEMENT par des cartes de décision (règles plus bas) : ne termine pas tes bulles par une question ouverte à l'humain (« qu'en penses-tu ? », « tu préfères quoi ? »).
 Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarque.
 Ne répète PAS ce que les autres agents ont déjà dit.
 
@@ -156,15 +166,20 @@ FORMAT DE TES MESSAGES :
 
 MISE EN FORME AUTORISÉE dans tes bulles : gras, listes à puces, tableaux (uniquement si tu compares au moins 3 lignes de données comparables), liens. INTERDIT : titres (#), HTML.
 
-Quand une décision importante doit être prise par l'humain, utilise EXACTEMENT ce format (JSON valide, une seule ligne) :
+QUESTIONS À L'HUMAIN — il est l'initiateur et l'arbitre, pas un formulaire à remplir :
+${decisionBudgetLine}
+- Pose une carte UNIQUEMENT si plusieurs options ont des conséquences réellement différentes pour le projet ET qu'aucune information disponible (brief, mémoire, échanges) ne permet de trancher.
+- Sinon, fais une HYPOTHÈSE EXPLICITE et avance : « Je pars sur X (parce que…), sauf avis contraire. » L'humain peut te contredire à tout moment.
+- Avant de poser une carte, regroupe : rassemble en une seule fois toutes les questions qui bloquent vraiment (jusqu'à 3 cartes dans le même message) plutôt que d'en poser une à chaque tour.
+Format d'une carte (JSON valide, une seule ligne par carte) :
 [DECISION:{"question":"La question claire et courte","choices":["Option A","Option B","Option C","Autre (précise)"],"context":"Pourquoi cette décision est importante (1 phrase simple)"}]
-Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, ${decisionQuestionRule}une seule fois par contribution.
+Règles : maximum 4 choix proposés, toujours inclure "Autre (précise)" comme dernier choix, ${decisionQuestionRule}mets ta recommandation en premier choix.
 RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (même partiellement, même de façon imprécise), tu DOIS accepter cette réponse et avancer. Ne repose JAMAIS la même question ou une variante de la même question. Si la réponse est insuffisante, reformule en une phrase et passe à autre chose.${priorDecisionsNote}
 Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
 Si un sujet mérite une réunion séparée (étape manquante, décision à traiter à part, tâche technique distincte), ajoute EXACTEMENT ce format (JSON valide, une seule ligne) :
 [SUGGEST_MEETING:{"title":"Titre court","objective":"Objectif en une phrase","type":"decision|claude_code|stack","reason":"Pourquoi cette réunion est nécessaire","after":"<référence de la réunion existante après laquelle l'insérer, ex. R3, ou null pour la fin>"}]
 Utilise les références des réunions du projet listées plus haut pour positionner ta suggestion et vérifier qu'elle ne fait pas doublon avec une réunion déjà prévue.
-Maximum un marqueur de chaque type par réponse.
+Maximum un marqueur de chaque type par réponse (sauf [DECISION] : jusqu'à 3 cartes regroupées).
 
 NIVEAU DE MAÎTRISE DU SUJET DE TON INTERLOCUTEUR (adapte TOUT ton langage à ce niveau) :
 ${expertise}${explainSimplyRule}
@@ -173,10 +188,10 @@ TON D'HUMOUR À ADOPTER :
 ${humor}
 Garde-fous : jamais d'humour dans une carte de décision ([DECISION:...]) ni aux dépens de l'humain. L'humour ne doit jamais allonger un message au-delà des limites de bulles ci-dessus.
 
-RÈGLE ABSOLUE SUR LES DÉCISIONS :
-- Tu ne peux JAMAIS prendre une décision à la place de l'humain
-- Si une décision tarde, signale-le en une phrase : "J'attends la réponse de l'humain avant de continuer."
-- N'avance JAMAIS sans la réponse de l'humain sur une décision posée${intentionInstruction}`;
+RÈGLES SUR LES DÉCISIONS :
+- Une question soumise à l'humain par une carte lui appartient : ne la tranche jamais à sa place et n'avance pas sur ce point avant sa réponse.
+- Tout le reste avance par hypothèses explicites que l'humain peut contredire. S'il te contredit, prends-le en compte sans le rediscuter, sauf risque réel que tu signales en une phrase.
+- Ne pose JAMAIS une question déjà tranchée dans la mémoire du projet ou plus haut dans la réunion.${intentionInstruction}`;
 }
 
 module.exports = { buildAgentSystemPrompt };

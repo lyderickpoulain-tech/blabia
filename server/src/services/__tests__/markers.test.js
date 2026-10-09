@@ -154,3 +154,13 @@ describe('illustrations (phase 5)', () => {
     expect(detectArtifactRequest('On garde la maquette actuelle')).toBe(false);
   });
 });
+
+describe('questions regroupées (budget de questions)', () => {
+  it('extrait jusqu\'à 3 cartes de décision dans un même message, sans doublon', () => {
+    const card = q => `[DECISION:{"question":"${q}","choices":["A","Autre (précise)"],"context":"c"}]`;
+    const r = parseAgentOutput(`Trois points bloquent.\n${card('Q1 ?')}\n${card('Q2 ?')}\n${card('Q1 ?')}\n${card('Q3 ?')}\n${card('Q4 ?')}`);
+    expect(r.decisions.map(d => d.question)).toEqual(['Q1 ?', 'Q2 ?', 'Q3 ?']);
+    expect(r.decision.question).toBe('Q1 ?');
+    expect(r.content).toBe('Trois points bloquent.');
+  });
+});

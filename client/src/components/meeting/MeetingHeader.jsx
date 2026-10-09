@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import AgentScopeSelector from './AgentScopeSelector';
+import QuestionModePicker from '../QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../LevelSlider';
 
 export default function MeetingHeader({
@@ -14,10 +15,10 @@ export default function MeetingHeader({
   showIntentionDropdown, setShowIntentionDropdown, savingIntention, handleSaveIntention,
   intentionDropdownRef,
   // Pédagogie / humour
-  expertiseLevel, humorLevel, onChangeLevel,
+  expertiseLevel, humorLevel, questionMode, onChangeLevel,
   showLevelsDropdown, setShowLevelsDropdown, levelsDropdownRef,
   // Decisions panel toggle
-  showDecisions, setShowDecisions, decisions, pendingDecisionCount,
+  showDecisions, setShowDecisions, decisions, pendingDecisionCount, decisionBudget,
   // Réunions suggérées (phase 3.4)
   meetingSuggestionsCount,
   // Tokens
@@ -98,12 +99,12 @@ export default function MeetingHeader({
           <button
             onClick={() => setShowLevelsDropdown(v => !v)}
             className="text-xs font-medium px-2.5 py-1 rounded-full border bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 transition flex items-center gap-1"
-            title="Maîtrise du sujet et humour"
+            title="Maîtrise du sujet, humour et questions des agents"
           >
             🎓 {HUMOR_ICONS[humorLevel - 1]}
           </button>
           {showLevelsDropdown && (
-            <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-4 space-y-4">
+            <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-4 space-y-4">
               <LevelSlider
                 label="Maîtrise du sujet"
                 value={expertiseLevel}
@@ -117,6 +118,7 @@ export default function MeetingHeader({
                 labels={HUMOR_LABELS}
                 icons={HUMOR_ICONS}
               />
+              <QuestionModePicker value={questionMode} onChange={v => onChangeLevel('questionMode', v)} />
               <p className="text-[10px] text-gray-400">Effet à partir du prochain message.</p>
             </div>
           )}
@@ -125,13 +127,14 @@ export default function MeetingHeader({
         {/* Badge 📌 Décisions */}
         <button
           onClick={() => setShowDecisions(v => !v)}
+          title={decisionBudget ? `Questions posées par les agents dans cette réunion (budget : ${decisionBudget}). Au-delà, ils tranchent par hypothèse — vous pouvez les contredire.` : 'Décisions'}
           className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border transition flex items-center gap-1.5 ${
             showDecisions
               ? 'bg-amber-200 border-amber-300 text-amber-800'
               : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
           }`}
         >
-          📌 {decisions.length > 0 ? `(${decisions.length})` : ''}
+          📌 {decisionBudget ? `${decisions.length}/${decisionBudget}` : decisions.length > 0 ? `(${decisions.length})` : ''}
           {pendingDecisionCount > 0 && (
             <span className="text-[10px] bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full font-semibold leading-none">
               ⏸ {pendingDecisionCount}

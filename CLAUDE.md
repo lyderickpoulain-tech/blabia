@@ -27,6 +27,7 @@ server/prisma/   schema.prisma + migrations SQL
 | **Compte-rendu** | `Session.summary` | Toujours produit à la clôture, injecté en mémoire projet (`Project.context`). Structuré en relevé de décisions pour le type `decision` |
 | **Livrable** | `Session.deliverable` | Résultat typé produit en plus du CR à la clôture : prompt (`claude_code`) ou liste d'outils proposés (`stack`) |
 | **Type d'objectif** | `Milestone.type` / `Session.intention` | `decision` (prise de décision), `claude_code` (prompt Claude Code), `stack` (revue des outils) |
+| **Questions des agents** | `Project.questionMode` / `Session.questionMode` | Budget de cartes de décision par réunion : `delegate` (4), `balanced` (8), `control` (15) — `services/questionModes.js`. Au-delà, les agents tranchent par hypothèse explicite que l'humain peut contredire |
 | **Mes outils** | `User.tools` | Outils de l'utilisateur, tous projets (statut j'utilise / j'ai un compte / à essayer, coût, note) |
 | **Outils du projet** | `Project.tools` | Sélection parmi « Mes outils » + outils complémentaires (suggéré / validé / refusé, coût) |
 | **Catalogue d'outils** | `server/src/services/tools/catalog.js` | 16 catégories en termes simples, outils connus, coûts indicatifs, positions de la carte — servi au client par `GET /api/tools/catalog` |

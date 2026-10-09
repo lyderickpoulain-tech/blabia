@@ -9,6 +9,7 @@ import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
 import ProjectToolsPanel from '../components/tools/ProjectToolsPanel';
 import { attentionCount } from '../utils/toolsCatalog';
+import QuestionModePicker from '../components/QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 const QUICK_COMMANDS = [
@@ -28,6 +29,7 @@ function RenameModal({ project, onSave, onClose }) {
   const [description, setDescription] = useState(project.description || '');
   const [expertiseLevel, setExpertiseLevel] = useState(project.expertiseLevel || 3);
   const [humorLevel, setHumorLevel] = useState(project.humorLevel || 2);
+  const [questionMode, setQuestionMode] = useState(project.questionMode || 'balanced');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,7 +38,7 @@ function RenameModal({ project, onSave, onClose }) {
     setLoading(true);
     setError('');
     try {
-      const { data } = await api.patch(`/projects/${project.id}`, { name, description, expertiseLevel, humorLevel });
+      const { data } = await api.patch(`/projects/${project.id}`, { name, description, expertiseLevel, humorLevel, questionMode });
       onSave(data);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la modification');
@@ -83,6 +85,7 @@ function RenameModal({ project, onSave, onClose }) {
               labels={HUMOR_LABELS}
               icons={HUMOR_ICONS}
             />
+            <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
           </div>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>

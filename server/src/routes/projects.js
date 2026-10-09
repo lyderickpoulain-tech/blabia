@@ -6,6 +6,7 @@ const { sendInvitation } = require('../services/email');
 const anthropic = require('../services/anthropic');
 const { getProjectTools, formatProjectToolsForPrompt } = require('../services/tools/toolsStore');
 const { findProject } = require('../utils/projectHelpers');
+const { isQuestionMode, DEFAULT_QUESTION_MODE } = require('../services/questionModes');
 const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
@@ -13,7 +14,7 @@ router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
   'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context',
-  'expertiseLevel', 'humorLevel', 'createdAt', 'updatedAt', 'userId'
+  'expertiseLevel', 'humorLevel', 'questionMode', 'createdAt', 'updatedAt', 'userId'
 ];
 
 function clampLevel(v, fallback) {
@@ -105,7 +106,7 @@ router.post('/', async (req, res) => {
   if (req.user.role === 'user') {
     return res.status(403).json({ error: 'Votre compte ne permet pas de créer des projets' });
   }
-  const { name, description, objectif, contexte, notes, hasTechnicalStack, expertiseLevel, humorLevel } = req.body;
+  const { name, description, objectif, contexte, notes, hasTechnicalStack, expertiseLevel, humorLevel, questionMode } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -128,6 +129,7 @@ router.post('/', async (req, res) => {
         hasTechnicalStack: hasTechnicalStack === true,
         expertiseLevel: clampLevel(expertiseLevel, 3),
         humorLevel: clampLevel(humorLevel, 2),
+        questionMode: isQuestionMode(questionMode) ? questionMode : DEFAULT_QUESTION_MODE,
         userId: req.user.id,
         createdAt: now,
         updatedAt: now
@@ -215,7 +217,7 @@ router.get('/:id/stats', async (req, res) => {
 
 // PATCH /api/projects/:id — mettre à jour les champs du projet (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
-  const { name, description, devDirectory, hasTechnicalStack, expertiseLevel, humorLevel } = req.body;
+  const { name, description, devDirectory, hasTechnicalStack, expertiseLevel, humorLevel, questionMode } = req.body;
   if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -234,6 +236,7 @@ router.patch('/:id', async (req, res) => {
     if (hasTechnicalStack !== undefined) updates.hasTechnicalStack = Boolean(hasTechnicalStack);
     if (expertiseLevel !== undefined)   updates.expertiseLevel     = clampLevel(expertiseLevel, project.expertiseLevel);
     if (humorLevel !== undefined)       updates.humorLevel         = clampLevel(humorLevel, project.humorLevel);
+    if (isQuestionMode(questionMode))   updates.questionMode       = questionMode;
 
     const [updated] = await db('Project')
       .where({ id: req.params.id })

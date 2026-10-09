@@ -11,6 +11,7 @@
 // affiché dans la bulle.
 const DECISION_RE      = /\[DECISION:(\{[\s\S]*?\})\]/;
 const DECISION_STRIP_RE = /\[DECISION:\{[\s\S]*?\}\]/g;
+const MAX_DECISIONS_PER_MESSAGE = 3;
 const SUGGEST_AGENT_RE  = /\[SUGGEST_AGENT:\s*([\s\S]*?)\]/;
 const SUGGEST_AGENT_STRIP_RE = /\[SUGGEST_AGENT:[\s\S]*?\]/g;
 const SUGGEST_MEETING_RE   = /\[SUGGEST_MEETING:(\{[\s\S]*?\})\]/;
@@ -73,15 +74,21 @@ function parseAgentOutput(text) {
   }
   const raw = original.replace(ARTIFACT_BLOCK_STRIP_RE, '').replace(ARTIFACT_TITLE_STRIP_RE, '');
 
-  const decisionMatch = raw.match(DECISION_RE);
-  const decisionData   = decisionMatch ? safeJsonParse(decisionMatch[1]) : null;
-  const decision = decisionData?.question
-    ? {
-        question: decisionData.question,
-        choices:  Array.isArray(decisionData.choices) ? decisionData.choices : [],
-        context:  decisionData.context || '',
-      }
-    : null;
+  // Jusqu'à MAX_DECISIONS_PER_MESSAGE cartes par message : un agent regroupe ses
+  // questions en une seule fois plutôt que d'en poser une à chaque tour.
+  const decisions = [];
+  for (const m of raw.matchAll(new RegExp(DECISION_RE.source, 'g'))) {
+    const d = safeJsonParse(m[1]);
+    if (!d?.question) continue;
+    if (decisions.some(x => x.question === d.question)) continue;
+    decisions.push({
+      question: d.question,
+      choices:  Array.isArray(d.choices) ? d.choices : [],
+      context:  d.context || '',
+    });
+    if (decisions.length >= MAX_DECISIONS_PER_MESSAGE) break;
+  }
+  const decision = decisions[0] || null;
 
   const suggestAgentMatch = raw.match(SUGGEST_AGENT_RE);
   let suggestedAgent = null;
@@ -133,7 +140,7 @@ function parseAgentOutput(text) {
     .map(s => s.trim())
     .filter(Boolean);
 
-  return { bubbles, content, decision, suggestedAgent, suggestedMeeting, neededTool, artifact };
+  return { bubbles, content, decision, decisions, suggestedAgent, suggestedMeeting, neededTool, artifact };
 }
 
-module.exports = { parseAgentOutput, detectArtifactRequest };
+module.exports = { parseAgentOutput, detectArtifactRequest, MAX_DECISIONS_PER_MESSAGE };

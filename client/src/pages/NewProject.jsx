@@ -2,6 +2,7 @@
 import { useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../utils/api';
+import QuestionModePicker from '../components/QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 export default function NewProject() {
@@ -12,6 +13,7 @@ export default function NewProject() {
   const [notes, setNotes] = useState('');
   const [expertiseLevel, setExpertiseLevel] = useState(3);
   const [humorLevel, setHumorLevel] = useState(2);
+  const [questionMode, setQuestionMode] = useState('balanced');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -21,7 +23,7 @@ export default function NewProject() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, expertiseLevel, humorLevel });
+      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, expertiseLevel, humorLevel, questionMode });
       navigate(`/projects/${data.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
@@ -133,6 +135,7 @@ export default function NewProject() {
                 labels={HUMOR_LABELS}
                 icons={HUMOR_ICONS}
               />
+              <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
             </div>
 
             {error && (
