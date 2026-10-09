@@ -1,0 +1,156 @@
+# BlabIA — feuille de route v5.1
+
+Document de reprise : à lire en début de session (avec `CLAUDE.md`, qui décrit l'architecture, le glossaire technique et les conventions). Mis à jour le 10/10/2026.
+
+## 1. Où on en est
+
+### En production (poussé sur `origin/main`, déployé sur Railway)
+- **v5.0 complète** (phases 0 à 5 de `prompt-claude-code-blabia-v5.md`) : réunions uniquement, bulles + Markdown, curseurs maîtrise/humour, recherche web citée, types `decision | claude_code | stack`, livrable à la clôture, suggestions de réunions positionnées, refonte des outils (Mes outils, outils du projet par besoin, réunion Outils), illustrations à la demande.
+- **Moins de questions à l'humain** : budget de cartes de décision par réunion, réglable (`questionMode` : Je délègue 4 / Équilibré 8 / Je veux tout trancher 15), questions regroupées (≤ 3 par message), hypothèses explicites que l'humain peut contredire, un autre agent reprend après une réponse, mémoire projet lue par la fin, tours comptés sur toute la réunion.
+- **Correctif healthcheck** (`8a39f23`) : `/api/health` et `/api/ping` déclarés avant les routeurs.
+- 6 migrations appliquées en prod (`20261008000001` → `20261009000002`).
+
+### Committé, pas encore poussé
+- `ed98f83` **Registre des décisions du projet** : table `Decision` (migration `20261009000003_v5_decision_registry`), extraction à la clôture (validée par l'humain), transmis aux agents, panneau « 📒 Décisions », vidé par la réinitialisation de la mémoire.
+
+### Pas encore committé (testé en local, à valider)
+- **Préparation de réunion sans l'humain** (`/chat` avec `prepare: true`, `services/prompts/preparationPrompt.js`) : débat entre agents (2 tours/agent, 4 à 8), sans carte, puis synthèse `prep_summary` + décisions regroupées dans le budget.
+- **Corrections UX de la préparation** (retour utilisateur : « la réunion s'est faite sans moi ») : bulles du débat marquées `prep: true` et repliées derrière un bloc « Débat de préparation des agents (N messages) » ; bandeau « 👉 Préparation terminée — N décisions vous attendent » ; « Clore la réunion » demande confirmation s'il reste des décisions sans réponse ; bouton renommé « 🧠 Préparer la réunion avant mon arrivée ».
+- Ces corrections sont transitoires : la refonte UX (section 2) remplace l'affichage de la préparation par l'écran **Briefing**.
+
+**Avant tout déploiement** : `pg_dump` de la prod (procédure section 5).
+
+## 2. Refonte UX validée
+
+Maquettes (canevas, privé) : https://claude.ai/artifact/U6WttxzAwX9v24XtQ6WKCs — 4 planches : glossaire, tableau de bord du projet, briefing (cliquable), réunion phase Échanges (cliquable, version compacte validée).
+
+### Diagnostic qui a motivé la refonte
+- « Réunions » désigne deux listes différentes sur la page projet (centre = réunions tenues, panneau de droite = réunions planifiées).
+- Préparation et réunion se confondent (même salle, même fil, même bouton « Clore »).
+- Les décisions vivent à quatre endroits (📌 en réunion, 📒 registre, « Mémoire du projet », compte-rendu).
+- Trois types de suggestions (réunion, outil, agent) avec trois styles de cartes ; trois « plans » (fenêtre de réordonnancement, page `/plan` legacy, lien « Voir le plan »).
+- Page projet = une dizaine de blocs empilés sans hiérarchie ; en-tête de réunion surchargé ; emojis comme seule iconographie ; ~19 teintes pastel sans sens stable ; fenêtres empilées sans URL.
+
+### Modèle mental
+1. **Projet** → tableau de bord : où j'en suis, prochaine étape.
+2. **Parcours** → **Plan** (réunions à venir) et **Historique** (réunions passées) : deux noms, deux pages.
+3. **Réunion** → toujours quatre temps affichés en haut :
+   1. **Préparation** (facultative, sans l'humain, « coulisses »)
+   2. **Briefing** (écran d'arrivée : synthèse + décisions qui reviennent à l'humain ; ses réponses lancent les échanges)
+   3. **Échanges**
+   4. **Conclusion** (compte-rendu, décisions à inscrire au registre, livrable, réunions suggérées)
+
+### Glossaire de l'interface (un mot = une seule chose)
+
+| Mot | Ce que c'est | Remplace aujourd'hui | Où |
+|---|---|---|---|
+| Tableau de bord | Accueil d'un projet : état, prochaine étape, points d'attention | Page projet (blocs empilés) | Projet |
+| Plan | Réunions à venir, dans l'ordre, réordonnables | « Réunions » (panneau de droite), Timeline, Plan des réunions | Projet › Plan |
+| Historique | Réunions tenues, avec compte-rendu et livrable | « Réunions » (liste centrale) | Projet › Historique |
+| Réunion | Séance de travail avec les agents, en quatre temps | Session | Plan, Historique |
+| Préparation | Temps facultatif : les agents débattent sans l'humain | « Les agents préparent sans moi » | Réunion › temps 1 |
+| Briefing | Écran d'arrivée : synthèse et décisions | Carte de synthèse dans le fil | Réunion › temps 2 |
+| Question | Ce qu'un agent demande de trancher (nombre limité) | Carte de décision, 📌 | Briefing, Échanges |
+| Hypothèse | Choix d'un agent pour avancer, contestable | — | Échanges |
+| Décisions | Registre de ce qui est tranché pour le projet | « 📒 Décisions », Mémoire du projet | Projet › Décisions |
+| Compte-rendu | Résumé d'une réunion | inchangé | Historique |
+| Livrable | Résultat typé (prompt Claude Code, liste d'outils) | inchangé | Historique |
+| Suggestion | Proposition d'un agent (réunion, outil, agent) | 💡, cartes de styles différents | Réunion › panneau |
+| Outils | Outils du projet, par besoin | 🧰 Outils, Stack | Projet › Outils |
+| Mes outils | Outils de l'utilisateur, tous projets | Ma boîte à outils, Environnement | Compte › Mes outils |
+| Équipe | Agents du projet | Agents du projet | Projet › Équipe |
+| Paramètres | Brief, membres, niveaux par défaut, zone de danger | Blocs en bas de la page projet | Projet › Paramètres |
+
+Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour une réunion), Boîte à outils, Environnement, Mémoire du projet (affichée brute).
+
+### Design system
+- **Couleurs à sens unique** : bleu `#2448C9` = action ; ambre `#92400E` / fond `#FEF3C7` = attend l'arbitrage de l'humain ; vert `#166534` / `#DCFCE7` = validé ; violet `#5B21B6` / `#EDE9FE` = produit par l'IA (synthèse, préparation, illustration) ; gris `#4A4F5C` / `#ECEDF1` = passé, secondaire. Fond de page `#F4F5F7`, texte `#16181D`.
+- **Typographie** : Manrope seule (Google Fonts).
+- **Icônes** au trait, une seule famille (proposition : `lucide-react`) ; emojis réservés aux avatars d'agents (sinon initiales).
+- **Composants partagés** : carte, badge, bouton, fenêtre, panneau latéral. Zones cliquables ≥ 44 px pour les actions principales.
+- **Navigation par pages** (URL, retour arrière) plutôt que par fenêtres : barre latérale de projet Tableau de bord · Plan · Historique · Décisions · Outils · Équipe · Paramètres.
+
+### Écrans validés
+- **Tableau de bord du projet** : prochaine étape mise en avant (« Préparer avant mon arrivée » / « Démarrer la réunion »), bloc ambre des points d'attention, cartes Plan / Décisions / Outils / Historique.
+- **Briefing** : temps en haut, synthèse (violet) avec lien « Voir le débat des agents (N messages) », questions avec la recommandation des agents en premier, bouton « Lancer la réunion avec mes réponses » actif seulement quand tout est tranché, « Déléguer aux agents ».
+- **Réunion, phase Échanges (version compacte validée)** :
+  - en-tête sur une ligne (retour, titre + réunion/type/agents, quatre temps compacts, « Questions n/budget », réglages regroupés, bouton panneau, « Conclure ») ;
+  - seul le fil défile, saisie fixée en bas sur une ligne ;
+  - messages façon messagerie (avatar + nom au premier message d'une série, 14 px, marges réduites) ;
+  - **hypothèse** : étiquette « Hypothèse » + « D'accord · Je contredis » ;
+  - **question** compacte : intitulé, une ligne de contexte, choix en pastilles sur une rangée, recommandation en premier ;
+  - panneau de droite repliable (280 px) : Suggestions (style unique), Tranché ici, Équipe.
+- **Illustrations (validé sur description, pas de maquette)** : dans le fil, une ligne compacte (miniature, titre, type, « Ouvrir ») ; l'ouverture bascule la zone de droite en mode « Illustration » élargi (plein écran, code, téléchargement), le fil restant visible ; onglet « Illustrations » listant celles de la réunion.
+
+## 3. Reste à faire (ordre recommandé)
+
+### A. Refonte UX (en cours de démarrage)
+1. Socle : tokens de couleur Tailwind, Manrope, `lucide-react`, composants partagés.
+2. **Salle de réunion** : quatre temps, Briefing comme écran dédié (remplace les corrections transitoires de la préparation), fil compact, panneau repliable, zone Illustration.
+3. Tableau de bord du projet + navigation par pages (Plan, Historique, Décisions, Outils, Équipe, Paramètres) ; retirer la double liste « Réunions ».
+4. Renommages du glossaire partout (y compris commandes rapides qui parlent encore de « timeline »).
+
+### B. Évolutions fonctionnelles (audit, « compagnon de projet en solo »)
+1. **Actions entre les réunions** : actions datées issues du compte-rendu, cochées par l'humain ; la réunion suivante commence par un point d'avancement (reprend l'idée de `TodoItem`, aujourd'hui hors périmètre).
+2. **Tableau de bord enrichi** : actions en retard, risques signalés par les agents, budget.
+3. **Modèles de projets non informatiques** (événement, édition, rénovation, création d'activité) : agents, plan de réunions type, catégories d'outils adaptées.
+4. **Agent contradicteur** optionnel, pour challenger les consensus trop rapides.
+5. **Documents de référence du projet** persistants (consultés à chaque réunion).
+6. **Rappels par email** (Resend déjà branché) et **export** du compte-rendu / du registre (PDF, Word).
+
+### C. Code
+1. Modèle d'IA écrit en dur à ~11 endroits (`claude-sonnet-4-6`) : centraliser dans une config ; modèle léger pour l'orchestrateur, l'analyse des besoins et les commandes rapides.
+2. Mise en cache des prompts (`cache_control`) sur les prompts système des agents.
+3. Éviter l'appel d'orchestration quand le choix est évident (mention @, un seul candidat).
+4. Découper `ProjectView.jsx` (~1 250 lignes) et `MeetingRoom.jsx` (~1 150 lignes) ; chargement des pages à la demande (bundle principal ~650 Ko).
+5. Notifications d'erreur côté client (beaucoup de `catch {}` silencieux : c'est ce qui a masqué le bug `updatedAt`).
+6. Tests : boucle de réunion avec IA simulée ; test de contrôle d'accès de toutes les routes.
+7. Après stabilisation en prod : supprimer les colonnes `DEPRECATED` (`User.techStack/toolbox`, `Project.techStack/hasTechnicalStack`, `Milestone.checklistData`, `Session.suggestedTools/pendingStepSuggestions/exchanges/agents`) ; trancher le sort de `PlanView` / `TodoItem`.
+
+## 4. Réglages et choix déjà faits (ne pas les rediscuter sans raison)
+- Budget de questions : 4 / 8 / 15 selon `questionMode` (`server/src/services/questionModes.js`) ; jusqu'à 3 cartes par message (`MAX_DECISIONS_PER_MESSAGE`, `markers.js`) ; jusqu'à 5 décisions après une préparation.
+- Mémoire transmise aux agents : 3 000 caractères, réunions les plus récentes (`utils/projectMemory.js`).
+- Seuils de suggestion de clôture (tours d'agents sur toute la réunion) : décision 6, Claude Code 8, outils 10.
+- Préparation : 2 tours par agent, entre 4 et 8, au moins 2 agents, seulement au début d'une réunion.
+- Catalogue d'outils servi par l'API (`GET /api/tools/catalog`), pas de fichier partagé client/serveur (évite de toucher au Dockerfile).
+- Conversion des anciennes données d'outils en JS à la première lecture (`NULL` = pas encore migré).
+- Réinitialisation de la mémoire : supprime réunions tenues et registre ; réunions planifiées supprimées seulement si la case est cochée.
+- Illustrations : iframe sandboxée (`allow-scripts` sans `allow-same-origin` pour le HTML, aucun script pour SVG/Mermaid), `mermaid` chargé à la demande.
+- Hors périmètre v5 : `TodoItem`, `PlanView.jsx`.
+
+## 5. Environnement de test et déploiement
+
+### Lancer l'environnement de test (PowerShell)
+```powershell
+# Base de données (Docker Desktop doit tourner)
+docker start blabia-pg-dev
+
+# Serveur — la variable fait pointer sur la base locale, JAMAIS modifier server/.env (prod)
+cd C:\BlabIA\server
+$env:DATABASE_URL="postgresql://postgres:devpassword@localhost:5432/blabia_dev"
+npx prisma migrate deploy
+npm run dev
+
+# Client
+cd C:\BlabIA\client
+npm run dev
+```
+http://localhost:5173 — compte `test@blabia.local` / `test1234` (admin).
+
+Si la connexion bloque : vérifier que le moteur Docker répond (`docker ps`). En cas de blocage, arrêter complètement Docker Desktop (`Get-Process "Docker Desktop","com.docker.backend" | Stop-Process -Force`), `wsl --shutdown`, relancer Docker Desktop.
+
+### Vérifications avant commit
+```powershell
+cd C:\BlabIA\server; npx vitest run; npx prisma validate
+cd C:\BlabIA\client; npm run build
+```
+
+### Déploiement
+1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-09-19-21.dump`.
+2. `git push origin main` → Railway redéploie ; les migrations s'appliquent au démarrage (`prisma migrate deploy`).
+3. Vérifier dans les logs Railway : migrations appliquées, serveur démarré, healthcheck `/api/health` en 200.
+
+Restauration en cas de problème :
+```powershell
+docker run --rm -v "C:/BlabIA-backups:/backups:ro" postgres:18 pg_restore --clean --if-exists --no-owner --no-privileges -d "<adresse de la base>" /backups/<fichier>.dump
+```
