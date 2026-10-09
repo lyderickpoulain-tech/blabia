@@ -7,6 +7,8 @@ const { CATEGORIES, CATEGORY_LINKS, TOOLS } = require('../services/tools/catalog
 const {
   getUserTools, sanitizeUserTools, getProjectTools, sanitizeProjectTools, monthlyTotal,
 } = require('../services/tools/toolsStore');
+const { analyzeProjectToolNeeds, applyNeedsAnalysis } = require('../services/tools/toolNeeds');
+const { parseJsonField } = require('../utils/parseJsonField');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -48,7 +50,7 @@ router.get('/projects/:id/tools', async (req, res) => {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     const tools = await getProjectTools(project);
-    res.json({ tools, total: monthlyTotal(tools) });
+    res.json({ tools, total: monthlyTotal(tools), needs: project.toolNeeds ? parseJsonField(project.toolNeeds, []) : null });
   } catch (err) {
     console.error('[projects/:id/tools GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -68,6 +70,31 @@ router.put('/projects/:id/tools', async (req, res) => {
   } catch (err) {
     console.error('[projects/:id/tools PUT]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/tools/analyze — BlabIA identifie les types d'outils
+// nécessaires et pré-remplit avec « Mes outils » (sans écraser les choix existants)
+router.post('/projects/:id/tools/analyze', async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (!project.brief && !project.description) {
+      return res.status(400).json({ error: 'Ajoutez un brief ou une description au projet pour que BlabIA puisse identifier les outils nécessaires.' });
+    }
+    const userTools = (await getUserTools(req.user.id)) || [];
+    const needsWithTools = await analyzeProjectToolNeeds(project, userTools);
+    const current = await getProjectTools(project);
+    const { tools: merged, needs } = applyNeedsAnalysis(current, userTools, needsWithTools);
+    const tools = sanitizeProjectTools(merged);
+    await db('Project').where({ id: project.id }).update({
+      tools: JSON.stringify(tools), toolNeeds: JSON.stringify(needs), updatedAt: new Date(),
+    });
+    res.json({ tools, total: monthlyTotal(tools), needs });
+  } catch (err) {
+    console.error('[projects/:id/tools/analyze POST]', err.message);
+    res.status(500).json({ error: 'Erreur lors de l\'analyse des besoins' });
   }
 });
 

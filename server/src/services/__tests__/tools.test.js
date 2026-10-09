@@ -4,6 +4,43 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { convertLegacyUserTools, sanitizeUserTools, sanitizeProjectTools, monthlyTotal, formatProjectToolsForPrompt } = require('../tools/toolsStore');
 const { findCatalogTool, CATEGORIES, CATEGORY_LINKS } = require('../tools/catalog');
+const { applyNeedsAnalysis, parseAnalysis } = require('../tools/toolNeeds');
+
+describe('analyse des besoins en outils', () => {
+  const userTools = [
+    { id: 'u1', name: 'Railway', catalogId: 'railway', category: 'hosting', cost: { type: 'usage', monthlyMin: 5, monthlyMax: 20 } },
+    { id: 'u2', name: 'SQLite', catalogId: 'sqlite', category: 'database', cost: { type: 'free', monthlyMin: 0, monthlyMax: 0 } },
+  ];
+
+  it('nettoie la réponse du modèle (catégorie inconnue, doublon, id inventé)', () => {
+    const needs = parseAnalysis('```json\n{"needs":[' +
+      '{"category":"hosting","need":"Mettre en ligne","userToolId":"u1","fit":"ok","warning":null,"examples":[]},' +
+      '{"category":"hosting","need":"doublon","userToolId":"u1","fit":"ok"},' +
+      '{"category":"inconnue","need":"x"},' +
+      '{"category":"messaging","need":"Emails","userToolId":"inventé","fit":"ok","warning":"Il faut envoyer des confirmations","examples":["Resend"]}' +
+      ']}\n```', userTools);
+    expect(needs.map(n => n.category)).toEqual(['hosting', 'messaging']);
+    expect(needs[1]).toMatchObject({ userToolId: null, fit: 'none', warning: 'Il faut envoyer des confirmations' });
+  });
+
+  it('pré-remplit : adapté → validé, pas adapté → suggéré avec avertissement, manquant → rien', () => {
+    const needs = [
+      { category: 'hosting', need: 'Mettre en ligne', userToolId: 'u1', fit: 'ok', warning: null, examples: [] },
+      { category: 'database', need: 'Plusieurs utilisateurs en même temps', userToolId: 'u2', fit: 'unsuited', warning: 'SQLite ne gère pas bien les écritures simultanées', examples: ['PostgreSQL'] },
+      { category: 'messaging', need: 'Emails', userToolId: null, fit: 'none', warning: 'Il faut envoyer des emails', examples: ['Resend'] },
+    ];
+    const { tools, needs: stored } = applyNeedsAnalysis([], userTools, needs);
+    expect(tools.map(t => `${t.name}/${t.status}/${t.warning ? 'warn' : '-'}`)).toEqual(['Railway/validated/-', 'SQLite/suggested/warn']);
+    expect(stored[0]).not.toHaveProperty('userToolId');
+  });
+
+  it('ne remplace pas un outil déjà choisi par l\'humain, rafraîchit seulement l\'avertissement', () => {
+    const existing = [{ id: 'p1', name: 'Vercel', catalogId: 'vercel', category: 'hosting', status: 'validated', origin: 'mine' }];
+    const { tools } = applyNeedsAnalysis(existing, userTools, [{ category: 'hosting', need: 'x', userToolId: 'u1', fit: 'ok' }]);
+    expect(tools).toHaveLength(1);
+    expect(tools[0].name).toBe('Vercel');
+  });
+});
 
 describe('catalogue', () => {
   it('reconnaît les anciens noms approximatifs', () => {

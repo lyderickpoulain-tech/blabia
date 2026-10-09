@@ -61,7 +61,8 @@ model Project {
   context           String?   // Mémoire cumulée des sessions précédentes
   techStack         Json?     // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule
   hasTechnicalStack Boolean   @default(false) // DEPRECATED v5.0 — remplacé par tools (phase 4) ; seulement lu par la migration
-  tools             Json?     // v5.0 phase 4 : outils du projet [{ id, catalogId, name, category, origin: mine|complementary, status: suggested|validated|refused, need, why, cost, priceSource, sessionId }] — NULL = pas encore migré
+  tools             Json?     // v5.0 phase 4 : outils du projet [{ id, catalogId, name, category, origin: mine|complementary, status: suggested|validated|refused, need, why, cost, priceSource, sessionId, warning }] — NULL = pas encore migré
+  toolNeeds         Json?     // v5.0 phase 4 : besoins en outils analysés par BlabIA [{ category, need, fit: ok|unsuited|none, warning, examples }] — NULL = jamais analysé
   expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
   humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
   createdAt         DateTime  @default(now())

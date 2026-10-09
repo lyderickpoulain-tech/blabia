@@ -58,6 +58,15 @@ export function costLabel(cost) {
   return `${type} — ${euros(min ?? 0)} à ${euros(max)}/mois`;
 }
 
+// Points d'attention des outils d'un projet : besoins non couverts, outils
+// signalés comme pas adaptés, outils suggérés en attente de décision.
+export function attentionCount(tools = [], needs = []) {
+  const active = (tools || []).filter(t => t.status === 'validated' || t.status === 'suggested');
+  const missing = (needs || []).filter(n => !active.some(t => t.category === n.category)).length;
+  const flagged = active.filter(t => t.warning || t.status === 'suggested').length;
+  return missing + flagged;
+}
+
 export function totalLabel({ min, max }) {
   if (!min && !max) return '0 €/mois';
   return min === max ? `${euros(min)}/mois` : `${euros(min)} à ${euros(max)}/mois`;

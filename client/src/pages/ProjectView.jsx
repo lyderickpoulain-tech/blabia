@@ -8,6 +8,7 @@ import GenerateTimelineModal from '../components/GenerateTimelineModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
 import ProjectToolsPanel from '../components/tools/ProjectToolsPanel';
+import { attentionCount } from '../utils/toolsCatalog';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 const QUICK_COMMANDS = [
@@ -519,7 +520,6 @@ export default function ProjectView() {
   // ── Outils du projet (v5.0 phase 4) ────────────────────────────────────────
   const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [suggestedToolsCount, setSuggestedToolsCount] = useState(0);
-  const countSuggested = (tools) => (tools || []).filter(t => t.status === 'suggested').length;
 
   const refetchSessionsAndStats = () => {
     setSessionsLoading(true);
@@ -553,7 +553,7 @@ export default function ProjectView() {
 
     // Badge du bouton Outils : outils complémentaires en attente de validation
     api.get(`/projects/${id}/tools`)
-      .then(({ data }) => setSuggestedToolsCount(countSuggested(data.tools)))
+      .then(({ data }) => setSuggestedToolsCount(attentionCount(data.tools, data.needs)))
       .catch(() => {});
 
     setAgentsLoading(true);
@@ -806,7 +806,7 @@ export default function ProjectView() {
             >
               🧰 Outils
               {suggestedToolsCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none" title="Outils suggérés à valider">
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none" title="Points d'attention sur les outils">
                   {suggestedToolsCount}
                 </span>
               )}
@@ -1238,7 +1238,7 @@ export default function ProjectView() {
         <ProjectToolsPanel
           projectId={id}
           onClose={() => setShowToolsPanel(false)}
-          onChanged={tools => setSuggestedToolsCount(countSuggested(tools))}
+          onChanged={(tools, needs) => setSuggestedToolsCount(attentionCount(tools, needs))}
         />
       )}
     </ProjectLayout>
