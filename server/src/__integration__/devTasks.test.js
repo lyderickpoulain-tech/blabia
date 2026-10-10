@@ -10,7 +10,7 @@ const harness = require('./harness');
 // ── GitHub simulé ────────────────────────────────────────────────────────────
 function fakeGitHub() {
   const gh = {
-    calls: [], files: {}, branches: {}, secrets: new Set(), issues: [], pulls: [], runs: [], dispatches: [], comments: {},
+    calls: [], files: {}, branches: {}, secrets: new Set(), issues: [], pulls: [], runs: [], dispatches: [], comments: {}, created: [], createdFiles: {},
     repo: { full_name: 'moi/app', private: false, default_branch: 'main' },
   };
   const json = (status, data) => ({ status, ok: status < 400, text: async () => (data === undefined ? '' : JSON.stringify(data)), json: async () => data });
@@ -22,12 +22,27 @@ function fakeGitHub() {
     gh.calls.push(`${method} ${p}${u.search}`);
     if (u.host === 'github.com' && p === '/login/oauth/access_token') return json(200, body.code === 'bon-code' ? { access_token: 'jeton-utilisateur' } : { error: 'bad_verification_code' });
     if (p === '/user') return json(200, { login: 'moi' });
-    if (p === '/user/installations') return json(200, { installations: [{ id: 77, account: { login: 'moi' } }] });
+    if (p === '/user/installations') return json(200, { installations: [{ id: 77, account: { login: 'moi' }, repository_selection: 'selected' }] });
     if (method === 'POST' && p === '/app/installations/77/access_tokens') return json(201, { token: 'jeton-installation', expires_at: new Date(Date.now() + 3600e3).toISOString() });
+    let m;
+    // Création d'un dépôt : jeton de l'UTILISATEUR (obtenu au retour de GitHub)
+    if (method === 'POST' && p === '/user/repos') {
+      if (opts.headers?.Authorization !== 'Bearer jeton-utilisateur') return json(401, { message: 'Bad credentials' });
+      if (gh.denyRepoCreation) return json(403, { message: 'Resource not accessible by integration' });
+      if (['app', ...gh.created.map(r => r.name)].includes(body.name)) return json(422, { message: 'Repository creation failed.', errors: [{ message: 'name already exists on this account' }] });
+      const repo = { id: 500 + gh.created.length, name: body.name, full_name: `moi/${body.name}`, private: body.private, default_branch: 'main', body };
+      gh.created.push(repo); return json(201, repo);
+    }
+    if (method === 'PUT' && (m = p.match(/^\/user\/installations\/77\/repositories\/(\d+)$/))) return json(204);
     if (opts.headers?.Authorization !== 'Bearer jeton-installation') return json(401, { message: 'Bad credentials' });
     if (p === '/installation/repositories') return json(200, { repositories: [gh.repo] });
     if (p === '/repos/moi/app') return json(200, gh.repo);
-    let m;
+    // Automatisations installées dans un dépôt créé par BlabIA
+    if ((m = p.match(/^\/repos\/moi\/([\w.-]+)\/contents\/(.+)$/)) && m[1] !== 'app') {
+      const key = `${m[1]}:${decodeURIComponent(m[2])}`;
+      if (method === 'PUT') { gh.createdFiles[key] = { sha: 'sha', content: body.content }; return json(201, {}); }
+      return gh.createdFiles[key] ? json(200, gh.createdFiles[key]) : json(404, { message: 'Not Found' });
+    }
     if ((m = p.match(/^\/repos\/moi\/app\/contents\/(.+)$/))) {
       const path = decodeURIComponent(m[1]);
       // Jeton créé avant un changement de permissions : refusé une fois
@@ -222,5 +237,64 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     await h.db('Project').where({ id: projectId }).update({ isDemo: true });
     expect((await h.request('POST', `/api/projects/${projectId}/dev-tasks`, { token: owner.token, body: { sessionId } })).status).toBe(403);
     await h.db('Project').where({ id: projectId }).update({ isDemo: false });
+  });
+
+  // ── Site web à créer de zéro ─────────────────────────────────────────────
+  const newProject = async name => (await h.request('POST', '/api/projects', { token: owner.token, body: { name, description: 'Site vitrine' } })).body;
+  const createVia = async (pid, body = {}) => {
+    const r = await h.request('POST', `/api/projects/${pid}/github/create-repo`, { token: owner.token, body });
+    if (r.status !== 200) return { status: r.status, body: r.body };
+    const state = new URL(r.body.url).searchParams.get('state');
+    return { status: 200, name: r.body.name, location: await callback({ code: 'bon-code', state }) };
+  };
+
+  it('site web : plan type ajouté une seule fois, réservé au propriétaire', async () => {
+    const site = await newProject('Salon de thé « Feuilles »');
+    expect((await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: collaborator.token })).status).toBe(404);
+    const r = await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: owner.token });
+    expect(r.status).toBe(201);
+    expect(r.body.created.map(m => m.type)).toEqual(['decision', 'decision', 'stack', 'claude_code']);
+    expect((await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: owner.token })).body.created).toEqual([]);
+    // Réunion « outils » suggérée avant de développer : celle du plan, tant qu'aucune n'a été tenue
+    let tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
+    expect(tools.toolsMeeting).toMatchObject({ done: false, planned: { title: 'Choisir les outils : hébergement, nom de domaine…' } });
+    expect(tools.guide).toBeNull();
+    // Guide de mise en place : seulement une fois des outils retenus
+    expect((await h.request('POST', `/api/projects/${site.id}/tools/guide`, { token: owner.token })).status).toBe(400);
+    const s = (await h.request('POST', `/api/projects/${site.id}/sessions`, { token: owner.token,
+      body: { task: 'Choisir les outils', intention: ['stack'], activeAgents: [{ id: 'a1', name: 'Léa', role: 'Dev', systemPrompt: '' }] } })).body.session;
+    await h.db('Session').where({ id: s.id }).update({ status: 'accepted' });
+    tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
+    expect(tools.toolsMeeting).toEqual({ done: true, planned: null });
+  });
+
+  it('site web : BlabIA crée le dépôt au retour de GitHub, l’ouvre à l’application et l’équipe', async () => {
+    const site = await newProject('Salon de thé « Feuilles » à Lyon');
+    expect((await h.request('POST', `/api/projects/${site.id}/github/create-repo`, { token: collaborator.token, body: {} })).status).toBe(404);
+    expect((await h.request('POST', `/api/projects/${site.id}/github/create-repo`, { token: owner.token, body: { name: 'mauvais nom' } })).status).toBe(400);
+    const r = await createVia(site.id);
+    expect(r.name).toBe('salon-de-the-feuilles-a-lyon');
+    expect(r.location).toContain(`/projects/${site.id}/developpements?github=depot-cree`);
+    const repo = gh.created.at(-1);
+    expect(repo.body).toMatchObject({ name: 'salon-de-the-feuilles-a-lyon', private: true, auto_init: true, description: 'Site vitrine' });
+    expect(gh.calls).toContain(`PUT /user/installations/77/repositories/${repo.id}`); // installation sur des dépôts choisis
+    expect((await h.db('Project').where({ id: site.id }).first()).githubRepo).toBe('moi/salon-de-the-feuilles-a-lyon');
+    const devFile = Buffer.from(gh.createdFiles['salon-de-the-feuilles-a-lyon:.github/workflows/blabia-dev.yml'].content, 'base64').toString();
+    expect(devFile).toContain('allowed_bots: "blabia-app[bot]"');
+    // Déjà un dépôt : refusé
+    expect((await createVia(site.id)).status).toBe(409);
+  });
+
+  it('site web : nom déjà pris → suffixe ; permission « Administration » absente → message dédié', async () => {
+    const other = await newProject('App');
+    const r = await createVia(other.id, { name: 'app' });
+    expect(r.location).toContain('github=depot-cree');
+    expect(gh.created.at(-1).full_name).toBe('moi/app-2');
+
+    const third = await newProject('Troisième site');
+    gh.denyRepoCreation = true;
+    expect((await createVia(third.id)).location).toContain('github=depot-permission');
+    expect((await h.db('Project').where({ id: third.id }).first()).githubRepo).toBeNull();
+    gh.denyRepoCreation = false;
   });
 });

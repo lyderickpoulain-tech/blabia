@@ -20,12 +20,17 @@ function buildSummaryPrompt(sessionContext, expertiseLevel = 3, meetingType = 'd
 
 // githubRepo : dépôt relié au projet (développements lancés depuis BlabIA) → Claude Code
 // travaille SEUL dans GitHub Actions, déjà à la racine du dépôt, sans pouvoir demander de validation.
-function buildClaudeCodePrompt({ session, brief, devDirectory, githubRepo, stackLines = [], decisions = [], historyText }) {
+// registryText : décisions actives du registre du projet (réunions précédentes, ex. réunions de
+// décision tenues avant de construire un site) — elles s'imposent aussi à Claude Code.
+function buildClaudeCodePrompt({ session, brief, devDirectory, githubRepo, stackLines = [], decisions = [], registryText = '', historyText }) {
   const briefSection = brief?.trim()
     ? `Brief du projet :\n${brief.trim()}\n\n`
     : '';
   const stackSection = stackLines.length > 0
     ? `Stack technique :\n${stackLines.join('\n')}\n\n`
+    : '';
+  const registrySection = registryText?.trim()
+    ? `Décisions déjà prises pour le projet (registre, réunions précédentes — contraintes obligatoires) :\n${registryText.trim()}\n\n`
     : '';
   const decisionsSection = decisions.length > 0
     ? `Décisions prises pendant la réunion (contraintes obligatoires) :\n${decisions.map((d, i) => `${i + 1}. ${d.content}`).join('\n')}\n\n`
@@ -43,14 +48,14 @@ function buildClaudeCodePrompt({ session, brief, devDirectory, githubRepo, stack
     system: 'Tu es un expert en rédaction de prompts techniques pour Claude Code. Tu génères des prompts précis, calibrés et directement utilisables. Réponds uniquement en français.',
     user: `${briefSection}Objectif de la réunion : ${session.task}
 
-${stackSection}${decisionsSection}Génère un prompt Claude Code prêt à être ${githubRepo ? 'exécuté par Claude Code en autonomie' : 'copié dans Claude Code'}.
+${stackSection}${registrySection}${decisionsSection}Génère un prompt Claude Code prêt à être ${githubRepo ? 'exécuté par Claude Code en autonomie' : 'copié dans Claude Code'}.
 
 Le prompt généré doit :
 ${cdInstruction}
 - Calibrer sa complexité sur l'objectif réel (ne pas over-engineer : chaque tâche doit servir directement "${session.task}")
 - Lister les tâches concrètes à implémenter dans l'ordre logique (numérotées)
 - Préciser les fichiers ou composants concernés si identifiés dans la réunion
-- Intégrer les décisions prises comme contraintes non négociables
+- Intégrer les décisions prises (registre du projet et réunion) comme contraintes non négociables
 ${validationInstruction}
 - Être rédigé en français
 

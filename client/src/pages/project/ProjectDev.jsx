@@ -5,10 +5,11 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError, notifySuccess } from '../../utils/notify';
-import { startGitHubConnect, useGitHubReturn } from '../../utils/github';
+import { startGitHubConnect, startRepoCreation, useGitHubReturn } from '../../utils/github';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Badge, Card } from '../../components/ui';
 import Markdown from '../../components/Markdown';
+import ToolsMeetingHint from '../../components/project/ToolsMeetingHint';
 
 // Développements lancés depuis BlabIA (v5.1) : Claude Code travaille dans GitHub
 // (abonnement Claude de l'utilisateur), propose une pull request ; « Mettre en ligne »
@@ -41,6 +42,37 @@ function Step({ done, warn, title, children }) {
 }
 
 const Code = ({ children }) => <code className="px-1.5 py-0.5 rounded bg-canvas border border-line text-[11px] font-mono text-ink break-all">{children}</code>;
+
+// Projet à créer de zéro : BlabIA crée le dépôt sur le compte GitHub de l'utilisateur
+// (en passant par GitHub, qui connecte le compte au besoin), le relie au projet et y
+// installe les automatisations.
+function NewRepo({ project, status }) {
+  const [name, setName] = useState(status.suggestedRepoName || '');
+  const [isPrivate, setIsPrivate] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const valid = /^[A-Za-z0-9_.-]{1,100}$/.test(name);
+  const create = async () => {
+    setBusy(true);
+    try { await startRepoCreation(project.id, { name, isPrivate }); } catch (err) { notifyError(err, 'La création du dépôt n’a pas pu démarrer.'); setBusy(false); }
+  };
+  return (
+    <div className="rounded-xl border border-line bg-canvas p-3 space-y-2" data-tour="dev-new-repo">
+      <p className="text-sm font-bold text-ink">Nouveau projet ? BlabIA crée le dépôt pour vous</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="sr-only" htmlFor="new-repo-name">Nom du dépôt</label>
+        <input id="new-repo-name" value={name} onChange={e => setName(e.target.value.replace(/\s+/g, '-'))}
+          className="h-9 min-w-[220px] flex-1 px-2.5 border border-line rounded-[10px] text-sm text-ink bg-white font-mono" />
+        <Button size="sm" variant="primary" onClick={create} disabled={busy || !valid}><Github size={15} aria-hidden="true" /> {busy ? 'Création…' : 'Créer le dépôt'}</Button>
+      </div>
+      <label className="inline-flex items-center gap-2 text-xs text-ink-soft cursor-pointer min-h-[28px]">
+        <input type="checkbox" className="w-4 h-4 accent-action" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} />
+        Privé (vous seul et les personnes invitées voyez le code)
+      </label>
+      {!valid && name && <p className="text-await font-bold">Lettres, chiffres, tirets, points ou soulignés seulement.</p>}
+      <p>Vous passez un instant par GitHub{status.connected ? '' : ', qui vous demande d’autoriser BlabIA'}, puis revenez ici avec le dépôt créé et équipé. Il ne restera qu’à y ranger votre abonnement Claude.</p>
+    </div>
+  );
+}
 
 // Configuration pas à pas : compte, dépôt, automatisations, abonnement Claude, sauvegarde
 function Setup({ project, status, onChange }) {
@@ -84,7 +116,8 @@ function Setup({ project, status, onChange }) {
           </>}
         </Step>
 
-        <Step done={status.accessible} warn={!!status.error} title="Choisir le dépôt du projet">
+        <Step done={status.accessible} warn={!!status.error} title="Créer ou choisir le dépôt du projet">
+          {!status.repo && <NewRepo project={project} status={status} />}
           {status.connected && <>
             {status.error && <p className="text-await font-bold">{status.error}</p>}
             <div className="flex flex-wrap gap-2">
@@ -277,7 +310,7 @@ export default function ProjectDev() {
     .catch(err => notifyError(err, 'Impossible de charger les développements.')), [project.id]);
 
   useEffect(() => { loadStatus(); loadTasks(); }, [loadStatus, loadTasks]);
-  useGitHubReturn(() => loadStatus());
+  useGitHubReturn(() => { loadStatus(); reloadProject(); }); // dépôt créé : entrée « Développements » de la navigation
 
   // Suivi automatique tant qu'un développement ou une mise en ligne est en cours
   const polling = !!data?.tasks.some(t => POLLING.includes(t.status));
@@ -342,6 +375,8 @@ export default function ProjectDev() {
       </PageHeader>
 
       {setupVisible && <Setup project={project} status={status} onChange={onStatusChange} />}
+
+      {status.isOwner && status.repo && <ToolsMeetingHint projectId={project.id} />}
 
       {status.ready && status.isOwner && (
         <Card className="p-5" data-tour="dev-launch">

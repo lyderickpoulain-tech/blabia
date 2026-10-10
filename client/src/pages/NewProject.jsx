@@ -4,6 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import api from '../utils/api';
+import { startRepoCreation } from '../utils/github';
+import { notifyError } from '../utils/notify';
 import { useTour } from '../tour/TourContext';
 import QuestionModePicker from '../components/QuestionModePicker';
 import ChallengerToggle from '../components/ChallengerToggle';
@@ -43,6 +45,7 @@ export default function NewProject() {
   const [humorLevel, setHumorLevel] = useState(2);
   const [questionMode, setQuestionMode] = useState('balanced');
   const [challengerEnabled, setChallengerEnabled] = useState(true);
+  const [website, setWebsite] = useState(false); // site web à créer de zéro : plan type + dépôt GitHub créé par BlabIA
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -72,6 +75,16 @@ export default function NewProject() {
     }
     try {
       const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, expertiseLevel, humorLevel, questionMode, challengerEnabled });
+      if (website) {
+        // Plan type (décisions → outils → construction), puis création du dépôt en passant par GitHub
+        await api.post(`/projects/${data.id}/plan/website`).catch(() => {});
+        try {
+          await startRepoCreation(data.id);
+          return;
+        } catch (err) {
+          notifyError(err, 'Projet créé, mais le dépôt GitHub n’a pas pu être créé : réessayez depuis Paramètres › Développement avec Claude Code.');
+        }
+      }
       navigate(`/projects/${data.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
@@ -115,6 +128,16 @@ export default function NewProject() {
                 placeholder="Idées, inspirations, références, contraintes techniques…" rows={2} className={`${inputCls} resize-none`} />
             </Field>
           </Block>
+
+          {!inTour && <Block title="Site web à créer de zéro" hint="Pour un site ou une application qui n’existe pas encore.">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" className="mt-1 w-5 h-5 accent-action shrink-0" checked={website} onChange={e => setWebsite(e.target.checked)} />
+              <span className="text-sm text-ink-soft">
+                <strong className="text-ink">BlabIA prépare tout pour construire le site.</strong> Il crée le dépôt GitHub du code (vous passez un instant par GitHub)
+                et prévoit les réunions dans l’ordre : définir le site, choisir son style, choisir les outils (hébergement, nom de domaine…), puis le construire avec Claude Code.
+              </span>
+            </label>
+          </Block>}
 
           <Block title="Façon de travailler" tour="np-work" hint="Valeurs par défaut des réunions, modifiables à chaque réunion.">
             <LevelSlider label="Maîtrise du sujet de l'interlocuteur" value={expertiseLevel}

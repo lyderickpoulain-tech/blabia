@@ -15,8 +15,18 @@ export async function startGitHubConnect(returnTo) {
   }
 }
 
+// Projet « à créer de zéro » : BlabIA crée le dépôt au retour de GitHub (connexion comprise)
+export async function startRepoCreation(projectId, { name, isPrivate = true } = {}) {
+  const { data } = await api.post(`/projects/${projectId}/github/create-repo`, { name, private: isPrivate });
+  window.location.assign(data.url);
+}
+
 const RESULTS = {
   ok: ['ok', 'Compte GitHub connecté.'],
+  'depot-cree': ['ok', 'Dépôt GitHub créé et relié au projet.'],
+  'depot-nom': ['error', 'Ce nom de dépôt est déjà pris sur votre compte GitHub : choisissez-en un autre.'],
+  'depot-permission': ['error', 'GitHub refuse la création du dépôt : l’application BlabIA doit avoir la permission « Administration » en lecture et écriture, acceptée sur votre installation (github.com/settings/installations).'],
+  'depot-erreur': ['error', 'Le dépôt n’a pas pu être créé. Réessayez ; si le problème persiste, créez-le sur GitHub puis choisissez-le ici.'],
   annule: ['error', 'Connexion GitHub annulée.'],
   erreur: ['error', 'La connexion GitHub a échoué. Réessayez ; si le problème persiste, réinstallez l’application BlabIA sur GitHub.'],
 };

@@ -110,4 +110,27 @@ async function analyzeProjectToolNeeds(project, userTools) {
   return parseAnalysis(text, userTools);
 }
 
-module.exports = { analyzeProjectToolNeeds, applyNeedsAnalysis, parseAnalysis, buildAnalysisPrompt };
+// Analyse + enregistrement (outils pré-remplis et besoins) ; utilisé par la page Outils
+// et au premier tour d'une réunion « outils » quand l'analyse n'a jamais été faite.
+async function analyzeAndSaveNeeds(project, userTools) {
+  const db = require('../../utils/db');
+  const { getProjectTools, sanitizeProjectTools } = require('./toolsStore');
+  const needsWithTools = await analyzeProjectToolNeeds(project, userTools);
+  const { tools: merged, needs } = applyNeedsAnalysis(await getProjectTools(project), userTools, needsWithTools);
+  const tools = sanitizeProjectTools(merged);
+  await db('Project').where({ id: project.id }).update({ tools: JSON.stringify(tools), toolNeeds: JSON.stringify(needs), updatedAt: new Date() });
+  return { tools, needs };
+}
+
+// Besoins du projet pour le prompt d'une réunion « outils » : catégorie, besoin, et ce qui
+// est déjà retenu (sinon : à demander à l'humain)
+function formatNeedsForPrompt(needs, tools) {
+  return (needs || []).map(n => {
+    const cat = CATEGORIES.find(c => c.id === n.category);
+    const kept = tools.filter(t => t.category === n.category && t.status === 'validated').map(t => t.name);
+    const status = kept.length ? `déjà retenu : ${kept.join(', ')}` : `À DEMANDER À L'HUMAIN${n.examples?.length ? ` (pistes : ${n.examples.join(', ')})` : ''}`;
+    return `- ${cat?.label || n.category} (${cat?.technical || n.category}) — besoin : ${n.need} — ${status}`;
+  }).join('\n');
+}
+
+module.exports = { analyzeProjectToolNeeds, applyNeedsAnalysis, parseAnalysis, buildAnalysisPrompt, analyzeAndSaveNeeds, formatNeedsForPrompt };

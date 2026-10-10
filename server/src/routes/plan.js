@@ -4,6 +4,7 @@ const db         = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { computeMilestoneStatus } = require('../utils/milestones');
 const { findProject } = require('../utils/projectHelpers');
+const { addWebsitePlan } = require('../services/websiteStarter');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -351,6 +352,21 @@ router.delete('/:id/todos/:tid', async (req, res) => {
     res.json({ message: 'Tâche supprimée' });
   } catch (err) {
     console.error('[todos/:tid DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── POST /api/projects/:id/plan/website — plan type d'un site web à créer de zéro ──
+// (décisions → outils → construction ; services/websiteStarter.js). Propriétaire seulement.
+router.post('/:id/plan/website', async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, false);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.userId !== req.user.id) return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    const created = await addWebsitePlan(project.id, req.user.id);
+    res.status(201).json({ created });
+  } catch (err) {
+    console.error('[plan/website POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

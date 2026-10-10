@@ -17,12 +17,21 @@ describe('connexion GitHub', () => {
 
   it('état signé : utilisateur et page de retour retrouvés ; falsification refusée', () => {
     const s = github.signState('u1', '/projects/0f8b1c2d-1111-2222-3333-444455556666/developpements');
-    expect(github.verifyState(s)).toEqual({ userId: 'u1', ret: '/projects/0f8b1c2d-1111-2222-3333-444455556666/developpements' });
+    expect(github.verifyState(s)).toEqual({ userId: 'u1', ret: '/projects/0f8b1c2d-1111-2222-3333-444455556666/developpements', extra: null });
+    // Action à mener au retour (création d'un dépôt), signée avec le reste
+    const c = github.signState('u1', '/profile', { a: 'create', p: 'p1', n: 'mon-site', v: 1 });
+    expect(github.verifyState(c).extra).toEqual({ a: 'create', p: 'p1', n: 'mon-site', v: 1 });
     const [payload, sig] = s.split('.');
     const forged = Buffer.from(JSON.stringify({ u: 'pirate', r: '/profile', e: Date.now() + 1e6 })).toString('base64url');
     expect(github.verifyState(`${forged}.${sig}`)).toBeNull();
     expect(github.verifyState(`${payload}.xx`)).toBeNull();
     expect(github.verifyState('')).toBeNull();
+  });
+
+  it('nom de dépôt proposé : minuscules, sans accents ni espaces', () => {
+    expect(github.repoSlug('Salon de thé « Les Feuilles » à Lyon !')).toBe('salon-de-the-les-feuilles-a-lyon');
+    expect(github.repoSlug('  ')).toBe('mon-site');
+    expect(github.REPO_NAME_RE.test(github.repoSlug('Été 2027 : site'))).toBe(true);
   });
 
   it('page de retour : jamais une adresse externe', () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Handshake, Code2, Wrench, Sparkles, Check, Plus, X, Lightbulb, ChevronDown, Globe, Play, Coffee } from 'lucide-react';
 import { useProject, PageHeader } from '../components/project/ProjectShell';
@@ -8,6 +8,7 @@ import QuestionModePicker from '../components/QuestionModePicker';
 import ChallengerToggle from '../components/ChallengerToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 import { notifyError } from '../utils/notify';
+import ToolsMeetingHint from '../components/project/ToolsMeetingHint';
 
 // v5.0 : decision | claude_code | stack (phase 4)
 const DELIVERABLES = [
@@ -149,12 +150,19 @@ export default function StartMeeting() {
       .catch(() => {}); // liste des modèles : à défaut, le serveur applique le modèle par défaut
   }, []);
 
-  // Auto-suggestion si pré-rempli depuis le plan
+  // Auto-suggestion si pré-rempli depuis le plan — y compris quand on arrive ici depuis cette
+  // même page (encadré « choisissez d'abord les outils ») : on reprend alors objectif et livrable
+  const firstRender = useRef(true);
   useEffect(() => {
+    if (!firstRender.current && milestoneTitle) {
+      setTask(milestoneTitle);
+      setDeliverable(MT_MAP[milestoneType] || 'decision');
+    }
+    firstRender.current = false;
     if (!milestoneTitle) return;
     handleSuggestAgents(milestoneTitle, milestoneType);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.key]);
 
   const handleSuggestAgents = async (taskValue = task, milType = null) => {
     if (!taskValue.trim() || suggestingAgents) return;
@@ -302,6 +310,7 @@ export default function StartMeeting() {
               );
             })}
           </div>
+          {deliverable === 'claude_code' && <div className="mt-3"><ToolsMeetingHint projectId={projectId} /></div>}
         </Step>
 
         {/* ── 3. Agents invités ───────────────────────────────────────────── */}

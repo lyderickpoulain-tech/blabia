@@ -19,6 +19,7 @@ const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/o
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
 const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
+const { analyzeAndSaveNeeds, formatNeedsForPrompt } = require('../../services/tools/toolNeeds');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const { listDocuments, formatDocumentsForPrompt } = require('../../services/documents');
 const { proposeMission, listMissions, formatMissionsForPrompt } = require('../../services/missions');
@@ -368,7 +369,15 @@ router.post('/:sessionId/chat', async (req, res) => {
     let toolReview = null;
     if (intention[0] === 'stack') {
       const userTools = (await getUserTools(req.user.id)) || [];
+      // Catégories nécessaires au projet : analyse faite une fois (au premier tour si besoin),
+      // pour que les agents demandent à l'humain l'outil de chaque catégorie non couverte
+      let needs = project.toolNeeds ? parseJsonField(project.toolNeeds, []) : null;
+      let reviewTools = await getProjectTools(project);
+      if (!needs && (project.brief || project.description)) {
+        try { ({ needs, tools: reviewTools } = await analyzeAndSaveNeeds(project, userTools)); } catch (err) { console.error('[chat] analyse des besoins en outils :', err.message); }
+      }
       toolReview = {
+        needsText: formatNeedsForPrompt(needs, reviewTools),
         toolCategories: TOOL_CATEGORIES,
         userToolsText: formatUserToolsForPrompt(userTools),
         suggested: parseJsonField(session.pendingToolSuggestions, []).map(t => t.name || t.label).filter(Boolean),

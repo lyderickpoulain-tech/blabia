@@ -39,7 +39,7 @@ router.get('/:id/github', async (req, res) => {
   try {
     const { project } = await load(req, res);
     if (!project) return;
-    res.json({ ...(await dev.repoStatus(project)), isOwner: project.userId === req.user.id });
+    res.json({ ...(await dev.repoStatus(project)), isOwner: project.userId === req.user.id, suggestedRepoName: github.repoSlug(project.name) });
   } catch (err) { fail(res, 'github GET', err); }
 });
 
@@ -56,6 +56,23 @@ router.put('/:id/github', async (req, res) => {
     const [p] = await db('Project').where({ id: project.id }).update({ githubRepo: repo || null }).returning('*');
     res.json(await dev.repoStatus(p));
   } catch (err) { fail(res, 'github PUT', err); }
+});
+
+// POST /api/projects/:id/github/create-repo { name?, private? } — projet « à créer de zéro » :
+// renvoie l'adresse GitHub vers laquelle envoyer le navigateur. Au retour (routes/github.js),
+// BlabIA crée le dépôt avec le jeton de l'utilisateur, le relie au projet et l'équipe.
+// Connecte aussi le compte GitHub au passage s'il ne l'était pas.
+router.post('/:id/github/create-repo', async (req, res) => {
+  try {
+    const { project } = await load(req, res, { owner: true });
+    if (!project) return;
+    if (!github.isConfigured()) return res.status(503).json({ error: 'La connexion GitHub n’est pas configurée sur ce serveur.' });
+    if (project.githubRepo) return res.status(409).json({ error: 'Ce projet a déjà un dépôt.' });
+    const name = String(req.body?.name || '').trim() || github.repoSlug(project.name);
+    if (!github.REPO_NAME_RE.test(name)) return res.status(400).json({ error: 'Nom de dépôt invalide : lettres, chiffres, tirets, points ou soulignés, sans espace.' });
+    const state = github.signState(req.user.id, `/projects/${project.id}/developpements`, { a: 'create', p: project.id, n: name, v: req.body?.private === false ? 0 : 1 });
+    res.json({ url: github.authorizeUrl(state), name });
+  } catch (err) { fail(res, 'create-repo', err); }
 });
 
 // POST /api/projects/:id/github/install — installe ou met à jour les automatisations du dépôt

@@ -54,7 +54,11 @@ async function call(token, method, path, body, { scheme = 'Bearer' } = {}) {
   if (res.status === 204) return null;
   const text = await res.text();
   let data; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!res.ok) throw new GitHubError(res.status, data?.message || `GitHub a répondu ${res.status}`);
+  if (!res.ok) {
+    // Le détail utile est souvent dans errors[] (ex. « name already exists on this account »)
+    const detail = (Array.isArray(data?.errors) ? data.errors : []).map(e => e?.message || e?.code).filter(Boolean).join(' ; ');
+    throw new GitHubError(res.status, [data?.message || `GitHub a répondu ${res.status}`, detail].filter(Boolean).join(' — '));
+  }
   return data;
 }
 
@@ -88,8 +92,10 @@ async function gh(installationId, method, path, body) {
 const RETURN_RE = /^\/(profile|projects\/[0-9a-f-]{36}\/developpements)$/;
 const safeReturn = r => (RETURN_RE.test(String(r || '')) ? r : '/profile');
 
-function signState(userId, ret) {
-  const payload = b64url(JSON.stringify({ u: userId, r: safeReturn(ret), e: Date.now() + STATE_TTL_MS, n: crypto.randomBytes(8).toString('hex') }));
+// extra : action à mener au retour, ex. { a: 'create', p: projectId, n: nom, v: privé ? 1 : 0 }
+// (création d'un dépôt : elle exige le jeton de l'UTILISATEUR, obtenu par ce retour)
+function signState(userId, ret, extra = null) {
+  const payload = b64url(JSON.stringify({ u: userId, r: safeReturn(ret), e: Date.now() + STATE_TTL_MS, n: crypto.randomBytes(8).toString('hex'), ...(extra ? { x: extra } : {}) }));
   const sig = crypto.createHmac('sha256', process.env.JWT_SECRET || '').update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
@@ -99,8 +105,8 @@ function verifyState(state) {
   const expected = crypto.createHmac('sha256', process.env.JWT_SECRET || '').update(payload).digest('base64url');
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
-    const { u, r, e } = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    return e > Date.now() && u ? { userId: u, ret: safeReturn(r) } : null;
+    const { u, r, e, x } = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    return e > Date.now() && u ? { userId: u, ret: safeReturn(r), extra: x || null } : null;
   } catch { return null; }
 }
 
@@ -122,7 +128,39 @@ async function resolveConnection(code) {
   const { installations = [] } = await call(userToken, 'GET', '/user/installations') || {};
   // De préférence l'installation sur le compte personnel
   const inst = installations.find(i => i.account?.login === me.login) || installations[0] || null;
-  return { login: me.login, installationId: inst ? String(inst.id) : null };
+  // userToken : jamais conservé, seulement utilisé pendant ce retour (création de dépôt)
+  return { login: me.login, installationId: inst ? String(inst.id) : null, allRepos: inst?.repository_selection === 'all', userToken };
+}
+
+// ── Création d'un dépôt (projet « à créer de zéro ») ─────────────────────────
+// Nom proposé à partir du nom du projet : minuscules, sans accents, tirets
+function repoSlug(name) {
+  const slug = String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 60).replace(/[-.]+$/, '');
+  return slug || 'mon-site';
+}
+const REPO_NAME_RE = /^[A-Za-z0-9_.-]{1,100}$/;
+
+// Crée le dépôt sur le compte de l'utilisateur, avec son jeton (permission « Administration »
+// de l'application). Nom déjà pris : essaie « nom-2 », « nom-3 »… Renvoie le dépôt GitHub.
+async function createRepo(userToken, { name, description, isPrivate }) {
+  for (let i = 1; i <= 5; i++) {
+    const candidate = i === 1 ? name : `${name}-${i}`;
+    try {
+      return await call(userToken, 'POST', '/user/repos', {
+        name: candidate, description: String(description || '').slice(0, 300), private: !!isPrivate,
+        auto_init: true, has_wiki: false, has_projects: false, delete_branch_on_merge: true,
+      });
+    } catch (err) {
+      if (err.status !== 422 || !/already exists|name already/i.test(err.message)) throw err;
+    }
+  }
+  throw new GitHubError(422, 'Ce nom de dépôt est déjà pris : choisissez-en un autre.');
+}
+
+// Ouvre le nouveau dépôt à l'application quand elle n'a accès qu'à des dépôts choisis
+async function addRepoToInstallation(userToken, installationId, repoId) {
+  await call(userToken, 'PUT', `/user/installations/${installationId}/repositories/${repoId}`);
 }
 
 // Dépôts auxquels l'installation donne accès
@@ -141,5 +179,6 @@ const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 module.exports = {
   transport, config, isConfigured, GitHubError, appJwt, installationToken, gh, call,
   signState, verifyState, safeReturn, authorizeUrl, installUrl, resolveConnection, listRepos, REPO_RE,
+  repoSlug, REPO_NAME_RE, createRepo, addRepoToInstallation,
   _resetCache: () => tokenCache.clear(),
 };

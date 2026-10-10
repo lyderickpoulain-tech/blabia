@@ -2,6 +2,7 @@ const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const db = require('../utils/db');
 const github = require('../services/github');
+const dev = require('../services/devTasks');
 
 // Connexion du compte GitHub de l'utilisateur (v5.1, développements).
 // Seule la route de retour (callback) est publique : GitHub y renvoie le navigateur ;
@@ -17,16 +18,46 @@ router.get('/callback', async (req, res) => {
   if (!state) return res.redirect(back(null, 'erreur'));
   if (!req.query.code) return res.redirect(back(state.ret, 'annule'));
   try {
-    const { login, installationId } = await github.resolveConnection(String(req.query.code));
+    const conn = await github.resolveConnection(String(req.query.code));
     // Application pas encore installée sur ce compte : page d'installation, qui revient ici
-    if (!installationId) return res.redirect(github.installUrl(github.signState(state.userId, state.ret)));
-    await db('User').where({ id: state.userId }).update({ githubInstallationId: installationId, githubLogin: login });
+    if (!conn.installationId) return res.redirect(github.installUrl(github.signState(state.userId, state.ret, state.extra)));
+    await db('User').where({ id: state.userId }).update({ githubInstallationId: conn.installationId, githubLogin: conn.login });
+    if (state.extra?.a === 'create') return res.redirect(back(state.ret, await createProjectRepo(state, conn)));
     res.redirect(back(state.ret, 'ok'));
   } catch (err) {
     console.error('[github callback]', err.message);
     res.redirect(back(state.ret, 'erreur'));
   }
 });
+
+// Projet « à créer de zéro » : BlabIA crée le dépôt sur le compte de l'utilisateur, l'ouvre à
+// l'application, le relie au projet et y installe les automatisations. Renvoie le résultat
+// affiché au retour (utils/github.js côté client).
+async function createProjectRepo(state, conn) {
+  const { p: projectId, n: name, v: isPrivate } = state.extra;
+  const [project] = await db('Project').where({ id: projectId, userId: state.userId }).limit(1);
+  if (!project || project.githubRepo || !github.REPO_NAME_RE.test(String(name || ''))) return 'depot-erreur';
+  let repo;
+  try {
+    repo = await github.createRepo(conn.userToken, { name, description: project.description || project.name, isPrivate: !!isPrivate });
+  } catch (err) {
+    console.error('[github création dépôt]', err.status, err.message);
+    // Permission « Administration » absente ou pas encore acceptée sur l'installation
+    return err.status === 403 || err.status === 404 ? 'depot-permission' : err.status === 422 ? 'depot-nom' : 'depot-erreur';
+  }
+  if (!conn.allRepos) {
+    await github.addRepoToInstallation(conn.userToken, conn.installationId, repo.id)
+      .catch(err => console.error('[github ajout du dépôt à l’installation]', err.status, err.message));
+  }
+  const [linked] = await db('Project').where({ id: project.id }).update({ githubRepo: repo.full_name, updatedAt: new Date() }).returning('*');
+  try {
+    await dev.installWorkflows(linked);
+  } catch (err) {
+    // Rattrapable depuis la page Développements (« Installer »)
+    console.error('[github automatisations du nouveau dépôt]', err.status, err.message);
+  }
+  return 'depot-cree';
+}
 
 router.use(authMiddleware);
 

@@ -4,7 +4,7 @@ const db             = require('../../utils/db');
 const anthropic      = require('../../services/anthropic');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { getProjectTools, formatProjectToolsForPrompt } = require('../../services/tools/toolsStore');
-const { extractMeetingDecisions } = require('../../services/decisions');
+const { extractMeetingDecisions, listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 
@@ -227,8 +227,9 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       const devDirectory = project.devDirectory?.trim() || null;
       const stackLines = formatProjectToolsForPrompt(await getProjectTools(project)).split('\n').filter(Boolean);
       const decisions = messages.filter(m => m.pinned || m.type === 'decision');
+      const registryText = formatRegistryForPrompt(await listDecisions(projectId)).activeText;
       const codePrompt = buildClaudeCodePrompt({
-        session, brief: project.brief, devDirectory, githubRepo: project.githubRepo || null, stackLines, decisions, historyText
+        session, brief: project.brief, devDirectory, githubRepo: project.githubRepo || null, stackLines, decisions, registryText, historyText
       });
       const deliverableResponse = await anthropic.messages.create({
         model: MODEL, max_tokens: 4000,

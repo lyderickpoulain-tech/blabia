@@ -21,12 +21,20 @@ const INTENTION_INSTRUCTIONS = {
 };
 
 // v5.0 phase 4.3 : section propre aux réunions de type stack
-function buildToolReviewSection({ toolCategories, userToolsText, webSearchEnabled }) {
+function buildToolReviewSection({ toolCategories, userToolsText, needsText = '', webSearchEnabled }) {
   const grid = toolCategories.map(c => `- ${c.label} (${c.technical})`).join('\n');
   const priceRule = webSearchEnabled
     ? 'Les prix DOIVENT venir d\'une recherche web : renseigne "priceSource" avec l\'URL de la page de tarifs consultée.'
     : 'Recherche web indisponible : donne une estimation prudente, mets "priceSource": null — elle sera affichée comme « indicatif, à vérifier ».';
-  return `
+  // Besoins analysés pour ce projet : c'est l'humain qui renseigne l'outil de chaque catégorie
+  const needsBlock = needsText
+    ? `
+CATÉGORIES NÉCESSAIRES À CE PROJET (analyse de BlabIA) — parcours-les dans cet ordre :
+${needsText}
+Pour chaque catégorie marquée « À DEMANDER À L'HUMAIN » : demande-lui d'abord ce qu'il utilise déjà ou préfère, par une carte [DECISION] (2 à 3 outils adaptés avec leur coût en quelques mots, recommandation en premier, « J'en utilise déjà un autre (précise) », « Je ne sais pas, conseillez-moi »). Ne propose un outil [NEED_TOOL] qu'après sa réponse, en suivant son choix. Une catégorie à la fois.
+`
+    : '';
+  return `${needsBlock}
 GRILLE DES CATÉGORIES D'OUTILS :
 ${grid}
 

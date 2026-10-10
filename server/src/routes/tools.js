@@ -7,8 +7,21 @@ const { CATEGORIES, CATEGORY_LINKS, TOOLS } = require('../services/tools/catalog
 const {
   getUserTools, sanitizeUserTools, getProjectTools, sanitizeProjectTools, monthlyTotal,
 } = require('../services/tools/toolsStore');
-const { analyzeProjectToolNeeds, applyNeedsAnalysis } = require('../services/tools/toolNeeds');
+const { analyzeAndSaveNeeds } = require('../services/tools/toolNeeds');
 const { parseJsonField } = require('../utils/parseJsonField');
+const { generateSetupGuide } = require('../services/tools/setupGuide');
+const { listDecisions, formatRegistryForPrompt } = require('../services/decisions');
+
+// Réunion « outils » (type stack) : déjà tenue ? sinon, celle prévue au plan. Sert à la
+// suggérer avant tout développement (démarrage d'une réunion Claude Code, Développements).
+async function toolsMeetingStatus(projectId) {
+  const done = await db('Session').where({ projectId, status: 'accepted' })
+    .whereRaw(`"intention"::text LIKE '%stack%'`).first('id');
+  if (done) return { done: true, planned: null };
+  const planned = await db('Milestone').where({ projectId, type: 'stack' }).whereNot({ status: 'done' })
+    .orderBy('displayOrder', 'asc').first('id', 'title');
+  return { done: false, planned: planned || null };
+}
 
 const router = express.Router();
 // Monté sur '/api' : l'authentification est posée route par route, pas via router.use,
@@ -51,7 +64,11 @@ router.get('/projects/:id/tools', authMiddleware, async (req, res) => {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     const tools = await getProjectTools(project);
-    res.json({ tools, total: monthlyTotal(tools), needs: project.toolNeeds ? parseJsonField(project.toolNeeds, []) : null });
+    res.json({
+      tools, total: monthlyTotal(tools), needs: project.toolNeeds ? parseJsonField(project.toolNeeds, []) : null,
+      toolsMeeting: await toolsMeetingStatus(project.id),
+      guide: project.toolsGuide ? { text: project.toolsGuide, at: project.toolsGuideAt } : null,
+    });
   } catch (err) {
     console.error('[projects/:id/tools GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -74,6 +91,29 @@ router.put('/projects/:id/tools', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/projects/:id/tools/guide — guide pas à pas pour relier les outils retenus
+// (demandé par l'utilisateur ; conservé sur le projet, régénéré à chaque demande)
+router.post('/projects/:id/tools/guide', authMiddleware, async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.isDemo) return res.status(403).json({ demo: true, error: 'Projet exemple : pas de guide pendant la visite guidée.' });
+    const tools = await getProjectTools(project);
+    if (!tools.some(t => t.status === 'validated')) {
+      return res.status(400).json({ error: 'Retenez d’abord les outils du projet (réunion « outils » ou ci-dessous) : le guide explique comment les relier.' });
+    }
+    const registryText = formatRegistryForPrompt(await listDecisions(project.id)).activeText;
+    const text = await generateSetupGuide({ project, tools, registryText });
+    const at = new Date();
+    await db('Project').where({ id: project.id }).update({ toolsGuide: text, toolsGuideAt: at });
+    res.json({ text, at });
+  } catch (err) {
+    console.error('[projects/:id/tools/guide POST]', err.message);
+    res.status(500).json({ error: 'Le guide n’a pas pu être rédigé. Réessayez dans un instant.' });
+  }
+});
+
 // POST /api/projects/:id/tools/analyze — BlabIA identifie les types d'outils
 // nécessaires et pré-remplit avec « Mes outils » (sans écraser les choix existants)
 router.post('/projects/:id/tools/analyze', authMiddleware, async (req, res) => {
@@ -85,13 +125,7 @@ router.post('/projects/:id/tools/analyze', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Ajoutez un brief ou une description au projet pour que BlabIA puisse identifier les outils nécessaires.' });
     }
     const userTools = (await getUserTools(req.user.id)) || [];
-    const needsWithTools = await analyzeProjectToolNeeds(project, userTools);
-    const current = await getProjectTools(project);
-    const { tools: merged, needs } = applyNeedsAnalysis(current, userTools, needsWithTools);
-    const tools = sanitizeProjectTools(merged);
-    await db('Project').where({ id: project.id }).update({
-      tools: JSON.stringify(tools), toolNeeds: JSON.stringify(needs), updatedAt: new Date(),
-    });
+    const { tools, needs } = await analyzeAndSaveNeeds(project, userTools);
     res.json({ tools, total: monthlyTotal(tools), needs });
   } catch (err) {
     console.error('[projects/:id/tools/analyze POST]', err.message);
