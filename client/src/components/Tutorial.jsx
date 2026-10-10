@@ -105,6 +105,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                   'Le plan enchaîne les réunions à tenir, dans l’ordre.',
                   'Chaque réunion fait avancer une étape ; vous tranchez les décisions qui vous reviennent.',
                   'Les décisions sont inscrites au registre : les agents ne reposent plus la question.',
+                  'Entre deux réunions, vous menez les actions décidées, dans l’ordre ; la réunion suivante commence par un point d’avancement.',
                 ].map(t => (
                   <li key={t} className="flex gap-2 text-sm text-ink-soft leading-snug">
                     <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-action shrink-0" aria-hidden="true" />{t}

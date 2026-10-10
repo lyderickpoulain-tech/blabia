@@ -150,7 +150,7 @@ export default function ProjectActions() {
         )}
 
         {open.length > 0 && (
-          <section className="space-y-2">
+          <section data-tour="act-list" className="space-y-2">
             <SectionLabel className={late.length ? '!text-await' : ''}>
               À faire · {open.length}{late.length ? ` · dont ${late.length} en retard` : ''}
             </SectionLabel>

@@ -105,11 +105,11 @@ export const CHAPTERS = [
         body: 'Vos réponses partent ensemble et la discussion reprend. Pendant les échanges, écrivez à tout moment pour réorienter le débat ou contredire un agent.' },
       { target: 'mr-conclude', placement: 'bottom',
         title: 'Conclure',
-        body: 'Quand le sujet est traité : BlabIA rédige le compte-rendu, vous le relisez et choisissez les décisions à inscrire au registre.' },
+        body: 'Quand le sujet est traité : BlabIA rédige le compte-rendu, vous le relisez, choisissez les décisions à inscrire au registre et les actions à mener d’ici la prochaine réunion.' },
     ],
   },
   {
-    id: 'close', label: 'Décisions et historique', roles: ['admin', 'member', 'user'],
+    id: 'close', label: 'Décisions, actions et historique', roles: ['admin', 'member', 'user'],
     steps: [
       { path: demo('/historique'), target: 'hist-first',
         title: 'Les réunions tenues',
@@ -120,6 +120,9 @@ export const CHAPTERS = [
       { target: 'dec-reopened',
         title: 'Changer d’avis',
         body: 'Une décision ne tient plus ? Remettez-la en question avec un motif : elle sera retraitée à la prochaine réunion.' },
+      { path: demo('/actions'), target: 'act-list',
+        title: 'Les actions, dans l’ordre',
+        body: 'Numérotées dans l’ordre où les mener : flèches pour réordonner, case pour cocher. L’échéance est facultative ; une action en retard passe en ambre. Les agents ouvrent la réunion suivante par un point d’avancement.' },
     ],
   },
   {

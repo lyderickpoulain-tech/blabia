@@ -121,7 +121,8 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 - Conversion des anciennes données d'outils en JS à la première lecture (`NULL` = pas encore migré).
 - Réinitialisation de la mémoire : supprime réunions tenues et registre ; réunions planifiées supprimées seulement si la case est cochée.
 - Illustrations : iframe sandboxée (`allow-scripts` sans `allow-same-origin` pour le HTML, aucun script pour SVG/Mermaid), `mermaid` chargé à la demande.
-- Hors périmètre v5 : `TodoItem`, `PlanView.jsx`.
+- Hors périmètre v5 : `PlanView.jsx` (`TodoItem` sert désormais aux actions entre les réunions).
+- **Toute nouvelle fonctionnalité met à jour le guide et la visite guidée** (demande de l'utilisateur) : `client/src/components/Tutorial.jsx`, `client/src/tour/chapters.js` (+ ancres `data-tour`), projet exemple `server/src/services/demoProject.js` si des données sont nécessaires.
 
 ## 5. Environnement de test et déploiement
 
