@@ -6,6 +6,7 @@ const { MODEL } = require('./helpers');
 const { isMeetingModel } = require('../../services/models');
 const { isQuestionMode, decisionBudgetFor } = require('../../services/questionModes');
 const { parseJsonField } = require('../../utils/parseJsonField');
+const { withoutSession } = require('../../utils/projectMemory');
 
 const router = express.Router({ mergeParams: true });
 
@@ -153,20 +154,64 @@ router.get('/:sessionId', async (req, res) => {
 
 // ── DELETE /:sessionId — Suppression ──────────────────────────────────────────
 
-router.delete('/:sessionId', async (req, res) => {
+// Supprimer une réunion = l'effacer aussi de ce que les agents retiennent : son compte rendu
+// dans la mémoire du projet, les décisions qu'elle a inscrites au registre, les actions
+// qu'elle a créées. Restent : développements lancés (historique), rapports de mission,
+// coût de l'IA. Réservé au propriétaire (ou administrateur). Refusé si son développement
+// est en cours. GET …/deletion : ce qui partira, pour la confirmation.
+async function deletionScope(projectId, sessionId) {
+  const [decisions, actions, activeDev] = await Promise.all([
+    db('Decision').where({ projectId, sessionId }).count('* as n').first(),
+    db('TodoItem').where({ projectId, sessionId }).whereNull('milestoneId').count('* as n').first(),
+    db('DevTask').where({ projectId, sessionId }).whereIn('status', ['running', 'deploying']).first('id'),
+  ]);
+  return { decisions: Number(decisions.n), actions: Number(actions.n), devRunning: !!activeDev };
+}
+
+async function loadForDeletion(req, res) {
   const { projectId, sessionId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  const project = await getProject(projectId, req.user.id, isAdmin);
+  if (!project) { res.status(404).json({ error: 'Projet introuvable' }); return {}; }
+  if (project.userId !== req.user.id && !isAdmin) { res.status(403).json({ error: 'Seul le propriétaire du projet peut supprimer une réunion.' }); return {}; }
+  const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+  if (!session) { res.status(404).json({ error: 'Réunion introuvable' }); return {}; }
+  return { project, session };
+}
+
+router.get('/:sessionId/deletion', async (req, res) => {
   try {
-    const project = await getProject(projectId, req.user.id, isAdmin);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const { session } = await loadForDeletion(req, res);
+    if (!session) return;
+    res.json(await deletionScope(req.params.projectId, session.id));
+  } catch (err) {
+    console.error('[sessions/:id/deletion GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
-    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
-    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+router.delete('/:sessionId', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  try {
+    const { project, session } = await loadForDeletion(req, res);
+    if (!session) return;
+    const scope = await deletionScope(projectId, sessionId);
+    if (scope.devRunning) return res.status(409).json({ error: 'Le développement de cette réunion est en cours : attendez qu’il se termine.' });
 
-    await db('Session').where({ parentSessionId: sessionId }).update({ parentSessionId: null });
-    await db('Session').where({ id: sessionId }).delete();
-
-    res.json({ message: 'Session supprimée' });
+    await db.transaction(async trx => {
+      await trx('Decision').where({ projectId, sessionId }).delete();
+      await trx('TodoItem').where({ projectId, sessionId }).whereNull('milestoneId').delete();
+      const [p] = await trx('Project').where({ id: projectId }).select('context').forUpdate();
+      const context = withoutSession(p?.context, sessionId);
+      if (context !== null) await trx('Project').where({ id: projectId }).update({ context, updatedAt: new Date() });
+      await trx('Session').where({ parentSessionId: sessionId }).update({ parentSessionId: null });
+      await trx('Session').where({ id: sessionId }).delete();
+      // Étape du plan traitée par cette réunion seule : de nouveau « à tenir »
+      if (session.milestoneId && !(await trx('Session').where({ milestoneId: session.milestoneId }).first('id'))) {
+        await trx('Milestone').where({ id: session.milestoneId, projectId }).update({ status: 'pending' });
+      }
+    });
+    res.json({ deleted: true, ...scope, project: project.id });
   } catch (err) {
     console.error('[sessions/:id DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

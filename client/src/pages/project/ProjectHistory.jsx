@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Code2, RotateCcw, Plus, CornerDownRight } from 'lucide-react';
+import { FileText, Code2, RotateCcw, Plus, CornerDownRight, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Badge, Button, Card } from '../../components/ui';
 import { formatUSD, kindLabel } from '../../utils/cost';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 import ExportModal from '../../components/ExportModal';
-import { notifyError } from '../../utils/notify';
+import { notifyError, notifySuccess } from '../../utils/notify';
 
 // Historique : les réunions tenues (refonte UX v5.1 — remplace la liste
 // « Réunions » de l'ancienne page projet).
@@ -43,12 +43,30 @@ function StatusBadge({ status }) {
   return <Badge tone="await">Interrompue</Badge>;
 }
 
-function SessionItem({ session, projectId, cost, onViewDeliverable, tour }) {
+function SessionItem({ session, projectId, cost, onViewDeliverable, tour, canDelete, onDeleted }) {
   const navigate = useNavigate();
   const [reopening, setReopening] = useState(false);
   const type = intentionOf(session);
   const finished = session.status === 'accepted' || session.status === 'abandoned';
   const path = `/projects/${projectId}/meeting/${session.id}`;
+
+  // Suppression (propriétaire) : la réunion et ce que les agents en retiennent
+  const [deleting, setDeleting] = useState(false);
+  const remove = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const { data: scope } = await api.get(`/projects/${projectId}/sessions/${session.id}/deletion`);
+      if (scope.devRunning) { notifyError(null, 'Le développement de cette réunion est en cours : attendez qu’il se termine pour la supprimer.'); return; }
+      const parts = ['son compte rendu, retiré de la mémoire du projet (les agents ne s’en serviront plus)'];
+      if (scope.decisions) parts.push(`${scope.decisions} décision${scope.decisions > 1 ? 's' : ''} inscrite${scope.decisions > 1 ? 's' : ''} au registre`);
+      if (scope.actions) parts.push(`${scope.actions} action${scope.actions > 1 ? 's' : ''} créée${scope.actions > 1 ? 's' : ''} à sa conclusion`);
+      if (!confirm(`Supprimer définitivement la réunion « ${session.task} » ?\n\nSeront aussi supprimés :\n• ${parts.join('\n• ')}\n\nRestent : les développements déjà lancés et le coût de l’IA. Cette suppression est définitive.`)) return;
+      await api.delete(`/projects/${projectId}/sessions/${session.id}`);
+      notifySuccess('Réunion supprimée.');
+      onDeleted?.(session.id);
+    } catch (err) { notifyError(err, 'La réunion n’a pas pu être supprimée.'); } finally { setDeleting(false); }
+  };
 
   const reopen = async () => {
     if (reopening) return;
@@ -80,6 +98,11 @@ function SessionItem({ session, projectId, cost, onViewDeliverable, tour }) {
           <Button size="sm" variant="ghost" onClick={reopen} disabled={reopening}><RotateCcw size={15} /> {reopening ? '…' : 'Reprendre'}</Button>
         ) : session.status === 'open' && (
           <Link to={path} className="h-9 px-3 inline-flex items-center rounded-[10px] text-[13px] font-bold text-action hover:bg-action-light">Rejoindre</Link>
+        )}
+        {canDelete && (
+          <Button size="sm" variant="ghost" onClick={remove} disabled={deleting} aria-label={`Supprimer la réunion « ${session.task} »`} title="Supprimer la réunion">
+            <Trash2 size={15} aria-hidden="true" />
+          </Button>
         )}
       </div>
     </li>
@@ -122,8 +145,13 @@ function CostCard({ stats }) {
 }
 
 export default function ProjectHistory() {
-  const { project } = useProject();
+  const { project, isOwner, refreshCounts } = useProject();
   const [sessions, setSessions] = useState(null);
+  // Réunion supprimée : ses suites restent (rattachées à rien), la liste est relue
+  const onDeleted = () => {
+    api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(() => {});
+    refreshCounts?.();
+  };
   const [stats, setStats] = useState(null);
   const [deliverableSession, setDeliverableSession] = useState(null);
 
@@ -156,7 +184,8 @@ export default function ProjectHistory() {
               const threads = buildThreads(sessions);
               const firstDone = threads.find(s => s.status === 'accepted')?.id; // ancre de la visite guidée
               return threads.map(s => (
-              <SessionItem key={s.id} tour={s.id === firstDone ? 'hist-first' : undefined} session={s} projectId={project.id} cost={stats?.bySession?.[s.id] || 0} onViewDeliverable={setDeliverableSession} />
+              <SessionItem key={s.id} tour={s.id === firstDone ? 'hist-first' : undefined} session={s} projectId={project.id} cost={stats?.bySession?.[s.id] || 0} onViewDeliverable={setDeliverableSession}
+                canDelete={isOwner && !project.isDemo} onDeleted={onDeleted} />
             ));
             })()}
           </ul>

@@ -22,4 +22,13 @@ function recentMemory(context, maxChars = 3000) {
   return kept.join(SEPARATOR);
 }
 
-module.exports = { recentMemory };
+// Retire de la mémoire du projet le compte rendu d'une réunion (entrées « [SESSION:<id> | … »,
+// écrites par updateProjectContext). Renvoie la mémoire nettoyée, ou null si rien ne change.
+function withoutSession(context, sessionId) {
+  if (!context) return null;
+  const entries = String(context).split(SEPARATOR);
+  const kept = entries.filter(e => !e.startsWith(`[SESSION:${sessionId} |`));
+  return kept.length === entries.length ? null : kept.join(SEPARATOR);
+}
+
+module.exports = { recentMemory, withoutSession };
