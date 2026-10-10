@@ -158,8 +158,8 @@ model ProjectMember {
 model Session {
   id              String    @id @default(uuid())
   task            String
-  agents          Json
-  exchanges       Json
+  agents          Json      @default("[]") // DEPRECATED v5.1 — plus écrit ni lu (remplacé par activeAgents) ; suppression à décider
+  exchanges       Json      @default("[]") // DEPRECATED v5.1 — plus écrit ni lu (remplacé par messages) ; suppression à décider
   summary         String?   // compte-rendu de la réunion (toujours produit à la clôture)
   deliverable     String?   // v5.0 phase 3 : livrable typé (prompt Claude Code, relevé de décisions texte, proposition d'outils) — distinct du compte-rendu depuis la phase 3 ; avant, le prompt claude_code était stocké dans summary
   status          String    @default("complete") // "open" | "accepted" | "abandoned" (CHECK contraint ajoutée en v3 — le défaut "complete" ci-dessus est un résidu v1, jamais utilisé : tous les chemins de création renseignent status explicitement)

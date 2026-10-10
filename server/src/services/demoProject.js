@@ -160,7 +160,7 @@ async function ensureDemoProject(user) {
     const msgs1 = messages1(agents1, t1);
     await trx('Session').insert({
       id: s1, task: 'Définir le concept et le public', projectId, milestoneId: msId(0),
-      agents: JSON.stringify(agents1), activeAgents: JSON.stringify(agents1), exchanges: JSON.stringify([]),
+      activeAgents: JSON.stringify(agents1),
       messages: JSON.stringify(msgs1), summary: SUMMARY_MEETING_1, status: 'accepted', mode: 'meeting',
       intention: JSON.stringify(['decision']), createdAt: t1,
       tokensUsed: JSON.stringify({ input: 0, output: 0, total: 0 }),
@@ -171,7 +171,7 @@ async function ensureDemoProject(user) {
     const agents2 = snapshot(t2.toISOString());
     await trx('Session').insert({
       id: randomUUID(), task: 'Choisir l’emplacement du salon', projectId, milestoneId: msId(1),
-      agents: JSON.stringify(agents2), activeAgents: JSON.stringify(agents2), exchanges: JSON.stringify([]),
+      activeAgents: JSON.stringify(agents2),
       messages: JSON.stringify(messages2(agents2, t2)), status: 'open', mode: 'meeting',
       intention: JSON.stringify(['decision']), createdAt: t2,
       tokensUsed: JSON.stringify({ input: 0, output: 0, total: 0 }),

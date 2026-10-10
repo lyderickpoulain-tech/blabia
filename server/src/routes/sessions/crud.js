@@ -54,8 +54,7 @@ router.post('/', async (req, res) => {
       .insert({
         id: randomUUID(),
         task: task.trim(),
-        agents: JSON.stringify(agentsWithJoin),
-        exchanges: JSON.stringify([]),
+        // agents / exchanges (DEPRECATED) : plus écrits, valeur par défaut '[]' en base
         messages: JSON.stringify([]),
         activeAgents: JSON.stringify(agentsWithJoin),
         summary: null,
@@ -133,8 +132,8 @@ router.get('/:sessionId', async (req, res) => {
 
     res.json({
       ...session,
-      agents:          parseJsonField(session.agents, []),
-      exchanges:       parseJsonField(session.exchanges, []),
+      agents:          undefined, // DEPRECATED, plus renvoyé (activeAgents)
+      exchanges:       undefined, // DEPRECATED, plus renvoyé (messages)
       timeline:        parseJsonField(session.timeline, []),
       planSuggestions: parseJsonField(session.planSuggestions, null),
       intention:       parseJsonField(session.intention, []),
