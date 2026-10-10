@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Code2, RotateCcw, Plus, CornerDownRight } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
-import { Badge, Button } from '../../components/ui';
+import { Badge, Button, Card } from '../../components/ui';
+import { formatUSD, kindLabel } from '../../utils/cost';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 import ExportModal from '../../components/ExportModal';
 
@@ -41,7 +42,7 @@ function StatusBadge({ status }) {
   return <Badge tone="await">Interrompue</Badge>;
 }
 
-function SessionItem({ session, projectId, onViewDeliverable }) {
+function SessionItem({ session, projectId, cost, onViewDeliverable }) {
   const navigate = useNavigate();
   const [reopening, setReopening] = useState(false);
   const type = intentionOf(session);
@@ -64,6 +65,7 @@ function SessionItem({ session, projectId, onViewDeliverable }) {
         <Link to={path} className="text-sm font-bold text-ink hover:text-action">{session.task}</Link>
         <p className="text-xs text-ink-faint mt-0.5">
           {TYPE_LABEL[type] || 'Réunion'} · {session.agentCount ?? '–'} agents · {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+          {cost > 0 && <span title="Coût réel de l'IA pour cette réunion"> · {formatUSD(cost)}</span>}
         </p>
       </div>
       <StatusBadge status={session.status} />
@@ -80,6 +82,41 @@ function SessionItem({ session, projectId, onViewDeliverable }) {
         )}
       </div>
     </li>
+  );
+}
+
+// Coût de l'IA pour le projet : réel (chaque appel journalisé), détaillé par usage
+function CostCard({ stats }) {
+  const max = Math.max(...(stats.byKind || []).map(k => k.costUSD), 0.000001);
+  const since = stats.trackedSince
+    ? new Date(stats.trackedSince).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+  return (
+    <Card className="mt-4 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-extrabold text-ink">Coût de l'IA</h2>
+        <p className="text-2xl font-extrabold text-ink">{formatUSD(stats.realCostUSD + stats.legacyCostUSD)}</p>
+      </div>
+      <p className="text-xs text-ink-muted mt-0.5">
+        {stats.realCostUSD > 0 && <>{formatUSD(stats.realCostUSD)} réels{since && <> depuis le {since}</>} ({stats.calls} appel{stats.calls > 1 ? 's' : ''})</>}
+        {stats.realCostUSD > 0 && stats.legacyCostUSD > 0 && ' · '}
+        {stats.legacyCostUSD > 0 && <>{formatUSD(stats.legacyCostUSD)} estimés pour les réunions antérieures au suivi</>}
+      </p>
+      {stats.byKind?.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {stats.byKind.map(k => (
+            <li key={k.kind} className="grid grid-cols-[minmax(0,11rem)_1fr_auto] items-center gap-3 text-xs">
+              <span className="text-ink-soft font-semibold truncate">{kindLabel(k.kind)}</span>
+              <span className="h-2 rounded-full bg-canvas overflow-hidden" aria-hidden="true">
+                <span className="block h-full rounded-full bg-ai" style={{ width: `${Math.max(3, (k.costUSD / max) * 100)}%` }} />
+              </span>
+              <span className="text-ink-muted font-bold tabular-nums text-right min-w-[64px]">{formatUSD(k.costUSD)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-[11px] text-ink-faint mt-3">Tarifs Anthropic en dollars US, calculés à partir des tokens exacts de chaque appel.</p>
+    </Card>
   );
 }
 
@@ -115,17 +152,13 @@ export default function ProjectHistory() {
         ) : (
           <ul className="divide-y divide-line">
             {buildThreads(sessions).map(s => (
-              <SessionItem key={s.id} session={s} projectId={project.id} onViewDeliverable={setDeliverableSession} />
+              <SessionItem key={s.id} session={s} projectId={project.id} cost={stats?.bySession?.[s.id] || 0} onViewDeliverable={setDeliverableSession} />
             ))}
           </ul>
         )}
       </div>
 
-      {stats && stats.totalTokens > 0 && (
-        <p className="mt-3 text-xs text-ink-faint">
-          Consommation du projet : {stats.totalTokens.toLocaleString('fr-FR')} jetons sur {stats.sessionCount} réunion{stats.sessionCount !== 1 ? 's' : ''} · coût estimé ~{stats.estimatedCost.toFixed(2)} €
-        </p>
-      )}
+      {stats && (stats.realCostUSD > 0 || stats.legacyCostUSD > 0) && <CostCard stats={stats} />}
 
       {dlg && intentionOf(dlg) === 'claude_code' && (
         <ExportModal directContent={dlg.deliverable || dlg.summary} projectId={project.id} onClose={() => setDeliverableSession(null)} />

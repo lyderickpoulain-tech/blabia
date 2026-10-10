@@ -8,6 +8,7 @@ const { getProjectTools, formatProjectToolsForPrompt } = require('../services/to
 const { findProject } = require('../utils/projectHelpers');
 const { isQuestionMode, DEFAULT_QUESTION_MODE } = require('../services/questionModes');
 const { parseJsonField } = require('../utils/parseJsonField');
+const { LEGACY_COST_SQL, projectCostReport } = require('../services/usageReports');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -51,7 +52,10 @@ router.get('/', async (req, res) => {
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'in_progress') AS "todoInProgress"`),
         db.raw(`${TOKEN_CASE('total')} AS "totalTokens"`),
         db.raw(`${TOKEN_CASE('input')} AS "totalInputTokens"`),
-        db.raw(`${TOKEN_CASE('output')} AS "totalOutputTokens"`)
+        db.raw(`${TOKEN_CASE('output')} AS "totalOutputTokens"`),
+        // Coût réel (UsageLog) + estimation de l'activité antérieure au suivi
+        db.raw(`(SELECT COALESCE(SUM("costUSD"), 0) FROM "UsageLog" WHERE "projectId" = "Project"."id") AS "realCostUSD"`),
+        db.raw(`(${LEGACY_COST_SQL('"Project"."id"')}) AS "legacyCostUSD"`)
       )
       .leftJoin('Session', 'Session.projectId', 'Project.id')
       .groupBy('Project.id')
@@ -80,18 +84,17 @@ router.get('/', async (req, res) => {
 
     const rows = await query;
 
-    const SONNET_RATES = { input: 3, output: 15 };
-    const OPUS_RATES   = { input: 15, output: 75 };
-    const estimateCost = (inp, out, model = 'sonnet') => {
-      const r = (model || '').includes('opus') ? OPUS_RATES : SONNET_RATES;
-      return (inp / 1_000_000 * r.input) + (out / 1_000_000 * r.output);
-    };
-
     const projects = rows.map(p => {
       const totalTokens = parseInt(p.totalTokens) || 0;
       const inp = parseInt(p.totalInputTokens) || 0;
       const out = parseInt(p.totalOutputTokens) || 0;
-      return { ...p, totalTokens, totalInputTokens: inp, totalOutputTokens: out, estimatedCostUSD: estimateCost(inp, out) };
+      const realCostUSD   = Number(p.realCostUSD)   || 0;
+      const legacyCostUSD = Number(p.legacyCostUSD) || 0;
+      return {
+        ...p, totalTokens, totalInputTokens: inp, totalOutputTokens: out,
+        realCostUSD, legacyCostUSD,
+        estimatedCostUSD: realCostUSD + legacyCostUSD, // DEPRECATED v5.1 — remplacé par realCostUSD + legacyCostUSD
+      };
     });
 
     res.json(projects);
@@ -180,7 +183,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/projects/:id/stats — tokens cumulés et coût estimé
+// GET /api/projects/:id/stats — tokens cumulés, coût réel (UsageLog) et détail
 router.get('/:id/stats', async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
@@ -200,14 +203,15 @@ router.get('/:id/stats', async (req, res) => {
     const row         = result.rows[0];
     const totalInput  = parseInt(row.totalInput)  || 0;
     const totalOutput = parseInt(row.totalOutput) || 0;
-    const estimatedCost = (totalInput * 3 + totalOutput * 15) / 1_000_000;
+    const cost = await projectCostReport(req.params.id);
 
     res.json({
       sessionCount:   parseInt(row.sessionCount) || 0,
       totalTokens:    parseInt(row.totalTokens)  || 0,
       totalInput,
       totalOutput,
-      estimatedCost,
+      ...cost, // realCostUSD, legacyCostUSD, trackedSince, byKind, bySession
+      estimatedCost: cost.realCostUSD + cost.legacyCostUSD, // DEPRECATED v5.1
     });
   } catch (err) {
     console.error('[projects/:id/stats GET]', err.message);

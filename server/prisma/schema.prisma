@@ -23,6 +23,7 @@ model User {
   projectMemberships ProjectMember[]
   createdMilestones  Milestone[] @relation("MilestoneCreator")
   createdTodos       TodoItem[]  @relation("TodoCreator")
+  usageLogs          UsageLog[]
 }
 
 model Agent {
@@ -77,6 +78,7 @@ model Project {
   milestones    Milestone[]
   todos         TodoItem[]
   decisions     Decision[]
+  usageLogs     UsageLog[]
 }
 
 model ProjectAgent {
@@ -182,6 +184,7 @@ model Session {
   milestone         Milestone? @relation("SessionMilestone", fields: [milestoneId], references: [id], onDelete: SetNull)
   sourcedMilestones Milestone[] @relation("MilestoneSource")
   decisions         Decision[]
+  usageLogs         UsageLog[]
 }
 
 // v5.0 : registre des décisions du projet — alimenté à la clôture des réunions
@@ -202,4 +205,27 @@ model Decision {
   session         Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
+}
+
+// v5.1 : coût réel de l'IA — une ligne par appel Anthropic (services/usage.js)
+model UsageLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  userId           String?
+  projectId        String?
+  sessionId        String?
+  kind             String   @default("other") // origine : chat, generate-deliverable, quick-command, …
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  webSearches      Int      @default(0)
+  costUSD          Float    @default(0) // calculé au tarif du modèle (services/pricing.js)
+  createdAt        DateTime @default(now())
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project          Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session          Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([createdAt])
 }

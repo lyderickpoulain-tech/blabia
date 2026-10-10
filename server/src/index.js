@@ -18,6 +18,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 
+// Coût réel de l'IA : rattache les appels Anthropic de la requête au projet / à la réunion
+app.use(require('./services/usage').usageMiddleware);
+
 // ── Routes publiques (avant tout routeur : aucune authentification) ──────────
 // Healthcheck Railway : doit répondre 200 sans jeton, sinon le déploiement échoue.
 app.get('/api/health', (req, res) => {
@@ -34,6 +37,7 @@ app.use('/api/admin',                        require('./routes/admin'));
 app.use('/api/agents',                       require('./routes/agents'));
 app.use('/api/export',                       require('./routes/export'));
 app.use('/api/users',                        require('./routes/users'));
+app.use('/api/usage',                        require('./routes/usage'));
 app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
 app.use('/api/projects',                     require('./routes/plan'));
