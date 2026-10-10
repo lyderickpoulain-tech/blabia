@@ -26,6 +26,7 @@ model User {
   createdMilestones  Milestone[] @relation("MilestoneCreator")
   createdTodos       TodoItem[]  @relation("TodoCreator")
   usageLogs          UsageLog[]
+  documents          ProjectDocument[]
 }
 
 model Agent {
@@ -83,6 +84,7 @@ model Project {
   todos         TodoItem[]
   decisions     Decision[]
   usageLogs     UsageLog[]
+  documents     ProjectDocument[]
 }
 
 model ProjectAgent {
@@ -233,4 +235,23 @@ model UsageLog {
 
   @@index([projectId])
   @@index([createdAt])
+}
+
+// v5.1 : documents de référence du projet (services/documents.js) — texte extrait au dépôt,
+// lu par les agents à chaque réunion si enabled (bloc commun du prompt, mis en cache)
+model ProjectDocument {
+  id        String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  projectId String
+  name      String
+  mimeType  String?
+  sizeBytes Int      @default(0)
+  charCount Int      @default(0)
+  content   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  createdBy String?
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator   User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }

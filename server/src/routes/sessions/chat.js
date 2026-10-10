@@ -20,6 +20,7 @@ const { parseAgentOutput, detectArtifactRequest } = require('../../services/mark
 const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
+const { listDocuments, formatDocumentsForPrompt } = require('../../services/documents');
 const {
   CHALLENGER, challengesLeft, challengerAvailable, priorVigilanceText,
   buildOrchestratorChallengeSection, buildChallengerTurnSection,
@@ -335,6 +336,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     // Registre des décisions du projet (chargé une fois par requête)
     const decisionRegistry = formatRegistryForPrompt(await listDecisions(projectId));
     const actionsText = formatActionsForPrompt(await listActions(projectId));
+    const documentsText = formatDocumentsForPrompt(await listDocuments(projectId, { withContent: true }));
     // Contradicteur : réglage de la réunion, sinon celui du projet (activé par défaut)
     const challengerOn = (session.challengerEnabled ?? project.challengerEnabled) !== false;
     const today = new Date().toLocaleDateString('fr-FR');
@@ -469,6 +471,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         decisionBudget: { used: countDecisions(currentMessages), max: decisionBudget },
         decisionRegistry,
         actionsText,
+        documentsText,
         today,
         challengerSection: isChallenge
           ? buildChallengerTurnSection({ target: next.challengeTarget, priorText: priorVigilanceText(currentMessages) })

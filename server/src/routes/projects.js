@@ -11,6 +11,7 @@ const { parseJsonField } = require('../utils/parseJsonField');
 const { LEGACY_COST_SQL, projectCostReport } = require('../services/usageReports');
 const { ensureDemoProject, deleteDemoProjects } = require('../services/demoProject');
 const { DEFAULT_MODEL } = require('../services/models');
+const { listDocuments, formatDocumentsForPrompt } = require('../services/documents');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -843,12 +844,13 @@ router.post('/:id/quick-command', async (req, res) => {
       .where({ projectId: req.params.id, status: 'accepted' })
       .select('id', 'task', 'summary', 'intention', 'createdAt', 'milestoneId');
 
+    const documentsText = formatDocumentsForPrompt(await listDocuments(project.id, { withContent: true }));
     const systemPrompt = `Tu es l'assistant du projet "${project.name}".
 Brief : ${project.brief || 'non défini'}
 Réunions planifiées : ${milestones.length > 0 ? milestones.map(m => `- ${m.title} (${m.status})`).join('\n') : 'aucune'}
 Réunions tenues (acceptées) : ${sessions.length > 0 ? sessions.map(s => `- ${s.task}`).join('\n') : 'aucune'}
 Mémoire projet : ${project.context?.slice(0, 1000) || 'aucune'}
-
+${documentsText ? `\nDocuments de référence du projet (cite-les entre « » quand tu t'en sers) :\n${documentsText}\n` : ''}
 IMPORTANT : Ta réponse N'EST PAS stockée dans la mémoire du projet. C'est une réponse ponctuelle.`;
 
     let userPrompt;

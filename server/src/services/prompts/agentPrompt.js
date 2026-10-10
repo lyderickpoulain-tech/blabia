@@ -80,6 +80,7 @@ const HUMOR_INSTRUCTIONS = {
  * @param {{activeText:string, reopenedText:string}|null} [p.decisionRegistry] - registre des décisions du projet (services/decisions.js)
  * @param {string}  [p.preparationSection] - consigne de préparation sans l'humain (services/prompts/preparationPrompt.js)
  * @param {string}  [p.actionsText] - actions du projet entre les réunions (services/actions.js)
+ * @param {string}  [p.documentsText] - documents de référence du projet (services/documents.js)
  * @param {string}  [p.today] - date du jour (JJ/MM/AAAA), pour situer les échéances
  */
 function buildAgentSystemPrompt({
@@ -102,6 +103,7 @@ function buildAgentSystemPrompt({
   decisionRegistry = null,
   preparationSection = '',
   actionsText = '',
+  documentsText = '',
   today = '',
   challengerSection = '', // v5.1 : tour du contradicteur (services/challenger.js)
 }) {
@@ -145,6 +147,10 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
     ? `\nOUTILS DÉJÀ PROPOSÉS DANS CETTE RÉUNION — ne les repropose pas :\n${toolReview.toolSuggestionsText}\n`
     : '';
   const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
+  // v5.1 : documents de référence fournis par l'humain (texte extrait au dépôt)
+  const documentsSection = documentsText
+    ? `\nDOCUMENTS DE RÉFÉRENCE DU PROJET (fournis par l'humain : appuie-toi dessus, cite le document entre « » quand tu t'en sers, signale toute contradiction entre un document et ce qui se dit) :\n${documentsText}\n`
+    : '';
   const memorySection   = project.context ? `\nMémoire du projet (réunions les plus récentes — ne redemande pas ce qui y est déjà décidé) :\n${recentMemory(project.context)}\n` : '';
   const pastCodeSection = pastCodePromptsText
     ? `\nPrompts Claude Code des réunions précédentes :\n${pastCodePromptsText}\n` : '';
@@ -178,7 +184,7 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
 
   // ── 1. Bloc commun à la réunion (mis en cache) ─────────────────────────────
   const shared = `Tu participes à une réunion collaborative entre agents IA spécialisés, animée pour un humain qui initie le projet et tranche les décisions. Ton rôle précis t'est donné à la fin de ce prompt.
-${briefSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
+${briefSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 

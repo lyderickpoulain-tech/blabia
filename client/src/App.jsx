@@ -9,6 +9,7 @@ import ProjectPlan from './pages/project/ProjectPlan';
 import ProjectHistory from './pages/project/ProjectHistory';
 import ProjectDecisions from './pages/project/ProjectDecisions';
 import ProjectActions from './pages/project/ProjectActions';
+import ProjectDocuments from './pages/project/ProjectDocuments';
 import ProjectTools from './pages/project/ProjectTools';
 import ProjectTeam from './pages/project/ProjectTeam';
 import ProjectSettings from './pages/project/ProjectSettings';
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="historique" element={<ProjectHistory />} />
           <Route path="decisions" element={<ProjectDecisions />} />
           <Route path="actions" element={<ProjectActions />} />
+          <Route path="documents" element={<ProjectDocuments />} />
           <Route path="outils" element={<ProjectTools />} />
           <Route path="equipe" element={<ProjectTeam />} />
           <Route path="parametres" element={<ProjectSettings />} />

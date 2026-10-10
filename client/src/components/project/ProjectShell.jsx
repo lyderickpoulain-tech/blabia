@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, Wrench, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, FileText, Wrench, Users, Settings } from 'lucide-react';
 import Layout from '../Layout';
 import { Badge } from '../ui';
 import api from '../../utils/api';
@@ -20,6 +20,7 @@ const NAV = [
   { to: 'historique', label: 'Historique',  icon: History },
   { to: 'decisions',  label: 'Décisions',   icon: ScrollText, badge: 'decisions' },
   { to: 'actions',    label: 'Actions',     icon: ListChecks, badge: 'actions' },
+  { to: 'documents',  label: 'Documents',   icon: FileText },
   { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools' },
   { to: 'equipe',     label: 'Équipe',      icon: Users },
   { to: 'parametres', label: 'Paramètres',  icon: Settings },

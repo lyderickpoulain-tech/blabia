@@ -69,6 +69,9 @@ export const CHAPTERS = [
       { target: 'pd-ask', placement: 'top',
         title: 'Demander à BlabIA',
         body: 'Un résumé, la prochaine étape, une recherche : BlabIA répond à partir de tout ce qui a été dit et décidé dans le projet.' },
+      { path: demo('/documents'), target: 'docs-list',
+        title: 'Les documents de référence',
+        body: 'Cahier des charges, devis, étude, règlement : déposez-les ici (PDF, Word, Excel…). Les agents les lisent à chaque réunion et les citent. Ici, une étude de marché.' },
     ],
   },
   {

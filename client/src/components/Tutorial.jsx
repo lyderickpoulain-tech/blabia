@@ -101,7 +101,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
             <div className="space-y-4">
               <ul className="space-y-1.5">
                 {[
-                  'Un projet décrit votre objectif : c’est le brief, que les agents lisent avant chaque réunion.',
+                  'Un projet décrit votre objectif : le brief et vos documents de référence, que les agents lisent avant chaque réunion.',
                   'Le plan enchaîne les réunions à tenir, dans l’ordre.',
                   'Chaque réunion fait avancer une étape ; vous tranchez les décisions qui vous reviennent.',
                   'Un contradicteur signale, seulement sur les choix à fort enjeu, ce qui mérite d’être challengé : vous en tenez compte ou l’écartez.',

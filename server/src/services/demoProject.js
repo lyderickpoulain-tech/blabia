@@ -6,7 +6,8 @@
 //  - une réunion préparée qui attend deux arbitrages (phase « briefing ») ;
 //  - une décision remise en question et une action en retard (points d'attention) ;
 //  - trois actions entre les réunions (faite, en retard, à venir) ;
-//  - un point de vigilance du contradicteur, pris en compte (réunion conclue).
+//  - un point de vigilance du contradicteur, pris en compte (réunion conclue) ;
+//  - un document de référence (étude de marché courte).
 // Project.isDemo = true : les routes IA sont bloquées (demoGuard) et le projet est
 // supprimé à la fin de la visite.
 const { randomUUID } = require('crypto');
@@ -199,6 +200,22 @@ async function ensureDemoProject(user) {
       id: randomUUID(), projectId, milestoneId: null, description: null, ...a,
       priority: 'medium', displayOrder: i, source: 'session', sessionId: s1, createdAt: t1, createdBy: user.id,
     })));
+
+    // Document de référence
+    const study = [
+      'Étude de marché — salon de thé à Lyon (synthèse, septembre 2026)',
+      '',
+      'Marché : la consommation de thé en France progresse de 4 % par an ; les thés en vrac et les infusions bio portent la croissance.',
+      'Concurrence : trois cafés de spécialité dans un rayon de 500 m autour de la Croix-Rousse, aucun salon centré sur le thé.',
+      'Clientèle : 62 % des habitants du quartier ont entre 25 et 45 ans ; pic de fréquentation entre 12 h et 14 h et entre 16 h et 18 h.',
+      'Prix constatés : boisson chaude 4 à 6 €, pâtisserie 4 à 5 €, thé en vrac 8 à 15 € les 100 g.',
+      'Saisonnalité : baisse de 35 à 40 % des boissons chaudes de juin à août, compensée en partie par les thés glacés.',
+      'Loyers commerciaux : Croix-Rousse 24 à 30 €/m²/mois ; Presqu’île 40 à 50 €/m²/mois.',
+    ].join('\n');
+    await trx('ProjectDocument').insert({
+      id: randomUUID(), projectId, name: 'Étude de marché — thé à Lyon.pdf', mimeType: 'application/pdf',
+      sizeBytes: 182_400, charCount: study.length, content: study, enabled: true, createdAt: t1, createdBy: user.id,
+    });
 
     return { id: projectId, created: true };
   });
