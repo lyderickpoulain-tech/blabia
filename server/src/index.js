@@ -48,6 +48,8 @@ app.use('/api/projects',                     require('./routes/actions'));
 app.use('/api/projects',                     require('./routes/documents'));
 app.use('/api/projects',                     require('./routes/missions'));
 app.use('/api/projects',                     require('./routes/exports'));
+app.use('/api/projects',                     require('./routes/devTasks'));
+app.use('/api/github',                       require('./routes/github'));
 app.use('/api/reminders',                    require('./routes/reminders'));
 app.use('/api',                              require('./routes/tools'));
 

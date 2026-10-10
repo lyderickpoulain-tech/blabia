@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Archive, RotateCcw, Trash2 } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Archive, RotateCcw, Trash2, GitPullRequest } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
@@ -246,7 +246,7 @@ function ConfirmByName({ project, title, children, confirmLabel, tone, busy, onC
 }
 
 export default function ProjectSettings() {
-  const { project, setProject, canManage, refreshCounts } = useProject();
+  const { project, setProject, canManage, isOwner, refreshCounts } = useProject();
   const navigate = useNavigate();
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -296,6 +296,20 @@ export default function ProjectSettings() {
         <IdentitySection project={project} setProject={setProject} canEdit={canManage} />
         <BriefSection project={project} setProject={setProject} canEdit={canManage} />
         <DevDirectorySection project={project} setProject={setProject} canEdit={canManage} />
+
+        {/* Développements depuis BlabIA (v5.1) : configuration sur la page Développements */}
+        {isOwner && (
+          <div data-tour="settings-dev">
+          <Section title="Développement avec Claude Code" subtitle="Lancer les prompts de vos réunions Claude Code directement depuis BlabIA, sans copier-coller : Claude Code travaille dans le dépôt GitHub du projet, avec votre abonnement Claude.">
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-ink-soft flex-1">{project.githubRepo ? <>Dépôt : <strong>{project.githubRepo}</strong></> : 'Aucun dépôt GitHub associé.'}</p>
+              <Link to="../developpements" relative="path" className="inline-flex items-center gap-2 h-9 px-3 rounded-[10px] text-[13px] font-bold bg-white text-ink-soft border border-line hover:bg-canvas">
+                <GitPullRequest size={15} aria-hidden="true" /> {project.githubRepo ? 'Gérer' : 'Configurer'}
+              </Link>
+            </div>
+          </Section>
+          </div>
+        )}
 
         {project.context && (
           <Section title="Mémoire brute" subtitle="Les comptes-rendus accumulés, transmis aux agents (les plus récents d'abord). Le registre des décisions en est la version structurée.">

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Mail, AtSign, Shield, Bell, Send } from 'lucide-react';
+import { Mail, AtSign, Shield, Bell, Send, Github } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import api from '../utils/api';
 import { dayName } from '../components/RemindersToggle';
+import { notifyError } from '../utils/notify';
+import { startGitHubConnect, useGitHubReturn } from '../utils/github';
 
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 const ROLE_LABEL = { user: 'Utilisateur (collaborateur invité)', member: 'Membre', admin: 'Administrateur', supervisor: 'Superviseur' };
@@ -52,6 +54,33 @@ function ReminderSettings() {
       </div>
       <p className="text-xs text-ink-faint mt-2">Un e-mail par semaine avec les actions en retard, de la semaine et les prochaines, pour les projets où vous avez activé le rappel (page Actions ou Paramètres du projet).</p>
       {status && <p className="text-xs font-bold text-ink-soft mt-1" role="status">{status}</p>}
+    </Section>
+  );
+}
+
+// Compte GitHub (v5.1) : pour lancer les développements Claude Code depuis BlabIA
+function GitHubSettings() {
+  const [gh, setGh] = useState(null);
+  const load = () => api.get('/github').then(({ data }) => setGh(data)).catch(err => notifyError(err, 'Impossible de lire la connexion GitHub.'));
+  useEffect(() => { load(); }, []);
+  useGitHubReturn(() => load());
+  if (!gh?.configured) return null; // fonctionnalité non configurée sur ce serveur
+  const disconnect = async () => {
+    if (!confirm('Déconnecter votre compte GitHub de BlabIA ? Les développements ne pourront plus être lancés ni suivis.')) return;
+    try { await api.delete('/github'); load(); } catch (err) { notifyError(err, 'Déconnexion impossible.'); }
+  };
+  return (
+    <Section icon={Github} title="GitHub">
+      {gh.connected ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-ink-soft flex-1">Connecté : <strong>{gh.login}</strong></p>
+          {gh.manageUrl && <a className="text-xs font-bold text-action underline" href={gh.manageUrl} target="_blank" rel="noreferrer">Choisir les dépôts</a>}
+          <Button size="sm" variant="ghost" onClick={disconnect}>Déconnecter</Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="primary" onClick={() => startGitHubConnect('/profile')}><Github size={15} aria-hidden="true" /> Connecter GitHub</Button>
+      )}
+      <p className="text-xs text-ink-faint mt-2">Permet de lancer depuis BlabIA les prompts de vos réunions Claude Code : Claude Code travaille dans votre dépôt GitHub, avec votre abonnement Claude (Projet › Développements).</p>
     </Section>
   );
 }
@@ -142,6 +171,7 @@ export default function ProfilePage() {
           </Section>
 
           <ReminderSettings />
+          {user?.role !== 'user' && <GitHubSettings />}
         </Card>
       </div>
     </Layout>

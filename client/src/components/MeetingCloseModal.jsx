@@ -6,7 +6,7 @@ import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
 import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Button, IconButton, Badge, SectionLabel } from './ui';
-import { notifyError } from '../utils/notify';
+import { notifyError, notifySuccess } from '../utils/notify';
 
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
 // à l'ouverture, puis assistant en 3 étapes : relecture CR + livrable → revue
@@ -38,6 +38,15 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   const updateAction = (key, patch) => setActionProposals(prev => prev.map(a => a.key === key ? { ...a, ...patch } : a));
   const updateProposal = (key, patch) => setDecisionProposals(prev => prev.map(d => d.key === key ? { ...d, ...patch } : d));
   const [showPlan, setShowPlan] = useState(false);
+  // Développement depuis BlabIA (v5.1) : lancé à la conclusion si le dépôt du projet est prêt
+  const [devReady, setDevReady]   = useState(false);
+  const [launchDev, setLaunchDev] = useState(true);
+  useEffect(() => {
+    if (meetingType !== 'claude_code') return;
+    api.get(`/projects/${projectId}/github`)
+      .then(({ data }) => setDevReady(!!(data.ready && data.isOwner)))
+      .catch(() => {}); // facultatif : sans dépôt prêt, on garde « Copier »
+  }, [meetingType, projectId]);
 
   const [applying,       setApplying]       = useState(false);
   const [applyError,     setApplyError]     = useState('');
@@ -145,6 +154,13 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       }
 
       await api.patch(`/projects/${projectId}/sessions/${session.id}/status`, { status: 'accepted' });
+      if (meetingType === 'claude_code' && devReady && launchDev && deliverable?.trim()) {
+        // La réunion est conclue même si le lancement échoue : il reste possible depuis Projet › Développements
+        try {
+          await api.post(`/projects/${projectId}/dev-tasks`, { sessionId: session.id });
+          notifySuccess('Développement lancé : suivez-le dans Projet › Développements.');
+        } catch (err) { notifyError(err, 'Le développement n’a pas pu être lancé : relancez-le depuis Projet › Développements.'); }
+      }
       onClosed?.('accepted');
     } catch (err) {
       setApplyError(err.response?.data?.error || 'Erreur lors de la validation');
@@ -292,6 +308,12 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                     aria-label="Prompt Claude Code"
                     className="w-full px-3.5 py-3 bg-ink text-green-200 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-action resize-y leading-relaxed"
                   />
+                  {devReady && (
+                    <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+                      <input type="checkbox" checked={launchDev} onChange={e => setLaunchDev(e.target.checked)} className="mt-0.5 w-4 h-4 accent-action" />
+                      <span><strong>Lancer le développement dès la conclusion</strong> : Claude Code réalise ce prompt dans le dépôt GitHub du projet. Rien n’est mis en ligne sans votre accord (Projet › Développements).</span>
+                    </label>
+                  )}
                 </section>
               )}
 

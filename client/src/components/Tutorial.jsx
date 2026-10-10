@@ -109,6 +109,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                   'Entre deux réunions, vous menez les actions décidées, dans l’ordre (avec un rappel par e-mail chaque semaine si vous le souhaitez) ; la réunion suivante commence par un point d’avancement.',
                   'Pour un travail approfondi (recherche, analyse, rédaction), un agent propose une mission à un sous-agent : vous la lancez avec un plafond de coût, le rapport rejoint les documents.',
                   'Comptes rendus, décisions et actions s’exportent en PDF ou en Word.',
+                  'Projet informatique : le prompt d’une réunion Claude Code se lance depuis BlabIA ; Claude Code travaille dans votre dépôt GitHub avec votre abonnement Claude, et vous mettez en ligne d’un clic (Projet › Développements).',
                 ].map(t => (
                   <li key={t} className="flex gap-2 text-sm text-ink-soft leading-snug">
                     <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-action shrink-0" aria-hidden="true" />{t}

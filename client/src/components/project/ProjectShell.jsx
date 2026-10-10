@@ -1,6 +1,6 @@
 import { Suspense, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, FileText, Wrench, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, FileText, Wrench, Users, Settings, GitPullRequest } from 'lucide-react';
 import Layout from '../Layout';
 import PageLoader from '../PageLoader';
 import { Badge } from '../ui';
@@ -23,6 +23,7 @@ const NAV = [
   { to: 'actions',    label: 'Actions',     icon: ListChecks, badge: 'actions' },
   { to: 'documents',  label: 'Documents',   icon: FileText },
   { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools' },
+  { to: 'developpements', label: 'Développements', icon: GitPullRequest, show: p => !!p.githubRepo }, // dépôt GitHub choisi (Paramètres)
   { to: 'equipe',     label: 'Équipe',      icon: Users },
   { to: 'parametres', label: 'Paramètres',  icon: Settings },
 ];
@@ -95,7 +96,7 @@ export default function ProjectShell() {
               {project.isDemo && <Badge tone="ai" className="mt-1">Projet exemple</Badge>}
             </div>
             <nav data-tour="shell-nav" className="flex md:flex-col gap-1 overflow-x-auto pb-1 md:pb-0">
-              {NAV.map(item => {
+              {NAV.filter(item => !item.show || item.show(project)).map(item => {
                 const badge = item.badge ? badgeOf(item.badge) : 0;
                 return (
                   <NavLink key={item.label} to={item.to} end={item.end}

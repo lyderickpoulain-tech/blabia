@@ -23,6 +23,7 @@ const ProjectHistory   = lazy(() => import('./pages/project/ProjectHistory'));
 const ProjectDecisions = lazy(() => import('./pages/project/ProjectDecisions'));
 const ProjectActions   = lazy(() => import('./pages/project/ProjectActions'));
 const ProjectDocuments = lazy(() => import('./pages/project/ProjectDocuments'));
+const ProjectDev = lazy(() => import('./pages/project/ProjectDev'));
 const ProjectTools     = lazy(() => import('./pages/project/ProjectTools'));
 const ProjectTeam      = lazy(() => import('./pages/project/ProjectTeam'));
 const ProjectSettings  = lazy(() => import('./pages/project/ProjectSettings'));
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="decisions" element={<ProjectDecisions />} />
           <Route path="actions" element={<ProjectActions />} />
           <Route path="documents" element={<ProjectDocuments />} />
+          <Route path="developpements" element={<ProjectDev />} />
           <Route path="outils" element={<ProjectTools />} />
           <Route path="equipe" element={<ProjectTeam />} />
           <Route path="parametres" element={<ProjectSettings />} />

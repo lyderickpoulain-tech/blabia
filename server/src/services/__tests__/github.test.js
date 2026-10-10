@@ -1,0 +1,75 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import { createRequire } from 'module';
+import crypto from 'crypto';
+
+const require = createRequire(import.meta.url);
+const github = require('../github');
+const wf = require('../githubWorkflows');
+
+describe('connexion GitHub', () => {
+  beforeAll(() => {
+    process.env.JWT_SECRET = 'secret-unitaire';
+    const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    process.env.GITHUB_APP_ID = '123';
+    process.env.GITHUB_APP_PRIVATE_KEY = privateKey.export({ type: 'pkcs1', format: 'pem' }).replace(/\n/g, '\\n');
+    globalThis.__pub = publicKey;
+  });
+
+  it('état signé : utilisateur et page de retour retrouvés ; falsification refusée', () => {
+    const s = github.signState('u1', '/projects/0f8b1c2d-1111-2222-3333-444455556666/developpements');
+    expect(github.verifyState(s)).toEqual({ userId: 'u1', ret: '/projects/0f8b1c2d-1111-2222-3333-444455556666/developpements' });
+    const [payload, sig] = s.split('.');
+    const forged = Buffer.from(JSON.stringify({ u: 'pirate', r: '/profile', e: Date.now() + 1e6 })).toString('base64url');
+    expect(github.verifyState(`${forged}.${sig}`)).toBeNull();
+    expect(github.verifyState(`${payload}.xx`)).toBeNull();
+    expect(github.verifyState('')).toBeNull();
+  });
+
+  it('page de retour : jamais une adresse externe', () => {
+    expect(github.verifyState(github.signState('u1', 'https://pirate.example')).ret).toBe('/profile');
+    expect(github.safeReturn('//pirate.example')).toBe('/profile');
+    expect(github.safeReturn('/profile')).toBe('/profile');
+  });
+
+  it('jeton de l’application : JWT RS256 vérifiable, émis par l’application', () => {
+    const [h, b, sig] = github.appJwt().split('.');
+    expect(crypto.createVerify('RSA-SHA256').update(`${h}.${b}`).verify(globalThis.__pub, Buffer.from(sig, 'base64url'))).toBe(true);
+    const body = JSON.parse(Buffer.from(b, 'base64url').toString());
+    expect(body.iss).toBe('123');
+    expect(body.exp - body.iat).toBeLessThanOrEqual(10 * 60);
+  });
+});
+
+describe('automatisations installées dans le dépôt', () => {
+  const dev = wf.devWorkflow({ appSlug: 'blabia-app' });
+  const deploy = wf.deployWorkflow();
+
+  it('développement : lancé seulement par BlabIA, abonnement de l’utilisateur, garde-fous', () => {
+    expect(wf.isCurrent(dev)).toBe(true);
+    expect(dev).toMatch(/on:\n {2}workflow_dispatch:/);
+    // Seul déclencheur : workflow_dispatch (un tiers ne peut rien déclencher sur un dépôt public)
+    const triggers = dev.slice(dev.indexOf('\non:\n'), dev.indexOf('\npermissions:')).match(/\n {2}\w[\w-]*:/g);
+    expect(triggers).toEqual(['\n  workflow_dispatch:']);
+    expect(dev).toContain('claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}');
+    expect(dev).toContain('allowed_bots: "blabia-app[bot]"');
+    expect(dev).toContain('--max-turns 60');
+    expect(dev).toContain('timeout-minutes: 45');
+    expect(dev).toContain('blabia/dev-${{ inputs.issue }}');
+    expect(dev).toContain('Ne fusionne jamais');
+    expect(dev).toContain(`run-name: "${wf.devRunName('${{ inputs.issue }}')}"`);
+  });
+
+  it('mise en ligne : sauvegarde chiffrée AVANT la fusion, échec si mot de passe absent', () => {
+    expect(wf.isCurrent(deploy)).toBe(true);
+    const backup = deploy.indexOf('pg_dump');
+    const encrypt = deploy.indexOf('gpg --batch');
+    const merge = deploy.indexOf('gh pr merge');
+    expect(backup).toBeGreaterThan(0);
+    expect(encrypt).toBeGreaterThan(backup);
+    expect(merge).toBeGreaterThan(encrypt);
+    expect(deploy).toContain('rm -f base.dump');                 // jamais de sauvegarde en clair conservée
+    expect(deploy).toMatch(/BACKUP_PASSWORD" \]; then echo .*exit 1/);
+    expect(deploy).toContain('retention-days: 90');
+    expect(deploy).toContain(`run-name: "${wf.deployRunName('${{ inputs.pr }}')}"`);
+  });
+});

@@ -20,6 +20,8 @@ model User {
   reminderDay         Int       @default(1) // v5.1 : jour des rappels hebdomadaires, 1 = lundi … 7 = dimanche
   remindersLastSentAt DateTime? // v5.1 : dernier rappel envoyé (un par semaine)
   tourProgress     Json            @default("{}") // v5.1 : chapitres de la visite guidée terminés { chapitre: date ISO }
+  githubInstallationId String?   // v5.1 : installation de l'application GitHub BlabIA (services/github.js)
+  githubLogin          String?   // v5.1 : compte GitHub connecté
   createdAt        DateTime        @default(now())
   projects           Project[]
   invitations        Invitation[]
@@ -30,6 +32,7 @@ model User {
   usageLogs          UsageLog[]
   documents          ProjectDocument[]
   approvedMissions   AgentMission[]
+  devTasks           DevTask[]
 }
 
 model Agent {
@@ -76,6 +79,7 @@ model Project {
   missionsMonthlyBudgetUSD Float @default(5) // v5.1 : budget mensuel des missions des agents (services/missions.js)
   remindersEnabled  Boolean   @default(false) // v5.1 : rappels hebdomadaires par e-mail des actions (services/reminders.js)
   challengerEnabled Boolean   @default(true) // v5.1 : contradicteur (avocat du diable sélectif, services/challenger.js), activé par défaut
+  githubRepo        String?   // v5.1 : dépôt GitHub du projet « propriétaire/nom » (développements, services/devTasks.js)
   isDemo            Boolean   @default(false) // v5.1 : projet exemple de la visite guidée (services/demoProject.js), sans appel à l'IA, supprimé en fin de visite
   createdAt         DateTime  @default(now())
   updatedAt     DateTime        @updatedAt
@@ -91,6 +95,7 @@ model Project {
   usageLogs     UsageLog[]
   documents     ProjectDocument[]
   missions      AgentMission[]
+  devTasks      DevTask[]
 }
 
 model ProjectAgent {
@@ -199,6 +204,7 @@ model Session {
   decisions         Decision[]
   usageLogs         UsageLog[]
   missions          AgentMission[]
+  devTasks          DevTask[]
 }
 
 // v5.0 : registre des décisions du projet — alimenté à la clôture des réunions
@@ -296,4 +302,36 @@ model AgentMission {
 
   @@index([projectId])
   @@index([status])
+}
+
+// v5.1 : développements lancés depuis BlabIA (services/devTasks.js) — Claude Code dans
+// GitHub Actions sur le dépôt du projet : demande (issue) → pull request → mise en ligne
+// (sauvegarde de la base puis fusion, workflow blabia-deploy.yml).
+model DevTask {
+  id                String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  projectId         String
+  sessionId         String?
+  createdBy         String?
+  repo              String
+  title             String
+  prompt            String
+  status            String    @default("running") // running | ready | failed | deploying | deployed | deploy_failed | abandoned
+  issueNumber       Int?
+  issueUrl          String?
+  prNumber          Int?
+  prUrl             String?
+  summary           String?
+  files             Json      @default("[]") // [{ filename, additions, deletions }]
+  touchesDatabase   Boolean   @default(false)
+  runUrl            String?
+  error             String?
+  createdAt         DateTime  @default(now())
+  readyAt           DateTime?
+  deployRequestedAt DateTime?
+  finishedAt        DateTime?
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session           Session?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  creator           User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }

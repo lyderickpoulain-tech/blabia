@@ -86,6 +86,9 @@ export const CHAPTERS = [
       { target: 'plan-generate', placement: 'bottom',
         title: 'Laisser BlabIA proposer',
         body: 'À partir du brief, BlabIA propose une suite de réunions. Les réunions suggérées pendant les échanges s’y ajoutent aussi, si vous les gardez.' },
+      { path: demo('/parametres'), target: 'settings-dev', placement: 'top',
+        title: 'Projet informatique : sans copier-coller',
+        body: 'Pour un logiciel ou un site, reliez ici un dépôt GitHub : le prompt d’une réunion Claude Code se lance alors depuis BlabIA. Claude Code travaille avec votre abonnement Claude, puis vous mettez en ligne d’un clic (la base est sauvegardée juste avant).' },
     ],
   },
   {
