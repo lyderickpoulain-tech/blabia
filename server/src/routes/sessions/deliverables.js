@@ -5,6 +5,7 @@ const anthropic      = require('../../services/anthropic');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { getProjectTools, formatProjectToolsForPrompt } = require('../../services/tools/toolsStore');
 const { extractMeetingDecisions } = require('../../services/decisions');
+const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 
 // Livrable d'une réunion stack : la liste des outils proposés (Markdown), validée
@@ -179,16 +180,20 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     // dans la fenêtre de clôture (POST /:sessionId/decisions). Un échec de
     // l'extraction ne bloque pas la clôture.
     const summaryPrompt = buildSummaryPrompt(sessionContext, expertiseLevel, meetingType);
-    const [summaryResponse, decisionProposals] = await Promise.all([
+    const actionsText = formatActionsForPrompt(await listActions(projectId));
+    const [summaryResponse, extraction] = await Promise.all([
       anthropic.messages.create({
         model: MODEL, max_tokens: 4000,
         system: summaryPrompt.system,
         messages: [{ role: 'user', content: summaryPrompt.user }]
       }),
-      extractMeetingDecisions({ session, messages, historyText, projectId })
+      extractMeetingDecisions({ session, messages, historyText, projectId, actionsText })
         .catch(err => { console.error('[generate-deliverable] extraction décisions :', err.message); return null; }),
     ]);
     let summary = summaryResponse.content[0].text.trim();
+    // null = extraction indisponible (la fenêtre de clôture le signale)
+    const decisionProposals = extraction ? extraction.decisions : null;
+    const actionProposals   = extraction ? extraction.actions   : null;
 
     // Sources web citées pendant la réunion (dédupliquées), agrégées en fin de CR
     const citedSources = new Map();
@@ -239,7 +244,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     });
     await updateProjectContext(projectId, sessionId, session.task, summary);
 
-    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals });
+    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals, actionProposals });
   } catch (err) {
     console.error('[sessions/generate-deliverable]', err.message);
     res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });

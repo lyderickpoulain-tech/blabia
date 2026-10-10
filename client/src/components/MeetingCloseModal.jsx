@@ -4,7 +4,7 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
 import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
-import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Button, IconButton, Badge, SectionLabel } from './ui';
 
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
@@ -31,6 +31,10 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   // (null = extraction indisponible)
   const [decisionProposals, setDecisionProposals] = useState([]);
   const decisionsSavedRef = useRef(false);
+  // Actions entre les réunions : proposées par BlabIA, créées seulement si gardées
+  const [actionProposals, setActionProposals] = useState([]);
+  const actionsSavedRef = useRef(false);
+  const updateAction = (key, patch) => setActionProposals(prev => prev.map(a => a.key === key ? { ...a, ...patch } : a));
   const updateProposal = (key, patch) => setDecisionProposals(prev => prev.map(d => d.key === key ? { ...d, ...patch } : d));
   const [showPlan, setShowPlan] = useState(false);
 
@@ -52,6 +56,9 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       if (Array.isArray(data.toolSuggestions)) setToolSuggestions(data.toolSuggestions);
       setDecisionProposals(Array.isArray(data.decisionProposals)
         ? data.decisionProposals.map((d, i) => ({ ...d, key: i, keep: true }))
+        : null);
+      setActionProposals(Array.isArray(data.actionProposals)
+        ? data.actionProposals.map((a, i) => ({ ...a, key: i, keep: true }))
         : null);
       setStep('review');
     } catch (err) {
@@ -103,6 +110,16 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
           decisions: kept.map(({ statement, rationale, rejectedOptions, origin }) => ({ statement, rationale, rejectedOptions, origin })),
         });
         decisionsSavedRef.current = true;
+      }
+
+      // Actions entre les réunions : seulement celles gardées (une seule fois)
+      const keptActions = (actionProposals || []).filter(a => a.keep && a.title.trim());
+      if (keptActions.length > 0 && !actionsSavedRef.current) {
+        await api.post(`/projects/${projectId}/actions/from-session`, {
+          sessionId: session.id,
+          actions: keptActions.map(({ title, description, dueDate }) => ({ title, description, dueDate })),
+        });
+        actionsSavedRef.current = true;
       }
 
       // Réunion stack : outils reportés dans les outils du projet avec la décision prise
@@ -315,6 +332,39 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                             {d.rejectedOptions?.length > 0 && (
                               <p className="text-[11px] text-ink-faint px-1.5">Écarté : {d.rejectedOptions.join(', ')}</p>
                             )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </section>
+
+              {/* Actions d'ici la prochaine réunion (v5.1) */}
+              <section className="space-y-2">
+                <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                  <ListChecks size={16} className="text-action" aria-hidden="true" /> Actions d'ici la prochaine réunion
+                </h3>
+                {actionProposals === null ? (
+                  <p className="text-xs text-await bg-await-bg border border-await-border rounded-[10px] px-3 py-2">
+                    Les actions n'ont pas pu être proposées. Vous pourrez les ajouter dans Projet › Actions.
+                  </p>
+                ) : actionProposals.length === 0 ? (
+                  <p className="text-xs text-ink-faint">Aucune action concrète identifiée pour vous dans cette réunion.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-ink-muted">Ce que vous avez à faire avant la prochaine réunion. Les agents feront le point dessus en l'ouvrant. Décochez ce qui ne vous concerne pas.</p>
+                    <ul className="space-y-1.5">
+                      {actionProposals.map(a => (
+                        <li key={a.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 transition ${a.keep ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'}`}>
+                          <input type="checkbox" checked={a.keep} aria-label="Garder cette action"
+                            onChange={e => updateAction(a.key, { keep: e.target.checked })} className="mt-2 w-4 h-4 accent-action shrink-0" />
+                          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
+                            <input value={a.title} onChange={e => updateAction(a.key, { title: e.target.value })} disabled={!a.keep}
+                              aria-label="Action" className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
+                            <input type="date" value={a.dueDate || ''} onChange={e => updateAction(a.key, { dueDate: e.target.value || null })} disabled={!a.keep}
+                              aria-label="Échéance" className="text-xs text-ink-soft border border-line rounded-md px-2 h-8 outline-none bg-white" />
+                            {a.description && <p className="basis-full text-[11px] text-ink-muted px-1.5">{a.description}</p>}
                           </div>
                         </li>
                       ))}

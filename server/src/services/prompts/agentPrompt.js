@@ -79,6 +79,8 @@ const HUMOR_INSTRUCTIONS = {
  * @param {{used:number, max:number}|null} [p.decisionBudget] - cartes de décision déjà posées / budget de la réunion
  * @param {{activeText:string, reopenedText:string}|null} [p.decisionRegistry] - registre des décisions du projet (services/decisions.js)
  * @param {string}  [p.preparationSection] - consigne de préparation sans l'humain (services/prompts/preparationPrompt.js)
+ * @param {string}  [p.actionsText] - actions du projet entre les réunions (services/actions.js)
+ * @param {string}  [p.today] - date du jour (JJ/MM/AAAA), pour situer les échéances
  */
 function buildAgentSystemPrompt({
   agent,
@@ -99,6 +101,8 @@ function buildAgentSystemPrompt({
   decisionBudget = null,
   decisionRegistry = null,
   preparationSection = '',
+  actionsText = '',
+  today = '',
 }) {
   // Registre des décisions du projet : ce qui est tranché ne se redemande pas ;
   // ce que l'humain a remis en question est à retraiter en priorité.
@@ -125,6 +129,13 @@ Accompagne-le d'UNE bulle courte (une phrase) qui dit ce que montre l'illustrati
     : `
 ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. Si un schéma ou une maquette aiderait, propose-le en une phrase : l'humain peut le demander avec le bouton « 🎨 Illustrer ».
 `;
+  // v5.1 : actions entre les réunions, et point d'avancement en ouverture
+  const actionsSection = actionsText
+    ? `\nACTIONS DU PROJET (décidées aux réunions précédentes, cochées par l'humain${today ? ` — nous sommes le ${today}` : ''}) :
+${actionsText}
+POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le premier commence par UNE bulle de point d'avancement sur les actions qui concernent l'objectif (faites, en retard, et leur effet sur cette réunion), puis la réunion avance. Ne propose jamais une action déjà listée.
+`
+    : '';
   const toolsSection = projectToolsText ? `\nOutils retenus pour ce projet :\n${projectToolsText}\n` : '';
   const toolReviewSection = intention[0] === 'stack' && toolReview
     ? buildToolReviewSection({ ...toolReview, webSearchEnabled })
@@ -166,7 +177,7 @@ ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. 
 
   // ── 1. Bloc commun à la réunion (mis en cache) ─────────────────────────────
   const shared = `Tu participes à une réunion collaborative entre agents IA spécialisés, animée pour un humain qui initie le projet et tranche les décisions. Ton rôle précis t'est donné à la fin de ce prompt.
-${briefSection}${meetingsSection}${toolsSection}${registrySection}${memorySection}${pastCodeSection}${toolReviewSection}
+${briefSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 

@@ -1,0 +1,80 @@
+// Actions entre les réunions (v5.1) — table TodoItem, sans jalon (milestoneId NULL :
+// les actions ne pilotent pas le statut des réunions du plan).
+// - À la conclusion : BlabIA propose les actions à mener (même appel que l'extraction
+//   des décisions, services/decisions.js), l'humain les garde ou les retire.
+// - Entre les réunions : l'humain les coche (page Projet › Actions).
+// - À la réunion suivante : transmises aux agents, qui ouvrent par un point d'avancement.
+const db = require('../utils/db');
+
+const MAX_PROPOSALS = 8;
+const MAX_IN_PROMPT = 20;
+const OPEN = ['todo', 'in_progress'];
+
+const clean = (v, max) => String(v ?? '').trim().slice(0, max);
+
+// Échéance relative (jours après la réunion) → date AAAA-MM-JJ
+function dueDateFrom(days, from = new Date()) {
+  if (days === null || days === undefined || days === '') return null; // Number(null) vaudrait 0 : « aujourd'hui »
+  const n = Number(days);
+  if (!Number.isFinite(n) || n < 0 || n > 365) return null;
+  const d = new Date(from);
+  d.setDate(d.getDate() + Math.round(n));
+  return d.toISOString().slice(0, 10);
+}
+
+function sanitizeAction(a, from) {
+  if (!a || !clean(a.title, 300)) return null;
+  return {
+    title: clean(a.title, 300),
+    description: clean(a.detail ?? a.description, 1000) || null,
+    dueDate: a.dueDate ? clean(a.dueDate, 10) : dueDateFrom(a.dueInDays, from),
+  };
+}
+
+// Actions proposées dans la réponse JSON de l'extraction de fin de réunion
+function parseActions(raw, from) {
+  const seen = new Set();
+  return (Array.isArray(raw?.actions) ? raw.actions : [])
+    .map(a => sanitizeAction(a, from))
+    .filter(a => a && !seen.has(a.title.toLowerCase()) && seen.add(a.title.toLowerCase()))
+    .slice(0, MAX_PROPOSALS);
+}
+
+async function listActions(projectId) {
+  return db('TodoItem as t')
+    .leftJoin('Session as s', 's.id', 't.sessionId')
+    .where('t.projectId', projectId)
+    .whereNot('t.status', 'cancelled')
+    .select('t.id', 't.title', 't.description', 't.status', 't.dueDate', 't.source', 't.sessionId', 't.createdAt', 's.task as sessionTask')
+    .orderByRaw(`CASE WHEN t.status IN ('todo','in_progress') THEN 0 ELSE 1 END, t."dueDate" ASC NULLS LAST, t."createdAt" DESC`);
+}
+
+const fmtDay = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+const isOverdue = (a, now = new Date()) =>
+  OPEN.includes(a.status) && a.dueDate && new Date(a.dueDate) < new Date(now.toISOString().slice(0, 10));
+
+// Texte des actions pour le prompt des agents (bloc commun de la réunion)
+function formatActionsForPrompt(actions, now = new Date()) {
+  const open = actions.filter(a => OPEN.includes(a.status));
+  const done = actions.filter(a => a.status === 'done').slice(0, 8);
+  const lines = [
+    ...open.map(a => `- [${isOverdue(a, now) ? `EN RETARD, prévue le ${fmtDay(a.dueDate)}` : a.dueDate ? `à faire, pour le ${fmtDay(a.dueDate)}` : 'à faire'}] ${a.title}`),
+    ...done.map(a => `- [fait] ${a.title}`),
+  ].slice(0, MAX_IN_PROMPT);
+  return lines.join('\n');
+}
+
+async function createSessionActions({ projectId, sessionId, userId, actions }) {
+  const rows = actions.map(a => sanitizeAction(a)).filter(Boolean).slice(0, MAX_PROPOSALS);
+  if (rows.length === 0) return [];
+  const [{ maxOrder }] = await db('TodoItem').max('displayOrder as maxOrder').where({ projectId }).whereNull('milestoneId');
+  const now = new Date();
+  return db('TodoItem').insert(rows.map((a, i) => ({
+    id: require('crypto').randomUUID(), projectId, milestoneId: null,
+    title: a.title, description: a.description, dueDate: a.dueDate || null,
+    status: 'todo', priority: 'medium', displayOrder: (maxOrder ?? -1) + 1 + i,
+    source: 'session', sessionId: sessionId || null, createdAt: now, createdBy: userId,
+  }))).returning(['id', 'title', 'description', 'status', 'dueDate', 'sessionId']);
+}
+
+module.exports = { OPEN, dueDateFrom, sanitizeAction, parseActions, listActions, isOverdue, formatActionsForPrompt, createSessionActions };

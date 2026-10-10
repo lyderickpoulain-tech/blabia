@@ -6,6 +6,7 @@
 const db = require('../utils/db');
 const anthropic = require('./anthropic');
 const { parseJsonField } = require('../utils/parseJsonField');
+const { parseActions } = require('./actions');
 
 const { DEFAULT_MODEL: MODEL } = require('./models');
 const ORIGINS  = ['human', 'agents'];
@@ -40,9 +41,9 @@ function decisionCardsText(messages) {
     .join('\n');
 }
 
-function buildExtractionPrompt({ task, historyText, cardsText, registryText }) {
+function buildExtractionPrompt({ task, historyText, cardsText, registryText, actionsText }) {
   return {
-    system: 'Tu extrais les décisions d\'une réunion de projet. Tu réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.',
+    system: 'Tu extrais les décisions et les actions d\'une réunion de projet. Tu réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.',
     user: `Objectif de la réunion : ${task}
 
 Questions posées à l'humain pendant la réunion :
@@ -57,15 +58,22 @@ ${registryText ? `Décisions DÉJÀ au registre du projet (ne les répète pas, 
 N'inclus pas les idées simplement évoquées, ni les questions restées sans réponse.
 Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".
 
-Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}]}`,
+${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas) :\n${actionsText}\n\n` : ''}Liste aussi les ACTIONS concrètes que l'humain (porteur du projet) doit mener hors de BlabIA avant la prochaine réunion, telles qu'elles ressortent des échanges (contacter, visiter, vérifier, chiffrer, rédiger…), 8 au maximum, les plus utiles d'abord. Pas d'action pour les agents, pas d'action vague (« réfléchir à… »).
+Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (échéance raisonnable en jours après la réunion, ou null).
+
+Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7}]}`,
   };
 }
 
-function parseExtraction(text) {
+function parseExtractionJSON(text) {
   const match = String(text).replace(/```json\n?/g, '').replace(/```\n?/g, '').match(/\{[\s\S]*\}/);
-  if (!match) return [];
-  let raw;
-  try { raw = JSON.parse(match[0]); } catch { return []; }
+  if (!match) return null;
+  try { return JSON.parse(match[0]); } catch { return null; }
+}
+
+function parseExtraction(text) {
+  const raw = typeof text === 'string' ? parseExtractionJSON(text) : text;
+  if (!raw) return [];
   const seen = new Set();
   return (Array.isArray(raw.decisions) ? raw.decisions : [])
     .map(sanitizeDecision)
@@ -88,13 +96,15 @@ function formatRegistryForPrompt(decisions) {
   return { activeText: lines.join('\n'), reopenedText: reopenedLines.join('\n') };
 }
 
-async function extractMeetingDecisions({ session, messages, historyText, projectId }) {
+// Décisions proposées au registre + actions proposées (v5.1), en un seul appel
+async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '' }) {
   const registry = await listDecisions(projectId);
   const prompt = buildExtractionPrompt({
     task: session.task,
     historyText,
     cardsText: decisionCardsText(messages),
     registryText: formatRegistryForPrompt(registry).activeText,
+    actionsText,
   });
   const response = await anthropic.messages.create({
     model: MODEL, max_tokens: 2000,
@@ -102,10 +112,11 @@ async function extractMeetingDecisions({ session, messages, historyText, project
     messages: [{ role: 'user', content: prompt.user }],
   });
   const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
-  return parseExtraction(text);
+  const raw = parseExtractionJSON(text);
+  return { decisions: parseExtraction(raw), actions: parseActions(raw) };
 }
 
 module.exports = {
   ORIGINS, STATUSES, sanitizeDecision, decisionCardsText, buildExtractionPrompt,
-  parseExtraction, listDecisions, formatRegistryForPrompt, extractMeetingDecisions,
+  parseExtraction, parseExtractionJSON, listDecisions, formatRegistryForPrompt, extractMeetingDecisions,
 };

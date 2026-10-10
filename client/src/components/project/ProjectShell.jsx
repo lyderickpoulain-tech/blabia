@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { LayoutDashboard, ListOrdered, History, ScrollText, Wrench, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, Wrench, Users, Settings } from 'lucide-react';
 import Layout from '../Layout';
 import { Badge } from '../ui';
 import api from '../../utils/api';
@@ -19,6 +19,7 @@ const NAV = [
   { to: 'reunions',   label: 'Plan',        icon: ListOrdered },
   { to: 'historique', label: 'Historique',  icon: History },
   { to: 'decisions',  label: 'Décisions',   icon: ScrollText, badge: 'decisions' },
+  { to: 'actions',    label: 'Actions',     icon: ListChecks, badge: 'actions' },
   { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools' },
   { to: 'equipe',     label: 'Équipe',      icon: Users },
   { to: 'parametres', label: 'Paramètres',  icon: Settings },
@@ -32,7 +33,7 @@ export default function ProjectShell() {
 
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [counts, setCounts]   = useState({ decisionsReopened: 0, decisionsActive: 0, toolsAttention: 0 });
+  const [counts, setCounts]   = useState({ decisionsReopened: 0, decisionsActive: 0, toolsAttention: 0, actionsOpen: 0, actionsOverdue: 0 });
 
   const reloadProject = useCallback(() =>
     api.get(`/projects/${id}`).then(({ data }) => setProject(data)), [id]);
@@ -45,6 +46,13 @@ export default function ProjectShell() {
         decisionsReopened: data.filter(d => d.status === 'reopened').length,
         decisionsActive:   data.filter(d => d.status === 'active').length,
       })))
+      .catch(() => {});
+    api.get(`/projects/${id}/actions`)
+      .then(({ data }) => {
+        const today = new Date().toISOString().slice(0, 10);
+        const open = data.filter(a => a.status !== 'done');
+        setCounts(c => ({ ...c, actionsOpen: open.length, actionsOverdue: open.filter(a => a.dueDate && String(a.dueDate).slice(0, 10) < today).length }));
+      })
       .catch(() => {});
     api.get(`/projects/${id}/tools`)
       .then(({ data }) => setCounts(c => ({ ...c, toolsAttention: attentionCount(data.tools, data.needs) })))
@@ -71,7 +79,7 @@ export default function ProjectShell() {
 
   const isOwner   = project.userId === user?.id;
   const canManage = isOwner || isAdmin;
-  const badgeOf   = key => key === 'decisions' ? counts.decisionsReopened : key === 'tools' ? counts.toolsAttention : 0;
+  const badgeOf   = key => key === 'decisions' ? counts.decisionsReopened : key === 'tools' ? counts.toolsAttention : key === 'actions' ? counts.actionsOverdue : 0;
 
   return (
     <ProjectContext.Provider value={{ project, setProject, reloadProject, isOwner, isAdmin, canManage, counts, refreshCounts }}>
@@ -96,7 +104,7 @@ export default function ProjectShell() {
                     <span className="flex-1 whitespace-nowrap">{item.label}</span>
                     {badge > 0 && (
                       <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-await-light text-await text-xs font-extrabold inline-flex items-center justify-center"
-                        title={item.badge === 'decisions' ? 'Décisions remises en question' : 'Points d’attention sur les outils'}>
+                        title={item.badge === 'decisions' ? 'Décisions remises en question' : item.badge === 'actions' ? 'Actions en retard' : 'Points d’attention sur les outils'}>
                         {badge}
                       </span>
                     )}

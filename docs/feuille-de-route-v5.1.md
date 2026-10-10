@@ -96,7 +96,7 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 5. Renommages du glossaire partout (y compris commandes rapides qui parlent encore de « timeline »).
 
 ### B. Évolutions fonctionnelles (audit, « compagnon de projet en solo »)
-1. **Actions entre les réunions** : actions datées issues du compte-rendu, cochées par l'humain ; la réunion suivante commence par un point d'avancement (reprend l'idée de `TodoItem`, aujourd'hui hors périmètre).
+1. ✅ **Actions entre les réunions** : stockées dans `TodoItem` (sans jalon, `source: session`), proposées à la conclusion par le même appel que l'extraction des décisions (`services/decisions.js` + `services/actions.js`), gardées par l'humain dans la fenêtre de conclusion, cochées dans Projet › Actions (pastille des retards, carte du tableau de bord, point d'attention), transmises aux agents dans le bloc commun : la réunion suivante s'ouvre sur un point d'avancement.
 2. **Tableau de bord enrichi** : actions en retard, risques signalés par les agents, budget.
 3. **Modèles de projets non informatiques** (événement, édition, rénovation, création d'activité) : agents, plan de réunions type, catégories d'outils adaptées.
 4. **Agent contradicteur** optionnel, pour challenger les consensus trop rapides.

@@ -4,7 +4,8 @@
 //  - brief, équipe d'agents (agents par défaut existants), plan de 4 réunions ;
 //  - une réunion conclue avec son compte-rendu et ses décisions au registre ;
 //  - une réunion préparée qui attend deux arbitrages (phase « briefing ») ;
-//  - une décision remise en question (point d'attention du tableau de bord).
+//  - une décision remise en question et une action en retard (points d'attention) ;
+//  - trois actions entre les réunions (faite, en retard, à venir).
 // Project.isDemo = true : les routes IA sont bloquées (demoGuard) et le projet est
 // supprimé à la fin de la visite.
 const { randomUUID } = require('crypto');
@@ -180,6 +181,17 @@ async function ensureDemoProject(user) {
       dec('Ouverture visée au printemps 2027', 'Laisse le temps de trouver le local et les fournisseurs.', 'agents'),
       dec('Budget d’aménagement plafonné à 40 000 €', 'Cohérent avec l’apport et un prêt prudent.', 'agents', { status: 'reopened', reopenNote: 'La banque accorde finalement un prêt plus élevé : à rediscuter.' }),
     ]);
+
+    // Actions entre les réunions (issues de la réunion 1) : une faite, une en retard, une à venir
+    const dueIn = days => new Date(now + days * day).toISOString().slice(0, 10);
+    await trx('TodoItem').insert([
+      { title: 'Lister les fournisseurs de thé en vrac de la région', status: 'done', dueDate: dueIn(-2) },
+      { title: 'Rencontrer la conseillère bancaire pour le prêt', status: 'todo', dueDate: dueIn(-1), description: 'Apporter le prévisionnel et l’estimation du loyer.' },
+      { title: 'Visiter trois locaux à la Croix-Rousse', status: 'todo', dueDate: dueIn(5) },
+    ].map((a, i) => ({
+      id: randomUUID(), projectId, milestoneId: null, description: null, ...a,
+      priority: 'medium', displayOrder: i, source: 'session', sessionId: s1, createdAt: t1, createdBy: user.id,
+    })));
 
     return { id: projectId, created: true };
   });

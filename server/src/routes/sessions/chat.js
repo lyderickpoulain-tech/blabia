@@ -19,6 +19,7 @@ const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/o
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
 const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
+const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const {
   prepTurnsFor, AGENT_PREPARATION_SECTION, ORCHESTRATOR_PREPARATION_NOTE,
   buildPrepSynthesisPrompt, parsePrepSynthesis,
@@ -320,6 +321,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     const decisionBudget = decisionBudgetFor(session, project);
     // Registre des décisions du projet (chargé une fois par requête)
     const decisionRegistry = formatRegistryForPrompt(await listDecisions(projectId));
+    const actionsText = formatActionsForPrompt(await listActions(projectId));
+    const today = new Date().toLocaleDateString('fr-FR');
 
     // Réunions du projet avec référence courte (R1, R2…) — positionnement des
     // suggestions [SUGGEST_MEETING] et dédoublonnage (phase 3.4).
@@ -448,6 +451,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         priorDecisionQuestions,
         decisionBudget: { used: countDecisions(currentMessages), max: decisionBudget },
         decisionRegistry,
+        actionsText,
+        today,
         preparationSection: prepare ? AGENT_PREPARATION_SECTION : '',
         pastCodePromptsText,
         expertiseLevel,

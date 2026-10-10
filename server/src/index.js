@@ -44,6 +44,7 @@ app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
 app.use('/api/projects',                     require('./routes/plan'));
 app.use('/api/projects',                     require('./routes/decisionRegistry'));
+app.use('/api/projects',                     require('./routes/actions'));
 app.use('/api',                              require('./routes/tools'));
 
 // ── Production : servir le build Vite ────────────────────────────────────────

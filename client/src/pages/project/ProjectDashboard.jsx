@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, Wrench, History, Send, X } from 'lucide-react';
+import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
@@ -8,6 +8,7 @@ import Markdown from '../../components/Markdown';
 import GenerateTimelineModal from '../../components/GenerateTimelineModal';
 import { totalLabel } from '../../utils/toolsCatalog';
 import { formatUSD } from '../../utils/cost';
+import { isOverdueAction } from './ProjectActions';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
@@ -105,6 +106,7 @@ export default function ProjectDashboard() {
   const [decisions, setDecisions] = useState([]);
   const [tools, setTools] = useState(null);       // { tools, total }
   const [stats, setStats] = useState(null);       // coût réel de l'IA (/stats)
+  const [actions, setActions] = useState([]);     // actions entre les réunions
   const [showGenerate, setShowGenerate] = useState(false);
 
   const loadStats = () => api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(() => {});
@@ -114,6 +116,7 @@ export default function ProjectDashboard() {
     loadStats();
     api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(() => {});
     api.get(`/projects/${project.id}/decisions`).then(({ data }) => setDecisions(data)).catch(() => {});
+    api.get(`/projects/${project.id}/actions`).then(({ data }) => setActions(data)).catch(() => {});
     api.get(`/projects/${project.id}/tools`).then(({ data }) => setTools(data)).catch(() => {});
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -127,6 +130,8 @@ export default function ProjectDashboard() {
   const activeDecisions = decisions.filter(d => d.status === 'active');
   const validatedTools = (tools?.tools || []).filter(t => t.status === 'validated');
   const pastSessions = sessions.filter(s => s.status === 'accepted').slice(0, 2);
+  const openActions = actions.filter(a => a.status !== 'done');
+  const lateActions = openActions.filter(isOverdueAction);
 
   const startMeeting = (prepare) => navigate(`/projects/${project.id}/meeting/new`, {
     state: { milestoneId: next.id, milestoneTitle: next.title, milestoneType: next.type, autoPrepare: prepare },
@@ -134,6 +139,7 @@ export default function ProjectDashboard() {
 
   const attention = [
     counts.decisionsReopened > 0 && { text: `${counts.decisionsReopened} décision${counts.decisionsReopened > 1 ? 's remises' : ' remise'} en question, à retraiter en réunion.`, to: 'decisions', cta: 'Voir' },
+    lateActions.length > 0 && { text: `${lateActions.length} action${lateActions.length > 1 ? 's' : ''} en retard (« ${lateActions[0].title} »${lateActions.length > 1 ? '…' : ''}).`, to: 'actions', cta: 'Voir' },
     counts.toolsAttention > 0 && { text: `${counts.toolsAttention} point${counts.toolsAttention > 1 ? 's' : ''} d'attention sur les outils du projet.`, to: 'outils', cta: 'Revoir' },
     ...openSessions.slice(0, 3).map(s => ({ text: `Réunion restée ouverte : « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Rejoindre' })),
   ].filter(Boolean);
@@ -231,6 +237,24 @@ export default function ProjectDashboard() {
                 <li key={d.id} className="flex gap-2 items-start text-sm">
                   <span className="mt-1.5 w-2 h-2 rounded-full bg-ok shrink-0" aria-hidden="true" />
                   <span className="text-ink-soft">{d.statement}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SummaryCard>
+
+        <SummaryCard tour="pd-actions" icon={ListChecks} title="Actions" meta={openActions.length ? `${openActions.length} à faire${lateActions.length ? ` · ${lateActions.length} en retard` : ''}` : null} to="actions" linkLabel="Voir les actions">
+          {openActions.length === 0 ? <p className="text-sm text-ink-faint">Aucune action en cours. Elles sont proposées à la conclusion des réunions.</p> : (
+            <ul className="space-y-1.5">
+              {openActions.slice(0, 3).map(a => (
+                <li key={a.id} className="flex gap-2 items-start text-sm">
+                  <span className={`mt-0.5 w-4 h-4 rounded border-2 shrink-0 ${isOverdueAction(a) ? 'border-await' : 'border-ink-faint'}`} aria-hidden="true" />
+                  <span className="flex-1 min-w-0 text-ink-soft">{a.title}</span>
+                  {a.dueDate && (
+                    <span className={`text-xs shrink-0 ${isOverdueAction(a) ? 'text-await font-bold' : 'text-ink-faint'}`}>
+                      {new Date(a.dueDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
