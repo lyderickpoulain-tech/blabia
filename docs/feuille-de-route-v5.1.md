@@ -103,6 +103,9 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 5. ✅ **Documents de référence du projet** (table `ProjectDocument`, `services/documents.js`) : PDF (`pdf-parse` 1.1.1, sans IA), Word, Excel, CSV, texte ; texte extrait une fois au dépôt (200 000 caractères max, 10 documents max) ; documents actifs lus par les agents dans le bloc commun mis en cache (~40 000 caractères au total, partagés, début des longs documents) et par « Demander à BlabIA » ; page Projet › Documents (dépôt, aperçu du texte, « Lu en réunion », suppression). Vérifié en réel : les agents citent le devis et le règlement et les croisent. Les PDF scannés (images) ne sont pas lus.
 6. ✅ **Export et rappels** : compte-rendu et registre (décisions + actions) en **PDF** (pages d'impression du client, `pages/print/`) et **Word** (`docx` 9.7.2, `services/exporters.js`, routes `/projects/:id/export/...`). **Rappel hebdomadaire par e-mail** des actions (`services/reminders.js`) : activé par projet (`Project.remindersEnabled`, désactivé par défaut), jour choisi dans le profil (`User.reminderDay`, lundi par défaut), à partir de 8 h (Paris), un par semaine (`User.remindersLastSentAt`) ; vérification horaire dans le serveur, et `POST /api/reminders/run` (en-tête `x-cron-secret` = `CRON_SECRET`) pour un cron externe si le service Railway est mis en veille. Envoyé au propriétaire et aux membres ; projet exemple exclu ; bouton « M'envoyer le rappel maintenant » dans le profil.
 
+### E. Missions des agents ✅
+Un agent propose en réunion ([MISSION:{…}], `services/markers.js`) un travail approfondi qui dépasse la réunion (recherche, analyse, rédaction) ; carte « Lancer (plafond) / Écarter » dans le fil ; l'humain la valide ; un sous-agent la mène en arrière-plan (`services/missionRunner.js`) avec la recherche web, la lecture de pages (`web_fetch_20250910`) et la lecture des documents du projet, sous un plafond de coût (rédaction forcée à 75 %) ; le rapport rejoint les documents du projet. Table `AgentMission`, budget mensuel par projet (`Project.missionsMonthlyBudgetUSD`, 5 $ par défaut, 0 = désactivé), 2 missions par réunion au plus, traitement toutes les 5 min + au démarrage + via le cron `/api/reminders/run`. Page Actions (section Missions), point d'attention au tableau de bord, projet exemple et visite guidée. Vérifié en réel : 0,15 $ / 51 s, 19 sources, document du projet lu.
+
 ### D. Développement depuis BlabIA (après le chantier « Code »)
 Objectif : se passer du copier-coller du prompt Claude Code — « Lancer le développement » depuis la conclusion d'une réunion Claude Code.
 - **Option A (à faire en premier)** : Claude Code dans **GitHub Actions** sur le dépôt de l'utilisateur. BlabIA crée la demande (issue / commentaire), suit la pull request, montre un résumé simple et un lien de prévisualisation, puis « Mettre en ligne » (fusion → Railway redéploie). Rien ne part en ligne sans le clic de l'humain.
@@ -138,6 +141,12 @@ Objectif : se passer du copier-coller du prompt Claude Code — « Lancer le dé
 - **Toute nouvelle fonctionnalité met à jour le guide et la visite guidée** (demande de l'utilisateur) : `client/src/components/Tutorial.jsx`, `client/src/tour/chapters.js` (+ ancres `data-tour`), projet exemple `server/src/services/demoProject.js` si des données sont nécessaires.
 
 ## 5. Environnement de test et déploiement
+
+### ⚠️ Prisma et la base de prod
+`server/.env` contient l'adresse de la **base de prod**. Toute commande Prisma lancée sans `DATABASE_URL` explicite s'y applique (incident du 10/10/2026 : migration des missions appliquée en prod sans sauvegarde préalable — additive, sans perte, nouvelle sauvegarde `blabia-prod-2026-10-10-09-40.dump` aussitôt faite).
+- Base de test : `npm run db:migrate:test` avec `TEST_DATABASE_URL` (refuse toute autre base) ; tests : `npm run test:integration`.
+- Base de dev : `$env:DATABASE_URL = 'postgresql://postgres:devpassword@localhost:5432/blabia_dev'; npx prisma migrate deploy` dans la même commande.
+- Prod : uniquement par le déploiement Railway, après pg_dump.
 
 ### Lancer l'environnement de test (PowerShell)
 ```powershell

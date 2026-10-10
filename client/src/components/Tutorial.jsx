@@ -107,6 +107,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                   'Un contradicteur signale, seulement sur les choix à fort enjeu, ce qui mérite d’être challengé : vous en tenez compte ou l’écartez.',
                   'Les décisions sont inscrites au registre : les agents ne reposent plus la question.',
                   'Entre deux réunions, vous menez les actions décidées, dans l’ordre (avec un rappel par e-mail chaque semaine si vous le souhaitez) ; la réunion suivante commence par un point d’avancement.',
+                  'Pour un travail approfondi (recherche, analyse, rédaction), un agent propose une mission à un sous-agent : vous la lancez avec un plafond de coût, le rapport rejoint les documents.',
                   'Comptes rendus, décisions et actions s’exportent en PDF ou en Word.',
                 ].map(t => (
                   <li key={t} className="flex gap-2 text-sm text-ink-soft leading-snug">

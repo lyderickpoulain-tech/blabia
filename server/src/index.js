@@ -46,6 +46,7 @@ app.use('/api/projects',                     require('./routes/plan'));
 app.use('/api/projects',                     require('./routes/decisionRegistry'));
 app.use('/api/projects',                     require('./routes/actions'));
 app.use('/api/projects',                     require('./routes/documents'));
+app.use('/api/projects',                     require('./routes/missions'));
 app.use('/api/projects',                     require('./routes/exports'));
 app.use('/api/reminders',                    require('./routes/reminders'));
 app.use('/api',                              require('./routes/tools'));
@@ -75,6 +76,13 @@ if (require.main === module) {
     console.log(`BlabIA server démarré sur le port ${PORT} (mode: ${isProd ? 'production' : 'développement'})`);
     // Rappels hebdomadaires des actions (services/reminders.js) : vérification horaire
     require('./services/reminders').startReminderScheduler();
+    // Missions des agents en attente : reprise au démarrage puis toutes les 5 minutes
+    if (process.env.REMINDERS_DISABLED !== '1') {
+      const { processMissions } = require('./services/missionRunner');
+      const tick = () => processMissions().catch(err => console.error('[missions]', err.message));
+      setTimeout(tick, 30 * 1000);
+      setInterval(tick, 5 * 60 * 1000).unref?.();
+    }
   });
 }
 

@@ -6,6 +6,10 @@ import { Button, IconButton, Card, SectionLabel } from '../../components/ui';
 import ExportButtons from '../../components/ExportButtons';
 import RemindersToggle from '../../components/RemindersToggle';
 import { useAuth } from '../../contexts/AuthContext';
+import MissionCard from '../../components/MissionCard';
+import SummaryDisplayModal from '../../components/SummaryDisplayModal';
+import useMissions from '../../hooks/useMissions';
+import { formatUSD } from '../../utils/cost';
 
 // Actions entre les réunions (v5.1) : proposées à la conclusion des réunions,
 // cochées et ordonnées ici par l'humain (l'ordre prime, l'échéance est facultative) ;
@@ -88,6 +92,9 @@ function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove }) {
 
 export default function ProjectActions() {
   const { project, setProject, canManage, refreshCounts } = useProject();
+  const missionsApi = useMissions(project.id);
+  const shownMissions = missionsApi.missions.filter(m => !['rejected', 'cancelled'].includes(m.status));
+  const [report, setReport] = useState(null);
   const { user } = useAuth();
   const setReminders = async enabled => {
     setProject(p => ({ ...p, remindersEnabled: enabled }));
@@ -190,7 +197,33 @@ export default function ProjectActions() {
             )}
           </section>
         )}
+
+        {/* Missions des agents (v5.1) : travaux approfondis menés par des sous-agents */}
+        <section data-tour="mission-list" className="space-y-2 pt-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <SectionLabel className="!text-ai">Missions des agents · {shownMissions.length}</SectionLabel>
+            {missionsApi.budget && (
+              <span className="text-xs text-ink-faint">
+                Ce mois : {formatUSD(missionsApi.budget.spentUSD + missionsApi.budget.reservedUSD)} sur {formatUSD(missionsApi.budget.monthlyUSD)}
+              </span>
+            )}
+          </div>
+          {shownMissions.length === 0 ? (
+            <p className="text-xs text-ink-faint">Aucune mission. En réunion, un agent peut proposer de confier un travail approfondi (recherche, analyse, rédaction) à un sous-agent ; vous la validez, avec un plafond de coût.</p>
+          ) : (
+            <ul className="space-y-2">
+              {shownMissions.map(m => (
+                <li key={m.id}>
+                  <MissionCard mission={m} onApprove={missionsApi.approve} onReject={missionsApi.reject}
+                    onCancel={missionsApi.cancel} onOpenReport={setReport} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
+
+      {report && <SummaryDisplayModal title={`Mission — ${report.title}`} content={report.report || ''} onClose={() => setReport(null)} />}
     </>
   );
 }

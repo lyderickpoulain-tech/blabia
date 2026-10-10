@@ -29,6 +29,7 @@ model User {
   createdTodos       TodoItem[]  @relation("TodoCreator")
   usageLogs          UsageLog[]
   documents          ProjectDocument[]
+  approvedMissions   AgentMission[]
 }
 
 model Agent {
@@ -72,6 +73,7 @@ model Project {
   expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
   humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
   questionMode      String    @default("balanced") // v5.0 : "delegate" (4 questions) | "balanced" (8) | "control" (15) — défaut des réunions du projet
+  missionsMonthlyBudgetUSD Float @default(5) // v5.1 : budget mensuel des missions des agents (services/missions.js)
   remindersEnabled  Boolean   @default(false) // v5.1 : rappels hebdomadaires par e-mail des actions (services/reminders.js)
   challengerEnabled Boolean   @default(true) // v5.1 : contradicteur (avocat du diable sélectif, services/challenger.js), activé par défaut
   isDemo            Boolean   @default(false) // v5.1 : projet exemple de la visite guidée (services/demoProject.js), sans appel à l'IA, supprimé en fin de visite
@@ -88,6 +90,7 @@ model Project {
   decisions     Decision[]
   usageLogs     UsageLog[]
   documents     ProjectDocument[]
+  missions      AgentMission[]
 }
 
 model ProjectAgent {
@@ -195,6 +198,7 @@ model Session {
   sourcedMilestones Milestone[] @relation("MilestoneSource")
   decisions         Decision[]
   usageLogs         UsageLog[]
+  missions          AgentMission[]
 }
 
 // v5.0 : registre des décisions du projet — alimenté à la clôture des réunions
@@ -255,6 +259,41 @@ model ProjectDocument {
   createdBy String?
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator   User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  missions  AgentMission[]
 
   @@index([projectId])
+}
+
+// v5.1 : missions des agents (services/missions.js, services/missionRunner.js) — proposées
+// en réunion par un agent, validées par l'humain, menées en arrière-plan par un sous-agent
+// avec un plafond de coût ; le rapport rejoint les documents du projet.
+model AgentMission {
+  id          String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  projectId   String
+  sessionId   String?
+  agentName   String
+  kind        String    @default("research") // research | analysis | writing
+  title       String
+  objective   String
+  deliverable String?
+  status      String    @default("proposed") // proposed | queued | running | done | failed | rejected | cancelled
+  budgetUSD   Float     @default(0.5)
+  costUSD     Float     @default(0)
+  attempts    Int       @default(0)
+  report      String?
+  sources     Json      @default("[]")
+  error       String?
+  documentId  String?
+  approvedBy  String?
+  createdAt   DateTime  @default(now())
+  approvedAt  DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session     Session?         @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  document    ProjectDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  approver    User?            @relation(fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status])
 }

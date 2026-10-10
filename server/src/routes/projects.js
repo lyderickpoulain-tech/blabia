@@ -18,7 +18,7 @@ router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
   'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context',
-  'expertiseLevel', 'humorLevel', 'questionMode', 'challengerEnabled', 'remindersEnabled', 'createdAt', 'updatedAt', 'userId'
+  'expertiseLevel', 'humorLevel', 'questionMode', 'challengerEnabled', 'remindersEnabled', 'missionsMonthlyBudgetUSD', 'createdAt', 'updatedAt', 'userId'
 ];
 
 function clampLevel(v, fallback) {
@@ -247,7 +247,7 @@ router.get('/:id/stats', async (req, res) => {
 
 // PATCH /api/projects/:id — mettre à jour les champs du projet (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
-  const { name, description, devDirectory, hasTechnicalStack, expertiseLevel, humorLevel, questionMode, challengerEnabled, remindersEnabled } = req.body;
+  const { name, description, devDirectory, hasTechnicalStack, expertiseLevel, humorLevel, questionMode, challengerEnabled, remindersEnabled, missionsMonthlyBudgetUSD } = req.body;
   if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -269,6 +269,10 @@ router.patch('/:id', async (req, res) => {
     if (isQuestionMode(questionMode))   updates.questionMode       = questionMode;
     if (typeof challengerEnabled === 'boolean') updates.challengerEnabled = challengerEnabled;
     if (typeof remindersEnabled === 'boolean')  updates.remindersEnabled  = remindersEnabled;
+    // Budget mensuel des missions des agents : 0 (désactivées) à 100 $
+    if (missionsMonthlyBudgetUSD !== undefined && Number.isFinite(Number(missionsMonthlyBudgetUSD))) {
+      updates.missionsMonthlyBudgetUSD = Math.min(100, Math.max(0, Math.round(Number(missionsMonthlyBudgetUSD) * 100) / 100));
+    }
 
     const [updated] = await db('Project')
       .where({ id: req.params.id })

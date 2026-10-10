@@ -104,6 +104,7 @@ function buildAgentSystemPrompt({
   preparationSection = '',
   actionsText = '',
   documentsText = '',
+  missionsText = '',
   today = '',
   challengerSection = '', // v5.1 : tour du contradicteur (services/challenger.js)
 }) {
@@ -138,6 +139,10 @@ ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. 
 ${actionsText}
 POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le premier commence par UNE bulle de point d'avancement sur les actions qui concernent l'objectif (faites, en retard, et leur effet sur cette réunion), puis la réunion avance. Ne propose jamais une action déjà listée.
 `
+    : '';
+  // v5.1 : missions confiées à des sous-agents (services/missions.js)
+  const missionsSection = missionsText
+    ? `\nMISSIONS DES AGENTS (travaux approfondis menés hors réunion par des sous-agents) :\n${missionsText}\n`
     : '';
   const toolsSection = projectToolsText ? `\nOutils retenus pour ce projet :\n${projectToolsText}\n` : '';
   const toolReviewSection = intention[0] === 'stack' && toolReview
@@ -184,7 +189,7 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
 
   // ── 1. Bloc commun à la réunion (mis en cache) ─────────────────────────────
   const shared = `Tu participes à une réunion collaborative entre agents IA spécialisés, animée pour un humain qui initie le projet et tranche les décisions. Ton rôle précis t'est donné à la fin de ce prompt.
-${briefSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
+${briefSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${missionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 
@@ -215,6 +220,9 @@ Si et seulement si une compétence précise et indispensable à l'objectif "${se
 Si un sujet mérite une réunion séparée (étape manquante, décision à traiter à part, tâche technique distincte), ajoute EXACTEMENT ce format (JSON valide, une seule ligne) :
 [SUGGEST_MEETING:{"title":"Titre court","objective":"Objectif en une phrase","type":"decision|claude_code|stack","reason":"Pourquoi cette réunion est nécessaire","after":"<référence de la réunion existante après laquelle l'insérer, ex. R3, ou null pour la fin>"}]
 Utilise les références des réunions du projet listées plus haut pour positionner ta suggestion et vérifier qu'elle ne fait pas doublon avec une réunion déjà prévue.
+Si un point demande un travail approfondi qui dépasse la réunion (recherche documentaire, comparatif chiffré, analyse détaillée d'un document, premier jet d'un texte), propose UNE mission à un sous-agent plutôt que de survoler le sujet, avec EXACTEMENT ce format (JSON valide, une seule ligne) :
+[MISSION:{"title":"Titre court","objective":"Ce qu'il faut trouver ou produire, précisément","deliverable":"Forme du résultat (tableau, liste, texte…)","kind":"research|analysis|writing"}]
+L'humain la valide ; le rapport arrivera dans les documents du projet. 2 missions par réunion au plus ; jamais pour du code (propose plutôt une réunion Claude Code), ni pour ce qu'une hypothèse ou une carte de décision suffit à régler, ni pour une mission déjà listée.
 Maximum un marqueur de chaque type par réponse (sauf [DECISION] : jusqu'à 3 cartes regroupées).
 
 NIVEAU DE MAÎTRISE DU SUJET DE TON INTERLOCUTEUR (adapte TOUT ton langage à ce niveau) :

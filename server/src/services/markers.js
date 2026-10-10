@@ -1,7 +1,7 @@
 // Parsing centralisé des marqueurs émis par les agents en fin de message.
 // Marqueurs reconnus : [DECISION:{...}], [SUGGEST_AGENT: Nom, rôle],
 // [SUGGEST_MEETING:{...}] (phase 3.4, remplace [SUGGEST_STEP: titre]),
-// [NEED_TOOL:{...}]. Un seul de chaque type est retenu par message (le
+// [NEED_TOOL:{...}], [MISSION:{...}] (v5.1, missions des agents). Un seul de chaque type est retenu par message (le
 // premier) ; tous sont retirés du texte affiché, même si le JSON est
 // invalide ou le marqueur dupliqué.
 
@@ -18,6 +18,9 @@ const SUGGEST_MEETING_RE   = /\[SUGGEST_MEETING:(\{[\s\S]*?\})\]/;
 const SUGGEST_MEETING_STRIP_RE = /\[SUGGEST_MEETING:\{[\s\S]*?\}\]/g;
 const NEED_TOOL_RE      = /\[NEED_TOOL:(\{[\s\S]*?\})\]/;
 const NEED_TOOL_STRIP_RE     = /\[NEED_TOOL:\{[\s\S]*?\}\]/g;
+const MISSION_RE        = /\[MISSION:(\{[\s\S]*?\})\]/;
+const MISSION_STRIP_RE  = /\[MISSION:\{[\s\S]*?\}\]/g;
+const MISSION_KINDS     = ['research', 'analysis', 'writing'];
 
 // v5.0 phase 5 : illustrations (artéfacts) — un bloc ```mermaid, ```html ou ```svg,
 // titré par [ARTIFACT_TITLE: …]. Extraits AVANT les autres marqueurs : le code
@@ -128,7 +131,20 @@ function parseAgentOutput(text) {
       }
     : null;
 
+  // v5.1 : mission proposée à un sous-agent (validée ensuite par l'humain)
+  const missionMatch = raw.match(MISSION_RE);
+  const missionData  = missionMatch ? safeJsonParse(missionMatch[1]) : null;
+  const mission = missionData?.title && missionData?.objective
+    ? {
+        title:       String(missionData.title).trim().slice(0, 200),
+        objective:   String(missionData.objective).trim().slice(0, 1500),
+        deliverable: missionData.deliverable ? String(missionData.deliverable).trim().slice(0, 500) : null,
+        kind:        MISSION_KINDS.includes(missionData.kind) ? missionData.kind : 'research',
+      }
+    : null;
+
   const content = raw
+    .replace(MISSION_STRIP_RE, '')
     .replace(DECISION_STRIP_RE, '')
     .replace(SUGGEST_AGENT_STRIP_RE, '')
     .replace(SUGGEST_MEETING_STRIP_RE, '')
@@ -140,7 +156,7 @@ function parseAgentOutput(text) {
     .map(s => s.trim())
     .filter(Boolean);
 
-  return { bubbles, content, decision, decisions, suggestedAgent, suggestedMeeting, neededTool, artifact };
+  return { bubbles, content, decision, decisions, suggestedAgent, suggestedMeeting, neededTool, artifact, mission };
 }
 
 module.exports = { parseAgentOutput, detectArtifactRequest, MAX_DECISIONS_PER_MESSAGE };

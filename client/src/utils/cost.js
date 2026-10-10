@@ -19,6 +19,7 @@ const KIND_LABELS = {
   'export/claude-code':    'Prompts Claude Code',
   'extract-file':          'Lecture de fichiers joints',
   'generate-memory':       'Mémoire du projet',
+  mission:                 'Missions des agents',
 };
 
 export function kindLabel(kind = '') {

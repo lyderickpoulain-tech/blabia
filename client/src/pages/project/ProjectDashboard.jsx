@@ -9,6 +9,7 @@ import GenerateTimelineModal from '../../components/GenerateTimelineModal';
 import { totalLabel } from '../../utils/toolsCatalog';
 import { formatUSD } from '../../utils/cost';
 import { isOverdueAction } from './ProjectActions';
+import useMissions from '../../hooks/useMissions';
 import { notifyError } from '../../utils/notify';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
@@ -108,6 +109,7 @@ export default function ProjectDashboard() {
   const [tools, setTools] = useState(null);       // { tools, total }
   const [stats, setStats] = useState(null);       // coût réel de l'IA (/stats)
   const [actions, setActions] = useState([]);     // actions entre les réunions
+  const { missions } = useMissions(project.id);   // missions des agents (proposées → point d'attention)
   const [showGenerate, setShowGenerate] = useState(false);
 
   const loadStats = () => api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(err => notifyError(err, 'Coût de l’IA indisponible.'));
@@ -133,6 +135,7 @@ export default function ProjectDashboard() {
   const pastSessions = sessions.filter(s => s.status === 'accepted').slice(0, 2);
   const openActions = actions.filter(a => a.status !== 'done');
   const lateActions = openActions.filter(isOverdueAction);
+  const proposedMissions = missions.filter(m => m.status === 'proposed');
 
   const startMeeting = (prepare) => navigate(`/projects/${project.id}/meeting/new`, {
     state: { milestoneId: next.id, milestoneTitle: next.title, milestoneType: next.type, autoPrepare: prepare },
@@ -140,6 +143,7 @@ export default function ProjectDashboard() {
 
   const attention = [
     counts.decisionsReopened > 0 && { text: `${counts.decisionsReopened} décision${counts.decisionsReopened > 1 ? 's remises' : ' remise'} en question, à retraiter en réunion.`, to: 'decisions', cta: 'Voir' },
+    proposedMissions.length > 0 && { text: `${proposedMissions.length} mission${proposedMissions.length > 1 ? 's' : ''} proposée${proposedMissions.length > 1 ? 's' : ''} par les agents attend${proposedMissions.length > 1 ? 'ent' : ''} votre accord (« ${proposedMissions[0].title} »).`, to: 'actions', cta: 'Voir' },
     lateActions.length > 0 && { text: `${lateActions.length} action${lateActions.length > 1 ? 's' : ''} en retard (« ${lateActions[0].title} »${lateActions.length > 1 ? '…' : ''}).`, to: 'actions', cta: 'Voir' },
     counts.toolsAttention > 0 && { text: `${counts.toolsAttention} point${counts.toolsAttention > 1 ? 's' : ''} d'attention sur les outils du projet.`, to: 'outils', cta: 'Revoir' },
     ...openSessions.slice(0, 3).map(s => ({ text: `Réunion restée ouverte : « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Rejoindre' })),

@@ -21,6 +21,7 @@ const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const { listDocuments, formatDocumentsForPrompt } = require('../../services/documents');
+const { proposeMission, listMissions, formatMissionsForPrompt } = require('../../services/missions');
 const {
   CHALLENGER, challengesLeft, challengerAvailable, priorVigilanceText,
   buildOrchestratorChallengeSection, buildChallengerTurnSection,
@@ -337,6 +338,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     const decisionRegistry = formatRegistryForPrompt(await listDecisions(projectId));
     const actionsText = formatActionsForPrompt(await listActions(projectId));
     const documentsText = formatDocumentsForPrompt(await listDocuments(projectId, { withContent: true }));
+    const missionsText = formatMissionsForPrompt(await listMissions(projectId));
     // Contradicteur : réglage de la réunion, sinon celui du projet (activé par défaut)
     const challengerOn = (session.challengerEnabled ?? project.challengerEnabled) !== false;
     const today = new Date().toLocaleDateString('fr-FR');
@@ -472,6 +474,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         decisionRegistry,
         actionsText,
         documentsText,
+        missionsText,
         today,
         challengerSection: isChallenge
           ? buildChallengerTurnSection({ target: next.challengeTarget, priorText: priorVigilanceText(currentMessages) })
@@ -577,7 +580,13 @@ router.post('/:sessionId/chat', async (req, res) => {
       // Illustration gardée seulement si demandée pour ce tour ; sinon le bloc a
       // déjà été retiré du texte par parseAgentOutput et est ignoré (phase 5).
       const artifact = turnArtifact ? parsed.artifact : null;
-      const bubbles = parsed.bubbles.length > 0 || !artifact ? parsed.bubbles : [`🎨 ${artifact.title}`];
+      // v5.1 : mission proposée à un sous-agent (validée ensuite par l'humain, carte dans le fil)
+      const proposedMission = parsed.mission && !isChallenge
+        ? await proposeMission({ projectId, sessionId, agentName: agent.name, proposal: parsed.mission })
+          .catch(err => { console.error('[chat] proposition de mission :', err.message); return null; })
+        : null;
+      let bubbles = parsed.bubbles.length > 0 || !artifact ? parsed.bubbles : [`🎨 ${artifact.title}`];
+      if (bubbles.length === 0 && proposedMission) bubbles = [`Je propose une mission : ${proposedMission.title}.`];
       const agentMessages = bubbles.map((bubbleContent, i) => ({
         id:        randomUUID(),
         role:      'agent',
@@ -586,6 +595,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         ...(i === 0 && next.reason ? { reason: next.reason } : {}),
         // Point de vigilance du contradicteur : attend « J'en tiens compte » / « Écarter »
         ...(i === 0 && isChallenge ? { vigilance: { status: 'open', target: next.challengeTarget } } : {}),
+        ...(i === bubbles.length - 1 && proposedMission ? { missionId: proposedMission.id } : {}),
         ...(i === 0 && hasWebSearchSources ? { webSearch: { queries: agentWebSearch.queries, sources: agentWebSearch.sources } } : {}),
         content:   bubbleContent,
         timestamp: new Date().toISOString(),
@@ -600,6 +610,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       if (agentMessages.length > 0) {
         send('agent_message', { agentName: agent.name, messages: agentMessages });
       }
+      if (proposedMission) send('mission', { mission: proposedMission });
 
       for (const decision of decisions) {
         await emitDecision(decision, agent.name, Math.max(0, budgetLeft - decisions.length));

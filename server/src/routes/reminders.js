@@ -20,7 +20,10 @@ router.post('/run', async (req, res) => {
     return res.status(403).json({ error: 'Secret incorrect (en-tête x-cron-secret).' });
   }
   try {
-    res.json(await runReminders());
+    // Le même cron relance aussi les missions des agents en attente (serveur mis en veille)
+    const reminders = await runReminders();
+    const missions = await require('../services/missionRunner').processMissions();
+    res.json({ ...reminders, missions: missions.processed });
   } catch (err) {
     console.error('[reminders/run]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

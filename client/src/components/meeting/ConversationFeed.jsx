@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Image as ImageIcon, Sparkles, ShieldAlert } from 'lucide-react';
 import DecisionCard from '../DecisionCard';
+import MissionCard from '../MissionCard';
 import Markdown from '../Markdown';
 
 // ── Fil de conversation compact (refonte UX v5.1) ─────────────────────────────
@@ -83,6 +84,7 @@ export default function ConversationFeed({
   agentColors, deliverableTypes, decisionBudget,
   onOpenArtifact, openArtifactId, onContradict,
   prepExpanded, onTogglePrep, onVigilance,
+  missions = [], onApproveMission, onRejectMission, onOpenMissionReport,
 }) {
   const [acknowledged, setAcknowledged] = useState(() => new Set()); // hypothèses approuvées
 
@@ -191,6 +193,16 @@ export default function ConversationFeed({
             </button>
           )}
           {msg.interrupted && <p className="text-xs text-await mt-0.5">Interrompu</p>}
+          {/* Mission proposée par l'agent dans ce message (v5.1) */}
+          {msg.missionId && (() => {
+            const mission = missions.find(m => m.id === msg.missionId);
+            return mission ? (
+              <div className="mt-1.5 max-w-[640px]">
+                <MissionCard mission={mission} disabled={isClosed}
+                  onApprove={onApproveMission} onReject={onRejectMission} onOpenReport={onOpenMissionReport} />
+              </div>
+            ) : null;
+          })()}
         </div>
       </div>
     );

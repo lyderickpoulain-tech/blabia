@@ -25,7 +25,7 @@ function installFakeAI() {
     const r = ai.responder(params) || {};
     return {
       id: `msg_test_${ai.calls.length}`, type: 'message', role: 'assistant', model: params.model,
-      content: [{ type: 'text', text: r.text ?? '' }], stop_reason: r.stop_reason || 'end_turn',
+      content: r.content ?? [{ type: 'text', text: r.text ?? '' }], stop_reason: r.stop_reason || 'end_turn',
       usage: { input_tokens: 100, output_tokens: 50, ...(r.usage || {}) },
     };
   };

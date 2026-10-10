@@ -62,6 +62,7 @@ function IdentitySection({ project, setProject, canEdit }) {
     questionMode: project.questionMode || 'balanced',
     challengerEnabled: project.challengerEnabled !== false,
     remindersEnabled: !!project.remindersEnabled,
+    missionsMonthlyBudgetUSD: project.missionsMonthlyBudgetUSD ?? 5,
   });
   const { user } = useAuth();
   const [st, run] = useSave();
@@ -88,6 +89,17 @@ function IdentitySection({ project, setProject, canEdit }) {
           <QuestionModePicker value={f.questionMode} onChange={v => setF(x => ({ ...x, questionMode: v }))} />
           <ChallengerToggle checked={f.challengerEnabled} onChange={v => setF(x => ({ ...x, challengerEnabled: v }))} disabled={!canEdit} />
           <RemindersToggle checked={f.remindersEnabled} onChange={v => setF(x => ({ ...x, remindersEnabled: v }))} reminderDay={user?.reminderDay} disabled={!canEdit} />
+          <label className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line p-3.5">
+            <span className="flex-1 min-w-[220px]">
+              <span className="block text-sm font-extrabold text-ink">Budget mensuel des missions des agents</span>
+              <span className="block text-xs text-ink-muted mt-0.5">Plafond de dépense par mois pour les travaux confiés à des sous-agents (recherche, analyse, rédaction). 0 pour les désactiver.</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-sm text-ink-soft">
+              <input type="number" min="0" max="100" step="0.5" value={f.missionsMonthlyBudgetUSD} aria-label="Budget mensuel des missions (dollars)"
+                onChange={e => setF(x => ({ ...x, missionsMonthlyBudgetUSD: e.target.value === '' ? '' : Number(e.target.value) }))}
+                className={`${inputCls} h-10 !w-24 text-right`} /> $
+            </span>
+          </label>
         </fieldset>
         {canEdit && <SaveRow {...st} disabled={!f.name.trim()} />}
       </form>

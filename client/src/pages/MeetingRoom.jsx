@@ -2,6 +2,7 @@
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import MeetingCloseModal from '../components/MeetingCloseModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
+import useMissions from '../hooks/useMissions';
 import ExportModal from '../components/ExportModal';
 import MeetingHeader from '../components/meeting/MeetingHeader';
 import MeetingInputBar from '../components/meeting/MeetingInputBar';
@@ -503,6 +504,9 @@ export default function MeetingRoom() {
             } else if (ev.type === 'suggest_tool') {
               setToolSuggestions(prev => [...prev, ev.tool]);
 
+            } else if (ev.type === 'mission') {
+              addMission(ev.mission); // carte « Mission » sous la bulle de l'agent
+
             } else if (ev.type === 'error') {
               setSendError(ev.message || 'Erreur inconnue');
               setStreamingAgent(null);
@@ -713,6 +717,11 @@ export default function MeetingRoom() {
   }, [briefingSubmitting, pendingPrepDecisions, projectId, sessionId, project?.isDemo]);
 
   // Contradicteur : « J'en tiens compte » / « Écarter »
+  // Missions des agents proposées dans cette réunion
+  const missionsApi = useMissions(projectId, { sessionId });
+  const { addMission } = missionsApi;
+  const [missionReport, setMissionReport] = useState(null);
+
   const handleVigilance = useCallback(async (messageId, status) => {
     if (project?.isDemo) { setDemoHint('Dans un vrai projet, votre réponse serait transmise aux agents.'); return; }
     try {
@@ -866,6 +875,10 @@ export default function MeetingRoom() {
                   openArtifactId={openArtifactId}
                   onContradict={handleContradict}
                   onVigilance={handleVigilance}
+                  missions={missionsApi.missions}
+                  onApproveMission={missionsApi.approve}
+                  onRejectMission={missionsApi.reject}
+                  onOpenMissionReport={setMissionReport}
                   prepExpanded={prepExpanded}
                   onTogglePrep={() => setPrepExpanded(v => !v)}
                 />
@@ -969,6 +982,11 @@ export default function MeetingRoom() {
     {/* Modale réinitialisation réunion */}
     {showResetModal && (
       <ResetMeetingModal busy={resettingSession} onCancel={() => setShowResetModal(false)} onConfirm={handleResetSession} />
+    )}
+
+    {/* Rapport d'une mission des agents */}
+    {missionReport && (
+      <SummaryDisplayModal title={`Mission — ${missionReport.title}`} content={missionReport.report || ''} onClose={() => setMissionReport(null)} />
     )}
 
     {/* Modal de clôture v3.0 */}

@@ -7,7 +7,8 @@
 //  - une décision remise en question et une action en retard (points d'attention) ;
 //  - trois actions entre les réunions (faite, en retard, à venir) ;
 //  - un point de vigilance du contradicteur, pris en compte (réunion conclue) ;
-//  - un document de référence (étude de marché courte).
+//  - un document de référence (étude de marché courte) ;
+//  - deux missions des agents : une terminée (rapport dans les documents), une proposée.
 // Project.isDemo = true : les routes IA sont bloquées (demoGuard) et le projet est
 // supprimé à la fin de la visite.
 const { randomUUID } = require('crypto');
@@ -216,6 +217,39 @@ async function ensureDemoProject(user) {
       id: randomUUID(), projectId, name: 'Étude de marché — thé à Lyon.pdf', mimeType: 'application/pdf',
       sizeBytes: 182_400, charCount: study.length, content: study, enabled: true, createdAt: t1, createdBy: user.id,
     });
+
+    // Missions des agents : une terminée (rapport dans les documents), une proposée
+    const missionReport = [
+      '# Comparer les loyers commerciaux de la Croix-Rousse',
+      '## Synthèse',
+      'Pour 60 à 80 m², comptez 1 700 à 2 300 € par mois hors charges à la Croix-Rousse, contre 2 900 à 3 800 € sur la Presqu’île. Les locaux avec vitrine sur rue partent vite.',
+      '## Résultats',
+      '| Secteur | Loyer constaté | Surface type |',
+      '|---|---|---|',
+      '| Croix-Rousse (plateau) | 24 à 30 €/m²/mois | 60–80 m² |',
+      '| Croix-Rousse (pentes) | 20 à 26 €/m²/mois | 50–70 m² |',
+      '| Presqu’île | 40 à 50 €/m²/mois | 60–80 m² |',
+      '## Recommandation',
+      'Viser le plateau de la Croix-Rousse, avec une clause de sortie triennale négociée.',
+      '## Limites et points à vérifier',
+      'Données d’exemple pour la visite guidée : à confirmer auprès d’agences locales.',
+      '## Sources',
+      '- Exemple (visite guidée)',
+    ].join('\n');
+    const [reportDoc] = await trx('ProjectDocument').insert({
+      id: randomUUID(), projectId, name: 'Mission — Comparer les loyers commerciaux de la Croix-Rousse', mimeType: 'text/markdown',
+      sizeBytes: Buffer.byteLength(missionReport), charCount: missionReport.length, content: missionReport, enabled: true, createdAt: new Date(now - 3 * day), createdBy: user.id,
+    }).returning('id');
+    await trx('AgentMission').insert([
+      { projectId, sessionId: s1, agentName: agents1[1]?.name || 'Analyste', kind: 'research',
+        title: 'Comparer les loyers commerciaux de la Croix-Rousse', objective: 'Relever les loyers pratiqués pour 60 à 80 m² et les comparer à la Presqu’île.',
+        deliverable: 'Tableau comparatif', status: 'done', budgetUSD: 0.6, costUSD: 0.42, report: missionReport,
+        documentId: reportDoc.id ?? reportDoc, approvedBy: user.id, createdAt: new Date(now - 5 * day), approvedAt: new Date(now - 5 * day),
+        startedAt: new Date(now - 5 * day), finishedAt: new Date(now - 3 * day) },
+      { projectId, sessionId: s1, agentName: agents1[0]?.name || 'Stratège', kind: 'research',
+        title: 'Lister les aides à la création d’entreprise à Lyon', objective: 'Recenser les aides et prêts d’honneur accessibles pour ouvrir un commerce à Lyon, avec conditions et montants.',
+        deliverable: 'Liste avec montants et démarches', status: 'proposed', budgetUSD: 0.6, createdAt: new Date(now - 5 * day) },
+    ]);
 
     return { id: projectId, created: true };
   });
