@@ -263,7 +263,14 @@ export default function ProjectDev() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Développements" subtitle="Claude Code réalise les prompts de vos réunions directement dans le dépôt GitHub du projet. Rien n’est mis en ligne sans votre clic.">
+      <PageHeader title="Développements" subtitle={<>
+        Claude Code réalise les prompts de vos réunions directement dans le dépôt GitHub du projet. Rien n’est mis en ligne sans votre clic.
+        {status.repo && (
+          <a className="mt-1 text-xs font-bold text-action flex items-center gap-1.5" href={`https://github.com/${status.repo}`} target="_blank" rel="noopener noreferrer">
+            <Github size={13} aria-hidden="true" /> Voir le dépôt sur GitHub
+          </a>
+        )}
+      </>}>
         {status.ready && status.isOwner && (
           <Button size="sm" variant="ghost" onClick={() => setShowSetup(v => !v)}>{showSetup ? 'Masquer la configuration' : 'Configuration'}</Button>
         )}
