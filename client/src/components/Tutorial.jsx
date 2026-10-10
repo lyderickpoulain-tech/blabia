@@ -136,7 +136,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                         <span className="block text-sm font-bold text-ink">{c.label}</span>
                         <span className="block text-[11px] text-ink-faint">{c.steps.length} étapes{done ? ' · déjà vu' : ''}</span>
                       </span>
-                      <Button size="sm" variant="ghost" onClick={() => onStart([c.id])} aria-label={`Lancer le chapitre ${c.label}`}>
+                      <Button size="sm" variant="ghost" onClick={() => onStart(chapters.slice(i).map(x => x.id))} aria-label={`Lancer la visite à partir du chapitre ${c.label}`}>
                         <Play size={14} aria-hidden="true" /> {done ? 'Revoir' : 'Lancer'}
                       </Button>
                     </li>

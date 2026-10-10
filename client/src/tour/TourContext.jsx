@@ -272,10 +272,10 @@ function TourBubble({ step, chapter, chapterNo, chapterCount, stepNo, stepCount,
           ) : nextChapterLabel ? (
             <>
               <button type="button" onClick={onFinish} disabled={busy}
-                className="h-9 px-3 rounded-[10px] text-sm font-bold text-ink-muted hover:bg-canvas">Terminer</button>
+                className="h-9 px-3 rounded-[10px] text-sm font-bold text-ink-muted hover:bg-canvas">Arrêter là</button>
               <button type="button" onClick={onNextChapter} disabled={busy} autoFocus
                 className="h-9 px-3 inline-flex items-center gap-1.5 rounded-[10px] bg-action text-white text-sm font-bold hover:bg-action-dark disabled:opacity-50">
-                {nextChapterLabel} <ArrowRight size={15} aria-hidden="true" />
+                Suivant : {nextChapterLabel} <ArrowRight size={15} aria-hidden="true" />
               </button>
             </>
           ) : (
