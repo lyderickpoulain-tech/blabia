@@ -1,0 +1,336 @@
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Archive, RotateCcw, Trash2 } from 'lucide-react';
+import api from '../../utils/api';
+import { useProject, PageHeader } from '../../components/project/ProjectShell';
+import { Button, Card } from '../../components/ui';
+import QuestionModePicker from '../../components/QuestionModePicker';
+import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../../components/LevelSlider';
+
+// Paramètres du projet (refonte UX v5.1) : tout ce qui était empilé en bas de
+// l'ancienne page projet — identité, niveaux par défaut, brief, répertoire de
+// dev, mémoire brute, membres, archivage, zone de danger.
+
+const inputCls = 'w-full text-sm border border-line rounded-lg px-3 outline-none focus:ring-2 focus:ring-action-border bg-white';
+
+function Section({ title, subtitle, children }) {
+  return (
+    <Card as="section" className="p-5 space-y-4">
+      <div>
+        <h2 className="text-base font-extrabold text-ink">{title}</h2>
+        {subtitle && <p className="text-xs text-ink-muted mt-0.5">{subtitle}</p>}
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+function SaveRow({ saving, saved, error, disabled }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Button type="submit" variant="primary" disabled={saving || disabled}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
+      {saved && <span className="text-sm font-semibold text-ok" role="status">Enregistré</span>}
+      {error && <span className="text-sm font-semibold text-red-700" role="alert">{error}</span>}
+    </div>
+  );
+}
+
+function useSave() {
+  const [state, setState] = useState({ saving: false, saved: false, error: '' });
+  const run = async (fn) => {
+    setState({ saving: true, saved: false, error: '' });
+    try { await fn(); setState({ saving: false, saved: true, error: '' }); }
+    catch (err) { setState({ saving: false, saved: false, error: err.response?.data?.error || 'Erreur lors de l\u2019enregistrement' }); }
+  };
+  return [state, run];
+}
+
+function parseBriefFields(brief) {
+  const objectif = brief?.match(/OBJECTIF\s*:\s*([\s\S]*?)(?=\n\nCONTEXTE|\n\nNOTES|$)/)?.[1]?.trim() || '';
+  const contexte = brief?.match(/CONTEXTE\s*:\s*([\s\S]*?)(?=\n\nOBJECTIF|\n\nNOTES|$)/)?.[1]?.trim() || '';
+  const notes    = brief?.match(/NOTES\s*:\s*([\s\S]*?)(?=\n\nOBJECTIF|\n\nCONTEXTE|$)/)?.[1]?.trim() || '';
+  return { objectif, contexte, notes };
+}
+
+function IdentitySection({ project, setProject, canEdit }) {
+  const [f, setF] = useState({
+    name: project.name, description: project.description || '',
+    expertiseLevel: project.expertiseLevel || 3, humorLevel: project.humorLevel || 2,
+    questionMode: project.questionMode || 'balanced',
+  });
+  const [st, run] = useSave();
+  const submit = e => { e.preventDefault(); run(async () => {
+    const { data } = await api.patch(`/projects/${project.id}`, f);
+    setProject(p => ({ ...p, ...data }));
+  }); };
+  return (
+    <Section title="Projet et réglages par défaut" subtitle="Les niveaux s'appliquent aux nouvelles réunions ; chaque réunion peut les ajuster.">
+      <form onSubmit={submit} className="space-y-4">
+        <fieldset disabled={!canEdit} className="space-y-4">
+          <div>
+            <label htmlFor="p-name" className="block text-sm font-bold text-ink-soft mb-1">Nom</label>
+            <input id="p-name" required value={f.name} onChange={e => setF(v => ({ ...v, name: e.target.value }))} className={`${inputCls} h-11`} />
+          </div>
+          <div>
+            <label htmlFor="p-desc" className="block text-sm font-bold text-ink-soft mb-1">Description</label>
+            <textarea id="p-desc" rows={2} value={f.description} onChange={e => setF(v => ({ ...v, description: e.target.value }))} className={`${inputCls} py-2 resize-none`} />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <LevelSlider label="Maîtrise du sujet" value={f.expertiseLevel} onChange={v => setF(x => ({ ...x, expertiseLevel: v }))} labels={EXPERTISE_LABELS} />
+            <LevelSlider label="Humour" value={f.humorLevel} onChange={v => setF(x => ({ ...x, humorLevel: v }))} labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
+          </div>
+          <QuestionModePicker value={f.questionMode} onChange={v => setF(x => ({ ...x, questionMode: v }))} />
+        </fieldset>
+        {canEdit && <SaveRow {...st} disabled={!f.name.trim()} />}
+      </form>
+    </Section>
+  );
+}
+
+function BriefSection({ project, setProject, canEdit }) {
+  const init = parseBriefFields(project.brief);
+  const [f, setF] = useState(init);
+  const [st, run] = useSave();
+  const submit = e => { e.preventDefault(); run(async () => {
+    const { data } = await api.patch(`/projects/${project.id}/brief`, f);
+    setProject(p => ({ ...p, ...data }));
+  }); };
+  const field = (key, label, placeholder, rows) => (
+    <div>
+      <label htmlFor={`b-${key}`} className="block text-sm font-bold text-ink-soft mb-1">{label}</label>
+      <textarea id={`b-${key}`} rows={rows} value={f[key]} placeholder={placeholder}
+        onChange={e => setF(v => ({ ...v, [key]: e.target.value }))} className={`${inputCls} py-2 resize-none`} />
+    </div>
+  );
+  return (
+    <Section title="Brief" subtitle="Transmis aux agents au début de chaque réunion. Plus il est précis, moins ils posent de questions.">
+      <form onSubmit={submit} className="space-y-3">
+        <fieldset disabled={!canEdit} className="space-y-3">
+          {field('objectif', 'Objectif principal', 'Que cherchez-vous à accomplir ?', 3)}
+          {field('contexte', 'Contexte', 'Pour qui ? Quelles contraintes ?', 3)}
+          {field('notes', 'Notes', 'Idées, références, contraintes…', 2)}
+        </fieldset>
+        {canEdit && <SaveRow {...st} />}
+      </form>
+    </Section>
+  );
+}
+
+function DevDirectorySection({ project, setProject, canEdit }) {
+  const [val, setVal] = useState(project.devDirectory || '');
+  const [st, run] = useSave();
+  const submit = e => { e.preventDefault(); run(async () => {
+    await api.patch(`/projects/${project.id}`, { devDirectory: val });
+    setProject(p => ({ ...p, devDirectory: val.trim() || null }));
+  }); };
+  return (
+    <Section title="Répertoire de développement" subtitle="Utilisé par les prompts Claude Code (commande cd en tête de prompt).">
+      <form onSubmit={submit} className="space-y-3">
+        <label htmlFor="p-dir" className="sr-only">Répertoire</label>
+        <input id="p-dir" value={val} disabled={!canEdit} onChange={e => setVal(e.target.value)}
+          placeholder="ex. C:\MonProjet ou /home/moi/projet" className={`${inputCls} h-11 font-mono`} />
+        {canEdit && <SaveRow {...st} />}
+      </form>
+    </Section>
+  );
+}
+
+function MembersSection({ project }) {
+  const [members, setMembers] = useState(null);
+  const [input, setInput] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [result, setResult] = useState(null);
+  const [removing, setRemoving] = useState(null);
+
+  useEffect(() => {
+    api.get(`/projects/${project.id}/members`).then(({ data }) => setMembers(data)).catch(() => setMembers([]));
+  }, [project.id]);
+
+  const invite = async (e) => {
+    e.preventDefault();
+    const v = input.trim();
+    if (!v) return;
+    setInviting(true); setResult(null);
+    try {
+      const { data } = await api.post(`/projects/${project.id}/members`, v.startsWith('@') ? { username: v.slice(1) } : { email: v });
+      if (data.type === 'added') {
+        setMembers(m => [...m, data.member]);
+        setResult({ ok: true, text: `${data.member.username ? '@' + data.member.username : data.member.email} ajouté.` });
+      } else {
+        setResult({ ok: true, text: `Invitation envoyée à ${data.email}.` });
+      }
+      setInput('');
+    } catch (err) {
+      setResult({ ok: false, text: err.response?.data?.error || 'Invitation impossible.' });
+    }
+    setInviting(false);
+  };
+
+  const remove = async (userId) => {
+    setRemoving(userId);
+    try {
+      await api.delete(`/projects/${project.id}/members/${userId}`);
+      setMembers(m => m.filter(x => x.userId !== userId));
+    } catch (err) {
+      setResult({ ok: false, text: err.response?.data?.error || 'Retrait impossible.' });
+    }
+    setRemoving(null);
+  };
+
+  return (
+    <Section title="Membres" subtitle="Les personnes qui ont accès au projet.">
+      <form onSubmit={invite} className="flex gap-2">
+        <label htmlFor="p-invite" className="sr-only">E-mail ou @pseudo</label>
+        <input id="p-invite" value={input} onChange={e => { setInput(e.target.value); setResult(null); }}
+          placeholder="email@exemple.com ou @pseudo" className={`${inputCls} h-11 flex-1`} />
+        <Button type="submit" variant="primary" disabled={inviting || !input.trim()}>{inviting ? '…' : 'Inviter'}</Button>
+      </form>
+      {result && <p role="status" className={`text-sm font-semibold ${result.ok ? 'text-ok' : 'text-red-700'}`}>{result.text}</p>}
+      {members === null ? <p className="text-sm text-ink-faint">Chargement…</p>
+        : members.length === 0 ? <p className="text-sm text-ink-faint">Aucun collaborateur pour l'instant.</p>
+        : (
+          <ul className="divide-y divide-line border border-line rounded-xl">
+            {members.map(m => (
+              <li key={m.id} className="flex items-center gap-3 px-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-ink truncate">{m.email}{m.username && <span className="ml-1.5 text-xs font-semibold text-ink-faint">@{m.username}</span>}</p>
+                  <p className="text-xs text-ink-faint">{m.role}</p>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => remove(m.userId)} disabled={removing === m.userId}>Retirer</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+    </Section>
+  );
+}
+
+function ConfirmByName({ project, title, children, confirmLabel, tone, busy, onConfirm, onClose }) {
+  const [name, setName] = useState('');
+  return (
+    <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label={title}>
+      <Card className="max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <h3 className="text-lg font-extrabold text-ink">{title}</h3>
+        {children}
+        <div>
+          <label htmlFor="confirm-name" className="block text-sm text-ink-muted mb-1">Pour confirmer, saisissez le nom du projet : <strong className="text-ink">{project.name}</strong></label>
+          <input id="confirm-name" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder={project.name} className={`${inputCls} h-11`} />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={onClose} disabled={busy}>Annuler</Button>
+          <Button variant={tone} className="flex-1" onClick={onConfirm} disabled={busy || name !== project.name}>{busy ? '…' : confirmLabel}</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export default function ProjectSettings() {
+  const { project, setProject, canManage, refreshCounts } = useProject();
+  const navigate = useNavigate();
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [modal, setModal] = useState(null); // 'reset' | 'delete'
+  const [deleteMilestones, setDeleteMilestones] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const archive = async () => {
+    const label = project.status === 'active' ? 'archiver' : 'réactiver';
+    if (!window.confirm(`Voulez-vous ${label} ce projet ?`)) return;
+    setArchiving(true);
+    try {
+      const { data } = await api.patch(`/projects/${project.id}/archive`);
+      setProject(p => ({ ...p, status: data.status }));
+    } catch { setNotice('Opération impossible.'); }
+    setArchiving(false);
+  };
+
+  const resetMemory = async () => {
+    setBusy(true);
+    try {
+      await api.delete(`/projects/${project.id}/memory`, { params: { deleteMilestones } });
+      setProject(p => ({ ...p, context: null }));
+      setModal(null);
+      setDeleteMilestones(false);
+      refreshCounts();
+      setNotice('Mémoire du projet réinitialisée.');
+    } catch { setNotice('Erreur lors de la réinitialisation.'); }
+    setBusy(false);
+  };
+
+  const deleteProject = async () => {
+    setBusy(true);
+    try {
+      await api.delete(`/projects/${project.id}`);
+      navigate('/dashboard');
+    } catch { setNotice('Erreur lors de la suppression.'); setBusy(false); }
+  };
+
+  return (
+    <>
+      <PageHeader title="Paramètres" subtitle="Identité du projet, réglages par défaut, membres et actions sensibles." />
+      {notice && <p role="status" className="mb-4 text-sm font-semibold text-ink-soft bg-white border border-line rounded-lg px-3 py-2">{notice}</p>}
+
+      <div className="space-y-4">
+        <IdentitySection project={project} setProject={setProject} canEdit={canManage} />
+        <BriefSection project={project} setProject={setProject} canEdit={canManage} />
+        <DevDirectorySection project={project} setProject={setProject} canEdit={canManage} />
+
+        {project.context && (
+          <Section title="Mémoire brute" subtitle="Les comptes-rendus accumulés, transmis aux agents (les plus récents d'abord). Le registre des décisions en est la version structurée.">
+            <Button size="sm" variant="secondary" onClick={() => setMemoryOpen(o => !o)}>{memoryOpen ? 'Masquer' : 'Afficher'}</Button>
+            {memoryOpen && (
+              <pre className="text-xs text-ink-muted whitespace-pre-wrap font-sans leading-relaxed max-h-72 overflow-y-auto bg-canvas rounded-lg p-3">{project.context}</pre>
+            )}
+          </Section>
+        )}
+
+        {canManage && <MembersSection project={project} />}
+
+        <Section title="Ancienne vue des tâches" subtitle="Jalons et tâches de la version précédente, conservés en l'état.">
+          <Link to={`/projects/${project.id}/plan`} className="text-sm font-bold">Ouvrir l'ancienne vue</Link>
+        </Section>
+
+        {canManage && (
+          <section aria-labelledby="danger" className="border border-red-200 rounded-2xl p-5 space-y-3 bg-white">
+            <h2 id="danger" className="text-base font-extrabold text-red-700">Zone sensible</h2>
+            <div className="flex flex-wrap items-center gap-3 justify-between">
+              <p className="text-sm text-ink-soft flex-1 min-w-[220px]">{project.status === 'active' ? 'Archiver le projet : il sort de votre liste active.' : 'Le projet est archivé.'}</p>
+              <Button variant="secondary" onClick={archive} disabled={archiving}><Archive size={15} /> {project.status === 'active' ? 'Archiver' : 'Réactiver'}</Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 justify-between">
+              <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Réinitialiser la mémoire : supprime les réunions tenues, le registre des décisions et la mémoire.</p>
+              <Button variant="await" onClick={() => { setDeleteMilestones(false); setModal('reset'); }}><RotateCcw size={15} /> Réinitialiser</Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 justify-between">
+              <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Supprimer le projet et toutes ses données. Irréversible.</p>
+              <Button variant="danger" onClick={() => setModal('delete')}><Trash2 size={15} /> Supprimer</Button>
+            </div>
+          </section>
+        )}
+      </div>
+
+      {modal === 'reset' && (
+        <ConfirmByName project={project} title="Réinitialiser la mémoire du projet" confirmLabel="Réinitialiser" tone="await"
+          busy={busy} onConfirm={resetMemory} onClose={() => setModal(null)}>
+          <ul className="list-disc pl-5 text-sm text-ink-soft space-y-1">
+            <li>Effacer la mémoire et le registre des décisions</li>
+            <li>Supprimer les réunions tenues (historique, comptes-rendus, livrables)</li>
+            <li>{deleteMilestones ? 'Supprimer les réunions du plan' : 'Remettre les réunions du plan à « à tenir »'}</li>
+          </ul>
+          <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+            <input type="checkbox" checked={deleteMilestones} onChange={e => setDeleteMilestones(e.target.checked)} className="mt-1 accent-await" />
+            <span>Supprimer aussi le plan des réunions<span className="block text-xs text-ink-faint">Il devra être reconstruit.</span></span>
+          </label>
+        </ConfirmByName>
+      )}
+      {modal === 'delete' && (
+        <ConfirmByName project={project} title="Supprimer le projet" confirmLabel="Supprimer définitivement" tone="danger"
+          busy={busy} onConfirm={deleteProject} onClose={() => setModal(null)}>
+          <p className="text-sm text-red-700">Le projet « {project.name} » et toutes ses réunions seront supprimés définitivement.</p>
+        </ConfirmByName>
+      )}
+    </>
+  );
+}

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import MeetingCloseModal from '../components/MeetingCloseModal';
 import SummaryDisplayModal from '../components/SummaryDisplayModal';
 import ExportModal from '../components/ExportModal';
@@ -45,6 +45,8 @@ const DELIVERABLE_TYPES = [
 export default function MeetingRoom() {
   const { id: projectId, sid: sessionId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const autoPrepareDone = useRef(false);
 
   const [session,      setSession]      = useState(null);
   const [project,      setProject]      = useState(null);
@@ -791,6 +793,17 @@ export default function MeetingRoom() {
   const handlePrepare = useCallback(() => {
     handleSend('', { resume: true, prepare: true });
   }, [handleSend]);
+
+  // « Préparer avant mon arrivée » choisi au démarrage : une seule fois, réunion vide
+  useEffect(() => {
+    if (autoPrepareDone.current || loading || !session || !location.state?.autoPrepare) return;
+    autoPrepareDone.current = true;
+    if (messages.length === 0 && activeAgents.length >= 2 && !isClosed) {
+      setPrepRequested(true);
+      handlePrepare();
+    }
+    navigate(location.pathname, { replace: true, state: {} }); // pas de relance au rechargement
+  }, [loading, session, messages.length, activeAgents.length, isClosed, location, handlePrepare, navigate]);
 
   const processFiles = useCallback(async (fileList) => {
     const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];

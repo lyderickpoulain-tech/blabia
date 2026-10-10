@@ -91,7 +91,8 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 ### A. Refonte UX (en cours)
 1. ✅ Socle : tokens de couleur Tailwind, Manrope, `lucide-react` 0.469.0, composants partagés (`client/src/components/ui/index.jsx` : Button, IconButton, Badge, Card, SectionLabel).
 2. ✅ **Salle de réunion** (plein écran, hors `ProjectLayout`) : en-tête sur une ligne (`MeetingHeader`, réglages regroupés), quatre temps (`PhaseStepper`), écran Briefing (`BriefingView`), fil compact avec bulles pastel par agent, séparateur entre interlocuteurs et heure (`ConversationFeed`), hypothèses « D'accord · Je contredis », questions à valider explicitement avec « Laisser les agents décider » (`DecisionCard`), panneau latéral repliable en cartes (`MeetingSidePanel`), zone Illustration (`IllustrationPanel`), saisie compacte (`MeetingInputBar`). Reste à restyler : fenêtres de conclusion et de réinitialisation.
-3. Tableau de bord du projet + navigation par pages (Plan, Historique, Décisions, Outils, Équipe, Paramètres) ; retirer la double liste « Réunions ».
+3. ✅ Tableau de bord du projet + navigation par pages : `components/project/ProjectShell.jsx` (barre latérale, contexte `useProject`, pastilles d'attention) et `pages/project/` (Dashboard, Plan → route `reunions`, Historique, Décisions, Outils, Équipe, Paramètres). `ProjectView.jsx` supprimé ; l'ancienne vue des tâches (`/plan`, `PlanView`) reste accessible depuis Paramètres. « Préparer avant mon arrivée » : case sur `StartMeeting` + lancement automatique dans `MeetingRoom` (`location.state.autoPrepare`).
+   Reste à refaire dans le nouveau style : `StartMeeting` (affiche encore l'ancien panneau Réunions via `ProjectLayout`), `MeetingCloseModal`, liste des projets (`Dashboard.jsx`), `MyTools`, `NewProject`, `AgentsPage`.
 4. Renommages du glossaire partout (y compris commandes rapides qui parlent encore de « timeline »).
 
 ### B. Évolutions fonctionnelles (audit, « compagnon de projet en solo »)

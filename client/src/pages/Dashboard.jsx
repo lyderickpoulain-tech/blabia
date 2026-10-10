@@ -148,7 +148,7 @@ export default function Dashboard() {
                       <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{project.description}</p>
                     )}
                     <Link
-                      to={`/projects/${project.id}/plan`}
+                      to={`/projects/${project.id}/reunions`}
                       onClick={e => e.stopPropagation()}
                       className="text-xs text-gray-300 hover:text-blue-500 mt-1 inline-block transition"
                     >

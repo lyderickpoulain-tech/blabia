@@ -78,6 +78,7 @@ export default function StartMeeting() {
   const [creatingAgent,      setCreatingAgent]      = useState(false);
   const [model,             setModel]             = useState('claude-sonnet-4-6');
   const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
+  const [autoPrepare,       setAutoPrepare]       = useState(!!location.state?.autoPrepare);
   const [expertiseLevel,    setExpertiseLevel]    = useState(3);
   const [humorLevel,        setHumorLevel]        = useState(2);
   const [questionMode,      setQuestionMode]      = useState('balanced');
@@ -215,7 +216,8 @@ export default function StartMeeting() {
       });
 
       if (milestoneId) panelRef.current?.();
-      navigate(`/projects/${projectId}/meeting/${data.session.id}`);
+      // La salle de réunion lance la préparation dès l'ouverture (si au moins 2 agents)
+      navigate(`/projects/${projectId}/meeting/${data.session.id}`, { state: { autoPrepare: autoPrepare && activeAgents.length >= 2 } });
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors du démarrage de la réunion');
       setStarting(false);
@@ -474,6 +476,18 @@ export default function StartMeeting() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Préparation sans l'humain (refonte UX v5.1) */}
+            <div className="pt-1 border-t border-gray-100">
+              <label className="flex items-start justify-between gap-4 cursor-pointer">
+                <span>
+                  <span className="block text-sm font-semibold text-gray-800">Préparer avant mon arrivée</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">Les agents débattent d'abord entre eux ; vous arrivez sur un briefing avec les seules décisions qui vous reviennent. Au moins 2 agents.</span>
+                </span>
+                <input type="checkbox" checked={autoPrepare} onChange={e => setAutoPrepare(e.target.checked)}
+                  className="mt-1 w-5 h-5 shrink-0 accent-blabia-blue" />
+              </label>
             </div>
 
             {/* Toggle Recherche web */}

@@ -84,7 +84,7 @@ function DecisionItem({ decision, onPatch, onDelete }) {
   );
 }
 
-export default function DecisionRegistryPanel({ projectId, onClose, onChanged }) {
+export default function DecisionRegistryPanel({ projectId, onChanged }) {
   const [decisions, setDecisions] = useState(null);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
@@ -119,17 +119,9 @@ export default function DecisionRegistryPanel({ projectId, onClose, onChanged })
   const superseded = (decisions || []).filter(d => d.status === 'superseded');
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl max-h-[92vh] flex flex-col">
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
-          <div className="flex-1">
-            <h2 className="text-base font-bold text-gray-900">📒 Registre des décisions</h2>
-            <p className="text-xs text-gray-400">Ce qui est tranché pour ce projet. Les agents ne reposent pas ces questions.</p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">×</button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+    <div>
+      <div>
+        <div className="space-y-4">
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
           {adding ? (

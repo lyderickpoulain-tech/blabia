@@ -169,7 +169,7 @@ function CategoryBlock({ category, need, tools, myTools, catalogTools, onSave })
   );
 }
 
-export default function ProjectToolsPanel({ projectId, onClose, onChanged }) {
+export default function ProjectToolsPanel({ projectId, onChanged }) {
   const { catalog } = useToolsCatalog();
   const [tools, setTools]       = useState(null);
   const [needs, setNeeds]       = useState(null);
@@ -233,7 +233,7 @@ export default function ProjectToolsPanel({ projectId, onClose, onChanged }) {
 
   if (!catalog || tools === null) {
     return (
-      <Shell onClose={onClose}>
+      <Shell>
         {error ? <p className="text-sm text-red-600">{error}</p>
           : <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" /></div>}
       </Shell>
@@ -255,7 +255,7 @@ export default function ProjectToolsPanel({ projectId, onClose, onChanged }) {
   const blockProps = { tools, myTools, catalogTools: catalog.tools, onSave: save };
 
   return (
-    <Shell onClose={onClose} saving={saving}>
+    <Shell saving={saving}>
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="flex items-center justify-between gap-3 flex-wrap bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
@@ -312,17 +312,11 @@ export default function ProjectToolsPanel({ projectId, onClose, onChanged }) {
   );
 }
 
-function Shell({ children, onClose, saving }) {
+function Shell({ children, saving }) {
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-4xl max-h-[92vh] flex flex-col">
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-bold text-gray-900 flex-1">🧰 Outils du projet</h2>
-          {saving && <span className="text-xs text-gray-400">Enregistrement…</span>}
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">×</button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">{children}</div>
-      </div>
+    <div className="space-y-5">
+      {saving && <p className="text-xs text-ink-faint" role="status">Enregistrement…</p>}
+      {children}
     </div>
   );
 }

@@ -1,0 +1,268 @@
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, Wrench, History, Send, X } from 'lucide-react';
+import api from '../../utils/api';
+import { useProject } from '../../components/project/ProjectShell';
+import { Button, Card } from '../../components/ui';
+import Markdown from '../../components/Markdown';
+import GenerateTimelineModal from '../../components/GenerateTimelineModal';
+import { totalLabel } from '../../utils/toolsCatalog';
+
+// Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
+// est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
+
+const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Outils' };
+
+const QUICK_COMMANDS = [
+  { cmd: '/résumerProjet',     label: 'Résumer le projet' },
+  { cmd: '/prochainEtape',     label: 'Prochaine étape' },
+  { cmd: '/analyserBloquants', label: 'Analyser les blocages' },
+  { cmd: '/décisions',         label: 'Lister les décisions' },
+  { cmd: '/ajouterEtapes',     label: 'Ajouter des réunions', placeholder: '/ajouterEtapes ' },
+  { cmd: '/rechercher',        label: 'Rechercher sur le web', placeholder: '/rechercher ' },
+];
+
+function SummaryCard({ icon: Icon, title, meta, to, linkLabel, children }) {
+  return (
+    <Card as="section" className="p-5 flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-base font-extrabold text-ink flex items-center gap-2"><Icon size={17} className="text-action" aria-hidden="true" />{title}</h2>
+        {meta && <span className="text-xs font-semibold text-ink-faint">{meta}</span>}
+      </div>
+      <div className="flex-1">{children}</div>
+      <Link to={to} className="text-sm font-bold inline-flex items-center gap-1">{linkLabel} <ArrowRight size={14} aria-hidden="true" /></Link>
+    </Card>
+  );
+}
+
+function AskBlabIA({ projectId }) {
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const submit = async (e) => {
+    e?.preventDefault();
+    const v = input.trim();
+    if (!v || loading) return;
+    setLoading(true); setResult(null);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/quick-command`, { input: v });
+      setResult(data);
+    } catch (err) {
+      setResult({ type: 'error', result: err.response?.data?.error || 'La commande a échoué.' });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Card as="section" className="p-5 space-y-3">
+      <h2 className="text-base font-extrabold text-ink flex items-center gap-2"><Sparkles size={17} className="text-ai" aria-hidden="true" />Demander à BlabIA</h2>
+      <form onSubmit={submit} className="flex gap-2">
+        <label htmlFor="ask" className="sr-only">Votre question ou commande</label>
+        <input id="ask" value={input} onChange={e => setInput(e.target.value)} disabled={loading}
+          placeholder="Une question sur le projet, ou une commande ci-dessous"
+          className="flex-1 min-w-0 h-11 text-sm border border-line rounded-[10px] px-3 outline-none focus:ring-2 focus:ring-action-border" />
+        <Button type="submit" variant="primary" disabled={loading || !input.trim()} aria-label="Envoyer">
+          {loading ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send size={16} />}
+        </Button>
+      </form>
+      <div className="flex flex-wrap gap-1.5">
+        {QUICK_COMMANDS.map(c => (
+          <button key={c.cmd} type="button" onClick={() => setInput(c.placeholder || c.cmd)}
+            className="h-8 px-3 rounded-full border border-line bg-white text-xs font-semibold text-ink-muted hover:border-ai-border hover:text-ai">
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {result && (
+        <div className="border border-ai-border bg-ai-bg rounded-xl p-4 relative">
+          <button type="button" onClick={() => setResult(null)} aria-label="Fermer le résultat"
+            className="absolute top-2 right-2 w-9 h-9 inline-flex items-center justify-center rounded-lg text-ink-faint hover:text-ink"><X size={16} /></button>
+          <div className="max-h-96 overflow-y-auto pr-8"><Markdown size="synthesis">{result.result}</Markdown></div>
+          {result.milestonesCreated?.length > 0 && (
+            <p className="mt-2 text-sm font-semibold text-ok">
+              {result.milestonesCreated.length} réunion{result.milestonesCreated.length > 1 ? 's ajoutées' : ' ajoutée'} au plan. <Link to="reunions">Voir le plan</Link>
+            </p>
+          )}
+          {result.sources?.length > 0 && (
+            <ul className="mt-2 space-y-0.5">
+              {result.sources.map((s, i) => <li key={i} className="text-xs truncate"><a href={s.url} target="_blank" rel="noopener noreferrer">{s.title || s.url}</a></li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export default function ProjectDashboard() {
+  const { project, counts } = useProject();
+  const navigate = useNavigate();
+  const [plan, setPlan] = useState(null);         // { milestones, milestoneSessions }
+  const [sessions, setSessions] = useState([]);
+  const [decisions, setDecisions] = useState([]);
+  const [tools, setTools] = useState(null);       // { tools, total }
+  const [showGenerate, setShowGenerate] = useState(false);
+
+  const loadPlan = () => api.get(`/projects/${project.id}/plan`).then(({ data }) => setPlan(data)).catch(() => setPlan({ milestones: [], milestoneSessions: {} }));
+  useEffect(() => {
+    loadPlan();
+    api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(() => {});
+    api.get(`/projects/${project.id}/decisions`).then(({ data }) => setDecisions(data)).catch(() => {});
+    api.get(`/projects/${project.id}/tools`).then(({ data }) => setTools(data)).catch(() => {});
+  }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const milestones = [...(plan?.milestones || [])].sort((a, b) => a.displayOrder - b.displayOrder);
+  const done = milestones.filter(m => m.status === 'done').length;
+  const nextIdx = milestones.findIndex(m => m.status !== 'done');
+  const next = nextIdx >= 0 ? milestones[nextIdx] : null;
+  const nextSession = next ? plan?.milestoneSessions?.[next.id] : null;
+  const upcoming = milestones.filter(m => m.status !== 'done').slice(0, 3);
+  const openSessions = sessions.filter(s => s.status === 'open' && (!nextSession || s.id !== nextSession.id));
+  const activeDecisions = decisions.filter(d => d.status === 'active');
+  const validatedTools = (tools?.tools || []).filter(t => t.status === 'validated');
+  const pastSessions = sessions.filter(s => s.status === 'accepted').slice(0, 2);
+
+  const startMeeting = (prepare) => navigate(`/projects/${project.id}/meeting/new`, {
+    state: { milestoneId: next.id, milestoneTitle: next.title, milestoneType: next.type, autoPrepare: prepare },
+  });
+
+  const attention = [
+    counts.decisionsReopened > 0 && { text: `${counts.decisionsReopened} décision${counts.decisionsReopened > 1 ? 's remises' : ' remise'} en question, à retraiter en réunion.`, to: 'decisions', cta: 'Voir' },
+    counts.toolsAttention > 0 && { text: `${counts.toolsAttention} point${counts.toolsAttention > 1 ? 's' : ''} d'attention sur les outils du projet.`, to: 'outils', cta: 'Revoir' },
+    ...openSessions.slice(0, 3).map(s => ({ text: `Réunion restée ouverte : « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Rejoindre' })),
+  ].filter(Boolean);
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-extrabold text-ink">{project.name}</h1>
+        {project.description && <p className="text-[15px] text-ink-muted mt-1">{project.description}</p>}
+        {project.status === 'archived' && <p className="text-sm font-bold text-ink-faint mt-1">Projet archivé</p>}
+      </div>
+
+      {/* Prochaine étape */}
+      <Card as="section" aria-labelledby="next-title" className="p-5 border-action-border flex flex-wrap items-center gap-5">
+        {plan === null ? (
+          <div className="w-6 h-6 border-2 border-action border-t-transparent rounded-full animate-spin" />
+        ) : next ? (
+          <>
+            <div className="flex-1 min-w-[260px] space-y-1">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-action">Prochaine étape · réunion {nextIdx + 1} sur {milestones.length}</p>
+              <h2 id="next-title" className="text-xl font-extrabold text-ink">{next.title}</h2>
+              <p className="text-sm text-ink-muted">{TYPE_LABEL[next.type] || 'Réunion'}{next.description ? ` · ${next.description}` : ''}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {nextSession?.status === 'open' ? (
+                <Link to={`/projects/${project.id}/meeting/${nextSession.id}`} className="h-11 px-5 inline-flex items-center gap-2 rounded-[10px] bg-action text-white text-sm font-bold hover:bg-action-dark">
+                  Reprendre la réunion <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+              ) : project.status === 'active' && (
+                <>
+                  <Button variant="secondary" onClick={() => startMeeting(true)} className="text-ai border-ai-border">
+                    <Sparkles size={16} /> Préparer avant mon arrivée
+                  </Button>
+                  <Button variant="primary" onClick={() => startMeeting(false)}>Démarrer la réunion <ArrowRight size={16} /></Button>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 min-w-[260px] space-y-1">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-action">Prochaine étape</p>
+              <h2 id="next-title" className="text-xl font-extrabold text-ink">{milestones.length ? 'Toutes les réunions du plan sont tenues' : 'Construire le plan des réunions'}</h2>
+              <p className="text-sm text-ink-muted">
+                {project.brief ? 'BlabIA peut proposer une suite de réunions à partir du brief.' : 'Commencez par écrire le brief du projet : il guide les agents et le plan.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {project.brief
+                ? <Button variant="primary" onClick={() => setShowGenerate(true)}><Sparkles size={16} /> Proposer un plan</Button>
+                : <Link to="parametres" className="h-11 px-5 inline-flex items-center rounded-[10px] bg-action text-white text-sm font-bold hover:bg-action-dark">Écrire le brief</Link>}
+              <Link to={`/projects/${project.id}/meeting/new`} className="h-11 px-4 inline-flex items-center rounded-[10px] border border-line bg-white text-sm font-bold text-ink-soft hover:bg-canvas">Réunion libre</Link>
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* Points d'attention */}
+      {attention.length > 0 && (
+        <section aria-labelledby="att-title" className="bg-await-bg border border-await-border rounded-2xl p-5 space-y-2">
+          <h2 id="att-title" className="text-sm font-extrabold text-await flex items-center gap-2"><AlertTriangle size={16} aria-hidden="true" />{attention.length} point{attention.length > 1 ? 's attendent' : ' attend'} votre arbitrage</h2>
+          <ul className="space-y-1.5">
+            {attention.map((a, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-between">
+                <span className="text-sm text-ink-soft flex-1 min-w-[240px]">{a.text}</span>
+                <Link to={a.to} className="text-sm font-bold text-await">{a.cta}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SummaryCard icon={ListOrdered} title="Plan" meta={milestones.length ? `${done} sur ${milestones.length} tenues` : null} to="reunions" linkLabel="Voir le plan">
+          {milestones.length > 0 && (
+            <div className="h-2 bg-muted-light rounded-full overflow-hidden mb-3"><div className="h-full bg-ok" style={{ width: `${Math.round((done / milestones.length) * 100)}%` }} /></div>
+          )}
+          {upcoming.length === 0 ? <p className="text-sm text-ink-faint">Aucune réunion à venir.</p> : (
+            <ol className="space-y-1.5">
+              {upcoming.map(m => (
+                <li key={m.id} className="flex items-center gap-2.5 text-sm">
+                  <span className="w-6 h-6 rounded-md bg-muted-light text-ink-muted text-xs font-extrabold inline-flex items-center justify-center shrink-0">{milestones.indexOf(m) + 1}</span>
+                  <span className="flex-1 min-w-0 truncate text-ink-soft">{m.title}</span>
+                  <span className="text-xs text-ink-faint shrink-0">{TYPE_LABEL[m.type] || ''}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </SummaryCard>
+
+        <SummaryCard icon={ScrollText} title="Décisions" meta={`${activeDecisions.length} en vigueur${counts.decisionsReopened ? ` · ${counts.decisionsReopened} à revoir` : ''}`} to="decisions" linkLabel="Ouvrir le registre">
+          {activeDecisions.length === 0 ? <p className="text-sm text-ink-faint">Aucune décision pour l'instant. Elles s'ajoutent à la conclusion des réunions.</p> : (
+            <ul className="space-y-1.5">
+              {activeDecisions.slice(0, 3).map(d => (
+                <li key={d.id} className="flex gap-2 items-start text-sm">
+                  <span className="mt-1.5 w-2 h-2 rounded-full bg-ok shrink-0" aria-hidden="true" />
+                  <span className="text-ink-soft">{d.statement}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SummaryCard>
+
+        <SummaryCard icon={Wrench} title="Outils" meta={tools ? `${validatedTools.length} retenu${validatedTools.length > 1 ? 's' : ''}` : null} to="outils" linkLabel="Voir les outils">
+          {tools && (
+            <div className="space-y-1">
+              <p className="text-xs text-ink-faint">Coût mensuel estimé</p>
+              <p className="text-2xl font-extrabold text-ink">{totalLabel(tools.total || { min: 0, max: 0 })}</p>
+              {counts.toolsAttention > 0 && <p className="text-sm text-await font-semibold">{counts.toolsAttention} point{counts.toolsAttention > 1 ? 's' : ''} d'attention</p>}
+            </div>
+          )}
+        </SummaryCard>
+
+        <SummaryCard icon={History} title="Historique" meta={`${sessions.length} réunion${sessions.length !== 1 ? 's' : ''}`} to="historique" linkLabel="Voir l'historique">
+          {pastSessions.length === 0 ? <p className="text-sm text-ink-faint">Aucune réunion conclue pour l'instant.</p> : (
+            <ul className="space-y-2">
+              {pastSessions.map(s => (
+                <li key={s.id}>
+                  <Link to={`/projects/${project.id}/meeting/${s.id}`} className="text-sm font-bold text-ink hover:text-action">{s.task}</Link>
+                  <p className="text-xs text-ink-faint">{new Date(s.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SummaryCard>
+      </div>
+
+      <AskBlabIA projectId={project.id} />
+
+      {showGenerate && (
+        <GenerateTimelineModal project={project} existingCount={0}
+          onClose={() => setShowGenerate(false)}
+          onAdded={() => { setShowGenerate(false); loadPlan(); }} />
+      )}
+    </div>
+  );
+}

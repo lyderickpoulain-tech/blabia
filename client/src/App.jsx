@@ -3,7 +3,14 @@ import { useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NewProject from './pages/NewProject';
-import ProjectView from './pages/ProjectView';
+import ProjectShell from './components/project/ProjectShell';
+import ProjectDashboard from './pages/project/ProjectDashboard';
+import ProjectPlan from './pages/project/ProjectPlan';
+import ProjectHistory from './pages/project/ProjectHistory';
+import ProjectDecisions from './pages/project/ProjectDecisions';
+import ProjectTools from './pages/project/ProjectTools';
+import ProjectTeam from './pages/project/ProjectTeam';
+import ProjectSettings from './pages/project/ProjectSettings';
 import AdminInvitations from './pages/AdminInvitations';
 import AdminUsers from './pages/AdminUsers';
 import ProfilePage from './pages/ProfilePage';
@@ -21,7 +28,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-canvas">
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Login />} />
@@ -33,8 +40,16 @@ export default function App() {
           <ProtectedRoute><NewProject /></ProtectedRoute>
         } />
         <Route path="/projects/:id" element={
-          <ProtectedRoute><ProjectView /></ProtectedRoute>
-        } />
+          <ProtectedRoute><ProjectShell /></ProtectedRoute>
+        }>
+          <Route index element={<ProjectDashboard />} />
+          <Route path="reunions" element={<ProjectPlan />} />
+          <Route path="historique" element={<ProjectHistory />} />
+          <Route path="decisions" element={<ProjectDecisions />} />
+          <Route path="outils" element={<ProjectTools />} />
+          <Route path="equipe" element={<ProjectTeam />} />
+          <Route path="parametres" element={<ProjectSettings />} />
+        </Route>
         <Route path="/projects/:id/plan" element={
           <ProtectedRoute><PlanView /></ProtectedRoute>
         } />

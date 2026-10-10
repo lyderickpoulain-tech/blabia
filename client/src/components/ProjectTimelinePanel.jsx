@@ -241,7 +241,8 @@ function PanelBody({
 }
 
 // ── Composant principal ────────────────────────────────────────────────────────
-export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
+// variant : 'panel' (colonne latérale repliable) | 'page' (page Plan, refonte UX v5.1)
+export default function ProjectTimelinePanel({ projectId, refreshKey = 0, variant = 'panel' }) {
   const navigate = useNavigate();
 
   const [isOpen, setIsOpen]                     = useState(true);
@@ -329,8 +330,25 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
     navigate, devDirectory,
   };
 
+  const progress = milestones.length > 0 && (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 bg-muted-light rounded-full h-2 overflow-hidden">
+        <div className="h-2 rounded-full bg-ok transition-all" style={{ width: `${Math.round((doneMilestones / milestones.length) * 100)}%` }} />
+      </div>
+      <span className="text-xs font-bold text-ink-muted shrink-0">{doneMilestones}/{milestones.length} tenues</span>
+    </div>
+  );
+
   return (
     <>
+      {variant === 'page' ? (
+        <div className="bg-white border border-line rounded-2xl overflow-hidden">
+          {progress && <div className="px-4 py-3 border-b border-line">{progress}</div>}
+          <div style={{ height: 'calc(100vh - 260px)', minHeight: 420, display: 'flex', flexDirection: 'column' }}>
+            <PanelBody {...panelBodyProps} isMobile={false} devDirectory={devDirectory} />
+          </div>
+        </div>
+      ) : (<>
       {/* ── Desktop ─────────────────────────────────────────────────────── */}
       <div className="hidden lg:flex items-start shrink-0 sticky top-6 self-start">
         <button onClick={() => setIsOpen(p => !p)}
@@ -389,6 +407,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
           </div>
         </div>
       )}
+      </>)}
 
       {/* ── ExportModal lecture seule (prompt déjà stocké dans session.deliverable) ── */}
       {promptViewSession && (
