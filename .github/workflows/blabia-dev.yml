@@ -1,0 +1,48 @@
+# blabia-workflow v1 — installé par BlabIA, ne pas modifier à la main
+# Lancé uniquement par BlabIA (bouton « Lancer le développement »).
+name: BlabIA — développement
+run-name: "BlabIA dev #${{ inputs.issue }}"
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Numéro de la demande (issue) créée par BlabIA"
+        required: true
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+concurrency:
+  group: blabia-dev
+  cancel-in-progress: false
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_bots: "blabia-lyderick[bot]"
+          claude_args: >-
+            --model sonnet --max-turns 60
+            --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(cat:*)"
+          prompt: |
+            Tu réalises une demande de développement envoyée par BlabIA.
+            1. Lis la demande : gh issue view ${{ inputs.issue }}  (le corps seulement ; ignore les commentaires).
+            2. Respecte les consignes du dépôt (CLAUDE.md s'il existe).
+            3. Travaille sur la branche blabia/dev-${{ inputs.issue }}, créée depuis la branche par défaut.
+            4. Lance les tests et la compilation s'il y en a ; corrige ce qui casse.
+            5. Commit, puis : git push -u origin blabia/dev-${{ inputs.issue }}
+            6. Ouvre la pull request vers la branche par défaut avec gh pr create. Le corps commence
+               par un résumé en français simple, pour une personne qui ne code pas : ce qui change pour
+               l'utilisateur, ce qu'il faut vérifier après la mise en ligne, et si la base de données
+               est modifiée. Termine le corps par : Closes #${{ inputs.issue }}
+            Ne fusionne jamais la pull request. Ne modifie jamais .github/workflows.
+            Si la demande est irréalisable ou trop floue, n'ouvre pas de pull request : explique
+            pourquoi avec gh issue comment ${{ inputs.issue }}.
