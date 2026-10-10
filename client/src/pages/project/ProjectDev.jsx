@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Check, Circle, AlertTriangle, ExternalLink, Rocket, Play, Github, RefreshCw, ShieldCheck, Database, ChevronDown, ChevronRight, X,
+  Check, Circle, AlertTriangle, ExternalLink, Rocket, Play, Github, RefreshCw, ShieldCheck, Database, ChevronDown, ChevronRight, X, Eye, Globe,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -25,6 +25,20 @@ const STATUS = {
   abandoned:     { label: 'Abandonné',              tone: 'muted' },
 };
 const POLLING = ['running', 'deploying'];
+// Après la fusion, c'est l'hébergeur relié au dépôt qui publie (déploiements GitHub)
+const PUBLISH = {
+  live:      { label: 'En ligne',                 tone: 'ok' },
+  pending:   { label: 'Publication en cours…',    tone: 'action' },
+  failed:    { label: 'Publication échouée',      tone: 'await' },
+  no_host:   { label: 'Fusionné, non publié',     tone: 'await' },
+  no_access: { label: 'Fusionné',                 tone: 'muted' },
+  unknown:   { label: 'Fusionné',                 tone: 'muted' },
+};
+const statusOf = t => (t.status === 'deployed' && t.publishState ? PUBLISH[t.publishState] : null) || STATUS[t.status] || STATUS.failed;
+const PREVIEW_WATCH_MS = 30 * 60 * 1000; // l'aperçu d'une pull request arrive en général en quelques minutes
+// Suivi automatique : travail en cours, publication en cours, aperçu attendu
+const needsPolling = t => POLLING.includes(t.status) || (t.status === 'deployed' && t.publishState === 'pending')
+  || (t.status === 'ready' && !t.previewUrl && Date.now() - new Date(t.readyAt || t.createdAt).getTime() < PREVIEW_WATCH_MS);
 const fmtDate = d => new Date(d).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 function Step({ done, warn, title, children }) {
@@ -232,9 +246,27 @@ function Summary({ text, done }) {
   );
 }
 
-function TaskCard({ task, status, isOwner, onAction, busy }) {
+// Développement fusionné : ce que l'hébergeur en a fait
+function Publication({ task, projectId }) {
+  const guide = <Link className="underline" to={`/projects/${projectId}/outils`}>Projet › Outils › Guide de mise en place</Link>;
+  switch (task.publishState) {
+    case 'live': return <p className="text-sm text-ok font-bold mt-3">Publié par l’hébergeur{task.siteUrl ? <> : <a className="underline break-all" href={task.siteUrl} target="_blank" rel="noreferrer">{task.siteUrl}</a></> : '.'} Vérifiez ce que le résumé indique.</p>;
+    case 'pending': return <p className="text-sm text-ink-muted mt-3">Code fusionné : l’hébergeur publie le site (quelques minutes). Cette page se met à jour toute seule.</p>;
+    case 'failed': return <p className="text-sm text-await font-bold mt-3">Code fusionné, mais l’hébergeur n’a pas réussi à publier le site : ouvrez son tableau de bord pour voir l’erreur.</p>;
+    case 'no_host': return (
+      <div className="mt-3 rounded-xl bg-await-bg border-2 border-await-border p-3.5 text-sm">
+        <p className="font-extrabold text-await">Code fusionné, mais rien n’est publié</p>
+        <p className="text-ink-soft mt-1">Aucun hébergeur n’est relié au dépôt : le site n’a pas d’adresse publique. Reliez celui que vous avez choisi en suivant le {guide} ; la prochaine mise en ligne sera alors publiée (et celle-ci aussi, si rien n’a changé depuis).</p>
+      </div>
+    );
+    case 'no_access': return <p className="text-sm text-ink-muted mt-3">Code fusionné. BlabIA ne peut pas encore vérifier la publication : l’application GitHub BlabIA doit avoir la permission « Deployments » en lecture (github.com/settings/installations).</p>;
+    default: return <p className="text-sm text-ink-muted mt-3">Code fusionné. Vérifiez sur votre site que la nouvelle version est en ligne, et ce que le résumé indique.</p>;
+  }
+}
+
+function TaskCard({ task, status, isOwner, onAction, busy, projectId }) {
   const [showFiles, setShowFiles] = useState(false);
-  const st = STATUS[task.status] || STATUS.failed;
+  const st = statusOf(task);
   const files = Array.isArray(task.files) ? task.files : [];
   const add = files.reduce((s, f) => s + (f.additions || 0), 0);
   const del = files.reduce((s, f) => s + (f.deletions || 0), 0);
@@ -248,12 +280,12 @@ function TaskCard({ task, status, isOwner, onAction, busy }) {
           <h3 className="text-base font-extrabold text-ink break-words">{task.title}</h3>
           <p className="text-xs text-ink-faint mt-0.5">Lancé le {fmtDate(task.createdAt)} · {task.repo}</p>
         </div>
-        <Badge tone={st.tone}>{POLLING.includes(task.status) && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{st.label}</Badge>
+        <Badge tone={st.tone}>{(POLLING.includes(task.status) || task.publishState === 'pending') && task.status !== 'ready' && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{st.label}</Badge>
       </div>
 
       {task.status === 'running' && <p className="text-sm text-ink-muted mt-3">Claude Code lit la demande, modifie le code et lance les tests. Comptez de 5 à 30 minutes ; cette page se met à jour toute seule.</p>}
-      {task.status === 'deploying' && <p className="text-sm text-ink-muted mt-3">Sauvegarde de la base puis fusion en cours. L’hébergeur redéploie ensuite le site (quelques minutes).</p>}
-      {task.status === 'deployed' && <p className="text-sm text-ok font-bold mt-3">Fusionné : l’hébergeur redéploie le site. Vérifiez ce que le résumé indique.</p>}
+      {task.status === 'deploying' && <p className="text-sm text-ink-muted mt-3">Sauvegarde de la base puis fusion en cours. L’hébergeur relié au dépôt publie ensuite le site (quelques minutes).</p>}
+      {task.status === 'deployed' && <Publication task={task} projectId={projectId} />}
       {task.error && <p className="text-sm text-await font-bold mt-3 whitespace-pre-wrap">{task.error}</p>}
 
       {task.summary && <Summary text={task.summary} done={['deployed', 'abandoned'].includes(task.status)} />}
@@ -282,6 +314,18 @@ function TaskCard({ task, status, isOwner, onAction, busy }) {
       )}
 
       <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-line">
+        {task.status === 'ready' && task.previewUrl && (
+          <a href={task.previewUrl} target="_blank" rel="noreferrer" data-tour="dev-preview"
+            className="h-9 px-3 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-bold bg-white text-action border border-action hover:bg-canvas">
+            <Eye size={15} aria-hidden="true" /> Voir l’aperçu
+          </a>
+        )}
+        {task.status === 'deployed' && task.publishState === 'live' && task.siteUrl && (
+          <a href={task.siteUrl} target="_blank" rel="noreferrer"
+            className="h-9 px-3 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-bold bg-white text-ok border border-ok hover:bg-canvas">
+            <Globe size={15} aria-hidden="true" /> Voir le site
+          </a>
+        )}
         {canDeploy && (
           <Button size="sm" variant="primary" disabled={busy} onClick={() => onAction(task, 'deploy')}>
             <Rocket size={15} aria-hidden="true" /> {task.status === 'deploy_failed' ? 'Réessayer la mise en ligne' : 'Mettre en ligne'}
@@ -313,7 +357,7 @@ export default function ProjectDev() {
   useGitHubReturn(() => { loadStatus(); reloadProject(); }); // dépôt créé : entrée « Développements » de la navigation
 
   // Suivi automatique tant qu'un développement ou une mise en ligne est en cours
-  const polling = !!data?.tasks.some(t => POLLING.includes(t.status));
+  const polling = !!data?.tasks.some(needsPolling);
   useEffect(() => {
     if (!polling) return undefined;
     const t = setInterval(loadTasks, 20000);
@@ -339,7 +383,7 @@ export default function ProjectDev() {
     const todo = summarySections(task.summary).todo;
     const before = todo && /avant la mise en ligne/i.test(todo.body);
     const msg = action === 'deploy'
-      ? `${before ? '⚠ Ce développement demande des actions AVANT la mise en ligne (encadré « À faire de votre côté »). Les avez-vous toutes faites ?\n\n' : ''}Mettre en ligne « ${task.title} » ?\n\n${status?.secrets?.db ? 'La base de données sera d’abord sauvegardée (chiffrée). ' : ''}Les modifications seront fusionnées et le site redéployé.${todo && !before ? '\n\nPensez ensuite aux actions « À faire de votre côté ».' : ''}`
+      ? `${before ? '⚠ Ce développement demande des actions AVANT la mise en ligne (encadré « À faire de votre côté »). Les avez-vous toutes faites ?\n\n' : ''}Mettre en ligne « ${task.title} » ?\n\n${status?.secrets?.db ? 'La base de données sera d’abord sauvegardée (chiffrée). ' : ''}Les modifications seront fusionnées, puis publiées par l’hébergeur relié au dépôt (s’il y en a un).${todo && !before ? '\n\nPensez ensuite aux actions « À faire de votre côté ».' : ''}`
       : `Abandonner « ${task.title} » ? Les modifications proposées seront fermées sur GitHub.`;
     if (!confirm(msg)) return;
     setBusy(true);
@@ -358,6 +402,7 @@ export default function ProjectDev() {
   const retry = s => ['failed', 'abandoned'].includes(lastTask.get(s.id)?.status);
   const toLaunch = data.launchable.filter(s => !lastTask.has(s.id) || retry(s));
   const setupVisible = !status.ready || showSetup;
+  const siteUrl = data.tasks.find(t => t.publishState === 'live' && t.siteUrl)?.siteUrl; // dernière publication connue
 
   return (
     <div className="space-y-4">
@@ -366,6 +411,11 @@ export default function ProjectDev() {
         {status.repo && (
           <a className="mt-1 text-xs font-bold text-action flex items-center gap-1.5" href={`https://github.com/${status.repo}`} target="_blank" rel="noopener noreferrer">
             <Github size={13} aria-hidden="true" /> Voir le dépôt sur GitHub
+          </a>
+        )}
+        {siteUrl && (
+          <a className="mt-1 text-xs font-bold text-ok flex items-center gap-1.5 break-all" href={siteUrl} target="_blank" rel="noopener noreferrer">
+            <Globe size={13} aria-hidden="true" /> Voir le site en ligne
           </a>
         )}
       </>}>
@@ -403,7 +453,7 @@ export default function ProjectDev() {
         </Card>
       )}
 
-      {data.tasks.map(t => <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} onAction={onAction} busy={busy} />)}
+      {data.tasks.map(t => <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} projectId={project.id} onAction={onAction} busy={busy} />)}
     </div>
   );
 }

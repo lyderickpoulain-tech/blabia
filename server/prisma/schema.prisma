@@ -326,6 +326,10 @@ model DevTask {
   files             Json      @default("[]") // [{ filename, additions, deletions }]
   touchesDatabase   Boolean   @default(false)
   runUrl            String?
+  previewUrl        String?   // v5.1 : aperçu de la pull request publié par l'hébergeur (déploiement GitHub)
+  siteUrl           String?   // v5.1 : adresse du site publié après fusion
+  mergeSha          String?   // v5.1 : commit de fusion, pour retrouver sa publication
+  publishState      String?   // v5.1 : pending | live | failed | no_host | unknown (services/devTasks.js)
   error             String?
   createdAt         DateTime  @default(now())
   readyAt           DateTime?

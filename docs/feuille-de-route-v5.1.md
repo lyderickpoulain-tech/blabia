@@ -145,6 +145,14 @@ Objectif : pour une demande « créer un site web » à partir de rien, BlabIA c
 - Hébergement : rien d'automatique côté hébergeur (choix de l'utilisateur : réunion « outils » + guide).
 - Tests : `services/__tests__/website.test.js`, `__integration__/devTasks.test.js` (création au retour de GitHub, nom pris, permission absente, plan type, réunion outils). À vérifier en réel : la création avec la permission Administration acceptée, et l'ajout automatique à une installation « Only select repositories ».
 
+### D4. Publication réelle et aperçu — codé le 10/10/2026
+Constat (projet « Site de numérologie ») : « Mettre en ligne » affichait « En ligne » alors qu'aucun hébergeur n'était relié au dépôt — le code était seulement fusionné.
+- BlabIA lit les **déploiements GitHub** que l'hébergeur relié (Railway, Vercel, Netlify…) déclare : `publicationOf` / `refreshPublication` dans `services/devTasks.js`. Après fusion : `publishState` = `pending` → `live` (+ `siteUrl`, l'adresse du site plutôt que celle d'un service « server/api ») ou `failed` ; `no_host` si aucun déploiement n'a jamais existé sur le dépôt (encadré « Code fusionné, mais rien n'est publié » + lien vers le guide) ; `no_access` si la permission manque (revérifié) ; suivi 7 jours.
+- **Aperçu** : déploiement sur le commit de tête de la PR → `previewUrl`, bouton « Voir l'aperçu » à côté de « Mettre en ligne » (suivi automatique 30 min après « prêt »). « Voir le site en ligne » dans l'en-tête de Développements.
+- Le guide de mise en place explique de relier l'hébergeur par son intégration GitHub et d'activer les aperçus (PR Environments Railway, Preview Deployments Vercel, Deploy Previews Netlify).
+- **⚠️ Permission à ajouter à l'application GitHub** : Repository permissions → **Deployments : Read-only**, puis accepter sur l'installation.
+- Migration `20261010000012_v5_dev_publication` ; tests d'intégration (aperçu, non publié, site + serveur, échec, permission absente).
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

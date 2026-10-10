@@ -159,10 +159,67 @@ async function openPrFromBranch(inst, task) {
 
 const NO_PR_RE = /pull request/i;
 
+// ── Publication par l'hébergeur ──────────────────────────────────────────────
+// « Mettre en ligne » fusionne ; c'est l'hébergeur relié au dépôt (Railway, Vercel, Netlify…)
+// qui publie, et il le déclare à GitHub sous forme de déploiements (état + adresse). Sans
+// hébergeur relié, rien n'est publié : BlabIA le dit au lieu d'afficher « En ligne ».
+// Permission de l'application GitHub : « Deployments » en lecture.
+const PUBLISH_WATCH_MS = 7 * 24 * 3600e3; // suivi de la publication après la fusion
+const PUBLISH_LOST_MS = 2 * 3600e3;       // hébergeur relié mais rien pour ce commit : on cesse d'attendre
+const PUBLISH_RECHECK = [null, 'pending', 'no_host', 'no_access'];
+const BACKEND_ENV_RE = /\b(server|serveur|api|backend|worker)\b/i;
+
+// Publication d'un commit : { state: live | pending | failed, url } ou null (aucun déploiement)
+async function publicationOf(inst, repo, sha) {
+  const deps = await github.gh(inst, 'GET', `/repos/${repo}/deployments?sha=${sha}&per_page=10`) || [];
+  if (!deps.length) return null;
+  const outcomes = await Promise.all(deps.map(async d => {
+    const statuses = await github.gh(inst, 'GET', `/repos/${repo}/deployments/${d.id}/statuses?per_page=5`) || [];
+    return { state: statuses[0]?.state || 'pending', url: statuses[0]?.environment_url || null, environment: d.environment || '' }; // plus récent d'abord
+  }));
+  // Plusieurs services (site + serveur) : l'adresse du site plutôt que celle de l'API
+  const ok = outcomes.filter(o => o.state === 'success');
+  const live = ok.find(o => o.url && !BACKEND_ENV_RE.test(o.environment)) || ok.find(o => o.url) || ok[0];
+  if (live) return { state: 'live', url: live.url };
+  if (outcomes.some(o => ['pending', 'queued', 'in_progress'].includes(o.state))) return { state: 'pending', url: null };
+  return { state: 'failed', url: null };
+}
+
+// Développement fusionné : publié ? où ? (no_host : aucun hébergeur n'a jamais publié ce
+// dépôt ; no_access : permission « Deployments » absente — revérifié ; unknown : abandon)
+async function refreshPublication(task, inst) {
+  if (!PUBLISH_RECHECK.includes(task.publishState ?? null)) return task;
+  if (Date.now() - new Date(task.finishedAt || task.createdAt).getTime() > PUBLISH_WATCH_MS) return task;
+  const patch = {};
+  try {
+    const sha = task.mergeSha || (await github.gh(inst, 'GET', `/repos/${task.repo}/pulls/${task.prNumber}`))?.merge_commit_sha || null;
+    if (sha && !task.mergeSha) patch.mergeSha = sha;
+    const pub = sha ? await publicationOf(inst, task.repo, sha) : null;
+    if (pub) {
+      patch.publishState = pub.state;
+      if (pub.url) patch.siteUrl = pub.url;
+    } else {
+      const any = await github.gh(inst, 'GET', `/repos/${task.repo}/deployments?per_page=1`) || [];
+      patch.publishState = !any.length ? 'no_host'
+        : Date.now() - new Date(task.finishedAt || task.createdAt).getTime() > PUBLISH_LOST_MS ? 'unknown' : 'pending';
+    }
+  } catch (err) {
+    if (err.status !== 403) throw err;
+    patch.publishState = 'no_access';
+  }
+  if (Object.entries(patch).every(([k, v]) => task[k] === v)) return task;
+  const [row] = await db('DevTask').where({ id: task.id }).update(patch).returning('*');
+  return row;
+}
+
+// Pull request fusionnée : la publication par l'hébergeur commence (refreshPublication)
+const merged = pr => ({ status: 'deployed', finishedAt: new Date(), mergeSha: pr.merge_commit_sha || null, publishState: 'pending' });
+
 // Relit l'état d'un développement auprès de GitHub ; renvoie la ligne à jour
 async function refreshTask(task, inst) {
   const repo = task.repo;
   const patch = {};
+  if (task.status === 'deployed') return refreshPublication(task, inst);
   // Échec « sans pull request » : la branche a peut-être été poussée (ancien développement)
   if (task.status === 'failed' && !task.prNumber && task.issueNumber && NO_PR_RE.test(task.error || '')) {
     const prNumber = await openPrFromBranch(inst, task);
@@ -196,12 +253,17 @@ async function refreshTask(task, inst) {
     }
   } else if (task.status === 'ready') {
     const pr = await github.gh(inst, 'GET', `/repos/${repo}/pulls/${task.prNumber}`);
-    if (pr.merged) Object.assign(patch, { status: 'deployed', finishedAt: new Date() });
+    if (pr.merged) Object.assign(patch, merged(pr));
     else if (pr.state === 'closed') Object.assign(patch, { status: 'abandoned', finishedAt: new Date() });
-    else if (pr.updated_at && new Date(pr.updated_at) > new Date(task.readyAt || 0)) Object.assign(patch, (await loadPr(inst, repo, task.prNumber)).patch);
+    else {
+      if (pr.updated_at && new Date(pr.updated_at) > new Date(task.readyAt || 0)) Object.assign(patch, (await loadPr(inst, repo, task.prNumber)).patch);
+      // Aperçu publié par l'hébergeur pour la pull request (s'il en propose)
+      const preview = pr.head?.sha ? await publicationOf(inst, repo, pr.head.sha).catch(() => null) : null;
+      if (preview?.state === 'live' && preview.url && preview.url !== task.previewUrl) patch.previewUrl = preview.url;
+    }
   } else if (task.status === 'deploying') {
     const pr = await github.gh(inst, 'GET', `/repos/${repo}/pulls/${task.prNumber}`);
-    if (pr.merged) Object.assign(patch, { status: 'deployed', finishedAt: new Date(), error: null });
+    if (pr.merged) Object.assign(patch, merged(pr), { error: null });
     else {
       const run = await findRun(inst, repo, 'blabia-deploy.yml', wf.deployRunName(task.prNumber), task.deployRequestedAt);
       if (run) patch.runUrl = run.html_url;
@@ -254,6 +316,6 @@ async function abandonTask(project, task) {
 }
 
 module.exports = {
-  repoStatus, installWorkflows, createTask, refreshTask, listTasks, deployTask, abandonTask,
+  repoStatus, installWorkflows, createTask, refreshTask, listTasks, deployTask, abandonTask, publicationOf,
   ACTIVE, SECRET_CLAUDE, SECRET_DB, SECRET_BACKUP, DB_FILE_RE,
 };

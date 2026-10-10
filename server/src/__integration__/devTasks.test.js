@@ -10,7 +10,7 @@ const harness = require('./harness');
 // ── GitHub simulé ────────────────────────────────────────────────────────────
 function fakeGitHub() {
   const gh = {
-    calls: [], files: {}, branches: {}, secrets: new Set(), issues: [], pulls: [], runs: [], dispatches: [], comments: {}, created: [], createdFiles: {},
+    calls: [], files: {}, branches: {}, secrets: new Set(), issues: [], pulls: [], runs: [], dispatches: [], comments: {}, created: [], createdFiles: {}, deployments: [],
     repo: { full_name: 'moi/app', private: false, default_branch: 'main' },
   };
   const json = (status, data) => ({ status, ok: status < 400, text: async () => (data === undefined ? '' : JSON.stringify(data)), json: async () => data });
@@ -72,10 +72,17 @@ function fakeGitHub() {
       if (!pr) return json(404, { message: 'Not Found' });
       if (m[2]) return json(200, pr.files);
       if (method === 'PATCH') Object.assign(pr, body);
-      return json(200, pr);
+      return json(200, { ...pr, head: { ref: pr.head, sha: pr.headSha || null } });
     }
     if ((m = p.match(/^\/repos\/moi\/app\/issues\/(\d+)\/comments$/))) return json(200, gh.comments[m[1]] || []);
     if ((m = p.match(/^\/repos\/moi\/app\/issues\/(\d+)$/)) && method === 'PATCH') { Object.assign(gh.issues[Number(m[1]) - 1], body); return json(200, {}); }
+    // Déploiements déclarés par l'hébergeur relié au dépôt (Railway, Vercel…)
+    if (p === '/repos/moi/app/deployments') {
+      if (gh.denyDeployments) return json(403, { message: 'Resource not accessible by integration' });
+      const sha = u.searchParams.get('sha');
+      return json(200, gh.deployments.filter(d => !sha || d.sha === sha).slice(0, Number(u.searchParams.get('per_page') || 30)));
+    }
+    if ((m = p.match(/^\/repos\/moi\/app\/deployments\/(\d+)\/statuses$/))) return json(200, gh.deployments.find(d => d.id === Number(m[1]))?.statuses || []);
     return json(404, { message: `Route simulée absente : ${method} ${p}` });
   };
   return gh;
@@ -229,6 +236,45 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     gh.runs.push({ workflow: 'blabia-dev.yml', display_title: 'BlabIA dev #4', status: 'completed', conclusion: 'success', html_url: 'https://github.com/moi/app/actions/runs/13', created_at: new Date().toISOString() });
     t = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
     expect(t).toMatchObject({ status: 'ready', prNumber: gh.pulls.at(-1).number });
+  });
+
+  it('publication : aperçu de la PR ; « non publié » sans hébergeur ; adresse du site une fois publié', async () => {
+    const tasks = async () => (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks;
+    // Le 1er développement, fusionné plus haut : aucun hébergeur n'a jamais publié ce dépôt
+    expect((await tasks()).find(t => t.id === devId)).toMatchObject({ status: 'deployed', publishState: 'no_host', siteUrl: null });
+
+    // Aperçu : l'hébergeur publie la pull request du développement en attente
+    const pr = gh.pulls.at(-1);
+    pr.headSha = 'tete-4';
+    gh.deployments.push({ id: 1, sha: 'tete-4', environment: `app-pr-${pr.number}`, statuses: [{ state: 'success', environment_url: 'https://app-pr.example' }] });
+    let t = (await tasks())[0];
+    expect(t).toMatchObject({ status: 'ready', previewUrl: 'https://app-pr.example' });
+
+    // Hébergeur relié ensuite : il publie le commit de fusion (site + serveur) → adresse du SITE
+    gh.pulls.find(x => x.number === 5).merge_commit_sha = 'fusion-5';
+    gh.deployments.push(
+      { id: 2, sha: 'fusion-5', environment: 'production / server', statuses: [{ state: 'success', environment_url: 'https://api.example' }] },
+      { id: 3, sha: 'fusion-5', environment: 'production / client', statuses: [{ state: 'success', environment_url: 'https://site.example' }] });
+    expect((await tasks()).find(x => x.id === devId)).toMatchObject({ publishState: 'live', siteUrl: 'https://site.example', mergeSha: 'fusion-5' });
+
+    // Mise en ligne du développement en attente : publication en cours, puis échouée
+    expect((await h.request('POST', `/api/projects/${projectId}/dev-tasks/${t.id}/deploy`, { token: owner.token })).status).toBe(200);
+    Object.assign(pr, { merged: true, merge_commit_sha: 'fusion-4' });
+    t = (await tasks())[0];
+    expect(t).toMatchObject({ status: 'deployed', publishState: 'pending', mergeSha: 'fusion-4' });
+    const dep = { id: 4, sha: 'fusion-4', environment: 'production', statuses: [{ state: 'in_progress' }] };
+    gh.deployments.push(dep);
+    expect((await tasks())[0].publishState).toBe('pending');
+    dep.statuses.unshift({ state: 'failure' });
+    expect((await tasks())[0].publishState).toBe('failed');
+
+    // Permission « Deployments » absente : signalé, et revérifié ensuite
+    await h.db('DevTask').where({ id: t.id }).update({ publishState: 'pending' });
+    gh.denyDeployments = true;
+    expect((await tasks())[0].publishState).toBe('no_access');
+    gh.denyDeployments = false;
+    dep.statuses.unshift({ state: 'success', environment_url: 'https://site.example' });
+    expect((await tasks())[0]).toMatchObject({ publishState: 'live', siteUrl: 'https://site.example' });
   });
 
   it('projet exemple et compte « user » : refusés', async () => {
