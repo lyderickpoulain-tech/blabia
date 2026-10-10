@@ -169,13 +169,25 @@ const PUBLISH_LOST_MS = 2 * 3600e3;       // hébergeur relié mais rien pour ce
 const PUBLISH_RECHECK = [null, 'pending', 'no_host', 'no_access'];
 const BACKEND_ENV_RE = /\b(server|serveur|api|backend|worker)\b/i;
 
+// Adresse du site déclarée par l'hébergeur — sauf quand c'est celle de son tableau de bord
+// (Railway transmet le lien du projet sur railway.com, pas l'adresse publique du site)
+const DASHBOARD_RE = /^https?:\/\/(?:www\.)?(?:railway\.(?:com|app)\/project|vercel\.com\/|app\.netlify\.com\/|dashboard\.render\.com\/)/i;
+const siteUrlOf = status => {
+  const url = status?.environment_url || null;
+  return url && !DASHBOARD_RE.test(url) ? url : null;
+};
+
 // Publication d'un commit : { state: live | pending | failed, url } ou null (aucun déploiement)
 async function publicationOf(inst, repo, sha) {
   const deps = await github.gh(inst, 'GET', `/repos/${repo}/deployments?sha=${sha}&per_page=10`) || [];
   if (!deps.length) return null;
   const outcomes = await Promise.all(deps.map(async d => {
-    const statuses = await github.gh(inst, 'GET', `/repos/${repo}/deployments/${d.id}/statuses?per_page=5`) || [];
-    return { state: statuses[0]?.state || 'pending', url: statuses[0]?.environment_url || null, environment: d.environment || '' }; // plus récent d'abord
+    const statuses = await github.gh(inst, 'GET', `/repos/${repo}/deployments/${d.id}/statuses?per_page=20`) || []; // plus récent d'abord
+    // « inactive » après « success » = version publiée, puis remplacée par une plus récente :
+    // elle a bien été en ligne (ex. Railway, 10/10/2026). On retient donc tout succès passé.
+    const success = statuses.find(s => s.state === 'success');
+    const last = success || statuses[0];
+    return { state: last?.state || 'pending', url: siteUrlOf(last), environment: d.environment || '' };
   }));
   // Plusieurs services (site + serveur) : l'adresse du site plutôt que celle de l'API
   const ok = outcomes.filter(o => o.state === 'success');
@@ -188,7 +200,10 @@ async function publicationOf(inst, repo, sha) {
 // Développement fusionné : publié ? où ? (no_host : aucun hébergeur n'a jamais publié ce
 // dépôt ; no_access : permission « Deployments » absente — revérifié ; unknown : abandon)
 async function refreshPublication(task, inst) {
-  if (!PUBLISH_RECHECK.includes(task.publishState ?? null)) return task;
+  // Relus aussi : un « échec » qui était un succès remplacé, une adresse qui était celle du
+  // tableau de bord de l'hébergeur (corrections du 11/10/2026)
+  const misread = task.publishState === 'failed' || (task.siteUrl && DASHBOARD_RE.test(task.siteUrl));
+  if (!PUBLISH_RECHECK.includes(task.publishState ?? null) && !misread) return task;
   if (Date.now() - new Date(task.finishedAt || task.createdAt).getTime() > PUBLISH_WATCH_MS) return task;
   const patch = {};
   try {
@@ -198,6 +213,7 @@ async function refreshPublication(task, inst) {
     if (pub) {
       patch.publishState = pub.state;
       if (pub.url) patch.siteUrl = pub.url;
+      else if (task.siteUrl && DASHBOARD_RE.test(task.siteUrl)) patch.siteUrl = null;
     } else {
       const any = await github.gh(inst, 'GET', `/repos/${task.repo}/deployments?per_page=1`) || [];
       patch.publishState = !any.length ? 'no_host'

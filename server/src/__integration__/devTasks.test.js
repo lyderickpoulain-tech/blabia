@@ -275,6 +275,15 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     gh.denyDeployments = false;
     dep.statuses.unshift({ state: 'success', environment_url: 'https://site.example' });
     expect((await tasks())[0]).toMatchObject({ publishState: 'live', siteUrl: 'https://site.example' });
+
+    // Cas réel Railway (mode sombre de BlabIA, 10/10/2026) : publié, puis « inactive » une fois
+    // remplacé par la version suivante ; l'adresse transmise est celle du TABLEAU DE BORD.
+    // Ancienne lecture : « Publication échouée » et un « Voir le site » vers railway.com.
+    const board = 'https://railway.com/project/bc0f?environmentId=89ef';
+    await h.db('DevTask').where({ id: t.id }).update({ publishState: 'failed', siteUrl: board });
+    dep.statuses.splice(0, dep.statuses.length,
+      { state: 'inactive', environment_url: board }, { state: 'success', environment_url: board }, { state: 'in_progress', environment_url: board });
+    expect((await tasks())[0]).toMatchObject({ publishState: 'live', siteUrl: null });
   });
 
   it('projet exemple et compte « user » : refusés', async () => {
