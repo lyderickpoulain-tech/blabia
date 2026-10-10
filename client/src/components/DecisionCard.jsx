@@ -65,7 +65,8 @@ export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, d
       className="ml-[38px] my-1.5 bg-await-bg border border-await-border rounded-xl px-3 py-2.5 space-y-2 min-w-0 disabled:opacity-60">
       <legend className="float-left w-full text-sm font-bold text-ink leading-snug">
         <span className="text-[11px] font-extrabold uppercase tracking-wider text-await mr-1.5">
-          Question{number ? ` ${number}${budget ? `/${budget}` : ''}` : ''} · {message.agentName}
+          {/* Numéro seul : le budget de questions (« Questions 3/4 » dans l'en-tête) n'est pas le nombre de cartes affichées */}
+          <span title={budget ? `Budget de la réunion : ${budget} questions` : undefined}>Question{number ? ` ${number}` : ''}</span> · {message.agentName}
         </span>
         {message.question}
       </legend>

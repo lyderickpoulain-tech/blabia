@@ -53,8 +53,10 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
                 <fieldset key={d.id}
                   className={`bg-white border rounded-2xl p-4 space-y-2.5 min-w-0 shadow-sm ${done ? 'border-ok-border' : 'border-await-border'}`}>
                   <legend className="float-left w-full text-[15px] font-bold text-ink">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-await mr-1.5">
-                      Question {firstNumber + i}{decisionBudget ? `/${decisionBudget}` : ''}
+                    {/* Numéro seul : le budget de questions (en-tête « Questions 3/4 ») n'est pas le nombre de cartes */}
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-await mr-1.5"
+                      title={decisionBudget ? `Budget de la réunion : ${decisionBudget} questions` : undefined}>
+                      Question {firstNumber + i}
                     </span>
                     {d.question}
                   </legend>
