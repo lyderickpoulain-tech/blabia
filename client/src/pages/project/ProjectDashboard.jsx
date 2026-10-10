@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check } from 'lucide-react';
+import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check, GitPullRequest } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
@@ -111,6 +111,7 @@ export default function ProjectDashboard() {
   const [actions, setActions] = useState([]);     // actions entre les réunions
   const { missions } = useMissions(project.id);   // missions des agents (proposées → point d'attention)
   const [showGenerate, setShowGenerate] = useState(false);
+  const [devTasks, setDevTasks] = useState(null); // développements Claude Code (si un dépôt GitHub est relié)
 
   const loadStats = () => api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(err => notifyError(err, 'Coût de l’IA indisponible.'));
   const loadPlan = () => api.get(`/projects/${project.id}/plan`).then(({ data }) => setPlan(data)).catch(() => setPlan({ milestones: [], milestoneSessions: {} }));
@@ -122,6 +123,18 @@ export default function ProjectDashboard() {
     api.get(`/projects/${project.id}/actions`).then(({ data }) => setActions(data)).catch(err => notifyError(err, 'Impossible de charger les actions.'));
     api.get(`/projects/${project.id}/tools`).then(({ data }) => setTools(data)).catch(err => notifyError(err, 'Impossible de charger les outils.'));
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Développements : état relu auprès de GitHub ; suivi toutes les 30 s tant que Claude Code travaille
+  const devActive = !!devTasks?.some(t => ['running', 'deploying'].includes(t.status));
+  useEffect(() => {
+    if (!project.githubRepo) return undefined;
+    const load = () => api.get(`/projects/${project.id}/dev-tasks`).then(({ data }) => setDevTasks(data.tasks))
+      .catch(err => notifyError(err, 'Impossible de charger les développements.'));
+    if (devTasks === null) load();
+    if (!devActive) return undefined;
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [project.id, project.githubRepo, devActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const milestones = [...(plan?.milestones || [])].sort((a, b) => a.displayOrder - b.displayOrder);
   const done = milestones.filter(m => m.status === 'done').length;
@@ -136,6 +149,9 @@ export default function ProjectDashboard() {
   const openActions = actions.filter(a => a.status !== 'done');
   const lateActions = openActions.filter(isOverdueAction);
   const proposedMissions = missions.filter(m => m.status === 'proposed');
+  const devOf = status => (devTasks || []).filter(t => t.status === status);
+  const devCurrent = (devTasks || []).find(t => ['running', 'deploying', 'ready'].includes(t.status));
+  const devLastDeployed = devOf('deployed')[0];
 
   const startMeeting = (prepare) => navigate(`/projects/${project.id}/meeting/new`, {
     state: { milestoneId: next.id, milestoneTitle: next.title, milestoneType: next.type, autoPrepare: prepare },
@@ -144,6 +160,9 @@ export default function ProjectDashboard() {
   const attention = [
     counts.decisionsReopened > 0 && { text: `${counts.decisionsReopened} décision${counts.decisionsReopened > 1 ? 's remises' : ' remise'} en question, à retraiter en réunion.`, to: 'decisions', cta: 'Voir' },
     proposedMissions.length > 0 && { text: `${proposedMissions.length} mission${proposedMissions.length > 1 ? 's' : ''} proposée${proposedMissions.length > 1 ? 's' : ''} par les agents attend${proposedMissions.length > 1 ? 'ent' : ''} votre accord (« ${proposedMissions[0].title} »).`, to: 'actions', cta: 'Voir' },
+    ...devOf('ready').map(t => ({ text: `Développement prêt à relire : « ${t.title} ». Claude Code a terminé ; rien n’est en ligne sans votre accord.`, to: 'developpements', cta: 'Relire' })),
+    ...devOf('deploy_failed').map(t => ({ text: `La mise en ligne de « ${t.title} » a échoué : rien n’a été mis en ligne.`, to: 'developpements', cta: 'Voir' })),
+    ...devOf('failed').slice(0, 1).map(t => ({ text: `Le développement « ${t.title} » n’a pas abouti.`, to: 'developpements', cta: 'Voir' })),
     lateActions.length > 0 && { text: `${lateActions.length} action${lateActions.length > 1 ? 's' : ''} en retard (« ${lateActions[0].title} »${lateActions.length > 1 ? '…' : ''}).`, to: 'actions', cta: 'Voir' },
     counts.toolsAttention > 0 && { text: `${counts.toolsAttention} point${counts.toolsAttention > 1 ? 's' : ''} d'attention sur les outils du projet.`, to: 'outils', cta: 'Revoir' },
     ...openSessions.slice(0, 3).map(s => ({ text: `Réunion restée ouverte : « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Rejoindre' })),
@@ -275,6 +294,25 @@ export default function ProjectDashboard() {
             </div>
           )}
         </SummaryCard>
+
+        {project.githubRepo && (
+          <SummaryCard icon={GitPullRequest} title="Développements" meta={project.githubRepo} to="developpements" linkLabel="Voir les développements">
+            {devTasks === null ? <p className="text-sm text-ink-faint">Chargement…</p> : devCurrent ? (
+              <div className="space-y-1">
+                <p className={`text-sm font-extrabold inline-flex items-center gap-1.5 ${devCurrent.status === 'ready' ? 'text-await' : 'text-ai'}`}>
+                  {devCurrent.status !== 'ready' && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}
+                  {devCurrent.status === 'running' ? 'Claude Code travaille…' : devCurrent.status === 'deploying' ? 'Mise en ligne en cours…' : 'Prêt à relire'}
+                </p>
+                <p className="text-sm text-ink-soft">{devCurrent.title}</p>
+              </div>
+            ) : devLastDeployed ? (
+              <div className="space-y-1">
+                <p className="text-xs text-ink-faint">Dernier mis en ligne · {new Date(devLastDeployed.finishedAt || devLastDeployed.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</p>
+                <p className="text-sm text-ink-soft">{devLastDeployed.title}</p>
+              </div>
+            ) : <p className="text-sm text-ink-faint">Aucun développement en cours. Ils se lancent à la conclusion des réunions Claude Code.</p>}
+          </SummaryCard>
+        )}
 
         <SummaryCard tour="pd-history" icon={History} title="Historique" meta={`${sessions.length} réunion${sessions.length !== 1 ? 's' : ''}`} to="historique" linkLabel="Voir l'historique">
           {stats && (

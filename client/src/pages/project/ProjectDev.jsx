@@ -258,7 +258,11 @@ export default function ProjectDev() {
   if (!status || !data) return <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-action border-t-transparent rounded-full animate-spin" /></div>;
 
   const active = data.tasks.some(t => ['running', 'deploying'].includes(t.status));
-  const launchedSessions = new Set(data.tasks.filter(t => t.status !== 'abandoned').map(t => t.sessionId));
+  // Dernier développement de chaque réunion : en cours ou réussi → plus proposé ; échoué ou abandonné → « Relancer »
+  const lastTask = new Map();
+  data.tasks.forEach(t => { if (!lastTask.has(t.sessionId)) lastTask.set(t.sessionId, t); }); // tâches du plus récent au plus ancien
+  const retry = s => ['failed', 'abandoned'].includes(lastTask.get(s.id)?.status);
+  const toLaunch = data.launchable.filter(s => !lastTask.has(s.id) || retry(s));
   const setupVisible = !status.ready || showSetup;
 
   return (
@@ -282,19 +286,19 @@ export default function ProjectDev() {
         <Card className="p-5" data-tour="dev-launch">
           <h2 className="text-base font-extrabold text-ink">Lancer un développement</h2>
           <p className="text-xs text-ink-muted mt-0.5 mb-3">Prompts rédigés à la fin de vos réunions Claude Code. Un développement à la fois.</p>
-          {data.launchable.length === 0 ? (
-            <p className="text-sm text-ink-muted">Aucune réunion Claude Code conclue pour l’instant. <Link className="underline" to={`/projects/${project.id}/meeting/new`}>Démarrer une réunion</Link></p>
+          {toLaunch.length === 0 ? (
+            <p className="text-sm text-ink-muted">{data.launchable.length ? 'Tous les prompts de vos réunions Claude Code ont été lancés.' : 'Aucune réunion Claude Code conclue pour l’instant.'} <Link className="underline" to={`/projects/${project.id}/meeting/new`}>Démarrer une réunion</Link></p>
           ) : (
             <ul className="divide-y divide-line">
-              {data.launchable.map(s => (
+              {toLaunch.map(s => (
                 <li key={s.id} className="flex flex-wrap items-center gap-3 py-2.5">
                   <div className="flex-1 min-w-[200px]">
                     <p className="text-sm font-bold text-ink">{s.task}</p>
-                    <p className="text-xs text-ink-faint">Réunion du {fmtDate(s.createdAt)}{launchedSessions.has(s.id) ? ' · déjà lancé' : ''}</p>
+                    <p className="text-xs text-ink-faint">Réunion du {fmtDate(s.createdAt)}{retry(s) ? ` · ${STATUS[lastTask.get(s.id).status].label.toLowerCase()}` : ''}</p>
                   </div>
-                  <Button size="sm" variant={launchedSessions.has(s.id) ? 'secondary' : 'primary'} disabled={busy || active} onClick={() => launch(s)}
+                  <Button size="sm" variant={retry(s) ? 'secondary' : 'primary'} disabled={busy || active} onClick={() => launch(s)}
                     title={active ? 'Un développement est déjà en cours' : undefined}>
-                    <Play size={14} aria-hidden="true" /> {launchedSessions.has(s.id) ? 'Relancer' : 'Lancer'}
+                    <Play size={14} aria-hidden="true" /> {retry(s) ? 'Relancer' : 'Lancer'}
                   </Button>
                 </li>
               ))}

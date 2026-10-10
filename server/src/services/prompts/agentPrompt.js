@@ -152,6 +152,10 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
     ? `\nOUTILS DÉJÀ PROPOSÉS DANS CETTE RÉUNION — ne les repropose pas :\n${toolReview.toolSuggestionsText}\n`
     : '';
   const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
+  // v5.1 : dépôt GitHub relié (développements lancés depuis BlabIA) — ne pas en redemander l'adresse
+  const repoSection     = project.githubRepo
+    ? `\nDÉPÔT DU CODE : GitHub ${project.githubRepo} (https://github.com/${project.githubRepo}). Les prompts des réunions Claude Code y sont réalisés par Claude Code, seul, dans GitHub ; ne demande pas l'adresse du dépôt.\n`
+    : '';
   // v5.1 : documents de référence fournis par l'humain (texte extrait au dépôt)
   const documentsSection = documentsText
     ? `\nDOCUMENTS DE RÉFÉRENCE DU PROJET (fournis par l'humain : appuie-toi dessus, cite le document entre « » quand tu t'en sers, signale toute contradiction entre un document et ce qui se dit) :\n${documentsText}\n`
@@ -189,7 +193,7 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
 
   // ── 1. Bloc commun à la réunion (mis en cache) ─────────────────────────────
   const shared = `Tu participes à une réunion collaborative entre agents IA spécialisés, animée pour un humain qui initie le projet et tranche les décisions. Ton rôle précis t'est donné à la fin de ce prompt.
-${briefSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${missionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
+${briefSection}${repoSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${missionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 

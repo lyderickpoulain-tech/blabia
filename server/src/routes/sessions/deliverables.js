@@ -228,7 +228,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       const stackLines = formatProjectToolsForPrompt(await getProjectTools(project)).split('\n').filter(Boolean);
       const decisions = messages.filter(m => m.pinned || m.type === 'decision');
       const codePrompt = buildClaudeCodePrompt({
-        session, brief: project.brief, devDirectory, stackLines, decisions, historyText
+        session, brief: project.brief, devDirectory, githubRepo: project.githubRepo || null, stackLines, decisions, historyText
       });
       const deliverableResponse = await anthropic.messages.create({
         model: MODEL, max_tokens: 4000,

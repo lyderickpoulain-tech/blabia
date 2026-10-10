@@ -18,7 +18,9 @@ function buildSummaryPrompt(sessionContext, expertiseLevel = 3, meetingType = 'd
   };
 }
 
-function buildClaudeCodePrompt({ session, brief, devDirectory, stackLines = [], decisions = [], historyText }) {
+// githubRepo : dépôt relié au projet (développements lancés depuis BlabIA) → Claude Code
+// travaille SEUL dans GitHub Actions, déjà à la racine du dépôt, sans pouvoir demander de validation.
+function buildClaudeCodePrompt({ session, brief, devDirectory, githubRepo, stackLines = [], decisions = [], historyText }) {
   const briefSection = brief?.trim()
     ? `Brief du projet :\n${brief.trim()}\n\n`
     : '';
@@ -28,15 +30,20 @@ function buildClaudeCodePrompt({ session, brief, devDirectory, stackLines = [], 
   const decisionsSection = decisions.length > 0
     ? `Décisions prises pendant la réunion (contraintes obligatoires) :\n${decisions.map((d, i) => `${i + 1}. ${d.content}`).join('\n')}\n\n`
     : '';
-  const cdInstruction = devDirectory
-    ? `- Commencer IMPÉRATIVEMENT par la ligne : cd "${devDirectory}"`
-    : '- Préciser que l\'utilisateur doit naviguer manuellement vers son répertoire de projet';
+  const cdInstruction = githubRepo
+    ? `- Ne PAS commencer par un « cd » : Claude Code travaille déjà à la racine du dépôt GitHub ${githubRepo}`
+    : devDirectory
+      ? `- Commencer IMPÉRATIVEMENT par la ligne : cd "${devDirectory}"`
+      : '- Préciser que l\'utilisateur doit naviguer manuellement vers son répertoire de projet';
+  const validationInstruction = githubRepo
+    ? '- Demander de réaliser TOUTES les tâches d\'affilée, sans demander de validation intermédiaire : Claude Code travaille seul (GitHub Actions) et l\'humain relit ensuite la pull request'
+    : '- Demander une validation étape par étape avant de passer à la suivante';
 
   return {
     system: 'Tu es un expert en rédaction de prompts techniques pour Claude Code. Tu génères des prompts précis, calibrés et directement utilisables. Réponds uniquement en français.',
     user: `${briefSection}Objectif de la réunion : ${session.task}
 
-${stackSection}${decisionsSection}Génère un prompt Claude Code prêt à être copié dans Claude Code.
+${stackSection}${decisionsSection}Génère un prompt Claude Code prêt à être ${githubRepo ? 'exécuté par Claude Code en autonomie' : 'copié dans Claude Code'}.
 
 Le prompt généré doit :
 ${cdInstruction}
@@ -44,7 +51,7 @@ ${cdInstruction}
 - Lister les tâches concrètes à implémenter dans l'ordre logique (numérotées)
 - Préciser les fichiers ou composants concernés si identifiés dans la réunion
 - Intégrer les décisions prises comme contraintes non négociables
-- Demander une validation étape par étape avant de passer à la suivante
+${validationInstruction}
 - Être rédigé en français
 
 Conversation de la réunion :

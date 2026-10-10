@@ -73,3 +73,29 @@ describe('automatisations installées dans le dépôt', () => {
     expect(deploy).toContain(`run-name: "${wf.deployRunName('${{ inputs.pr }}')}"`);
   });
 });
+
+describe('prompts quand le projet a un dépôt GitHub', () => {
+  const { buildClaudeCodePrompt } = require('../prompts/deliverablePrompts');
+  const { buildAgentSystemPrompt } = require('../prompts/agentPrompt');
+
+  it('prompt Claude Code : pas de « cd » local ni de validation étape par étape (Claude Code travaille seul)', () => {
+    const gh = buildClaudeCodePrompt({ session: { task: 'Lien' }, devDirectory: 'C:/BlabIA', githubRepo: 'moi/app', historyText: '…' }).user;
+    expect(gh).not.toContain('cd "C:/BlabIA"');
+    expect(gh).not.toContain('validation étape par étape');
+    expect(gh).toContain('sans demander de validation intermédiaire');
+    expect(gh).toContain('racine du dépôt GitHub moi/app');
+    // Sans dépôt : comportement inchangé (copier-coller dans VS Code)
+    const local = buildClaudeCodePrompt({ session: { task: 'Lien' }, devDirectory: 'C:/BlabIA', historyText: '…' }).user;
+    expect(local).toContain('cd "C:/BlabIA"');
+    expect(local).toContain('validation étape par étape');
+  });
+
+  it('agents : le dépôt figure dans le bloc commun (mis en cache)', () => {
+    const base = { agent: { name: 'Léa', role: 'Dev', systemPrompt: '' }, session: { task: 'T' }, intention: ['claude_code'], activeAgents: [] };
+    const blocks = buildAgentSystemPrompt({ ...base, project: { name: 'P', brief: 'b', githubRepo: 'moi/app' } });
+    const shared = Array.isArray(blocks) ? blocks[0].text : String(blocks);
+    expect(shared).toContain('DÉPÔT DU CODE : GitHub moi/app');
+    const without = buildAgentSystemPrompt({ ...base, project: { name: 'P', brief: 'b' } });
+    expect(JSON.stringify(without)).not.toContain('DÉPÔT DU CODE');
+  });
+});

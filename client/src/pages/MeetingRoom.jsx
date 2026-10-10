@@ -845,6 +845,7 @@ export default function MeetingRoom() {
               )}
 
               <MeetingSuggestCloseBanner
+                hasDevRepo={!!project?.githubRepo}
                 suggestClose={suggestClose}
                 setSuggestClose={setSuggestClose}
                 isClosed={isClosed}

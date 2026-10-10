@@ -6,6 +6,7 @@ export function MeetingSuggestCloseBanner({
   isClosed,
   currentIntention,
   setShowCloseModal,
+  hasDevRepo = false, // dépôt GitHub relié : le développement se lance à la conclusion
 }) {
   if (!suggestClose || isClosed) return null;
 
@@ -30,7 +31,7 @@ export function MeetingSuggestCloseBanner({
             onClick={() => { setShowCloseModal(true); setSuggestClose(null); }}
             className="flex-1 text-xs font-semibold bg-blabia-blue hover:bg-blabia-blue-dark text-white px-3 py-2 rounded-lg transition"
           >
-            🚀 Générer le prompt et clore
+            🚀 {hasDevRepo ? 'Générer le prompt et lancer le développement' : 'Générer le prompt et clore'}
           </button>
           <button
             onClick={() => setSuggestClose(null)}
