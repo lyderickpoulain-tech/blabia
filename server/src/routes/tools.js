@@ -9,7 +9,8 @@ const {
 } = require('../services/tools/toolsStore');
 const { analyzeAndSaveNeeds } = require('../services/tools/toolNeeds');
 const { parseJsonField } = require('../utils/parseJsonField');
-const { generateSetupGuide } = require('../services/tools/setupGuide');
+const { generateSetupGuide, answerGuideQuestion, MAX_CHAT } = require('../services/tools/setupGuide');
+const { projectRepoText } = require('../services/repoOverview');
 const { listDecisions, formatRegistryForPrompt } = require('../services/decisions');
 
 // Réunion « outils » (type stack) : déjà tenue ? sinon, celle prévue au plan. Sert à la
@@ -68,6 +69,7 @@ router.get('/projects/:id/tools', authMiddleware, async (req, res) => {
       tools, total: monthlyTotal(tools), needs: project.toolNeeds ? parseJsonField(project.toolNeeds, []) : null,
       toolsMeeting: await toolsMeetingStatus(project.id),
       guide: project.toolsGuide ? { text: project.toolsGuide, at: project.toolsGuideAt } : null,
+      guideChat: parseJsonField(project.toolsGuideChat, []),
     });
   } catch (err) {
     console.error('[projects/:id/tools GET]', err.message);
@@ -104,13 +106,55 @@ router.post('/projects/:id/tools/guide', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Retenez d’abord les outils du projet (réunion « outils » ou ci-dessous) : le guide explique comment les relier.' });
     }
     const registryText = formatRegistryForPrompt(await listDecisions(project.id)).activeText;
-    const text = await generateSetupGuide({ project, tools, registryText });
+    const repoText = await projectRepoText(project); // structure réelle du dépôt
+    const text = await generateSetupGuide({ project, tools, registryText, repoText, chat: parseJsonField(project.toolsGuideChat, []) });
     const at = new Date();
     await db('Project').where({ id: project.id }).update({ toolsGuide: text, toolsGuideAt: at });
     res.json({ text, at });
   } catch (err) {
     console.error('[projects/:id/tools/guide POST]', err.message);
     res.status(500).json({ error: 'Le guide n’a pas pu être rédigé. Réessayez dans un instant.' });
+  }
+});
+
+// POST /api/projects/:id/tools/guide/chat { message } — question ou message d'erreur posé
+// sous le guide ; réponse appuyée sur le guide, la structure du dépôt et la recherche web.
+// La discussion est conservée et nourrit le guide suivant.
+router.post('/projects/:id/tools/guide/chat', authMiddleware, async (req, res) => {
+  const message = String(req.body?.message || '').trim().slice(0, 6000);
+  if (!message) return res.status(400).json({ error: 'Message vide' });
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.isDemo) return res.status(403).json({ demo: true, error: 'Projet exemple : pas de discussion pendant la visite guidée.' });
+    const chat = parseJsonField(project.toolsGuideChat, []);
+    const [tools, decisions, repoText] = await Promise.all([getProjectTools(project), listDecisions(project.id), projectRepoText(project)]);
+    const answer = await answerGuideQuestion({
+      project, tools, registryText: formatRegistryForPrompt(decisions).activeText, repoText,
+      guide: project.toolsGuide || '', chat, message,
+    });
+    const now = new Date().toISOString();
+    const next = [...chat, { role: 'user', content: message, at: now }, { role: 'assistant', content: answer, at: now }].slice(-MAX_CHAT);
+    await db('Project').where({ id: project.id }).update({ toolsGuideChat: JSON.stringify(next) });
+    res.json({ chat: next });
+  } catch (err) {
+    console.error('[projects/:id/tools/guide/chat POST]', err.message);
+    res.status(500).json({ error: 'Pas de réponse pour l’instant. Réessayez dans un instant.' });
+  }
+});
+
+// DELETE /api/projects/:id/tools/guide/chat — efface la discussion
+router.delete('/projects/:id/tools/guide/chat', authMiddleware, async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    await db('Project').where({ id: project.id }).update({ toolsGuideChat: JSON.stringify([]) });
+    res.json({ chat: [] });
+  } catch (err) {
+    console.error('[projects/:id/tools/guide/chat DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 

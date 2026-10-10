@@ -75,6 +75,7 @@ model Project {
   toolNeeds         Json?     // v5.0 phase 4 : besoins en outils analysés par BlabIA [{ category, need, fit: ok|unsuited|none, warning, examples }] — NULL = jamais analysé
   toolsGuide        String?   // v5.1 : guide de mise en place des outils (Markdown, services/tools/setupGuide.js), régénéré à la demande
   toolsGuideAt      DateTime?
+  toolsGuideChat    Json      @default("[]") // v5.1 : discussion sous le guide [{ role, content, at }] (questions, erreurs collées)
   expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
   humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
   questionMode      String    @default("balanced") // v5.0 : "delegate" (4 questions) | "balanced" (8) | "control" (15) — défaut des réunions du projet

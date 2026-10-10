@@ -331,6 +331,31 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect((await createVia(site.id)).status).toBe(409);
   });
 
+  it('guide de mise en place : discussion sous le guide (erreur collée), reprise au guide suivant', async () => {
+    h.ai.responder = params => ({ text: params.system.includes('aides une personne') ? 'Dans Railway, réglez **Root Directory** sur `/client`.' : '## Étape 1 — Railway\nRoot Directory : /client' });
+    const url = `/api/projects/${projectId}/tools/guide/chat`;
+    expect((await h.request('POST', url, { token: owner.token, body: { message: ' ' } })).status).toBe(400);
+    const r = await h.request('POST', url, { token: owner.token, body: { message: 'The build failed because the repo root only contains a README' } });
+    expect(r.status).toBe(200);
+    expect(r.body.chat.map(m => m.role)).toEqual(['user', 'assistant']);
+    expect(r.body.chat[1].content).toContain('Root Directory');
+    const asked = h.ai.calls.at(-1);
+    expect(asked.messages[0].content).toContain('NOUVEAU MESSAGE DE L\'HUMAIN');
+    expect(asked.messages[0].content).toContain('STRUCTURE RÉELLE DU DÉPÔT'); // lue sur GitHub (dépôt moi/app)
+    expect(asked.tools?.[0]?.name).toBe('web_search');
+    expect((await h.request('GET', `/api/projects/${projectId}/tools`, { token: collaborator.token })).body.guideChat).toHaveLength(2);
+
+    // Le guide suivant reprend les problèmes rencontrés
+    await h.request('PUT', `/api/projects/${projectId}/tools`, { token: owner.token, body: { tools: [{ name: 'Railway', category: 'hosting', status: 'validated' }] } });
+    const g = await h.request('POST', `/api/projects/${projectId}/tools/guide`, { token: owner.token });
+    expect(g.status).toBe(200);
+    expect(h.ai.calls.at(-1).messages[0].content).toContain('PROBLÈMES DÉJÀ RENCONTRÉS ET SOLUTIONS');
+    expect(h.ai.calls.at(-1).messages[0].content).toContain('HUMAIN : The build failed');
+
+    expect((await h.request('DELETE', url, { token: owner.token })).body.chat).toEqual([]);
+    h.ai.responder = null;
+  });
+
   it('site web : nom déjà pris → suffixe ; permission « Administration » absente → message dédié', async () => {
     const other = await newProject('App');
     const r = await createVia(other.id, { name: 'app' });

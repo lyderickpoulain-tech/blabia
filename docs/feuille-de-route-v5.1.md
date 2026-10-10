@@ -153,6 +153,13 @@ Constat (projet « Site de numérologie ») : « Mettre en ligne » affichait «
 - **⚠️ Permission à ajouter à l'application GitHub** : Repository permissions → **Deployments : Read-only**, puis accepter sur l'installation.
 - Migration `20261010000012_v5_dev_publication` ; tests d'intégration (aperçu, non publié, site + serveur, échec, permission absente).
 
+### D5. Fiabiliser la mise en place — codé le 10/10/2026
+Constat (« Site de numérologie » sur Railway) : le guide ignorait la structure du dépôt (README à la racine, appli dans `client/` et `server/`) → « nothing for the builder to detect ». Correction donnée : Root Directory `/client`, sans Start Command (Railpack détecte Vite et sert `dist` avec Caddy), variables `VITE_*` seulement ; le serveur (qui ne fait que /api/health) peut attendre.
+- **Structure réelle du dépôt** (`services/repoOverview.js`) lue sur GitHub : parties (racine + dossiers), scripts, framework, fichiers de configuration, NOMS des variables des `.env.example` (jamais les valeurs) ; « un service par partie, Root Directory /client ou /server » quand rien n'est déployable à la racine. Injectée dans le guide et la discussion.
+- **Discussion sous le guide** (page Outils, `POST/DELETE /api/projects/:id/tools/guide/chat`, `Project.toolsGuideChat`, migration `20261010000013`) : question ou message d'erreur collé → réponse pas à pas (Sonnet + recherche web) ; si le code doit changer, texte d'une demande à faire en réunion Claude Code ; « Correction du guide : … ». « Régénérer » reprend ces échanges.
+- Guide : section « En cas d'erreur », un service par partie avec ses variables, ordre (serveur puis site), clés secrètes jamais dans le site, variables `VITE_` avant la construction.
+- **À la source** : le prompt Claude Code exige un code déployable tel quel chez l'hébergeur retenu et une section « Déploiement » du README (dossier racine de chaque partie, variables, ordre).
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

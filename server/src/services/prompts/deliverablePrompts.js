@@ -56,6 +56,7 @@ ${cdInstruction}
 - Lister les tâches concrètes à implémenter dans l'ordre logique (numérotées)
 - Préciser les fichiers ou composants concernés si identifiés dans la réunion
 - Intégrer les décisions prises (registre du projet et réunion) comme contraintes non négociables
+- Si la stack indique un hébergeur : exiger que chaque partie du code soit déployable TELLE QUELLE chez cet hébergeur (scripts de construction et de démarrage, port fourni par l'hébergeur, fichier .env.example listant chaque variable), et tenir à jour dans le README une section « Déploiement » qui dit, pour chaque partie, le dossier racine à indiquer à l'hébergeur (ex. /client, /server), les variables à renseigner et l'ordre de mise en place ; si le code est réparti en plusieurs dossiers, le dire explicitement
 ${validationInstruction}
 - Être rédigé en français
 
