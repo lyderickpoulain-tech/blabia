@@ -9,7 +9,7 @@
 //                      conservée 90 jours, puis fusion — seulement si la sauvegarde a réussi.
 //
 // WORKFLOW_VERSION : à incrémenter à chaque modification, BlabIA propose alors la mise à jour.
-const WORKFLOW_VERSION = 1;
+const WORKFLOW_VERSION = 2; // v2 : résumé de la pull request imposé (langage simple, « À faire de votre côté » pas à pas)
 const DEV_PATH = '.github/workflows/blabia-dev.yml';
 const DEPLOY_PATH = '.github/workflows/blabia-deploy.yml';
 const MARKER = `# blabia-workflow v${WORKFLOW_VERSION}`;
@@ -51,7 +51,7 @@ jobs:
           github_token: \${{ secrets.GITHUB_TOKEN }}
           allowed_bots: "${appSlug}[bot]"
           claude_args: >-
-            --model sonnet --max-turns 60
+            --model sonnet --max-turns 60 --add-dir /tmp
             --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(cat:*)"
           prompt: |
             Tu réalises une demande de développement envoyée par BlabIA.
@@ -60,13 +60,35 @@ jobs:
             3. Travaille sur la branche ${devBranch('${{ inputs.issue }}')}, créée depuis la branche par défaut.
             4. Lance les tests et la compilation s'il y en a ; corrige ce qui casse.
             5. Commit, puis : git push -u origin ${devBranch('${{ inputs.issue }}')}
-            6. Ouvre la pull request vers la branche par défaut avec gh pr create. Le corps commence
-               par un résumé en français simple, pour une personne qui ne code pas : ce qui change pour
-               l'utilisateur, ce qu'il faut vérifier après la mise en ligne, et si la base de données
-               est modifiée. Termine le corps par : Closes #\${{ inputs.issue }}
+            6. Écris le corps de la pull request dans le fichier /tmp/pr-body.md, puis ouvre-la vers la
+               branche par défaut : gh pr create --body-file /tmp/pr-body.md --title "<titre court en français>"
+
+            LECTEUR DU CORPS : une personne qui n'est PAS développeuse. Français simple, phrases courtes,
+            aucun jargon ; tout terme technique inévitable est expliqué entre parenthèses la première fois.
+            Le corps suit EXACTEMENT ce modèle, titres compris :
+
+            ## Ce qui change
+            (2 à 5 phrases : ce que la personne verra ou pourra faire de nouveau, sans parler de code)
+
+            ## À faire de votre côté
+            (Écris « Aucune action. » s'il n'y a rien à faire. Sinon, une procédure par action, chacune
+            annoncée « Avant la mise en ligne : » ou « Après la mise en ligne : », en étapes numérotées
+            très détaillées : quel site ouvrir (adresse complète), où cliquer (nom exact des menus et des
+            boutons), quoi copier et où le coller, le nom exact de chaque variable, et comment vérifier
+            que c'est bon. Exemples : créer un compte sur un service, ajouter une variable dans Railway,
+            renseigner une clé. Ne suppose aucune connaissance technique.)
+
+            ## À vérifier après la mise en ligne
+            (étapes numérotées : quelle page ouvrir, quoi faire, ce qu'on doit voir)
+
+            ## Base de données
+            (« Non modifiée. » ou ce qui change, en une ou deux phrases simples)
+
+            Closes #\${{ inputs.issue }}
+
             Ne fusionne jamais la pull request. Ne modifie jamais .github/workflows.
             Si la demande est irréalisable ou trop floue, n'ouvre pas de pull request : explique
-            pourquoi avec gh issue comment \${{ inputs.issue }}.
+            pourquoi, dans le même français simple, avec gh issue comment \${{ inputs.issue }}.
 `;
 }
 

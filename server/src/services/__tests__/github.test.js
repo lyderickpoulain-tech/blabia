@@ -56,6 +56,12 @@ describe('automatisations installées dans le dépôt', () => {
     expect(dev).toContain('timeout-minutes: 45');
     expect(dev).toContain('blabia/dev-${{ inputs.issue }}');
     expect(dev).toContain('Ne fusionne jamais');
+    // Résumé pour une personne qui ne code pas : sections fixes, procédures pas à pas
+    for (const title of ['## Ce qui change', '## À faire de votre côté', '## À vérifier après la mise en ligne', '## Base de données']) expect(dev).toContain(title);
+    expect(dev).toContain('PAS développeuse');
+    expect(dev).toContain('« Avant la mise en ligne : »');
+    expect(dev).toContain('--body-file /tmp/pr-body.md');
+    expect(dev).toContain('--add-dir /tmp');
     expect(dev).toContain(`run-name: "${wf.devRunName('${{ inputs.issue }}')}"`);
   });
 

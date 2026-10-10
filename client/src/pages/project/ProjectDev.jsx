@@ -8,6 +8,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { startGitHubConnect, useGitHubReturn } from '../../utils/github';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Badge, Card } from '../../components/ui';
+import Markdown from '../../components/Markdown';
 
 // Développements lancés depuis BlabIA (v5.1) : Claude Code travaille dans GitHub
 // (abonnement Claude de l'utilisateur), propose une pull request ; « Mettre en ligne »
@@ -135,6 +136,69 @@ function Setup({ project, status, onChange }) {
   );
 }
 
+// Résumé de la pull request, au modèle imposé par blabia-dev.yml (v2) : « Ce qui change »,
+// « À faire de votre côté », « À vérifier après la mise en ligne », « Base de données ».
+export function summarySections(text) {
+  const parts = String(text || '').split(/^##\s+/m);
+  const intro = parts.shift().trim();
+  const sections = parts.map(p => {
+    const nl = p.indexOf('\n');
+    return { title: (nl < 0 ? p : p.slice(0, nl)).trim(), body: (nl < 0 ? '' : p.slice(nl + 1)).trim() };
+  });
+  const find = re => sections.find(s => re.test(s.title));
+  const todo = find(/faire de votre c/i);
+  return { intro, sections, todo: todo && !/^aucune action/i.test(todo.body) ? todo : null, find };
+}
+
+function Summary({ text, done }) {
+  const { intro, sections, todo, find } = summarySections(text);
+  if (!sections.length) {
+    // Ancien format, ou pull request ouverte par BlabIA : texte libre
+    return (
+      <div className="mt-3 rounded-xl bg-ai-bg border border-ai-border p-3.5">
+        <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai mb-1">Ce que Claude Code a fait</p>
+        <Markdown size="synthesis">{text}</Markdown>
+      </div>
+    );
+  }
+  const change = find(/ce qui change/i);
+  const check = find(/v[ée]rifier/i);
+  const base = find(/base de donn/i);
+  const others = sections.filter(s => ![change, check, base, find(/faire de votre c/i)].includes(s));
+  return (
+    <div className="mt-3 space-y-3">
+      {(change || intro) && (
+        <div className="rounded-xl bg-ai-bg border border-ai-border p-3.5">
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai mb-1">Ce qui change</p>
+          <Markdown size="synthesis">{change?.body || intro}</Markdown>
+        </div>
+      )}
+      {todo ? (
+        <div className="rounded-xl bg-await-bg border-2 border-await-border p-3.5" data-tour="dev-todo">
+          <p className="text-sm font-extrabold text-await mb-1 inline-flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden="true" /> À faire de votre côté</p>
+          {!done && <p className="text-xs text-ink-muted mb-2">Suivez ces étapes dans l’ordre. Celles marquées « Avant la mise en ligne » sont à faire avant de cliquer sur « Mettre en ligne ».</p>}
+          <Markdown size="synthesis">{todo.body}</Markdown>
+        </div>
+      ) : (
+        <p className="text-sm text-ok font-bold inline-flex items-center gap-1.5"><Check size={15} aria-hidden="true" /> Aucune action de votre part.</p>
+      )}
+      {check && (
+        <div className="rounded-xl bg-white border border-line p-3.5">
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-muted mb-1">À vérifier après la mise en ligne</p>
+          <Markdown size="synthesis">{check.body}</Markdown>
+        </div>
+      )}
+      {others.map(s => (
+        <div key={s.title} className="rounded-xl bg-white border border-line p-3.5">
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-muted mb-1">{s.title}</p>
+          <Markdown size="synthesis">{s.body}</Markdown>
+        </div>
+      ))}
+      {base && <p className="text-xs text-ink-muted"><strong>Base de données :</strong> {base.body}</p>}
+    </div>
+  );
+}
+
 function TaskCard({ task, status, isOwner, onAction, busy }) {
   const [showFiles, setShowFiles] = useState(false);
   const st = STATUS[task.status] || STATUS.failed;
@@ -159,12 +223,7 @@ function TaskCard({ task, status, isOwner, onAction, busy }) {
       {task.status === 'deployed' && <p className="text-sm text-ok font-bold mt-3">Fusionné : l’hébergeur redéploie le site. Vérifiez ce que le résumé indique.</p>}
       {task.error && <p className="text-sm text-await font-bold mt-3 whitespace-pre-wrap">{task.error}</p>}
 
-      {task.summary && (
-        <div className="mt-3 rounded-xl bg-ai-bg border border-ai-border p-3.5">
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai mb-1">Ce que Claude Code a fait</p>
-          <p className="text-sm text-ink-soft whitespace-pre-wrap leading-relaxed">{task.summary}</p>
-        </div>
-      )}
+      {task.summary && <Summary text={task.summary} done={['deployed', 'abandoned'].includes(task.status)} />}
 
       {task.touchesDatabase && !['deployed', 'abandoned'].includes(task.status) && (
         <p className={`mt-3 text-sm font-bold inline-flex items-start gap-1.5 ${status?.secrets?.db ? 'text-ink-soft' : 'text-await'}`}>
@@ -244,8 +303,10 @@ export default function ProjectDev() {
   };
 
   const onAction = async (task, action) => {
+    const todo = summarySections(task.summary).todo;
+    const before = todo && /avant la mise en ligne/i.test(todo.body);
     const msg = action === 'deploy'
-      ? `Mettre en ligne « ${task.title} » ?\n\n${status?.secrets?.db ? 'La base de données sera d’abord sauvegardée (chiffrée). ' : ''}Les modifications seront fusionnées et le site redéployé.`
+      ? `${before ? '⚠ Ce développement demande des actions AVANT la mise en ligne (encadré « À faire de votre côté »). Les avez-vous toutes faites ?\n\n' : ''}Mettre en ligne « ${task.title} » ?\n\n${status?.secrets?.db ? 'La base de données sera d’abord sauvegardée (chiffrée). ' : ''}Les modifications seront fusionnées et le site redéployé.${todo && !before ? '\n\nPensez ensuite aux actions « À faire de votre côté ».' : ''}`
       : `Abandonner « ${task.title} » ? Les modifications proposées seront fermées sur GitHub.`;
     if (!confirm(msg)) return;
     setBusy(true);
