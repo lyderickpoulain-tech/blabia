@@ -2,6 +2,42 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
 import api from '../utils/api';
+import { dayName } from '../components/RemindersToggle';
+
+// Rappels hebdomadaires (v5.1) : jour d'envoi, commun à tous les projets où ils sont activés
+function ReminderSettings() {
+  const { user, patchUser } = useAuth();
+  const [day, setDay] = useState(user?.reminderDay || 1);
+  const [status, setStatus] = useState('');
+  const save = async v => {
+    setDay(v); setStatus('');
+    try { await api.patch('/users/me/reminders', { reminderDay: v }); patchUser?.({ reminderDay: v }); setStatus('Enregistré.'); }
+    catch { setStatus('Enregistrement impossible.'); }
+  };
+  const test = async () => {
+    setStatus('Envoi…');
+    try {
+      const { data } = await api.post('/users/me/reminders/test');
+      setStatus(data.sent ? `Rappel envoyé à ${user.email}.` : 'Rien à rappeler : aucun projet avec rappels activés et actions à faire.');
+    } catch { setStatus('Envoi impossible.'); }
+  };
+  return (
+    <div className="px-6 py-5">
+      <label htmlFor="reminder-day" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Rappels des actions</label>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-gray-700">Chaque</span>
+        <select id="reminder-day" value={day} onChange={e => save(Number(e.target.value))}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blabia-blue bg-white">
+          {[1, 2, 3, 4, 5, 6, 7].map(d => <option key={d} value={d}>{dayName(d)}</option>)}
+        </select>
+        <span className="text-sm text-gray-700">matin</span>
+        <button type="button" onClick={test} className="ml-auto px-3 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50">M'envoyer le rappel maintenant</button>
+      </div>
+      <p className="text-xs text-gray-400 mt-2">Un e-mail par semaine avec les actions en retard, de la semaine et les prochaines, pour les projets où vous avez activé le rappel (page Actions ou Paramètres du projet).</p>
+      {status && <p className="text-xs font-medium text-gray-600 mt-1" role="status">{status}</p>}
+    </div>
+  );
+}
 
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 
@@ -168,6 +204,8 @@ export default function ProfilePage() {
               </div>
             </form>
           </div>
+
+          <ReminderSettings />
 
         </div>
       </div>

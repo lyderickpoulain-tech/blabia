@@ -147,4 +147,18 @@ async function sendTestEmail(toEmail) {
   if (error) throw new Error(error.message);
 }
 
-module.exports = { sendInvitation, sendTestEmail };
+// ── sendActionsDigest (v5.1) — rappel hebdomadaire des actions (services/reminders.js) ──
+
+async function sendActionsDigest(toEmail, subject, contentHtml) {
+  const client = getClient();
+  const content = `<p style="margin:0 0 16px;color:#1E2238;font-size:15px;">Voici où en sont vos actions entre les réunions.</p>${contentHtml}
+    <p style="margin:8px 0 0;color:#9ca3af;font-size:11px;">Rappel envoyé chaque semaine pour les projets où vous l’avez activé. Le jour d’envoi se règle dans votre profil.</p>`;
+  if (!client) {
+    console.log(`[email] Rappel (RESEND_API_KEY absent) pour ${toEmail} : ${subject}`);
+    return;
+  }
+  const { error } = await client.emails.send({ from: FROM_ADDRESS, to: toEmail, subject, html: baseLayout(content) });
+  if (error) throw new Error(error.message);
+}
+
+module.exports = { sendInvitation, sendTestEmail, sendActionsDigest };

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import Markdown from './Markdown';
+import ExportButtons from './ExportButtons';
 
-export default function SummaryDisplayModal({ title, date, content, onClose }) {
+// exports (v5.1) : { pdfPath, wordPath } pour exporter le compte-rendu en PDF / Word
+export default function SummaryDisplayModal({ title, date, content, onClose, exports }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -28,6 +30,7 @@ export default function SummaryDisplayModal({ title, date, content, onClose }) {
             <h2 className="text-sm font-bold text-gray-900 leading-snug">{title || 'Compte-rendu'}</h2>
             {date && <p className="text-xs text-gray-400 mt-0.5">{date}</p>}
           </div>
+          {exports && <ExportButtons size="sm" pdfPath={exports.pdfPath} wordPath={exports.wordPath} className="shrink-0" />}
           <button
             onClick={handleCopy}
             className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border transition ${

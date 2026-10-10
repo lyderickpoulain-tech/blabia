@@ -17,6 +17,8 @@ model User {
   toolbox          Json            @default("{}")    // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule
   tools            Json?           // v5.0 phase 4 : « Mes outils » [{ id, catalogId, name, category, cost, status: using|account|to_try, note }] — NULL = pas encore migré (cf. toolsStore.js)
   tutorialSeenAt   DateTime?       // v5.1 : guide de prise en main vu (NULL = à afficher à la connexion)
+  reminderDay         Int       @default(1) // v5.1 : jour des rappels hebdomadaires, 1 = lundi … 7 = dimanche
+  remindersLastSentAt DateTime? // v5.1 : dernier rappel envoyé (un par semaine)
   tourProgress     Json            @default("{}") // v5.1 : chapitres de la visite guidée terminés { chapitre: date ISO }
   createdAt        DateTime        @default(now())
   projects           Project[]
@@ -70,6 +72,7 @@ model Project {
   expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
   humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
   questionMode      String    @default("balanced") // v5.0 : "delegate" (4 questions) | "balanced" (8) | "control" (15) — défaut des réunions du projet
+  remindersEnabled  Boolean   @default(false) // v5.1 : rappels hebdomadaires par e-mail des actions (services/reminders.js)
   challengerEnabled Boolean   @default(true) // v5.1 : contradicteur (avocat du diable sélectif, services/challenger.js), activé par défaut
   isDemo            Boolean   @default(false) // v5.1 : projet exemple de la visite guidée (services/demoProject.js), sans appel à l'IA, supprimé en fin de visite
   createdAt         DateTime  @default(now())

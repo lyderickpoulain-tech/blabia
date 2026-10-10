@@ -168,7 +168,8 @@ export default function ProjectHistory() {
         <ExportModal directContent={dlg.deliverable || dlg.summary} projectId={project.id} onClose={() => setDeliverableSession(null)} />
       )}
       {dlg && intentionOf(dlg) !== 'claude_code' && (
-        <SummaryDisplayModal title={dlg.task} date={dlgDate} content={dlg.summary} onClose={() => setDeliverableSession(null)} />
+        <SummaryDisplayModal title={dlg.task} date={dlgDate} content={dlg.summary} onClose={() => setDeliverableSession(null)}
+          exports={{ pdfPath: `/projects/${project.id}/imprimer/reunion/${dlg.id}`, wordPath: `/projects/${project.id}/export/sessions/${dlg.id}/word` }} />
       )}
     </>
   );

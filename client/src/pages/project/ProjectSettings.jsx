@@ -6,6 +6,8 @@ import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
 import QuestionModePicker from '../../components/QuestionModePicker';
 import ChallengerToggle from '../../components/ChallengerToggle';
+import RemindersToggle from '../../components/RemindersToggle';
+import { useAuth } from '../../contexts/AuthContext';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../../components/LevelSlider';
 
 // Paramètres du projet (refonte UX v5.1) : tout ce qui était empilé en bas de
@@ -59,7 +61,9 @@ function IdentitySection({ project, setProject, canEdit }) {
     expertiseLevel: project.expertiseLevel || 3, humorLevel: project.humorLevel || 2,
     questionMode: project.questionMode || 'balanced',
     challengerEnabled: project.challengerEnabled !== false,
+    remindersEnabled: !!project.remindersEnabled,
   });
+  const { user } = useAuth();
   const [st, run] = useSave();
   const submit = e => { e.preventDefault(); run(async () => {
     const { data } = await api.patch(`/projects/${project.id}`, f);
@@ -83,6 +87,7 @@ function IdentitySection({ project, setProject, canEdit }) {
           </div>
           <QuestionModePicker value={f.questionMode} onChange={v => setF(x => ({ ...x, questionMode: v }))} />
           <ChallengerToggle checked={f.challengerEnabled} onChange={v => setF(x => ({ ...x, challengerEnabled: v }))} disabled={!canEdit} />
+          <RemindersToggle checked={f.remindersEnabled} onChange={v => setF(x => ({ ...x, remindersEnabled: v }))} reminderDay={user?.reminderDay} disabled={!canEdit} />
         </fieldset>
         {canEdit && <SaveRow {...st} disabled={!f.name.trim()} />}
       </form>

@@ -3,6 +3,9 @@ import { Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, CalendarDays, Link
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, IconButton, Card, SectionLabel } from '../../components/ui';
+import ExportButtons from '../../components/ExportButtons';
+import RemindersToggle from '../../components/RemindersToggle';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Actions entre les réunions (v5.1) : proposées à la conclusion des réunions,
 // cochées et ordonnées ici par l'humain (l'ordre prime, l'échéance est facultative) ;
@@ -84,7 +87,13 @@ function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove }) {
 }
 
 export default function ProjectActions() {
-  const { project, refreshCounts } = useProject();
+  const { project, setProject, canManage, refreshCounts } = useProject();
+  const { user } = useAuth();
+  const setReminders = async enabled => {
+    setProject(p => ({ ...p, remindersEnabled: enabled }));
+    try { await api.patch(`/projects/${project.id}`, { remindersEnabled: enabled }); }
+    catch { setProject(p => ({ ...p, remindersEnabled: !enabled })); setError('Réglage des rappels impossible.'); }
+  };
   const [actions, setActions] = useState(null);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
@@ -120,10 +129,14 @@ export default function ProjectActions() {
   return (
     <>
       <PageHeader title="Actions" subtitle="Ce que vous avez à faire entre deux réunions, dans l'ordre où les mener. BlabIA les propose à la conclusion ; les agents commencent la réunion suivante par un point d'avancement.">
+        <ExportButtons pdfPath={`/projects/${project.id}/imprimer/registre`} wordPath={`/projects/${project.id}/export/registry/word`} />
         {!adding && <Button variant="secondary" onClick={() => setAdding(true)}><Plus size={16} aria-hidden="true" /> Ajouter une action</Button>}
       </PageHeader>
 
       <div className="space-y-5">
+        <div data-tour="act-reminders">
+          <RemindersToggle compact checked={!!project.remindersEnabled} onChange={setReminders} reminderDay={user?.reminderDay} disabled={!canManage} />
+        </div>
         {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
 
         {adding && (

@@ -24,6 +24,7 @@ import MyTools from './pages/MyTools';
 import PlanView from './pages/PlanView';
 import StartMeeting from './pages/StartMeeting';
 import MeetingRoom from './pages/MeetingRoom';
+import { PrintSession, PrintRegistry } from './pages/print/PrintPages';
 
 export default function App() {
   useEffect(() => {
@@ -62,6 +63,12 @@ export default function App() {
         } />
         <Route path="/projects/:id/meeting/:sid" element={
           <ProtectedRoute><MeetingRoom /></ProtectedRoute>
+        } />
+        <Route path="/projects/:id/imprimer/reunion/:sid" element={
+          <ProtectedRoute><PrintSession /></ProtectedRoute>
+        } />
+        <Route path="/projects/:id/imprimer/registre" element={
+          <ProtectedRoute><PrintRegistry /></ProtectedRoute>
         } />
         <Route path="/agents" element={
           <ProtectedRoute><AgentsPage /></ProtectedRoute>

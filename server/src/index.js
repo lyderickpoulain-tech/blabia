@@ -46,6 +46,8 @@ app.use('/api/projects',                     require('./routes/plan'));
 app.use('/api/projects',                     require('./routes/decisionRegistry'));
 app.use('/api/projects',                     require('./routes/actions'));
 app.use('/api/projects',                     require('./routes/documents'));
+app.use('/api/projects',                     require('./routes/exports'));
+app.use('/api/reminders',                    require('./routes/reminders'));
 app.use('/api',                              require('./routes/tools'));
 
 // ── Production : servir le build Vite ────────────────────────────────────────
@@ -68,6 +70,8 @@ if (isProd) {
 // sur 127.0.0.1 et le healthcheck Railway (externe au container) ne répond pas.
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`BlabIA server démarré sur le port ${PORT} (mode: ${isProd ? 'production' : 'développement'})`);
+  // Rappels hebdomadaires des actions (services/reminders.js) : vérification horaire
+  require('./services/reminders').startReminderScheduler();
 });
 
 module.exports = app;

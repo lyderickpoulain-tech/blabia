@@ -11,7 +11,7 @@ const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 router.get('/me', async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'createdAt')
+      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'reminderDay', 'createdAt')
       .where({ id: req.user.id })
       .limit(1);
     if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
@@ -55,6 +55,30 @@ router.post('/me/tutorial-seen', async (req, res) => {
   } catch (err) {
     console.error('[users/me/tutorial-seen POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/users/me/reminders — jour d'envoi des rappels hebdomadaires (1 = lundi … 7 = dimanche)
+router.patch('/me/reminders', async (req, res) => {
+  const day = Number(req.body.reminderDay);
+  if (!Number.isInteger(day) || day < 1 || day > 7) return res.status(400).json({ error: 'reminderDay : 1 (lundi) à 7 (dimanche)' });
+  try {
+    const [row] = await db('User').where({ id: req.user.id }).update({ reminderDay: day }).returning(['reminderDay']);
+    res.json(row);
+  } catch (err) {
+    console.error('[users/me/reminders PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/users/me/reminders/test — envoie tout de suite le rappel (sans attendre le jour)
+router.post('/me/reminders/test', async (req, res) => {
+  try {
+    const [user] = await db('User').where({ id: req.user.id }).select('id', 'email').limit(1);
+    res.json(await require('../services/reminders').sendDigestTo(user));
+  } catch (err) {
+    console.error('[users/me/reminders/test]', err.message);
+    res.status(500).json({ error: 'Envoi impossible' });
   }
 });
 
