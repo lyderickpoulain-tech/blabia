@@ -112,6 +112,7 @@ function buildAgentSystemPrompt({
   preparationSection = '',
   actionsText = '',
   documentsText = '',
+  codeText = '',
   missionsText = '',
   today = '',
   challengerSection = '', // v5.1 : tour du contradicteur (services/challenger.js)
@@ -164,6 +165,11 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
   const repoSection     = project.githubRepo
     ? `\nDÉPÔT DU CODE : GitHub ${project.githubRepo} (https://github.com/${project.githubRepo}). Les prompts des réunions Claude Code y sont réalisés par Claude Code, seul, dans GitHub ; ne demande pas l'adresse du dépôt.\n`
     : '';
+  // v5.1 : réunion Claude Code — le code du dépôt (services/codeContext.js), pour ne pas
+  // poser à l'humain une question dont la réponse est dans le code
+  const codeSection = codeText
+    ? `\nCODE DU PROJET (lu sur GitHub, branche principale — c'est la réalité de l'application : appuie-toi dessus, cite les fichiers ; ne demande JAMAIS à l'humain ce que le code montre, ex. où se trouve un écran ou comment il est fait ; si l'objectif reste ambigu après lecture, propose ce que tu as compris du code comme hypothèse) :\n${codeText}\n`
+    : '';
   // v5.1 : documents de référence fournis par l'humain (texte extrait au dépôt)
   const documentsSection = documentsText
     ? `\nDOCUMENTS DE RÉFÉRENCE DU PROJET (fournis par l'humain : appuie-toi dessus, cite le document entre « » quand tu t'en sers, signale toute contradiction entre un document et ce qui se dit) :\n${documentsText}\n`
@@ -201,7 +207,7 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
 
   // ── 1. Bloc commun à la réunion (mis en cache) ─────────────────────────────
   const shared = `Tu participes à une réunion collaborative entre agents IA spécialisés, animée pour un humain qui initie le projet et tranche les décisions. Ton rôle précis t'est donné à la fin de ce prompt.
-${briefSection}${repoSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${missionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
+${briefSection}${repoSection}${codeSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${missionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 
