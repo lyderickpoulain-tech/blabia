@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui';
+import ThemeToggle from '../components/ThemeToggle';
 import api from '../utils/api';
 
 const inputCls = 'w-full h-11 px-3.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
@@ -65,10 +66,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-4 relative">
+      <div className="absolute top-3 right-3"><ThemeToggle /></div>
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <img src="/logo.png" alt="BlabIA" className="h-16 mx-auto" />
+          <span className="logo-chip"><img src="/logo.png" alt="BlabIA" className="h-16 mx-auto" /></span>
           <p className="text-sm text-ink-muted mt-2">Une équipe d'agents IA pour faire avancer vos projets. Vous tranchez.</p>
         </div>
 

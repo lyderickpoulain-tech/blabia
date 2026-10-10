@@ -4,6 +4,7 @@ import { ArrowLeft, SlidersHorizontal, PanelRight, Globe, RotateCcw } from 'luci
 import { Badge, Button, IconButton } from '../ui';
 import PhaseStepper from './PhaseStepper';
 import QuestionModePicker from '../QuestionModePicker';
+import ThemeToggle from '../ThemeToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../LevelSlider';
 
 // En-tête de réunion sur une ligne (refonte UX v5.1) : retour, objectif
@@ -34,7 +35,7 @@ export default function MeetingHeader({
   const agentNames = activeAgents.map(a => a.name).join(', ');
 
   return (
-    <header className="shrink-0 bg-white border-b border-line shadow-[0_1px_3px_rgba(30,34,56,0.06)] px-3 sm:px-4 py-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 relative z-10">
+    <header className="shrink-0 bg-white border-b border-line shadow-header px-3 sm:px-4 py-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 relative z-10">
       <Link to={`/projects/${projectId}`} aria-label="Retour au projet" title="Retour au projet"
         className="w-11 h-11 -ml-1 shrink-0 inline-flex items-center justify-center rounded-[10px] text-ink-muted hover:bg-muted-light hover:text-ink">
         <ArrowLeft size={18} />
@@ -73,6 +74,7 @@ export default function MeetingHeader({
       <div data-tour="mr-phases"><PhaseStepper phase={phase} skipped={skippedPhases} /></div>
 
       <div className="flex items-center gap-1 ml-auto">
+        <ThemeToggle />
         {decisionBudget ? (
           <button type="button" onClick={onShowQuestions} className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-action"
             title={`Questions posées par les agents / budget de la réunion${pendingDecisionCount ? ` — ${pendingDecisionCount} en attente` : ''}. Au-delà, ils tranchent par hypothèse.`}>

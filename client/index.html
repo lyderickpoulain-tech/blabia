@@ -2,6 +2,24 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Anti-flash : applique le thème avant le premier affichage (localStorage > préférence système > clair)
+      (function () {
+        var dark = false;
+        try {
+          var saved = localStorage.getItem('theme');
+          if (saved === 'dark' || saved === 'light') dark = saved === 'dark';
+          else dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        } catch (e) {
+          try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e2) {}
+        }
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      })();
+      // Transition douce : activée seulement après le chargement, pour ne rien animer au premier affichage
+      window.addEventListener('load', function () {
+        document.documentElement.classList.add('theme-transitions-enabled');
+      });
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

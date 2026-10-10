@@ -34,7 +34,7 @@ export default function ToolsMap({ catalog, items, emptyLabel = "rien ici pour l
             {catalog.links.map(([a, b]) => {
               if (!boxes[a] || !boxes[b]) return null;
               const p = center(boxes[a]), q = center(boxes[b]);
-              return <line key={`${a}-${b}`} x1={p.cx} y1={p.cy} x2={q.cx} y2={q.cy} stroke="#cbd5e1" strokeWidth="2" />;
+              return <line key={`${a}-${b}`} x1={p.cx} y1={p.cy} x2={q.cx} y2={q.cy} className="stroke-gray-300" strokeWidth="2" />;
             })}
           </svg>
 

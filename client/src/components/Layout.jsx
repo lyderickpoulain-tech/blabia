@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { FolderKanban, Bot, Wrench, Shield, LogOut, LifeBuoy } from 'lucide-react';
 import Tutorial from './Tutorial';
+import ThemeToggle from './ThemeToggle';
 import { useTour } from '../tour/TourContext';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_VERSION, APP_BUILD } from '../version';
@@ -44,7 +45,8 @@ export default function Layout({ children, wide = false }) {
       <header className="bg-white border-b border-line">
         <div className="px-4 py-1.5 flex items-center gap-4">
           <Link to="/dashboard" className="shrink-0" aria-label="BlabIA, accueil">
-            <img src="/logo.png" alt="BlabIA" className="h-11" />
+            {/* TODO: migrer le logo en SVG currentColor */}
+            <span className="logo-chip"><img src="/logo.png" alt="BlabIA" className="h-11" /></span>
           </Link>
           <nav aria-label="Navigation principale" className="hidden sm:flex items-center gap-1 flex-1">
             {links.map(l => (
@@ -55,6 +57,7 @@ export default function Layout({ children, wide = false }) {
             ))}
           </nav>
           <div className="flex items-center gap-2 ml-auto">
+            <ThemeToggle />
             <button data-tour="nav-guide" onClick={() => setGuideOpen(true)} aria-label="Guide de prise en main" title="Guide de prise en main"
               className="inline-flex items-center gap-2 h-10 px-3 rounded-[10px] text-sm font-semibold text-ai hover:bg-ai-bg transition">
               <LifeBuoy size={17} aria-hidden="true" />
