@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Suspense, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, FileText, Wrench, Users, Settings } from 'lucide-react';
 import Layout from '../Layout';
+import PageLoader from '../PageLoader';
 import { Badge } from '../ui';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -116,7 +117,10 @@ export default function ProjectShell() {
           </aside>
 
           <main className="flex-1 min-w-0 basis-[560px]">
-            <Outlet />
+            {/* Pages du projet chargées à la demande : la barre latérale reste affichée */}
+            <Suspense fallback={<PageLoader inline />}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </Layout>

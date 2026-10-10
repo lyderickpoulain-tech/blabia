@@ -1,30 +1,34 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import NewProject from './pages/NewProject';
-import ProjectShell from './components/project/ProjectShell';
-import ProjectDashboard from './pages/project/ProjectDashboard';
-import ProjectPlan from './pages/project/ProjectPlan';
-import ProjectHistory from './pages/project/ProjectHistory';
-import ProjectDecisions from './pages/project/ProjectDecisions';
-import ProjectActions from './pages/project/ProjectActions';
-import ProjectDocuments from './pages/project/ProjectDocuments';
-import ProjectTools from './pages/project/ProjectTools';
-import ProjectTeam from './pages/project/ProjectTeam';
-import ProjectSettings from './pages/project/ProjectSettings';
-import AdminInvitations from './pages/AdminInvitations';
-import AdminUsers from './pages/AdminUsers';
-import ProfilePage from './pages/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { TourProvider } from './tour/TourContext';
+import PageLoader from './components/PageLoader';
 
-import AgentsPage from './pages/AgentsPage';
-import MyTools from './pages/MyTools';
-import PlanView from './pages/PlanView';
-import StartMeeting from './pages/StartMeeting';
-import MeetingRoom from './pages/MeetingRoom';
-import { PrintSession, PrintRegistry } from './pages/print/PrintPages';
+// Pages chargées à la demande (v5.1) : le premier chargement ne contient plus
+// toute l'application, chaque page arrive quand on y va.
+const Dashboard        = lazy(() => import('./pages/Dashboard'));
+const NewProject       = lazy(() => import('./pages/NewProject'));
+const ProjectShell     = lazy(() => import('./components/project/ProjectShell'));
+const ProjectDashboard = lazy(() => import('./pages/project/ProjectDashboard'));
+const ProjectPlan      = lazy(() => import('./pages/project/ProjectPlan'));
+const ProjectHistory   = lazy(() => import('./pages/project/ProjectHistory'));
+const ProjectDecisions = lazy(() => import('./pages/project/ProjectDecisions'));
+const ProjectActions   = lazy(() => import('./pages/project/ProjectActions'));
+const ProjectDocuments = lazy(() => import('./pages/project/ProjectDocuments'));
+const ProjectTools     = lazy(() => import('./pages/project/ProjectTools'));
+const ProjectTeam      = lazy(() => import('./pages/project/ProjectTeam'));
+const ProjectSettings  = lazy(() => import('./pages/project/ProjectSettings'));
+const AdminInvitations = lazy(() => import('./pages/AdminInvitations'));
+const AdminUsers       = lazy(() => import('./pages/AdminUsers'));
+const ProfilePage      = lazy(() => import('./pages/ProfilePage'));
+const AgentsPage       = lazy(() => import('./pages/AgentsPage'));
+const MyTools          = lazy(() => import('./pages/MyTools'));
+const PlanView         = lazy(() => import('./pages/PlanView'));
+const StartMeeting     = lazy(() => import('./pages/StartMeeting'));
+const MeetingRoom      = lazy(() => import('./pages/MeetingRoom'));
+const PrintSession     = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintSession })));
+const PrintRegistry    = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintRegistry })));
 
 export default function App() {
   useEffect(() => {
@@ -34,6 +38,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-canvas">
       <TourProvider>
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Login />} />
@@ -91,6 +96,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      </Suspense>
       </TourProvider>
     </div>
   );
