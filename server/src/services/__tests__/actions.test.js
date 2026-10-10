@@ -15,7 +15,7 @@ describe('actions entre les réunions', () => {
     expect(dueDateFrom(1000, FROM)).toBeNull();
   });
 
-  it('actions proposées : nettoyées, sans doublon, limitées à 8', () => {
+  it('actions proposées : nettoyées, sans doublon, limitées à 5 (les plus importantes)', () => {
     const raw = { actions: [
       { title: 'Visiter trois locaux', detail: 'Croix-Rousse', dueInDays: 14 },
       { title: 'visiter trois locaux', dueInDays: 3 },
@@ -24,7 +24,7 @@ describe('actions entre les réunions', () => {
     ] };
     const out = parseActions(raw, FROM);
     expect(out[0]).toEqual({ title: 'Visiter trois locaux', description: 'Croix-Rousse', dueDate: '2026-10-24' });
-    expect(out).toHaveLength(8);
+    expect(out).toHaveLength(5);
     expect(parseActions(null)).toEqual([]);
   });
 

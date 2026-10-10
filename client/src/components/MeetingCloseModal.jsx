@@ -4,7 +4,8 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
 import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
-import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft, CalendarPlus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button, IconButton, Badge, SectionLabel } from './ui';
 import { notifyError, notifySuccess } from '../utils/notify';
 
@@ -36,6 +37,13 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   const [actionProposals, setActionProposals] = useState([]);
   const actionsSavedRef = useRef(false);
   const updateAction = (key, patch) => setActionProposals(prev => prev.map(a => a.key === key ? { ...a, ...patch } : a));
+  // Ce qui n'est pas une action (v5.1) : réunions proposées (décisions à prendre, code),
+  // outils à mettre en place (page Outils), outils manquants pour le développement
+  const [meetingProposals, setMeetingProposals] = useState([]);
+  const meetingsSavedRef = useRef(false);
+  const updateMeeting = (key, patch) => setMeetingProposals(prev => prev.map(m => m.key === key ? { ...m, ...patch } : m));
+  const [toolSetups, setToolSetups] = useState([]);
+  const [devMissingTools, setDevMissingTools] = useState([]);
   const updateProposal = (key, patch) => setDecisionProposals(prev => prev.map(d => d.key === key ? { ...d, ...patch } : d));
   const [showPlan, setShowPlan] = useState(false);
   // Développement depuis BlabIA (v5.1) : lancé à la conclusion si le dépôt du projet est prêt
@@ -70,6 +78,10 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       setActionProposals(Array.isArray(data.actionProposals)
         ? data.actionProposals.map((a, i) => ({ ...a, key: i, keep: true }))
         : null);
+      setMeetingProposals((data.meetingProposals || []).map(m => ({ ...m, keep: true })));
+      setToolSetups(data.toolSetups || []);
+      setDevMissingTools(data.devMissingTools || []);
+      if ((data.devMissingTools || []).length) setLaunchDev(false); // lancé depuis Développements une fois les outils prêts
       setStep('review');
     } catch (err) {
       setGenError(err.response?.data?.error || 'Erreur lors de la génération du compte-rendu');
@@ -132,6 +144,15 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
         actionsSavedRef.current = true;
       }
 
+      // Réunions proposées (décisions à prendre, travail de code) : ajoutées au plan (une seule fois)
+      const keptMeetings = meetingProposals.filter(m => m.keep && m.title.trim());
+      if (keptMeetings.length > 0 && !meetingsSavedRef.current) {
+        for (const m of keptMeetings) {
+          await api.post(`/projects/${projectId}/milestones`, { title: m.title.trim(), description: m.description, type: m.type });
+        }
+        meetingsSavedRef.current = true;
+      }
+
       // Réunion stack : outils reportés dans les outils du projet avec la décision prise
       if (meetingType === 'stack' && toolSuggestions.length > 0) {
         await api.post(`/projects/${projectId}/sessions/${session.id}/tools/apply`, {
@@ -159,7 +180,11 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
         try {
           await api.post(`/projects/${projectId}/dev-tasks`, { sessionId: session.id });
           notifySuccess('Développement lancé : suivez-le dans Projet › Développements.');
-        } catch (err) { notifyError(err, 'Le développement n’a pas pu être lancé : relancez-le depuis Projet › Développements.'); }
+        } catch (err) {
+          notifyError(err, err.response?.data?.missingTools
+            ? 'Développement non lancé : des outils sont à mettre en place (Projet › Outils), puis lancez-le depuis Projet › Développements.'
+            : 'Le développement n’a pas pu être lancé : relancez-le depuis Projet › Développements.');
+        }
       }
       onClosed?.('accepted');
     } catch (err) {
@@ -308,7 +333,16 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                     aria-label="Prompt Claude Code"
                     className="w-full px-3.5 py-3 bg-ink text-green-200 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-action resize-y leading-relaxed"
                   />
-                  {devReady && (
+                  {devMissingTools.length > 0 && (
+                    <div className="text-xs bg-await-bg border border-await-border rounded-[10px] px-3 py-2 space-y-1">
+                      <p className="font-extrabold text-await">Ce développement se sert d’outils qui ne sont pas prêts :</p>
+                      <ul className="list-disc ml-4 text-ink-soft">
+                        {devMissingTools.map(m => <li key={m.category}>{m.reason === 'not_chosen' ? <>{m.label} : aucun outil choisi</> : <><strong>{m.tool}</strong> ({m.label}) : pas encore mis en place</>}</li>)}
+                      </ul>
+                      <p className="text-ink-muted">Il ne sera pas lancé automatiquement. Mettez ces outils en place (<Link className="underline" to={`/projects/${projectId}/outils`}>Projet › Outils</Link>, avec le guide), puis lancez-le depuis Projet › Développements.</p>
+                    </div>
+                  )}
+                  {devReady && devMissingTools.length === 0 && (
                     <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
                       <input type="checkbox" checked={launchDev} onChange={e => setLaunchDev(e.target.checked)} className="mt-0.5 w-4 h-4 accent-action" />
                       <span><strong>Lancer le développement dès la conclusion</strong> : Claude Code réalise ce prompt dans le dépôt GitHub du projet. Rien n’est mis en ligne sans votre accord (Projet › Développements).</span>
@@ -402,6 +436,45 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   </>
                 )}
               </section>
+
+              {/* Réunions proposées : décisions restées à prendre, travail de code (v5.1) */}
+              {meetingProposals.length > 0 && (
+                <section className="space-y-2">
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                    <CalendarPlus size={16} className="text-action" aria-hidden="true" /> Réunions à ajouter au plan
+                  </h3>
+                  <p className="text-xs text-ink-muted">Ce qui reste à décider, ou à développer, n’est pas une action pour vous : BlabIA propose une réunion pour le traiter. Décochez ce que vous ne voulez pas.</p>
+                  <ul className="space-y-1.5">
+                    {meetingProposals.map(m => (
+                      <li key={m.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 ${m.keep ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'}`}>
+                        <input type="checkbox" checked={m.keep} aria-label="Ajouter cette réunion au plan"
+                          onChange={e => updateMeeting(m.key, { keep: e.target.checked })} className="mt-2 w-4 h-4 accent-action shrink-0" />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge tone={m.type === 'claude_code' ? 'ai' : 'action'} className="!text-[10px] !px-2 !py-0.5">{m.type === 'claude_code' ? 'Claude Code' : 'Décision'}</Badge>
+                            <input value={m.title} onChange={e => updateMeeting(m.key, { title: e.target.value })} disabled={!m.keep} aria-label="Titre de la réunion"
+                              className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
+                          </div>
+                          <p className="text-[11px] text-ink-muted whitespace-pre-line px-1.5">{m.description}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Outils à mettre en place : relèvent de la page Outils, pas des actions (v5.1) */}
+              {toolSetups.length > 0 && (
+                <section className="space-y-1.5">
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                    <Wrench size={16} className="text-action" aria-hidden="true" /> Outils à mettre en place
+                  </h3>
+                  <ul className="text-xs text-ink-soft space-y-0.5">
+                    {toolSetups.map(t => <li key={t.tool}>• <strong>{t.tool}</strong> : {t.status === 'not_chosen' ? 'pas encore choisi dans les outils du projet' : 'retenu, à mettre en place'}</li>)}
+                  </ul>
+                  <p className="text-xs text-ink-muted">Ce ne sont pas des actions : créez les comptes et branchez-les depuis <Link className="underline" to={`/projects/${projectId}/outils`}>Projet › Outils</Link> (guide de mise en place), puis cochez « Mis en place ».</p>
+                </section>
+              )}
 
               {/* Livrable stack : outils proposés, validés un par un (phase 4.3) */}
               {meetingType === 'stack' && (

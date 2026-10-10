@@ -6,7 +6,7 @@
 const db = require('../utils/db');
 const anthropic = require('./anthropic');
 const { parseJsonField } = require('../utils/parseJsonField');
-const { parseActions } = require('./actions');
+const { parseActions, parseTriage } = require('./actions');
 
 const { DEFAULT_MODEL: MODEL } = require('./models');
 const ORIGINS  = ['human', 'agents'];
@@ -60,10 +60,14 @@ ${registryText ? `Décisions DÉJÀ au registre du projet (ne les répète pas, 
 N'inclus pas les idées simplement évoquées, ni les questions restées sans réponse.
 Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".${challenger ? '\nRELECTURE DU CONTRADICTEUR : pour au plus 2 décisions FRAGILES (fort enjeu — argent engagé, difficile à défaire, légal, conditionne la suite — ET justification faible ou alternative non examinée), ajoute "vigilance" : le risque en une phrase et comment le vérifier. Pour toutes les autres, omets ce champ. Dans le doute, omets-le.' : ''}
 
-${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas) :\n${actionsText}\n\n` : ''}Liste aussi les ACTIONS concrètes que l'humain (porteur du projet) doit mener hors de BlabIA avant la prochaine réunion, telles qu'elles ressortent des échanges (contacter, visiter, vérifier, chiffrer, rédiger…), 8 au maximum, DANS L'ORDRE où les mener (la première à faire d'abord). Pas d'action pour les agents, pas d'action vague (« réfléchir à… »).
-Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (en jours après la réunion, UNIQUEMENT si une échéance réelle ressort des échanges : rendez-vous, délai imposé, date annoncée ; sinon null — l'ordre suffit).
+${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas, même reformulées) :\n${actionsText}\n\n` : ''}Trie ensuite ce qui reste à faire après la réunion. CHAQUE élément va dans UNE SEULE de ces listes :
+- "toDecide" : les DÉCISIONS QUI RESTENT À PRENDRE (« définir », « trancher », « choisir entre », « arbitrer »…) : ce n'est PAS une action. Une question claire par élément.
+- "toolSetups" : ce qui consiste à créer un compte, souscrire, configurer ou brancher un OUTIL (hébergeur, nom de domaine, paiement, e-mails, mesure d'audience, base de données…) : cela relève de la page Outils, PAS des actions. "tool" = nom de l'outil, "category" = son type.
+- "codeTasks" : ce qui consiste à écrire ou modifier le CODE (installer une police, créer des variables CSS, ajouter une page…) : c'est le travail de Claude Code, PAS de l'humain.
+- "actions" : seulement les vraies ACTIONS de l'humain hors de BlabIA, ni décision, ni outil, ni code (contacter, vérifier un point légal, rédiger un contenu, tester avec de vrais utilisateurs, réserver un nom…) : 5 au maximum, les plus importantes, DANS L'ORDRE où les mener. Pas d'action pour les agents, pas d'action vague (« réfléchir à… »). Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (en jours après la réunion, UNIQUEMENT si une échéance réelle ressort des échanges ; sinon null — l'ordre suffit).
+Rien de ce qui est déjà au registre ou déjà suivi ne doit réapparaître. Mieux vaut une liste vide qu'un élément inventé.
 
-Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7}]}`,
+Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7}],"toDecide":["Question à trancher ?"],"toolSetups":[{"tool":"Stripe","category":"paiement"}],"codeTasks":[{"title":"...","detail":"..."}]}`,
   };
 }
 
@@ -116,7 +120,7 @@ async function extractMeetingDecisions({ session, messages, historyText, project
   });
   const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
   const raw = parseExtractionJSON(text);
-  return { decisions: parseExtraction(raw), actions: parseActions(raw) };
+  return { decisions: parseExtraction(raw), actions: parseActions(raw), triage: parseTriage(raw) };
 }
 
 module.exports = {

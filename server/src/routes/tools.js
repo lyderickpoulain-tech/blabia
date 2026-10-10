@@ -3,7 +3,7 @@ const express = require('express');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { findProject } = require('../utils/projectHelpers');
-const { CATEGORIES, CATEGORY_LINKS, TOOLS } = require('../services/tools/catalog');
+const { CATEGORIES, CATEGORY_LINKS, TOOLS, SETUP_CATEGORIES } = require('../services/tools/catalog');
 const {
   getUserTools, sanitizeUserTools, getProjectTools, sanitizeProjectTools, monthlyTotal,
 } = require('../services/tools/toolsStore');
@@ -45,7 +45,7 @@ const router = express.Router();
 
 // GET /api/tools/catalog — catalogue partagé (catégories, outils connus, liens de la carte)
 router.get('/tools/catalog', authMiddleware, (req, res) => {
-  res.json({ categories: CATEGORIES, links: CATEGORY_LINKS, tools: TOOLS });
+  res.json({ categories: CATEGORIES, links: CATEGORY_LINKS, tools: TOOLS, setupCategories: [...SETUP_CATEGORIES] });
 });
 
 // GET /api/tools/me — « Mes outils »

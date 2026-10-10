@@ -72,7 +72,7 @@ function ToolPicker({ category, myTools, catalogTools, excludeKeys, onPick, onCa
   );
 }
 
-function ToolLine({ tool, onChange, onRemove, onReplace }) {
+function ToolLine({ tool, onChange, onRemove, onReplace, needsSetup }) {
   const [editingCost, setEditingCost] = useState(false);
   const refused = tool.status === 'refused';
   return (
@@ -82,6 +82,14 @@ function ToolLine({ tool, onChange, onRemove, onReplace }) {
         <span className={`text-[10px] font-medium border px-1.5 py-0.5 rounded-full ${PROJECT_STATUS[tool.status]?.cls}`}>{PROJECT_STATUS[tool.status]?.label}</span>
         <span className="text-xs text-gray-500">{costLabel(tool.cost)}</span>
       </div>
+      {/* v5.1 : outil à mettre en place (compte, branchement) — un développement qui s'en sert
+          n'est lancé qu'une fois la case cochée (services/devTools.js) */}
+      {needsSetup && tool.status === 'validated' && (
+        <label className={`flex items-center gap-2 text-xs font-semibold cursor-pointer min-h-[28px] ${tool.setupDone ? 'text-green-700' : 'text-amber-800'}`}>
+          <input type="checkbox" className="w-4 h-4 accent-green-600" checked={!!tool.setupDone} onChange={e => onChange({ ...tool, setupDone: e.target.checked })} />
+          {tool.setupDone ? 'Mis en place (compte créé et branché)' : 'À mettre en place : cochez une fois le compte créé et branché (voir le guide ci-dessus)'}
+        </label>
+      )}
       {tool.warning && !refused && (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">⚠️ {tool.warning}</p>
       )}
@@ -110,7 +118,7 @@ function ToolLine({ tool, onChange, onRemove, onReplace }) {
   );
 }
 
-function CategoryBlock({ category, need, tools, myTools, catalogTools, onSave }) {
+function CategoryBlock({ category, need, tools, myTools, catalogTools, onSave, setupCategories = [] }) {
   const [picker, setPicker] = useState(null); // null | { replaceId: string|null }
   const inCat = tools.filter(t => t.category === category.id);
   const covered = inCat.some(t => ACTIVE.includes(t.status));
@@ -151,7 +159,7 @@ function CategoryBlock({ category, need, tools, myTools, catalogTools, onSave })
 
       {inCat.map(t => (
         <ToolLine
-          key={t.id} tool={t}
+          key={t.id} tool={t} needsSetup={setupCategories.includes(category.id)}
           onChange={u => onSave(tools.map(x => x.id === u.id ? u : x))}
           onRemove={() => onSave(tools.filter(x => x.id !== t.id))}
           onReplace={() => setPicker({ replaceId: t.id })}
@@ -252,7 +260,7 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
     detail: { role: t.why || roleById[t.catalogId], cost: costLabel(t.cost), status: PROJECT_STATUS[t.status]?.label },
   }));
 
-  const blockProps = { tools, myTools, catalogTools: catalog.tools, onSave: save };
+  const blockProps = { tools, myTools, catalogTools: catalog.tools, onSave: save, setupCategories: catalog.setupCategories || [] };
 
   return (
     <Shell saving={saving}>

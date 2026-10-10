@@ -8,6 +8,7 @@
 const db = require('../utils/db');
 
 const MAX_PROPOSALS = 8;
+const MAX_ACTION_PROPOSALS = 5; // proposées à la conclusion : les plus importantes seulement
 const MAX_IN_PROMPT = 20;
 const OPEN = ['todo', 'in_progress'];
 
@@ -38,7 +39,33 @@ function parseActions(raw, from) {
   return (Array.isArray(raw?.actions) ? raw.actions : [])
     .map(a => sanitizeAction(a, from))
     .filter(a => a && !seen.has(a.title.toLowerCase()) && seen.add(a.title.toLowerCase()))
-    .slice(0, MAX_PROPOSALS);
+    .slice(0, MAX_ACTION_PROPOSALS);
+}
+
+// Mots significatifs d'un intitulé (sans accents ni mots courts)
+const wordsOf = s => new Set(String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .split(/[^a-z0-9@]+/).filter(w => w.length > 3));
+function sameAction(a, b) {
+  const w1 = wordsOf(a), w2 = wordsOf(b);
+  if (!w1.size || !w2.size) return false;
+  const common = [...w1].filter(w => w2.has(w)).length;
+  return common / Math.min(w1.size, w2.size) >= 0.75;
+}
+// Écarte les propositions qui reprennent une action déjà ouverte (même reformulée)
+function dropExistingActions(proposals, existing) {
+  const open = existing.filter(e => OPEN.includes(e.status));
+  return proposals.filter(p => !open.some(e => sameAction(p.title, e.title)));
+}
+
+// Ce qui n'est pas une action (extraction de fin de réunion) : décisions encore à prendre,
+// outils à mettre en place (page Outils), travail de code (réunion Claude Code)
+function parseTriage(raw) {
+  const list = v => (Array.isArray(v) ? v : []);
+  return {
+    toDecide: list(raw?.toDecide).map(q => clean(typeof q === 'string' ? q : q?.question, 300)).filter(Boolean).slice(0, 6),
+    toolSetups: list(raw?.toolSetups).map(t => ({ tool: clean(t?.tool, 100), category: clean(t?.category, 60) })).filter(t => t.tool).slice(0, 8),
+    codeTasks: list(raw?.codeTasks).map(t => ({ title: clean(t?.title ?? t, 300), detail: clean(t?.detail, 500) || null })).filter(t => t.title).slice(0, 8),
+  };
 }
 
 async function listActions(projectId) {
@@ -82,4 +109,4 @@ async function createSessionActions({ projectId, sessionId, userId, actions }) {
   }))).returning(['id', 'title', 'description', 'status', 'dueDate', 'sessionId']);
 }
 
-module.exports = { OPEN, dueDateFrom, sanitizeAction, parseActions, listActions, isOverdue, formatActionsForPrompt, createSessionActions };
+module.exports = { OPEN, dueDateFrom, sanitizeAction, parseActions, parseTriage, dropExistingActions, sameAction, listActions, isOverdue, formatActionsForPrompt, createSessionActions };

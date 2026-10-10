@@ -345,6 +345,38 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect((await createVia(site.id)).status).toBe(409);
   });
 
+  it('outils : développement bloqué tant qu’un outil dont il se sert n’est pas mis en place ; « lancer quand même »', async () => {
+    h.ai.responder = () => ({ text: '{"categories":["payment"]}' });
+    const putTools = tools => h.request('PUT', `/api/projects/${projectId}/tools`, { token: owner.token, body: { tools } });
+    await putTools([{ name: 'Stripe', category: 'payment', status: 'validated' }]);
+    await h.db('Session').where({ id: sessionId }).update({ requiredTools: null });
+    const launch = body => h.request('POST', `/api/projects/${projectId}/dev-tasks`, { token: owner.token, body: { sessionId, ...body } });
+
+    let r = await launch({});
+    expect(r.status).toBe(409);
+    expect(r.body.missingTools).toEqual([{ category: 'payment', label: 'Encaisser de l\'argent', tool: 'Stripe', reason: 'not_setup' }]);
+    expect(r.body.error).toContain('Stripe (Encaisser de l\'argent) : pas encore mis en place');
+    expect(h.ai.calls.at(-1).model).toMatch(/haiku/);
+    // Repéré une fois, conservé sur la réunion ; visible dans la liste à lancer
+    const calls = h.ai.calls.length;
+    const list = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body;
+    expect(list.launchable.find(s => s.id === sessionId).missingTools).toHaveLength(1);
+    expect(h.ai.calls.length).toBe(calls);
+
+    // Mis en place : plus de blocage (vérifié sans lancer : l'erreur suivante n'est plus celle des outils)
+    await putTools([{ name: 'Stripe', category: 'payment', status: 'validated', setupDone: true }]);
+    expect((await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body
+      .launchable.find(s => s.id === sessionId).missingTools).toEqual([]);
+
+    // Pas mis en place mais confirmation explicite : lancé
+    await putTools([{ name: 'Stripe', category: 'payment', status: 'validated' }]);
+    r = await launch({ force: true });
+    expect(r.status).toBe(201);
+    await h.db('DevTask').where({ id: r.body.id }).update({ status: 'abandoned' }); // ne gêne pas la suite
+    await putTools([]);
+    h.ai.responder = null;
+  });
+
   it('guide de mise en place : discussion sous le guide (erreur collée), reprise au guide suivant', async () => {
     h.ai.responder = params => ({ text: params.system.includes('aides une personne') ? 'Dans Railway, réglez **Root Directory** sur `/client`.' : '## Étape 1 — Railway\nRoot Directory : /client' });
     const url = `/api/projects/${projectId}/tools/guide/chat`;

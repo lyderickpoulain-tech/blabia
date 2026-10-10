@@ -372,8 +372,18 @@ export default function ProjectDev() {
   const launch = async session => {
     if (!confirm(`Lancer le développement « ${session.task} » ?\n\nClaude Code va travailler sur ${status.repo} avec votre abonnement Claude, puis proposer ses modifications. Rien ne sera mis en ligne sans votre accord.`)) return;
     setBusy(true);
+    const post = force => api.post(`/projects/${project.id}/dev-tasks`, { sessionId: session.id, ...(force ? { force: true } : {}) });
     try {
-      await api.post(`/projects/${project.id}/dev-tasks`, { sessionId: session.id });
+      try {
+        await post(false);
+      } catch (err) {
+        // Outils dont se sert ce développement pas encore prêts : bloqué, sauf confirmation explicite
+        const missing = err.response?.status === 409 && err.response.data?.missingTools;
+        if (!missing) throw err;
+        const list = missing.map(m => `• ${m.reason === 'not_chosen' ? `${m.label} : aucun outil choisi` : `${m.tool} (${m.label}) : pas encore mis en place`}`).join('\n');
+        if (!confirm(`Ce développement se sert d’outils qui ne sont pas prêts :\n\n${list}\n\nMettez-les en place d’abord (Projet › Outils, avec le guide), puis cochez « Mis en place ».\n\nLancer quand même ? Le code risque de ne pas fonctionner tant que ces outils ne sont pas branchés.`)) return;
+        await post(true);
+      }
       notifySuccess('Développement lancé : Claude Code est au travail.');
       await loadTasks();
     } catch (err) { notifyError(err, 'Le développement n’a pas pu être lancé.'); } finally { setBusy(false); }
@@ -441,6 +451,11 @@ export default function ProjectDev() {
                   <div className="flex-1 min-w-[200px]">
                     <p className="text-sm font-bold text-ink">{s.task}</p>
                     <p className="text-xs text-ink-faint">Réunion du {fmtDate(s.createdAt)}{retry(s) ? ` · ${STATUS[lastTask.get(s.id).status].label.toLowerCase()}` : ''}</p>
+                    {s.missingTools?.length > 0 && (
+                      <p className="text-xs text-await font-bold mt-0.5">
+                        Outils à mettre en place d’abord : {s.missingTools.map(m => m.tool || m.label).join(', ')} (<Link className="underline" to={`/projects/${project.id}/outils`}>Outils</Link>)
+                      </p>
+                    )}
                   </div>
                   <Button size="sm" variant={retry(s) ? 'secondary' : 'primary'} disabled={busy || active} onClick={() => launch(s)}
                     title={active ? 'Un développement est déjà en cours' : undefined}>

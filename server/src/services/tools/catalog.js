@@ -144,7 +144,12 @@ function findCatalogTool(idOrName) {
   return TOOLS.find(t => t.id === idOrName || normalize(t.id) === key || normalize(t.name) === key) || null;
 }
 
+// Catégories dont l'outil doit être « mis en place » (compte créé, branché, clés rangées)
+// avant qu'un développement qui s'en sert soit lancé. Les autres (langages, frameworks,
+// éditeur, dépôt géré par BlabIA, organisation) n'ont rien à mettre en place.
+const SETUP_CATEGORIES = new Set(['database', 'auth', 'messaging', 'ai', 'payment', 'storage', 'hosting', 'domain', 'monitoring', 'nocode', 'analytics']);
+
 module.exports = {
   CATEGORIES, CATEGORY_LINKS, TOOLS, USER_STATUSES, PROJECT_STATUSES, COST_TYPES,
-  CATEGORY_IDS, findCatalogTool, normalize,
+  CATEGORY_IDS, SETUP_CATEGORIES, findCatalogTool, normalize,
 };

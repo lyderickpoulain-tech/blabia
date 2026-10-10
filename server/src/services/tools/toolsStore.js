@@ -195,6 +195,7 @@ function sanitizeProjectTools(list) {
       priceSource: typeof t.priceSource === 'string' && /^https?:\/\//.test(t.priceSource) ? t.priceSource.slice(0, 500) : null,
       sessionId: typeof t.sessionId === 'string' ? t.sessionId : null,
       warning: t.warning ? String(t.warning).slice(0, 500) : null,
+      setupDone: t.setupDone === true, // v5.1 : compte créé et branché (catégories SETUP_CATEGORIES)
     }));
 }
 

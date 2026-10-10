@@ -195,6 +195,7 @@ model Session {
   questionMode            String?   // v5.0 : "delegate" | "balanced" | "control" (budget de questions 4 / 8 / 15), null = hérite de Project.questionMode
   challengerEnabled       Boolean?  // v5.1 : contradicteur — false = désactivé pour cette réunion, null = hérite de Project.challengerEnabled
   codeContext     String?   // v5.1 : réunion Claude Code — code du dépôt vu par les agents (services/codeContext.js), calculé au 1er tour
+  requiredTools   Json?     // v5.1 : réunion Claude Code — types d'outils utilisés par le développement (services/devTools.js), null = pas encore repéré
   milestoneId     String?
   todos           TodoItem[]
   createdAt       DateTime  @default(now())

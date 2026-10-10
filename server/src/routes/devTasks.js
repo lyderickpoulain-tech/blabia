@@ -4,6 +4,9 @@ const db = require('../utils/db');
 const { findProject } = require('../utils/projectHelpers');
 const github = require('../services/github');
 const dev = require('../services/devTasks');
+const { getProjectTools } = require('../services/tools/toolsStore');
+const { requiredCategories, missingTools, describeMissing } = require('../services/devTools');
+const { parseJsonField } = require('../utils/parseJsonField');
 
 // Développements lancés depuis BlabIA (v5.1) : dépôt du projet, lancement, suivi,
 // mise en ligne, abandon. Lecture : tout membre du projet. Configuration, lancement,
@@ -98,9 +101,15 @@ router.get('/:id/dev-tasks', async (req, res) => {
     const { project } = await load(req, res);
     if (!project) return;
     const tasks = await dev.listTasks(project);
-    const launchable = await db('Session').where({ projectId: project.id }).whereNotNull('deliverable')
+    const sessions = await db('Session').where({ projectId: project.id }).whereNotNull('deliverable')
       .whereRaw(`"intention"::text LIKE '%claude_code%'`).orderBy('createdAt', 'desc').limit(20)
-      .select('id', 'task', 'createdAt');
+      .select('id', 'task', 'createdAt', 'requiredTools');
+    // Outils manquants, quand ceux dont dépend le développement sont déjà repérés
+    const tools = await getProjectTools(project);
+    const launchable = sessions.map(({ requiredTools, ...s }) => {
+      const cats = parseJsonField(requiredTools, null);
+      return { ...s, missingTools: Array.isArray(cats) ? missingTools(cats, tools) : null };
+    });
     res.json({ tasks, launchable });
   } catch (err) { fail(res, 'list', err); }
 });
@@ -116,6 +125,13 @@ router.post('/:id/dev-tasks', async (req, res) => {
     if (prompt.length < 20) return res.status(400).json({ error: 'Le prompt de développement est vide.' });
     if (await db('DevTask').where({ projectId: project.id }).whereIn('status', dev.ACTIVE).first()) {
       return res.status(409).json({ error: 'Un développement est déjà en cours sur ce projet : un seul à la fois.' });
+    }
+    // Un code qui se sert d'un outil pas encore choisi ou mis en place ne part pas, sauf
+    // confirmation explicite (« Lancer quand même » : force)
+    const tools = await getProjectTools(project);
+    const missing = missingTools(await requiredCategories(session, tools), tools);
+    if (missing.length && req.body?.force !== true) {
+      return res.status(409).json({ error: `Outils à mettre en place avant ce développement (Projet › Outils) : ${describeMissing(missing)}.`, missingTools: missing });
     }
     res.status(201).json(await dev.createTask({ project, session, prompt: prompt.slice(0, 60000), userId: req.user.id }));
   } catch (err) { fail(res, 'create', err); }

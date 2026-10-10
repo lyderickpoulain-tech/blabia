@@ -206,7 +206,10 @@ router.patch('/:sessionId', async (req, res) => {
     if (questionMode !== undefined)   updates.questionMode   = isQuestionMode(questionMode) ? questionMode : null;
     // Édition du CR / livrable à la relecture, avant validation (3.3)
     if (summary !== undefined)     updates.summary     = summary;
-    if (deliverable !== undefined) updates.deliverable = deliverable;
+    if (deliverable !== undefined) {
+      updates.deliverable = deliverable;
+      updates.requiredTools = null; // prompt modifié : outils dont dépend le développement à repérer de nouveau (services/devTools.js)
+    }
 
     await db('Session').where({ id: sessionId }).update(updates);
     const [updated] = await db('Session').where({ id: sessionId }).limit(1);

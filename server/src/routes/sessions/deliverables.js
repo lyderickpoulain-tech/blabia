@@ -5,7 +5,9 @@ const anthropic      = require('../../services/anthropic');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { getProjectTools, formatProjectToolsForPrompt } = require('../../services/tools/toolsStore');
 const { extractMeetingDecisions, listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
-const { listActions, formatActionsForPrompt } = require('../../services/actions');
+const { listActions, formatActionsForPrompt, dropExistingActions } = require('../../services/actions');
+const { requiredCategories, missingTools } = require('../../services/devTools');
+const { SETUP_CATEGORIES } = require('../../services/tools/catalog');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 
 // Livrable d'une réunion stack : la liste des outils proposés (Markdown), validée
@@ -30,6 +32,35 @@ const {
   buildClaudeCodePrompt,
 } = require('../../services/prompts/deliverablePrompts');
 const { parseJsonField } = require('../../utils/parseJsonField');
+
+// Réunions proposées à la conclusion à partir de ce qui n'est pas une action
+const cut = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trim()}…` : s);
+function buildMeetingProposals(triage, meetingType) {
+  const out = [];
+  if (triage.toDecide.length) {
+    out.push({ key: 'decide', type: 'decision',
+      title: cut(`Trancher : ${triage.toDecide[0].replace(/\?$/, '')}${triage.toDecide.length > 1 ? ` (+${triage.toDecide.length - 1})` : ''}`, 120),
+      description: `Questions restées ouvertes :\n${triage.toDecide.map(q => `- ${q}`).join('\n')}` });
+  }
+  // Réunion Claude Code : le travail de code est déjà dans son prompt
+  if (triage.codeTasks.length && meetingType !== 'claude_code') {
+    out.push({ key: 'code', type: 'claude_code',
+      title: cut(`Développer : ${triage.codeTasks[0].title}${triage.codeTasks.length > 1 ? ` (+${triage.codeTasks.length - 1})` : ''}`, 120),
+      description: `À réaliser par Claude Code :\n${triage.codeTasks.map(t => `- ${t.title}${t.detail ? ` — ${t.detail}` : ''}`).join('\n')}` });
+  }
+  return out;
+}
+
+// Outils cités comme « à mettre en place » : déjà prêts (écartés), retenus mais pas encore
+// mis en place, ou pas encore choisis dans la page Outils
+function toolSetupsStatus(setups, tools) {
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return setups.map(s => {
+    const match = tools.find(t => t.status === 'validated' && (norm(t.name).includes(norm(s.tool)) || norm(s.tool).includes(norm(t.name))));
+    if (match && (match.setupDone || !SETUP_CATEGORIES.has(match.category))) return null;
+    return { tool: match?.name || s.tool, category: match?.category || null, status: match ? 'not_setup' : 'not_chosen' };
+  }).filter(Boolean);
+}
 
 const router = express.Router({ mergeParams: true });
 
@@ -180,7 +211,8 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     // dans la fenêtre de clôture (POST /:sessionId/decisions). Un échec de
     // l'extraction ne bloque pas la clôture.
     const summaryPrompt = buildSummaryPrompt(sessionContext, expertiseLevel, meetingType);
-    const actionsText = formatActionsForPrompt(await listActions(projectId));
+    const existingActions = await listActions(projectId);
+    const actionsText = formatActionsForPrompt(existingActions);
     const [summaryResponse, extraction] = await Promise.all([
       anthropic.messages.create({
         model: MODEL, max_tokens: 4000,
@@ -194,7 +226,12 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     let summary = summaryResponse.content[0].text.trim();
     // null = extraction indisponible (la fenêtre de clôture le signale)
     const decisionProposals = extraction ? extraction.decisions : null;
-    const actionProposals   = extraction ? extraction.actions   : null;
+    // Actions : seulement les vraies actions de l'humain, sans reprise d'une action déjà ouverte
+    const actionProposals   = extraction ? dropExistingActions(extraction.actions, existingActions) : null;
+    // Ce qui n'est pas une action (v5.1) : décisions à prendre → réunion de décision proposée ;
+    // travail de code → réunion Claude Code proposée ; outils → page Outils
+    const triage = extraction?.triage || { toDecide: [], toolSetups: [], codeTasks: [] };
+    const meetingProposals = buildMeetingProposals(triage, meetingType);
 
     // Sources web citées pendant la réunion (dédupliquées), agrégées en fin de CR
     const citedSources = new Map();
@@ -246,7 +283,16 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     });
     await updateProjectContext(projectId, sessionId, session.task, summary);
 
-    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals, actionProposals });
+    // Outils à mettre en place (page Outils) et, pour un développement, outils dont il dépend
+    const projectTools = await getProjectTools(project);
+    const toolSetups = toolSetupsStatus(triage.toolSetups, projectTools);
+    let devMissingTools = [];
+    if (meetingType === 'claude_code' && deliverable) {
+      await db('Session').where({ id: sessionId }).update({ requiredTools: null });
+      devMissingTools = missingTools(await requiredCategories({ ...session, deliverable, requiredTools: null }, projectTools), projectTools);
+    }
+
+    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals, actionProposals, meetingProposals, toolSetups, devMissingTools });
   } catch (err) {
     console.error('[sessions/generate-deliverable]', err.message);
     res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });
