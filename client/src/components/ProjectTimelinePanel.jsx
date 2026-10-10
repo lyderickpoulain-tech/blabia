@@ -12,10 +12,10 @@ import { notifyError } from '../utils/notify';
 const TYPES = ['decision', 'claude_code', 'stack'];
 
 const STATUS_DOT = {
-  pending:     { cls: 'bg-gray-300' },
-  in_progress: { cls: 'bg-blue-500', pulse: true },
-  done:        { cls: 'bg-green-500' },
-  blocked:     { cls: 'bg-red-400' },
+  pending:     { cls: 'bg-muted' },
+  in_progress: { cls: 'bg-action', pulse: true },
+  done:        { cls: 'bg-ok' },
+  blocked:     { cls: 'bg-await' },
 };
 
 // ── Corps partagé desktop / mobile ─────────────────────────────────────────────
@@ -117,10 +117,10 @@ function PanelBody({
       <div className="flex-1 overflow-y-auto py-1 px-1">
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="w-4 h-4 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-action border-t-transparent rounded-full animate-spin" />
           </div>
         ) : milestones.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-8 px-3">
+          <p className="text-xs text-ink-faint text-center py-8 px-3">
             Aucune réunion —<br />commencez par en créer une
           </p>
         ) : (
@@ -143,13 +143,13 @@ function PanelBody({
                   onDragOver={(e) => { e.preventDefault(); if (!locked) setDragOverId(m.id); }}
                   onDrop={(e) => { e.preventDefault(); handleDrop(m.id); }}
                   onDragEnd={handleDragEnd}
-                  className={`rounded-lg transition ${dragOverId === m.id && dragId !== m.id ? 'ring-2 ring-blue-300 ring-inset' : ''}`}
+                  className={`rounded-lg transition ${dragOverId === m.id && dragId !== m.id ? 'ring-2 ring-action-border ring-inset' : ''}`}
                 >
                   {/* Mini-carte réunion */}
                   <div
                     data-tour={m.status === 'in_progress' ? 'plan-current' : undefined}
                     onClick={() => onMilestoneClick(m, linked)}
-                    className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none ${locked ? 'opacity-60' : ''}`}
+                    className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg hover:bg-canvas active:bg-canvas-deep cursor-pointer transition select-none ${locked ? 'opacity-60' : ''}`}
                     title={m.title}
                   >
                     <div
@@ -157,7 +157,7 @@ function PanelBody({
                       onDragStart={(e) => handleDragStart(e, m.id)}
                       onClick={e => e.stopPropagation()}
                       className={`shrink-0 text-sm leading-none select-none ${
-                        locked ? 'text-gray-200' : 'text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition'
+                        locked ? 'text-line' : 'text-ink-faint hover:text-ink-soft cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition'
                       }`}
                       title={locked ? 'Réunion terminée — verrouillée' : 'Glisser pour réorganiser'}
                     >
@@ -165,13 +165,13 @@ function PanelBody({
                     </div>
                     <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🤝'}</span>
                     <span className="flex-1 min-w-0 leading-snug">
-                      <span className="text-xs text-gray-700 truncate block">{trunc(m.title)}</span>
+                      <span className="text-xs text-ink truncate block">{trunc(m.title)}</span>
                       <span className="flex items-center gap-1">
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`} />
-                        <span className="text-[9px] text-gray-400 truncate">{STATUS_LABELS[m.status] || m.status}</span>
+                        <span className="text-[9px] text-ink-faint truncate">{STATUS_LABELS[m.status] || m.status}</span>
                       </span>
                       {m.type === 'claude_code' && (
-                        <span className={`text-[9px] truncate block ${devDirectory ? 'text-gray-400' : 'text-orange-400'}`}>
+                        <span className={`text-[9px] truncate block ${devDirectory ? 'text-ink-faint' : 'text-await'}`}>
                           📁 {devDirectory ? trunc(devDirectory, 22) : 'Répertoire non défini'}
                         </span>
                       )}
@@ -202,19 +202,19 @@ function PanelBody({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-gray-100 px-2 py-2">
+      <div className="shrink-0 border-t border-line px-2 py-2">
         {showAdd ? (
           <form onSubmit={handleSubmit} className="space-y-1.5">
             <input autoFocus type="text" value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="Titre de la réunion…"
-              className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+              className="w-full text-xs border border-line rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-action bg-white"
             />
             <div className="flex gap-1">
               {TYPES.map(t => (
                 <button key={t} type="button" onClick={() => setType(t)} title={TYPE_LABEL[t]}
                   className={`flex-1 text-sm py-1 rounded-lg border transition ${
-                    type === t ? 'bg-blabia-blue border-blabia-blue text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
+                    type === t ? 'bg-action border-action text-white' : 'bg-white border-line text-ink-soft hover:border-action-border'
                   }`}>
                   {TYPE_ICON[t]}
                 </button>
@@ -222,18 +222,18 @@ function PanelBody({
             </div>
             <div className="flex gap-1">
               <button type="submit" disabled={!title.trim() || saving}
-                className="flex-1 text-xs bg-blabia-blue hover:bg-blabia-blue text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50">
+                className="flex-1 text-xs bg-action hover:bg-action-dark text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50">
                 {saving ? '…' : 'Ajouter'}
               </button>
               <button type="button" onClick={() => { setShowAdd(false); setTitle(''); setType('decision'); }}
-                className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition">
+                className="text-xs text-ink-faint hover:text-ink-soft px-2 py-1.5 rounded-lg transition">
                 ✕
               </button>
             </div>
           </form>
         ) : (
           <button onClick={() => setShowAdd(true)}
-            className="w-full flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-blabia-blue hover:bg-blue-50 py-2 rounded-lg border border-dashed border-gray-200 hover:border-blue-300 transition font-medium">
+            className="w-full flex items-center justify-center gap-1 text-xs text-ink-faint hover:text-action hover:bg-action-light py-2 rounded-lg border border-dashed border-line hover:border-action-border transition font-medium">
             + Ajouter une réunion
           </button>
         )}
@@ -355,25 +355,25 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
       <div className="hidden lg:flex items-start shrink-0 sticky top-6 self-start">
         <button onClick={() => setIsOpen(p => !p)}
           title={isOpen ? 'Fermer le panel' : 'Ouvrir le panel'}
-          className="flex items-center justify-center w-5 h-8 bg-white border border-gray-200 rounded-l-lg shadow-sm text-gray-400 hover:text-blue-500 text-xs transition shrink-0 mt-2">
+          className="flex items-center justify-center w-5 h-8 bg-white border border-line rounded-l-lg shadow-sm text-ink-faint hover:text-action text-xs transition shrink-0 mt-2">
           {isOpen ? '›' : '‹'}
         </button>
 
         <div className={`transition-all duration-300 overflow-hidden ${isOpen ? 'w-64' : 'w-0'}`}>
-          <div className="w-64 bg-white border border-gray-200 border-l-0 rounded-r-xl shadow-sm"
+          <div className="w-64 bg-white border border-line border-l-0 rounded-r-xl shadow-sm"
                style={{ minHeight: '320px', maxHeight: 'calc(100vh - 120px)' }}>
-            <div className="px-3 py-2.5 border-b border-gray-100">
+            <div className="px-3 py-2.5 border-b border-line">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">🤝 Réunions</span>
-                <span className="text-xs text-gray-400">{milestones.length}</span>
+                <span className="text-xs font-semibold text-ink-soft uppercase tracking-wide flex-1">🤝 Réunions</span>
+                <span className="text-xs text-ink-faint">{milestones.length}</span>
               </div>
               {milestones.length > 0 && (
                 <div className="flex items-center gap-1.5 mt-1">
-                  <div className="flex-1 bg-gray-100 rounded-full h-1 overflow-hidden">
-                    <div className="h-1 rounded-full bg-green-500 transition-all"
+                  <div className="flex-1 bg-canvas-deep rounded-full h-1 overflow-hidden">
+                    <div className="h-1 rounded-full bg-ok transition-all"
                       style={{ width: `${Math.round((doneMilestones / milestones.length) * 100)}%` }} />
                   </div>
-                  <span className="text-[10px] text-gray-400 shrink-0">{doneMilestones}/{milestones.length}</span>
+                  <span className="text-[10px] text-ink-faint shrink-0">{doneMilestones}/{milestones.length}</span>
                 </div>
               )}
             </div>
@@ -386,7 +386,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
 
       {/* ── Mobile : bouton flottant ─────────────────────────────────────── */}
       <button onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-6 right-6 z-40 w-12 h-12 bg-blabia-blue hover:bg-blabia-blue text-white rounded-full shadow-lg flex items-center justify-center text-lg transition"
+        className="lg:hidden fixed bottom-6 right-6 z-40 w-12 h-12 bg-action hover:bg-action-dark text-white rounded-full shadow-lg flex items-center justify-center text-lg transition"
         title="Réunions du projet">
         🤝
       </button>
@@ -396,10 +396,10 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
         <div className="lg:hidden fixed inset-0 z-50 flex justify-end">
           <div className="flex-1 bg-black/30 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <div className="w-72 bg-white shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-              <span className="text-sm font-semibold text-gray-800">🤝 Réunions</span>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-line shrink-0">
+              <span className="text-sm font-semibold text-ink">🤝 Réunions</span>
               <button onClick={() => setMobileOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">
+                className="text-ink-faint hover:text-ink-soft text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-canvas-deep transition">
                 ×
               </button>
             </div>
@@ -438,24 +438,24 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
           <div className="bg-white rounded-2xl shadow-2xl w-full sm:max-w-sm p-5 space-y-3">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xl">💻</span>
-              <h2 className="text-sm font-bold text-gray-900 flex-1 leading-snug truncate">
+              <h2 className="text-sm font-bold text-ink flex-1 leading-snug truncate">
                 {techChoiceMilestone.title}
               </h2>
               <button onClick={() => setTechChoiceMilestone(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0">
+                className="text-ink-faint hover:text-ink-soft text-xl leading-none shrink-0">
                 ×
               </button>
             </div>
-            <p className="text-xs text-gray-500">Comment voulez-vous avancer sur cette tâche technique ?</p>
+            <p className="text-xs text-ink-soft">Comment voulez-vous avancer sur cette tâche technique ?</p>
 
             <button
               onClick={() => { setQuickExportMilestone(techChoiceMilestone); setTechChoiceMilestone(null); }}
-              className="w-full flex items-start gap-3 p-4 border-2 border-violet-200 bg-violet-50 hover:border-violet-400 hover:bg-violet-100 rounded-xl transition text-left"
+              className="w-full flex items-start gap-3 p-4 border-2 border-ai-border bg-ai-bg hover:border-ai hover:bg-ai-light rounded-xl transition text-left"
             >
               <span className="text-2xl shrink-0 mt-0.5">⚡</span>
               <div>
-                <p className="text-sm font-semibold text-violet-900">Générer directement un prompt</p>
-                <p className="text-xs text-violet-600 mt-0.5 leading-snug">
+                <p className="text-sm font-semibold text-ai">Générer directement un prompt</p>
+                <p className="text-xs text-ai mt-0.5 leading-snug">
                   Créer un prompt Claude Code à partir du titre de la réunion — rapide, sans réunion
                 </p>
               </div>
@@ -472,12 +472,12 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
                 });
                 setTechChoiceMilestone(null);
               }}
-              className="w-full flex items-start gap-3 p-4 border-2 border-blue-200 bg-blue-50 hover:border-blue-400 hover:bg-blue-100 rounded-xl transition text-left"
+              className="w-full flex items-start gap-3 p-4 border-2 border-action-border bg-action-light hover:border-action hover:bg-action-light rounded-xl transition text-left"
             >
               <span className="text-2xl shrink-0 mt-0.5">🚀</span>
               <div>
-                <p className="text-sm font-semibold text-blue-900">Démarrer une réunion</p>
-                <p className="text-xs text-blabia-blue mt-0.5 leading-snug">
+                <p className="text-sm font-semibold text-action-dark">Démarrer une réunion</p>
+                <p className="text-xs text-action mt-0.5 leading-snug">
                   Lancer une réunion d'agents pour explorer la tâche et préparer l'implémentation
                 </p>
               </div>

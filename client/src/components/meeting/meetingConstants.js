@@ -12,9 +12,9 @@ export const AGENT_COLORS = [
 
 // Statut de la réunion
 export const STATUS_BADGE = {
-  open:      { label: 'En cours',   cls: 'bg-blue-100 text-blabia-blue'   },
-  accepted:  { label: 'Acceptée',   cls: 'bg-green-100 text-green-700'  },
-  abandoned: { label: 'Abandonnée', cls: 'bg-gray-100 text-gray-500'    },
+  open:      { label: 'En cours',   cls: 'bg-action-light text-action'  },
+  accepted:  { label: 'Acceptée',   cls: 'bg-ok-light text-ok'          },
+  abandoned: { label: 'Abandonnée', cls: 'bg-muted-light text-muted'    },
 };
 
 // v5.0 phase 3.2 : decision | claude_code | stack
