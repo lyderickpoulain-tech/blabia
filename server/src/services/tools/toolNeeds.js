@@ -8,7 +8,7 @@ const anthropic = require('../anthropic');
 const { CATEGORIES, CATEGORY_IDS, findCatalogTool, normalize } = require('./catalog');
 const { recentMemory } = require('../../utils/projectMemory');
 
-const MODEL = 'claude-sonnet-4-6';
+const { DEFAULT_MODEL: MODEL } = require('../models');
 const FITS = ['ok', 'unsuited', 'none'];
 
 function buildAnalysisPrompt(project, userTools) {

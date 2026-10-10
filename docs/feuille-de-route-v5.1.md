@@ -8,12 +8,12 @@ Document de reprise : à lire en début de session (avec `CLAUDE.md`, qui décri
 - **v5.0 complète** (phases 0 à 5 de `prompt-claude-code-blabia-v5.md`) : réunions uniquement, bulles + Markdown, curseurs maîtrise/humour, recherche web citée, types `decision | claude_code | stack`, livrable à la clôture, suggestions de réunions positionnées, refonte des outils (Mes outils, outils du projet par besoin, réunion Outils), illustrations à la demande.
 - **Moins de questions à l'humain** : budget de cartes de décision par réunion, réglable (`questionMode` : Je délègue 4 / Équilibré 8 / Je veux tout trancher 15), questions regroupées (≤ 3 par message), hypothèses explicites que l'humain peut contredire, un autre agent reprend après une réponse, mémoire projet lue par la fin, tours comptés sur toute la réunion.
 - **Correctif healthcheck** (`8a39f23`) : `/api/health` et `/api/ping` déclarés avant les routeurs.
-- 6 migrations appliquées en prod (`20261008000001` → `20261009000002`).
-
-### Committé, pas encore poussé
-- `ed98f83` **Registre des décisions du projet** : table `Decision` (migration `20261009000003_v5_decision_registry`), extraction à la clôture (validée par l'humain), transmis aux agents, panneau « 📒 Décisions », vidé par la réinitialisation de la mémoire.
-
-- `a4541ac` **Préparation de réunion sans l'humain**, avec ses corrections d'affichage (détail ci-dessous).
+- **Registre des décisions du projet** : table `Decision`, extraction à la clôture (validée par l'humain), transmis aux agents, page Projet › Décisions.
+- **Préparation de réunion sans l'humain** (détail ci-dessous) et écran **Briefing**.
+- **Refonte UX v5.1 terminée** (section 2) : tous les écrans dans la nouvelle charte.
+- **Coût réel de l'IA** : table `UsageLog`, une ligne par appel Anthropic (point de passage unique `services/anthropic.js`, rattachement projet/réunion par `AsyncLocalStorage` dans `services/usage.js`, tarifs dans `services/pricing.js`). Affiché sur chaque carte projet, dans le tableau de bord et l'Historique (par usage, par réunion). La dépense du mois via l'Admin API a été abandonnée : indisponible pour un compte Anthropic individuel.
+- **Guide de prise en main et visite guidée** : fenêtre Guide (`components/Tutorial.jsx`, ouverte à la première connexion via `User.tutorialSeenAt`, puis bouton « Guide ») ; visite sur les vraies pages (`client/src/tour/`, ancres `data-tour`) avec un projet exemple non informatique créé sans IA (`services/demoProject.js`, `Project.isDemo`, supprimé en fin de visite ; `demoGuard` refuse les routes IA) ; chapitres selon le rôle, progression dans `User.tourProgress`.
+- 11 migrations appliquées en prod (`20261008000001` → `20261010000003`).
 
 ### Détail de la préparation
 - **Préparation de réunion sans l'humain** (`/chat` avec `prepare: true`, `services/prompts/preparationPrompt.js`) : débat entre agents (2 tours/agent, 4 à 8), sans carte, puis synthèse `prep_summary` + décisions regroupées dans le budget.
@@ -88,12 +88,12 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 
 ## 3. Reste à faire (ordre recommandé)
 
-### A. Refonte UX (en cours)
+### A. Refonte UX (terminée)
 1. ✅ Socle : tokens de couleur Tailwind, Manrope, `lucide-react` 0.469.0, composants partagés (`client/src/components/ui/index.jsx` : Button, IconButton, Badge, Card, SectionLabel).
 2. ✅ **Salle de réunion** (plein écran, hors `ProjectLayout`) : en-tête sur une ligne (`MeetingHeader`, réglages regroupés), quatre temps (`PhaseStepper`), écran Briefing (`BriefingView`), fil compact avec bulles pastel par agent, séparateur entre interlocuteurs et heure (`ConversationFeed`), hypothèses « D'accord · Je contredis », questions à valider explicitement avec « Laisser les agents décider » (`DecisionCard`), panneau latéral repliable en cartes (`MeetingSidePanel`), zone Illustration (`IllustrationPanel`), saisie compacte (`MeetingInputBar`). Reste à restyler : fenêtres de conclusion et de réinitialisation.
 3. ✅ Tableau de bord du projet + navigation par pages : `components/project/ProjectShell.jsx` (barre latérale, contexte `useProject`, pastilles d'attention) et `pages/project/` (Dashboard, Plan → route `reunions`, Historique, Décisions, Outils, Équipe, Paramètres). `ProjectView.jsx` supprimé ; l'ancienne vue des tâches (`/plan`, `PlanView`) reste accessible depuis Paramètres. « Préparer avant mon arrivée » : case sur `StartMeeting` + lancement automatique dans `MeetingRoom` (`location.state.autoPrepare`).
-   Reste à refaire dans le nouveau style : `StartMeeting` (affiche encore l'ancien panneau Réunions via `ProjectLayout`), `MeetingCloseModal`, liste des projets (`Dashboard.jsx`), `MyTools`, `NewProject`, `AgentsPage`.
-4. Renommages du glossaire partout (y compris commandes rapides qui parlent encore de « timeline »).
+4. ✅ Fin des écrans : `StartMeeting` (dans le cadre projet, route `meeting/new` imbriquée), `MeetingCloseModal`, en-tête commun (`Layout`), liste des projets en cartes, `NewProject`, `AgentsPage`, `MyTools`, registre des décisions, fenêtre de réinitialisation. Restent dans l'ancien style (peu utilisés) : connexion, profil, administration, `PlanView` legacy, `MeetingSuggestionCard`.
+5. Renommages du glossaire partout (y compris commandes rapides qui parlent encore de « timeline »).
 
 ### B. Évolutions fonctionnelles (audit, « compagnon de projet en solo »)
 1. **Actions entre les réunions** : actions datées issues du compte-rendu, cochées par l'humain ; la réunion suivante commence par un point d'avancement (reprend l'idée de `TodoItem`, aujourd'hui hors périmètre).
@@ -104,8 +104,8 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 6. **Rappels par email** (Resend déjà branché) et **export** du compte-rendu / du registre (PDF, Word).
 
 ### C. Code
-1. Modèle d'IA écrit en dur à ~11 endroits (`claude-sonnet-4-6`) : centraliser dans une config ; modèle léger pour l'orchestrateur, l'analyse des besoins et les commandes rapides.
-2. Mise en cache des prompts (`cache_control`) sur les prompts système des agents.
+1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Reste possible : un modèle léger pour l'orchestrateur, l'analyse des besoins et les commandes rapides.
+2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).
 3. Éviter l'appel d'orchestration quand le choix est évident (mention @, un seul candidat).
 4. Découper `ProjectView.jsx` (~1 250 lignes) et `MeetingRoom.jsx` (~1 150 lignes) ; chargement des pages à la demande (bundle principal ~650 Ko).
 5. Notifications d'erreur côté client (beaucoup de `catch {}` silencieux : c'est ce qui a masqué le bug `updatedAt`).

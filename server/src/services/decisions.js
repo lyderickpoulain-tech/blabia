@@ -7,7 +7,7 @@ const db = require('../utils/db');
 const anthropic = require('./anthropic');
 const { parseJsonField } = require('../utils/parseJsonField');
 
-const MODEL = 'claude-sonnet-4-6';
+const { DEFAULT_MODEL: MODEL } = require('./models');
 const ORIGINS  = ['human', 'agents'];
 const STATUSES = ['active', 'reopened', 'superseded'];
 const MAX_PROPOSALS = 15;

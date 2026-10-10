@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { MODEL } = require('./helpers');
+const { isMeetingModel } = require('../../services/models');
 const { isQuestionMode, decisionBudgetFor } = require('../../services/questionModes');
 const { parseJsonField } = require('../../utils/parseJsonField');
 
@@ -26,8 +27,7 @@ router.post('/', async (req, res) => {
   const { projectId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
-  const VALID_MODELS = ['claude-sonnet-4-6', 'claude-opus-4-8'];
-  const selectedModel = VALID_MODELS.includes(modelParam) ? modelParam : MODEL;
+  const selectedModel = isMeetingModel(modelParam) ? modelParam : MODEL;
   const fullContextEnabled = !!fullContextParam;
   const clampLevel = (v) => {
     const n = Number(v);

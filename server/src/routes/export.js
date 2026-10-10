@@ -7,7 +7,7 @@ const { getProjectTools, getUserTools, formatProjectToolsForPrompt } = require('
 const router = express.Router();
 router.use(authMiddleware);
 
-const MODEL = 'claude-sonnet-4-6';
+const { DEFAULT_MODEL: MODEL } = require('../services/models');
 
 // POST /api/export/claude-code — génère un prompt Claude Code depuis une restitution
 router.post('/claude-code', async (req, res) => {

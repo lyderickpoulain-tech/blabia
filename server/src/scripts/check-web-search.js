@@ -23,7 +23,7 @@ async function main() {
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: require('../services/models').DEFAULT_MODEL,
       max_tokens: 500,
       system: 'Tu es un assistant de test. Réponds en une phrase courte, en citant tes sources si tu cherches sur le web.',
       messages: [{ role: 'user', content: 'Quelle est la version actuelle de Node.js LTS ? Cherche l\'info si besoin.' }],

@@ -22,10 +22,7 @@ const MT_MAP = {
   stack: 'stack', stack_check: 'stack',
 };
 
-const MODELS = [
-  { id: 'claude-sonnet-4-6', label: 'Sonnet', desc: 'Rapide et économique' },
-  { id: 'claude-opus-4-8',   label: 'Opus',   desc: 'Plus puissant, plus lent' },
-];
+// Modèles proposés : source unique côté serveur (services/models.js, GET /api/models)
 
 const inputCls = 'w-full px-3.5 py-2.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
 
@@ -119,7 +116,8 @@ export default function StartMeeting() {
   const [creatingSuggested,  setCreatingSuggested]  = useState(false);
   const [newAgentForm,       setNewAgentForm]       = useState({ open: false, name: '', role: '', systemPrompt: '', scope: 'project' });
   const [creatingAgent,      setCreatingAgent]      = useState(false);
-  const [model,             setModel]             = useState('claude-sonnet-4-6');
+  const [models,            setModels]            = useState([]);
+  const [model,             setModel]             = useState(null); // null = défaut du serveur
   const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
   const [autoPrepare,       setAutoPrepare]       = useState(!!location.state?.autoPrepare);
   const [expertiseLevel,    setExpertiseLevel]    = useState(project?.expertiseLevel || 3);
@@ -141,6 +139,12 @@ export default function StartMeeting() {
       .catch(() => {})
       .finally(() => setAgentsLoading(false));
   }, [projectId]);
+
+  useEffect(() => {
+    api.get('/models')
+      .then(({ data }) => { setModels(data.models || []); setModel(m => m || data.default); })
+      .catch(() => {});
+  }, []);
 
   // Auto-suggestion si pré-rempli depuis le plan
   useEffect(() => {
@@ -238,7 +242,7 @@ export default function StartMeeting() {
         intention:        [deliverable],
         activeAgents,
         mode:             'meeting',
-        model,
+        ...(model ? { model } : {}),
         webSearchEnabled: webSearchEnabled === true,
         expertiseLevel,
         humorLevel,
@@ -256,7 +260,7 @@ export default function StartMeeting() {
 
   const canStart = task.trim().length > 0 && selectedAgentIds.size >= 1 && !starting;
   const prepPossible = selectedAgentIds.size >= 2;
-  const modelLabel = MODELS.find(m => m.id === model)?.label;
+  const modelLabel = models.find(m => m.id === model)?.label || 'Modèle par défaut';
 
   return (
     <div className="max-w-3xl">
@@ -431,7 +435,7 @@ export default function StartMeeting() {
               <div>
                 <p className="text-sm font-bold text-ink-soft mb-2">Modèle IA</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {MODELS.map(m => (
+                  {models.map(m => (
                     <ChoiceCard key={m.id} active={model === m.id} onClick={() => setModel(m.id)} className="px-4 py-3">
                       <p className={`text-sm font-extrabold ${model === m.id ? 'text-action' : 'text-ink'}`}>{m.label}</p>
                       <p className="text-xs text-ink-muted mt-0.5">{m.desc}</p>

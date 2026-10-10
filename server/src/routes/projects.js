@@ -10,6 +10,7 @@ const { isQuestionMode, DEFAULT_QUESTION_MODE } = require('../services/questionM
 const { parseJsonField } = require('../utils/parseJsonField');
 const { LEGACY_COST_SQL, projectCostReport } = require('../services/usageReports');
 const { ensureDemoProject, deleteDemoProjects } = require('../services/demoProject');
+const { DEFAULT_MODEL } = require('../services/models');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -731,7 +732,7 @@ router.post('/:id/generate-timeline', async (req, res) => {
     }
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: DEFAULT_MODEL,
       max_tokens: 2000,
       system: 'Tu es un expert en gestion de projet. Tu génères des timelines spécifiques et actionnables. Réponds UNIQUEMENT en JSON valide, sans backticks ni markdown.',
       messages: [{
@@ -811,7 +812,7 @@ router.post('/:id/quick-command', async (req, res) => {
       if (!query) return res.status(400).json({ error: 'Requête de recherche requise' });
       try {
         const searchResponse = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
+          model: DEFAULT_MODEL,
           max_tokens: 800,
           tools: [{ type: 'web_search_20250305', name: 'web_search' }],
           system: `Tu es l'assistant du projet "${project.name}". Recherche sur le web et réponds en français de façon concise.`,
@@ -884,7 +885,7 @@ Limite à 5 réunions maximum. Titres courts et actionnables (max 50 chars).`;
     }
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: DEFAULT_MODEL,
       max_tokens: 1000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }]

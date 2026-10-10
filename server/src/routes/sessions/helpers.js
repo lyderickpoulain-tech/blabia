@@ -3,7 +3,7 @@ const db         = require('../../utils/db');
 const anthropic  = require('../../services/anthropic');
 const { parseJsonField } = require('../../utils/parseJsonField');
 
-const MODEL = 'claude-sonnet-4-6';
+const { DEFAULT_MODEL: MODEL } = require('../../services/models');
 
 // ── Similarité lexicale (Jaccard) ─────────────────────────────────────────────
 

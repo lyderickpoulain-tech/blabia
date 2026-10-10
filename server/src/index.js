@@ -39,6 +39,7 @@ app.use('/api/admin',                        require('./routes/admin'));
 app.use('/api/agents',                       require('./routes/agents'));
 app.use('/api/export',                       require('./routes/export'));
 app.use('/api/users',                        require('./routes/users'));
+app.use('/api/models',                       require('./routes/models'));
 app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
 app.use('/api/projects',                     require('./routes/plan'));
