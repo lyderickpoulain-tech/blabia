@@ -6,6 +6,8 @@
 const PRICES = {
   'claude-sonnet-4-6': { input: 3, cacheWrite5m: 3.75, cacheWrite1h: 6,  cacheRead: 0.30, output: 15 },
   'claude-opus-4-8':   { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.50, output: 25 },
+  // Tarif des prompts ≤ 100 000 tokens (au-delà : x5) — l'orchestrateur en reste très loin
+  'claude-haiku-5-5':  { input: 0.10, cacheWrite5m: 0.125, cacheWrite1h: 0.20, cacheRead: 0.01, output: 0.50 },
 };
 const FAMILY_FALLBACK = {
   opus:   PRICES['claude-opus-4-8'],

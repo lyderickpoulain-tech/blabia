@@ -17,6 +17,10 @@ describe('coût réel : tarifs', () => {
     expect(costUSD('claude-opus-4-8', { input_tokens: 1_000_000, output_tokens: 1_000_000 })).toBeCloseTo(30, 6);
   });
 
+  it('Haiku 5.5 (orchestrateur) : 0,10 $ / 0,50 $ par million de tokens', () => {
+    expect(costUSD('claude-haiku-5-5', { input_tokens: 1_000_000, output_tokens: 1_000_000 })).toBeCloseTo(0.6, 6);
+  });
+
   it('compte le cache (écriture 5 min / 1 h, lecture) et la recherche web', () => {
     const usage = {
       input_tokens: 0, output_tokens: 0,

@@ -13,6 +13,7 @@ const {
   appendMessageEntry,
   appendPendingMeetingSuggestion,
 } = require('./helpers');
+const { ORCHESTRATOR_MODEL, ORCHESTRATOR_PARAMS } = require('../../services/models');
 const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt');
 const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
@@ -135,11 +136,12 @@ async function orchestrate({ session, project, messages, activeAgents,
 
   try {
     const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 150,
+      model: ORCHESTRATOR_MODEL,
+      ...ORCHESTRATOR_PARAMS,
+      max_tokens: 200,
       messages: [{ role: 'user', content: prompt }],
     });
-    const text  = response.content[0].text.trim();
+    const text  = (response.content.find(b => b.type === 'text')?.text || '').trim();
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const match = clean.match(/\{[\s\S]*\}/);
     const dec   = JSON.parse(match?.[0] || clean);
