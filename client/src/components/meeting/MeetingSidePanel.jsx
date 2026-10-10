@@ -19,7 +19,7 @@ const TONES = {
 
 function PanelSection({ icon: Icon, tone, title, count, children, sectionRef }) {
   return (
-    <section ref={sectionRef} className="bg-white border border-line rounded-xl p-3 space-y-2 shadow-[0_1px_2px_rgba(30,34,56,0.04)]">
+    <section ref={sectionRef} className="bg-white border border-line rounded-xl p-3 space-y-2 shadow-card">
       <h2 className="flex items-center gap-2 text-[13px] font-extrabold text-ink">
         <span className={`w-6 h-6 rounded-lg inline-flex items-center justify-center ${TONES[tone]}`} aria-hidden="true"><Icon size={14} /></span>
         <span className="flex-1">{title}</span>
@@ -168,7 +168,7 @@ export default function MeetingSidePanel({
   const numberOf = d => decisions.indexOf(d) + 1;
 
   return (
-    <aside aria-label="Panneau de la réunion" className="w-[292px] shrink-0 border-l border-line bg-[#EEF1F9] overflow-y-auto p-3 space-y-3">
+    <aside aria-label="Panneau de la réunion" className="w-[292px] shrink-0 border-l border-line bg-canvas-deep overflow-y-auto p-3 space-y-3">
 
       {waiting.length > 0 && (
         <PanelSection sectionRef={questionsRef} icon={CircleHelp} tone="await" title="Questions reportées" count={waiting.length}>

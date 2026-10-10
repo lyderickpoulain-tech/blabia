@@ -227,7 +227,7 @@ function TourBubble({ step, chapter, chapterNo, chapterCount, stepNo, stepCount,
       {hole ? (
         <>
           <div aria-hidden="true" className="fixed z-[80] rounded-xl pointer-events-none transition-all duration-200"
-            style={{ ...hole, boxShadow: '0 0 0 4px rgba(51,82,224,0.55), 0 0 0 9999px rgba(30,34,56,0.55)' }} />
+            style={{ ...hole, boxShadow: '0 0 0 4px rgb(var(--f-action) / 0.55), 0 0 0 9999px rgb(var(--overlay) / 0.55)' }} />
           <div className={block} style={{ left: 0, top: 0, right: 0, height: Math.max(hole.top, 0) }} />
           <div className={block} style={{ left: 0, top: hole.top + hole.height, right: 0, bottom: 0 }} />
           <div className={block} style={{ left: 0, top: hole.top, width: Math.max(hole.left, 0), height: hole.height }} />
