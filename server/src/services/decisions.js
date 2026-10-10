@@ -58,8 +58,8 @@ ${registryText ? `Décisions DÉJÀ au registre du projet (ne les répète pas, 
 N'inclus pas les idées simplement évoquées, ni les questions restées sans réponse.
 Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".
 
-${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas) :\n${actionsText}\n\n` : ''}Liste aussi les ACTIONS concrètes que l'humain (porteur du projet) doit mener hors de BlabIA avant la prochaine réunion, telles qu'elles ressortent des échanges (contacter, visiter, vérifier, chiffrer, rédiger…), 8 au maximum, les plus utiles d'abord. Pas d'action pour les agents, pas d'action vague (« réfléchir à… »).
-Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (échéance raisonnable en jours après la réunion, ou null).
+${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas) :\n${actionsText}\n\n` : ''}Liste aussi les ACTIONS concrètes que l'humain (porteur du projet) doit mener hors de BlabIA avant la prochaine réunion, telles qu'elles ressortent des échanges (contacter, visiter, vérifier, chiffrer, rédiger…), 8 au maximum, DANS L'ORDRE où les mener (la première à faire d'abord). Pas d'action pour les agents, pas d'action vague (« réfléchir à… »).
+Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (en jours après la réunion, UNIQUEMENT si une échéance réelle ressort des échanges : rendez-vous, délai imposé, date annoncée ; sinon null — l'ordre suffit).
 
 Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7}]}`,
   };

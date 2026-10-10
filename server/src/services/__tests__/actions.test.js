@@ -35,8 +35,8 @@ describe('actions entre les réunions', () => {
       { title: 'Appeler la banque', status: 'todo', dueDate: '2026-10-20' },
       { title: 'Lister les fournisseurs', status: 'done', dueDate: null },
     ], now);
-    expect(text).toContain('[EN RETARD, prévue le 5 oct.] Visiter les locaux');
-    expect(text).toContain('[à faire, pour le 20 oct.] Appeler la banque');
+    expect(text).toContain('1. [EN RETARD, prévue le 5 oct.] Visiter les locaux');
+    expect(text).toContain('2. [à faire, pour le 20 oct.] Appeler la banque');
     expect(text).toContain('[fait] Lister les fournisseurs');
     expect(isOverdue({ status: 'done', dueDate: '2026-10-01' }, now)).toBe(false);
   });

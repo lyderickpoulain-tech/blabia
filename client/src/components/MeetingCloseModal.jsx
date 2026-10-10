@@ -353,17 +353,18 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   <p className="text-xs text-ink-faint">Aucune action concrète identifiée pour vous dans cette réunion.</p>
                 ) : (
                   <>
-                    <p className="text-xs text-ink-muted">Ce que vous avez à faire avant la prochaine réunion. Les agents feront le point dessus en l'ouvrant. Décochez ce qui ne vous concerne pas.</p>
+                    <p className="text-xs text-ink-muted">Ce que vous avez à faire avant la prochaine réunion, dans l'ordre où les mener. L'échéance est facultative. Les agents feront le point dessus en l'ouvrant. Décochez ce qui ne vous concerne pas.</p>
                     <ul className="space-y-1.5">
-                      {actionProposals.map(a => (
+                      {actionProposals.map((a, i) => (
                         <li key={a.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 transition ${a.keep ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'}`}>
+                          <span className="mt-1.5 w-5 h-5 rounded-full bg-action-light text-action text-[11px] font-extrabold inline-flex items-center justify-center shrink-0" aria-hidden="true">{i + 1}</span>
                           <input type="checkbox" checked={a.keep} aria-label="Garder cette action"
                             onChange={e => updateAction(a.key, { keep: e.target.checked })} className="mt-2 w-4 h-4 accent-action shrink-0" />
                           <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
                             <input value={a.title} onChange={e => updateAction(a.key, { title: e.target.value })} disabled={!a.keep}
                               aria-label="Action" className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
                             <input type="date" value={a.dueDate || ''} onChange={e => updateAction(a.key, { dueDate: e.target.value || null })} disabled={!a.keep}
-                              aria-label="Échéance" className="text-xs text-ink-soft border border-line rounded-md px-2 h-8 outline-none bg-white" />
+                              aria-label="Échéance (facultative)" title="Échéance facultative" className="text-xs text-ink-soft border border-line rounded-md px-2 h-8 outline-none bg-white" />
                             {a.description && <p className="basis-full text-[11px] text-ink-muted px-1.5">{a.description}</p>}
                           </div>
                         </li>

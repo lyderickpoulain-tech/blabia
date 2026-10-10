@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Check, ChevronDown, CalendarDays, Link2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, CalendarDays, Link2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, IconButton, Card, SectionLabel } from '../../components/ui';
 
 // Actions entre les réunions (v5.1) : proposées à la conclusion des réunions,
-// cochées ici par l'humain ; la réunion suivante commence par un point d'avancement.
+// cochées et ordonnées ici par l'humain (l'ordre prime, l'échéance est facultative) ;
+// la réunion suivante commence par un point d'avancement.
 // Stockées dans TodoItem (routes /todos pour cocher, modifier, supprimer).
 
 const inputCls = 'text-sm text-ink border border-line rounded-[10px] px-3 h-10 outline-none bg-white focus:ring-2 focus:ring-action focus:border-transparent';
@@ -13,7 +14,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export const isOverdueAction = a => a.status !== 'done' && a.dueDate && String(a.dueDate).slice(0, 10) < today();
 const fmtDue = d => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
-function ActionItem({ action, onToggle, onSave, onDelete }) {
+function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(action.title);
   const [due, setDue] = useState(action.dueDate ? String(action.dueDate).slice(0, 10) : '');
@@ -24,6 +25,10 @@ function ActionItem({ action, onToggle, onSave, onDelete }) {
     <li className={`flex items-start gap-3 rounded-xl border px-3.5 py-3 transition ${
       late ? 'border-await-border bg-await-bg' : done ? 'border-line bg-canvas' : 'border-line bg-white'
     }`}>
+      {rank && (
+        <span className={`mt-0.5 w-6 h-6 shrink-0 rounded-full text-xs font-extrabold inline-flex items-center justify-center ${late ? 'bg-await-light text-await' : 'bg-action-light text-action'}`}
+          aria-label={`Action ${rank}`}>{rank}</span>
+      )}
       <button type="button" onClick={() => onToggle(action)} role="checkbox" aria-checked={done}
         aria-label={done ? 'Marquer comme à faire' : 'Marquer comme faite'}
         className={`mt-0.5 w-6 h-6 shrink-0 rounded-md border-2 inline-flex items-center justify-center transition ${
@@ -61,6 +66,12 @@ function ActionItem({ action, onToggle, onSave, onDelete }) {
 
       {!editing && (
         <div className="flex shrink-0 -mr-1 -mt-1">
+          {onMove && (
+            <>
+              <IconButton size="sm" label="Monter" disabled={!onMove.up} onClick={onMove.up}><ChevronUp size={16} aria-hidden="true" /></IconButton>
+              <IconButton size="sm" label="Descendre" disabled={!onMove.down} onClick={onMove.down}><ChevronDown size={16} aria-hidden="true" /></IconButton>
+            </>
+          )}
           <IconButton size="sm" label="Modifier" onClick={() => setEditing(true)}><Pencil size={15} aria-hidden="true" /></IconButton>
           <IconButton size="sm" label="Supprimer" className="hover:!text-red-600"
             onClick={() => { if (confirm('Supprimer cette action ?')) onDelete(action); }}>
@@ -90,6 +101,13 @@ export default function ProjectActions() {
   const toggle = a => run(() => api.patch(`/projects/${project.id}/todos/${a.id}`, { status: a.status === 'done' ? 'todo' : 'done' }));
   const save   = (a, body) => run(() => api.patch(`/projects/${project.id}/todos/${a.id}`, body));
   const remove = a => run(() => api.delete(`/projects/${project.id}/todos/${a.id}`));
+  // Réordonne les actions à faire (route /todos/reorder : displayOrder = position)
+  const move = (index, delta) => run(() => {
+    const ids = open.map(a => a.id);
+    [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
+    setActions(prev => [...ids.map(id => prev.find(a => a.id === id)), ...prev.filter(a => a.status === 'done')]); // affichage immédiat
+    return api.patch(`/projects/${project.id}/todos/reorder`, { order: ids });
+  });
   const add = () => run(async () => {
     await api.post(`/projects/${project.id}/todos`, { title: newTitle.trim(), dueDate: newDue || null });
     setNewTitle(''); setNewDue(''); setAdding(false);
@@ -101,7 +119,7 @@ export default function ProjectActions() {
 
   return (
     <>
-      <PageHeader title="Actions" subtitle="Ce que vous avez à faire entre deux réunions. BlabIA les propose à la conclusion ; les agents commencent la réunion suivante par un point d'avancement.">
+      <PageHeader title="Actions" subtitle="Ce que vous avez à faire entre deux réunions, dans l'ordre où les mener. BlabIA les propose à la conclusion ; les agents commencent la réunion suivante par un point d'avancement.">
         {!adding && <Button variant="secondary" onClick={() => setAdding(true)}><Plus size={16} aria-hidden="true" /> Ajouter une action</Button>}
       </PageHeader>
 
@@ -111,9 +129,9 @@ export default function ProjectActions() {
         {adding && (
           <Card className="p-4 border-action-border">
             <form onSubmit={e => { e.preventDefault(); if (newTitle.trim()) add(); }} className="flex flex-wrap gap-2">
-              <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Ex : Visiter trois locaux à la Croix-Rousse"
+              <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Ex : Visiter trois locaux à la Croix-Rousse (ajoutée en fin de liste)"
                 aria-label="Nouvelle action" className={`${inputCls} flex-1 min-w-[220px]`} autoFocus />
-              <input type="date" value={newDue} onChange={e => setNewDue(e.target.value)} aria-label="Échéance" className={inputCls} />
+              <input type="date" value={newDue} onChange={e => setNewDue(e.target.value)} aria-label="Échéance (facultative)" title="Échéance facultative" className={inputCls} />
               <Button type="submit" size="sm" variant="primary" className="!h-10" disabled={!newTitle.trim()}>Ajouter</Button>
               <Button size="sm" variant="ghost" className="!h-10" onClick={() => setAdding(false)}>Annuler</Button>
             </form>
@@ -137,7 +155,10 @@ export default function ProjectActions() {
               À faire · {open.length}{late.length ? ` · dont ${late.length} en retard` : ''}
             </SectionLabel>
             <ul className="space-y-2">
-              {open.map(a => <ActionItem key={a.id} action={a} onToggle={toggle} onSave={save} onDelete={remove} />)}
+              {open.map((a, i) => (
+                <ActionItem key={a.id} action={a} rank={i + 1} onToggle={toggle} onSave={save} onDelete={remove}
+                  onMove={open.length > 1 ? { up: i > 0 ? () => move(i, -1) : null, down: i < open.length - 1 ? () => move(i, 1) : null } : null} />
+              ))}
             </ul>
           </section>
         )}

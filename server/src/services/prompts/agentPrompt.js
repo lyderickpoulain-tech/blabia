@@ -131,7 +131,7 @@ ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. 
 `;
   // v5.1 : actions entre les réunions, et point d'avancement en ouverture
   const actionsSection = actionsText
-    ? `\nACTIONS DU PROJET (décidées aux réunions précédentes, cochées par l'humain${today ? ` — nous sommes le ${today}` : ''}) :
+    ? `\nACTIONS DU PROJET (décidées aux réunions précédentes, menées par l'humain dans l'ordre numéroté, cochées quand elles sont faites${today ? ` — nous sommes le ${today}` : ''}) :
 ${actionsText}
 POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le premier commence par UNE bulle de point d'avancement sur les actions qui concernent l'objectif (faites, en retard, et leur effet sur cette réunion), puis la réunion avance. Ne propose jamais une action déjà listée.
 `

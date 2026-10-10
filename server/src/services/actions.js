@@ -2,7 +2,8 @@
 // les actions ne pilotent pas le statut des réunions du plan).
 // - À la conclusion : BlabIA propose les actions à mener (même appel que l'extraction
 //   des décisions, services/decisions.js), l'humain les garde ou les retire.
-// - Entre les réunions : l'humain les coche (page Projet › Actions).
+// - Entre les réunions : l'humain les coche et les ordonne (page Projet › Actions) ;
+//   l'ordre (displayOrder) prime, l'échéance est facultative.
 // - À la réunion suivante : transmises aux agents, qui ouvrent par un point d'avancement.
 const db = require('../utils/db');
 
@@ -45,8 +46,11 @@ async function listActions(projectId) {
     .leftJoin('Session as s', 's.id', 't.sessionId')
     .where('t.projectId', projectId)
     .whereNot('t.status', 'cancelled')
-    .select('t.id', 't.title', 't.description', 't.status', 't.dueDate', 't.source', 't.sessionId', 't.createdAt', 's.task as sessionTask')
-    .orderByRaw(`CASE WHEN t.status IN ('todo','in_progress') THEN 0 ELSE 1 END, t."dueDate" ASC NULLS LAST, t."createdAt" DESC`);
+    .select('t.id', 't.title', 't.description', 't.status', 't.dueDate', 't.displayOrder', 't.source', 't.sessionId', 't.createdAt', 's.task as sessionTask')
+    // À faire : dans l'ordre choisi par l'humain ; faites : les plus récentes d'abord
+    .orderByRaw(`CASE WHEN t.status IN ('todo','in_progress') THEN 0 ELSE 1 END,
+      CASE WHEN t.status IN ('todo','in_progress') THEN t."displayOrder" END ASC,
+      t."createdAt" DESC`);
 }
 
 const fmtDay = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
@@ -58,7 +62,8 @@ function formatActionsForPrompt(actions, now = new Date()) {
   const open = actions.filter(a => OPEN.includes(a.status));
   const done = actions.filter(a => a.status === 'done').slice(0, 8);
   const lines = [
-    ...open.map(a => `- [${isOverdue(a, now) ? `EN RETARD, prévue le ${fmtDay(a.dueDate)}` : a.dueDate ? `à faire, pour le ${fmtDay(a.dueDate)}` : 'à faire'}] ${a.title}`),
+    // Numérotées : l'humain les mène dans cet ordre
+    ...open.map((a, i) => `${i + 1}. [${isOverdue(a, now) ? `EN RETARD, prévue le ${fmtDay(a.dueDate)}` : a.dueDate ? `à faire, pour le ${fmtDay(a.dueDate)}` : 'à faire'}] ${a.title}`),
     ...done.map(a => `- [fait] ${a.title}`),
   ].slice(0, MAX_IN_PROMPT);
   return lines.join('\n');
