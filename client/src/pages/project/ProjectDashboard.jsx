@@ -7,6 +7,7 @@ import { Button, Card } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 import GenerateTimelineModal from '../../components/GenerateTimelineModal';
 import { totalLabel } from '../../utils/toolsCatalog';
+import { formatUSD } from '../../utils/cost';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
@@ -35,7 +36,7 @@ function SummaryCard({ icon: Icon, title, meta, to, linkLabel, children }) {
   );
 }
 
-function AskBlabIA({ projectId }) {
+function AskBlabIA({ projectId, onDone }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -52,6 +53,7 @@ function AskBlabIA({ projectId }) {
       setResult({ type: 'error', result: err.response?.data?.error || 'La commande a échoué.' });
     }
     setLoading(false);
+    onDone?.(); // le coût du projet a changé
   };
 
   return (
@@ -102,11 +104,14 @@ export default function ProjectDashboard() {
   const [sessions, setSessions] = useState([]);
   const [decisions, setDecisions] = useState([]);
   const [tools, setTools] = useState(null);       // { tools, total }
+  const [stats, setStats] = useState(null);       // coût réel de l'IA (/stats)
   const [showGenerate, setShowGenerate] = useState(false);
 
+  const loadStats = () => api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(() => {});
   const loadPlan = () => api.get(`/projects/${project.id}/plan`).then(({ data }) => setPlan(data)).catch(() => setPlan({ milestones: [], milestoneSessions: {} }));
   useEffect(() => {
     loadPlan();
+    loadStats();
     api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(() => {});
     api.get(`/projects/${project.id}/decisions`).then(({ data }) => setDecisions(data)).catch(() => {});
     api.get(`/projects/${project.id}/tools`).then(({ data }) => setTools(data)).catch(() => {});
@@ -243,6 +248,12 @@ export default function ProjectDashboard() {
         </SummaryCard>
 
         <SummaryCard icon={History} title="Historique" meta={`${sessions.length} réunion${sessions.length !== 1 ? 's' : ''}`} to="historique" linkLabel="Voir l'historique">
+          {stats && (
+            <div className="mb-3" title={stats.legacyCostUSD > 0 ? `${formatUSD(stats.realCostUSD)} réels + ${formatUSD(stats.legacyCostUSD)} estimés avant le suivi` : 'Calculé à partir des tokens exacts de chaque appel'}>
+              <p className="text-xs text-ink-faint">Coût de l'IA</p>
+              <p className="text-2xl font-extrabold text-ink">{formatUSD(stats.realCostUSD + stats.legacyCostUSD)}</p>
+            </div>
+          )}
           {pastSessions.length === 0 ? <p className="text-sm text-ink-faint">Aucune réunion conclue pour l'instant.</p> : (
             <ul className="space-y-2">
               {pastSessions.map(s => (
@@ -256,7 +267,7 @@ export default function ProjectDashboard() {
         </SummaryCard>
       </div>
 
-      <AskBlabIA projectId={project.id} />
+      <AskBlabIA projectId={project.id} onDone={loadStats} />
 
       {showGenerate && (
         <GenerateTimelineModal project={project} existingCount={0}

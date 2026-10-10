@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Radio, Archive, ArchiveRestore, MessagesSquare, CalendarDays, FolderOpen, Receipt, RefreshCw } from 'lucide-react';
+import { Plus, Search, Radio, Archive, ArchiveRestore, MessagesSquare, CalendarDays, FolderOpen, Coins } from 'lucide-react';
 import Layout from '../components/Layout';
-import { Button, Badge, Card, IconButton } from '../components/ui';
-import { useAuth } from '../contexts/AuthContext';
+import { Button, Badge, Card } from '../components/ui';
 import { formatUSD } from '../utils/cost';
 import api from '../utils/api';
 
@@ -18,55 +17,6 @@ function formatDate(d) {
 }
 
 const projectCost = p => (p.realCostUSD || 0) + (p.legacyCostUSD || 0);
-
-const MONTH_UNAVAILABLE = {
-  missing_key: 'Facture Anthropic : ajoutez ANTHROPIC_ADMIN_KEY au serveur pour l’afficher.',
-  invalid_key: 'Facture Anthropic : la clé Admin est refusée (révoquée ou expirée ?).',
-  api_error:   'Facture Anthropic momentanément indisponible.',
-};
-
-// Dépense IA du mois (administrateurs) : facturée par Anthropic + calculée par BlabIA
-function MonthSpend() {
-  const [data, setData] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const load = (refresh = false) => {
-    setBusy(true);
-    api.get(`/usage/month${refresh ? '?refresh=1' : ''}`)
-      .then(({ data }) => setData(data))
-      .catch(() => setData(null))
-      .finally(() => setBusy(false));
-  };
-  useEffect(() => { load(); }, []);
-  if (!data) return null;
-
-  const month = new Date(data.monthStart).toLocaleDateString('fr-FR', { month: 'long', timeZone: 'UTC' });
-  const org = data.org || {};
-  return (
-    <Card className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 mb-5">
-      <span className="w-10 h-10 rounded-xl bg-ai-light text-ai inline-flex items-center justify-center shrink-0">
-        <Receipt size={20} aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-faint">Dépense IA · {month}</p>
-        {org.available ? (
-          <p className="text-xl font-extrabold text-ink">{formatUSD(org.orgSpendUSD)} <span className="text-xs font-semibold text-ink-muted">facturés par Anthropic</span></p>
-        ) : (
-          <p className="text-sm font-semibold text-ink-muted">{MONTH_UNAVAILABLE[org.reason] || MONTH_UNAVAILABLE.api_error}</p>
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-faint">Dont BlabIA</p>
-        <p className="text-sm font-bold text-ink-soft" title="Calculé par BlabIA à partir des tokens de chaque appel">{formatUSD(data.blabiaUSD)}</p>
-      </div>
-      <p className="text-[11px] text-ink-faint basis-full sm:basis-auto sm:ml-auto">
-        Toute l’organisation Anthropic · données à ~5 min près
-      </p>
-      <IconButton size="sm" label="Actualiser" onClick={() => load(true)} disabled={busy}>
-        <RefreshCw size={15} className={busy ? 'animate-spin' : ''} aria-hidden="true" />
-      </IconButton>
-    </Card>
-  );
-}
 
 function ProjectCard({ project, archiving, onArchive, onOpen }) {
   const open      = (project.openSessionCount ?? 0) > 0;
@@ -91,13 +41,11 @@ function ProjectCard({ project, archiving, onArchive, onOpen }) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4 text-xs text-ink-faint">
         <span className="inline-flex items-center gap-1"><MessagesSquare size={13} aria-hidden="true" /> {sessions} réunion{sessions !== 1 ? 's' : ''}</span>
         <span className="inline-flex items-center gap-1"><CalendarDays size={13} aria-hidden="true" /> {formatDate(project.createdAt)}</span>
-        {projectCost(project) > 0 && (
-          <span title={project.legacyCostUSD > 0
+        <span className="inline-flex items-center gap-1" title={project.legacyCostUSD > 0
             ? `Coût de l'IA : ${formatUSD(project.realCostUSD)} réels + ${formatUSD(project.legacyCostUSD)} estimés avant le suivi`
-            : 'Coût réel de l’IA'}>
-            {formatUSD(projectCost(project))}
-          </span>
-        )}
+            : 'Coût réel de l’IA pour ce projet'}>
+          <Coins size={13} aria-hidden="true" /> {formatUSD(projectCost(project))}
+        </span>
       </div>
 
       <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line">
@@ -143,8 +91,6 @@ export default function Dashboard() {
   }), [projects]);
 
   const totalCost = useMemo(() => projects.reduce((s, p) => s + projectCost(p), 0), [projects]);
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
 
   const handleArchive = async (project) => {
     if (!confirm(`${project.status === 'active' ? 'Archiver' : 'Réactiver'} le projet « ${project.name} » ?`)) return;
@@ -176,8 +122,6 @@ export default function Dashboard() {
           <Plus size={18} aria-hidden="true" /> Nouveau projet
         </Button>
       </div>
-
-      {isAdmin && <MonthSpend />}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <label className="relative flex-1">
