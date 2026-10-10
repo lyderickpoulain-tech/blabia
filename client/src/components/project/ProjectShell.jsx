@@ -23,7 +23,7 @@ const NAV = [
   { to: 'actions',    label: 'Actions',     icon: ListChecks, badge: 'actions' },
   { to: 'documents',  label: 'Documents',   icon: FileText },
   { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools' },
-  { to: 'developpements', label: 'Développements', icon: GitPullRequest, show: p => !!p.githubRepo }, // dépôt GitHub choisi (Paramètres)
+  { to: 'developpements', label: 'Développements', icon: GitPullRequest, show: p => !!p.githubRepo, badge: 'dev' }, // dépôt GitHub choisi (Paramètres)
   { to: 'equipe',     label: 'Équipe',      icon: Users },
   { to: 'parametres', label: 'Paramètres',  icon: Settings },
 ];
@@ -36,7 +36,7 @@ export default function ProjectShell() {
 
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [counts, setCounts]   = useState({ decisionsReopened: 0, decisionsActive: 0, toolsAttention: 0, actionsOpen: 0, actionsOverdue: 0 });
+  const [counts, setCounts]   = useState({ decisionsReopened: 0, decisionsActive: 0, toolsAttention: 0, actionsOpen: 0, actionsOverdue: 0, devAwaiting: 0, devRunning: false });
 
   const reloadProject = useCallback(() =>
     api.get(`/projects/${id}`).then(({ data }) => setProject(data)), [id]);
@@ -60,7 +60,25 @@ export default function ProjectShell() {
     api.get(`/projects/${id}/tools`)
       .then(({ data }) => setCounts(c => ({ ...c, toolsAttention: attentionCount(data.tools, data.needs) })))
       .catch(() => {}); // pastille de la barre latérale : la page concernée signale l'erreur
+    refreshDevCount();
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Développements (dépôt GitHub relié) : à relire / mise en ligne échouée → pastille ;
+  // en cours → point animé. État relu auprès de GitHub par le serveur.
+  const refreshDevCount = useCallback(() => {
+    api.get(`/projects/${id}/dev-tasks`)
+      .then(({ data }) => setCounts(c => ({
+        ...c,
+        devAwaiting: data.tasks.filter(t => ['ready', 'deploy_failed'].includes(t.status)).length,
+        devRunning:  data.tasks.some(t => ['running', 'deploying'].includes(t.status)),
+      })))
+      .catch(() => {}); // pastille de la barre latérale : la page concernée signale l'erreur
   }, [id]);
+  useEffect(() => {
+    if (!counts.devRunning) return undefined;
+    const t = setInterval(refreshDevCount, 30000); // la pastille apparaît quand Claude Code a fini
+    return () => clearInterval(t);
+  }, [counts.devRunning, refreshDevCount]);
 
   useEffect(() => {
     setLoading(true);
@@ -82,7 +100,7 @@ export default function ProjectShell() {
 
   const isOwner   = project.userId === user?.id;
   const canManage = isOwner || isAdmin;
-  const badgeOf   = key => key === 'decisions' ? counts.decisionsReopened : key === 'tools' ? counts.toolsAttention : key === 'actions' ? counts.actionsOverdue : 0;
+  const badgeOf   = key => key === 'decisions' ? counts.decisionsReopened : key === 'tools' ? counts.toolsAttention : key === 'actions' ? counts.actionsOverdue : key === 'dev' ? counts.devAwaiting : 0;
 
   return (
     <ProjectContext.Provider value={{ project, setProject, reloadProject, isOwner, isAdmin, canManage, counts, refreshCounts }}>
@@ -105,11 +123,13 @@ export default function ProjectShell() {
                     }`}>
                     <item.icon size={18} aria-hidden="true" />
                     <span className="flex-1 whitespace-nowrap">{item.label}</span>
-                    {badge > 0 && (
+                    {badge > 0 ? (
                       <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-await-light text-await text-xs font-extrabold inline-flex items-center justify-center"
-                        title={item.badge === 'decisions' ? 'Décisions remises en question' : item.badge === 'actions' ? 'Actions en retard' : 'Points d’attention sur les outils'}>
+                        title={item.badge === 'decisions' ? 'Décisions remises en question' : item.badge === 'actions' ? 'Actions en retard' : item.badge === 'dev' ? 'Développements à relire ou à reprendre' : 'Points d’attention sur les outils'}>
                         {badge}
                       </span>
+                    ) : item.badge === 'dev' && counts.devRunning && (
+                      <span className="w-2 h-2 rounded-full bg-ai animate-pulse" title="Claude Code travaille" aria-label="Développement en cours" />
                     )}
                   </NavLink>
                 );
