@@ -9,7 +9,7 @@ const { findProject } = require('../utils/projectHelpers');
 const { isQuestionMode, DEFAULT_QUESTION_MODE } = require('../services/questionModes');
 const { parseJsonField } = require('../utils/parseJsonField');
 const { LEGACY_COST_SQL, projectCostReport } = require('../services/usageReports');
-const { ensureDemoProject, deleteDemoProjects } = require('../services/demoProject');
+const { ensureDemoProject, createTestProject, deleteDemoProjects } = require('../services/demoProject');
 const { DEFAULT_MODEL } = require('../services/models');
 const { listDocuments, formatDocumentsForPrompt } = require('../services/documents');
 
@@ -116,6 +116,18 @@ router.post('/demo', async (req, res) => {
   } catch (err) {
     console.error('[projects/demo POST]', err.message);
     res.status(500).json({ error: 'Impossible de créer le projet exemple' });
+  }
+});
+
+// POST /api/projects/test-sample — projet de test pré-rempli (même contenu que l'exemple),
+// agents actifs, conservé. Comme toute création de projet : interdit au rôle « user ».
+router.post('/test-sample', async (req, res) => {
+  if (req.user.role === 'user') return res.status(403).json({ error: 'Votre compte ne permet pas de créer des projets' });
+  try {
+    res.status(201).json(await createTestProject(req.user));
+  } catch (err) {
+    console.error('[projects/test-sample POST]', err.message);
+    res.status(500).json({ error: 'Impossible de créer le projet de test' });
   }
 });
 

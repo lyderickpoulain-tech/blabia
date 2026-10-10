@@ -1,5 +1,7 @@
-// Projet exemple de la visite guidée (v5.1) : « Les Feuilles Vagabondes », un salon
-// de thé — volontairement non informatique, pour montrer que BlabIA sert à tout.
+// Projet « salon de thé » pré-rempli (v5.1) : « Les Feuilles Vagabondes » — volontairement
+// non informatique, pour montrer que BlabIA sert à tout. Deux usages :
+//  - projet EXEMPLE de la visite guidée (isDemo : IA refusée, supprimé en fin de visite) ;
+//  - projet de TEST à la demande (createTestProject : agents actifs, conservé).
 // Jeu de données fixe, créé sans aucun appel à l'IA (donc sans coût) :
 //  - brief, équipe d'agents (agents par défaut existants), plan de 4 réunions ;
 //  - une réunion conclue avec son compte-rendu et ses décisions au registre ;
@@ -107,11 +109,30 @@ async function findDemoProjects(userId) {
   return db('Project').where({ userId, isDemo: true }).select('id');
 }
 
-// Crée le projet exemple de l'utilisateur, ou renvoie celui qui existe déjà
+// Crée le projet exemple de l'utilisateur (visite guidée), ou renvoie celui qui existe déjà
 async function ensureDemoProject(user) {
   const [existing] = await findDemoProjects(user.id);
   if (existing) return { id: existing.id, created: false };
+  return seedSalonProject(user, {
+    isDemo: true,
+    name: 'Exemple — Salon de thé « Les Feuilles Vagabondes »',
+    description: 'Ouvrir un salon de thé et une boutique de thés en vrac à Lyon. Projet exemple de la visite guidée.',
+  });
+}
 
+// Projet de TEST pré-rempli (même contenu que l'exemple) : agents ACTIFS (coût réel),
+// conservé jusqu'à sa suppression ; plusieurs possibles. Bouton sur « Nouveau projet ».
+async function createTestProject(user) {
+  const stamp = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Paris' });
+  return seedSalonProject(user, {
+    isDemo: false,
+    name: `Projet de test — Salon de thé (${stamp})`,
+    description: 'Projet pré-rempli pour tester BlabIA : réunions, décisions, actions, documents et missions. Les agents sont actifs : les réunions et les missions ont un coût réel.',
+  });
+}
+
+// Remplit un projet « salon de thé » complet (transaction unique, aucun appel à l'IA)
+async function seedSalonProject(user, { isDemo, name, description }) {
   return db.transaction(async trx => {
     const now = Date.now();
     const day = 86400000;
@@ -124,11 +145,11 @@ async function ensureDemoProject(user) {
 
     await trx('Project').insert({
       id: projectId,
-      name: 'Exemple — Salon de thé « Les Feuilles Vagabondes »',
-      description: 'Ouvrir un salon de thé et une boutique de thés en vrac à Lyon. Projet exemple de la visite guidée.',
+      name,
+      description,
       brief: BRIEF,
       context: `[${new Date(now - 5 * day).toLocaleDateString('fr-FR')} — Concept et public]\nSalon cosy de 30 places + boutique de thés en vrac, public : actifs 25-45 ans du quartier, ouverture visée au printemps 2027.`,
-      status: 'active', isDemo: true,
+      status: 'active', isDemo,
       expertiseLevel: 2, humorLevel: 3, questionMode: 'balanced',
       userId: user.id, createdAt: new Date(now - 6 * day), updatedAt: new Date(now),
     });
@@ -268,4 +289,4 @@ async function deleteDemoProjects(userId) {
   return projects.length;
 }
 
-module.exports = { ensureDemoProject, deleteDemoProjects };
+module.exports = { ensureDemoProject, createTestProject, deleteDemoProjects };
