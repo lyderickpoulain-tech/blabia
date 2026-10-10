@@ -979,6 +979,20 @@ export default function MeetingRoom() {
     setBriefingSubmitting(false);
   }, [briefingSubmitting, pendingPrepDecisions, projectId, sessionId, project?.isDemo]);
 
+  // Contradicteur : « J'en tiens compte » / « Écarter »
+  const handleVigilance = useCallback(async (messageId, status) => {
+    if (project?.isDemo) { setDemoHint('Dans un vrai projet, votre réponse serait transmise aux agents.'); return; }
+    try {
+      const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/vigilance`, { messageId, status });
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === messageId ? { ...m, ...data.message } : m);
+        return data.systemMessage ? [...updated, data.systemMessage] : updated;
+      });
+    } catch (err) {
+      setSendError(err.response?.data?.error || 'Votre réponse n’a pas pu être enregistrée.');
+    }
+  }, [projectId, sessionId, project?.isDemo]);
+
   // « Je contredis » : la saisie s'ouvre adressée à l'agent
   const handleContradict = useCallback((agentName) => {
     setInputText(`@${agentName} je ne suis pas d'accord : `);
@@ -1118,6 +1132,7 @@ export default function MeetingRoom() {
                   onOpenArtifact={m => { setOpenArtifactId(id => id === m.id ? null : m.id); }}
                   openArtifactId={openArtifactId}
                   onContradict={handleContradict}
+                  onVigilance={handleVigilance}
                   prepExpanded={prepExpanded}
                   onTogglePrep={() => setPrepExpanded(v => !v)}
                 />

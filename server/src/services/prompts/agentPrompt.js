@@ -103,6 +103,7 @@ function buildAgentSystemPrompt({
   preparationSection = '',
   actionsText = '',
   today = '',
+  challengerSection = '', // v5.1 : tour du contradicteur (services/challenger.js)
 }) {
   // Registre des décisions du projet : ce qui est tranché ne se redemande pas ;
   // ce que l'humain a remis en question est à retraiter en priorité.
@@ -225,7 +226,7 @@ RÈGLES SUR LES DÉCISIONS :
   // ── 2. Bloc du tour (non mis en cache) ─────────────────────────────────────
   const turn = `TON RÔLE DANS CETTE RÉUNION : tu es ${agent.name}, ${agent.role}.
 ${agent.systemPrompt || ''}
-${reasonLine}${decisionBudgetLine ? `\n${decisionBudgetLine}\n` : ''}${priorDecisionsNote}${toolSuggestionsNote}${preparationSection}${artifactSection}`;
+${reasonLine}${decisionBudgetLine ? `\n${decisionBudgetLine}\n` : ''}${priorDecisionsNote}${toolSuggestionsNote}${preparationSection}${challengerSection}${artifactSection}`;
 
   return [
     { type: 'text', text: shared, cache_control: { type: 'ephemeral' } },

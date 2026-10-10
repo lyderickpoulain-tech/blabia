@@ -2,7 +2,7 @@
 // projet exemple « Les Feuilles Vagabondes » (server/src/services/demoProject.js).
 //
 // Étape : {
-//   path(ctx)    → page à afficher (ctx = { demoId, meetingId }) ; absent = page courante
+//   path(ctx)    → page à afficher (ctx = { demoId, meetingId, pastMeetingId }) ; absent = page courante
 //   target       → valeur de l'attribut data-tour de l'élément mis en évidence ; absent = bulle centrée
 //   title, body  → contenu de la bulle
 //   placement    → 'bottom' | 'top' | 'right' | 'left' (défaut : au mieux)
@@ -28,7 +28,7 @@ export const CHAPTERS = [
         body: 'Objectif, contexte, contraintes : les agents le lisent avant chaque réunion. Plus il est précis, moins ils vous poseront de questions.' },
       { target: 'np-work',
         title: 'Votre façon de travailler',
-        body: 'Votre maîtrise du sujet (les agents adaptent leur vocabulaire), le ton, et surtout combien de questions vous voulez trancher par réunion.' },
+        body: 'Votre maîtrise du sujet (les agents adaptent leur vocabulaire), le ton, combien de questions vous voulez trancher par réunion, et le contradicteur.' },
       { target: 'np-submit', interactive: true, waitAction: true, placement: 'top',
         title: 'Créez le projet',
         body: 'Cliquez sur « Créer le projet ».' },
@@ -106,6 +106,9 @@ export const CHAPTERS = [
       { target: 'mr-conclude', placement: 'bottom',
         title: 'Conclure',
         body: 'Quand le sujet est traité : BlabIA rédige le compte-rendu, vous le relisez, choisissez les décisions à inscrire au registre et les actions à mener d’ici la prochaine réunion.' },
+      { path: ctx => `/projects/${ctx.demoId}/meeting/${ctx.pastMeetingId}`, target: 'mr-vigilance',
+        title: 'Le contradicteur',
+        body: 'Sur les choix à fort enjeu que personne n’a remis en cause, il signale un point de vigilance (2 fois par réunion au plus). Vous en tenez compte, ou vous l’écartez : il n’y revient plus. À la conclusion, il relit aussi les décisions fragiles.' },
     ],
   },
   {

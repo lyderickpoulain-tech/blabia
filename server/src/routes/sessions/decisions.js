@@ -70,6 +70,48 @@ router.post('/:sessionId/pin-message', async (req, res) => {
   }
 });
 
+// ── POST /:sessionId/vigilance — Réponse à un point de vigilance (contradicteur) ──
+// accepted : les agents intègrent la remarque ; dismissed : le sujet est clos,
+// le contradicteur n'y revient plus (services/challenger.js).
+
+router.post('/:sessionId/vigilance', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { messageId, status } = req.body;
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  if (!messageId || !['accepted', 'dismissed'].includes(status)) {
+    return res.status(400).json({ error: 'messageId et status (accepted | dismissed) requis' });
+  }
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+
+    const messages = parseJsonField(session.messages, []);
+    const idx = messages.findIndex(m => m.id === messageId && m.vigilance);
+    if (idx < 0) return res.status(404).json({ error: 'Point de vigilance introuvable' });
+    if (messages[idx].vigilance.status !== 'open') {
+      return res.status(409).json({ error: 'Ce point de vigilance a déjà reçu une réponse' });
+    }
+
+    messages[idx] = { ...messages[idx], vigilance: { ...messages[idx].vigilance, status, answeredAt: new Date().toISOString() } };
+    const target = messages[idx].vigilance.target || '';
+    // Message technique pour les agents (masqué dans le fil, comme les réponses aux questions)
+    const systemMessage = {
+      id: randomUUID(), role: 'system', type: 'decision_answer', timestamp: new Date().toISOString(),
+      content: status === 'accepted'
+        ? `📌 Point de vigilance pris en compte par l'humain : « ${target} ». Les agents intègrent cette remarque dans la suite.`
+        : `📌 Point de vigilance écarté par l'humain : « ${target} ». Le sujet est clos, n'y revenez pas.`,
+    };
+    messages.push(systemMessage);
+    await db('Session').where({ id: sessionId }).update({ messages: JSON.stringify(messages) });
+    res.json({ message: messages[idx], systemMessage });
+  } catch (err) {
+    console.error('[sessions/vigilance]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── POST /:sessionId/answer-decision — Réponse à une décision ─────────────────
 
 router.post('/:sessionId/answer-decision', async (req, res) => {

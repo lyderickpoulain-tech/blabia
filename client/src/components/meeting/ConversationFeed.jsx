@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Image as ImageIcon, Sparkles, ShieldAlert } from 'lucide-react';
 import DecisionCard from '../DecisionCard';
 import Markdown from '../Markdown';
 
@@ -82,7 +82,7 @@ export default function ConversationFeed({
   pendingDecisionId, onAnswerDecision, onDeferDecision, onDelegateDecision,
   agentColors, deliverableTypes, decisionBudget,
   onOpenArtifact, openArtifactId, onContradict,
-  prepExpanded, onTogglePrep,
+  prepExpanded, onTogglePrep, onVigilance,
 }) {
   const [acknowledged, setAcknowledged] = useState(() => new Set()); // hypothèses approuvées
 
@@ -196,6 +196,38 @@ export default function ConversationFeed({
     );
   };
 
+  // Contradicteur (v5.1) : point de vigilance, en ambre car il attend votre réponse
+  const renderVigilance = (msg) => {
+    const v = msg.vigilance;
+    const text = (msg.content || '').replace(/^\s*\*\*Point de vigilance\*\*\s*:\s*/i, '');
+    return (
+      <div key={msg.id} data-tour="mr-vigilance" className={`flex gap-2.5 items-start ${TURN_SEPARATOR}`}>
+        <span className="w-8 h-8 rounded-full bg-await-light text-await inline-flex items-center justify-center shrink-0" aria-hidden="true">
+          <ShieldAlert size={16} />
+        </span>
+        <div className={`flex-1 min-w-0 max-w-[640px] rounded-xl border px-3.5 py-2.5 ${v.status === 'open' ? 'border-await-border bg-await-bg' : 'border-line bg-white'}`}>
+          <p className="text-xs">
+            <strong className="font-extrabold text-await uppercase tracking-wider">Point de vigilance</strong>
+            <span className="text-ink-faint"> · Contradicteur{timeOf(msg.timestamp) && <> · {timeOf(msg.timestamp)}</>}</span>
+          </p>
+          <div className="text-sm leading-[1.45] text-ink-soft mt-1"><Markdown size="bubble">{text}</Markdown></div>
+          {v.status === 'open' && !isClosed ? (
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button type="button" onClick={() => onVigilance?.(msg.id, 'accepted')}
+                className="h-8 px-3 rounded-[10px] bg-white border-2 border-ok-border text-ok text-[13px] font-bold hover:bg-ok-light">J'en tiens compte</button>
+              <button type="button" onClick={() => onVigilance?.(msg.id, 'dismissed')}
+                className="h-8 px-3 rounded-[10px] bg-white border-2 border-line text-ink-muted text-[13px] font-bold hover:bg-canvas">Écarter</button>
+            </div>
+          ) : v.status !== 'open' && (
+            <p className={`text-xs font-bold mt-1.5 ${v.status === 'accepted' ? 'text-ok' : 'text-ink-faint'}`}>
+              {v.status === 'accepted' ? '✓ Pris en compte : les agents l’intègrent' : 'Écarté : le contradicteur n’y reviendra pas'}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderHuman = (msg) => (
     <div key={msg.id} className={`flex justify-end ${TURN_SEPARATOR}`}>
       <div className="max-w-[75%] space-y-1">
@@ -273,6 +305,11 @@ export default function ConversationFeed({
     }
     if (msg.role === 'human') {
       items.push(renderHuman(msg));
+      prevAgent = null;
+      return;
+    }
+    if (msg.role === 'agent' && msg.vigilance) {
+      items.push(renderVigilance(msg));
       prevAgent = null;
       return;
     }

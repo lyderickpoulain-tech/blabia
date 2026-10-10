@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const { parseExtraction, formatRegistryForPrompt, decisionCardsText } = require('../decisions');
+const { parseExtraction, formatRegistryForPrompt, decisionCardsText, buildExtractionPrompt } = require('../decisions');
 
 describe('registre des décisions', () => {
   it('nettoie l\'extraction : doublons, entrées vides, origine inconnue', () => {
@@ -13,9 +13,17 @@ describe('registre des décisions', () => {
       '{"statement":"Hébergement sur Railway","origin":"inconnue"}' +
       ']}\n```');
     expect(out).toEqual([
-      { statement: 'Lancement en mars', rationale: 'Salon', rejectedOptions: ['Avril'], origin: 'human' },
-      { statement: 'Hébergement sur Railway', rationale: null, rejectedOptions: [], origin: 'human' },
+      { statement: 'Lancement en mars', rationale: 'Salon', rejectedOptions: ['Avril'], origin: 'human', vigilance: null },
+      { statement: 'Hébergement sur Railway', rationale: null, rejectedOptions: [], origin: 'human', vigilance: null },
     ]);
+  });
+
+  it('relecture du contradicteur : décision fragile signalée, consigne seulement si actif', () => {
+    const [d] = parseExtraction('{"decisions":[{"statement":"Bail de 9 ans signé","origin":"human","vigilance":"Clause de sortie non vérifiée"}]}');
+    expect(d.vigilance).toBe('Clause de sortie non vérifiée');
+    const base = { task: 'T', historyText: 'H', cardsText: '', registryText: '' };
+    expect(buildExtractionPrompt({ ...base, challenger: true }).user).toContain('RELECTURE DU CONTRADICTEUR');
+    expect(buildExtractionPrompt({ ...base, challenger: false }).user).not.toContain('RELECTURE DU CONTRADICTEUR');
   });
 
   it('renvoie une liste vide si la réponse est illisible', () => {

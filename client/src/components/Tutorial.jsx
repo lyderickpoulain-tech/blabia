@@ -104,6 +104,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                   'Un projet décrit votre objectif : c’est le brief, que les agents lisent avant chaque réunion.',
                   'Le plan enchaîne les réunions à tenir, dans l’ordre.',
                   'Chaque réunion fait avancer une étape ; vous tranchez les décisions qui vous reviennent.',
+                  'Un contradicteur signale, seulement sur les choix à fort enjeu, ce qui mérite d’être challengé : vous en tenez compte ou l’écartez.',
                   'Les décisions sont inscrites au registre : les agents ne reposent plus la question.',
                   'Entre deux réunions, vous menez les actions décidées, dans l’ordre ; la réunion suivante commence par un point d’avancement.',
                 ].map(t => (

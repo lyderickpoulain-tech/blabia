@@ -24,6 +24,8 @@ function sanitizeDecision(d) {
     rejectedOptions: (Array.isArray(d.rejectedOptions) ? d.rejectedOptions : [])
       .map(o => clean(o, 200)).filter(Boolean).slice(0, 6),
     origin: ORIGINS.includes(d.origin) ? d.origin : 'human',
+    // v5.1 : relecture du contradicteur — risque d'une décision fragile, sinon null
+    vigilance: clean(d.vigilance, 300) || null,
   };
 }
 
@@ -41,7 +43,7 @@ function decisionCardsText(messages) {
     .join('\n');
 }
 
-function buildExtractionPrompt({ task, historyText, cardsText, registryText, actionsText }) {
+function buildExtractionPrompt({ task, historyText, cardsText, registryText, actionsText, challenger = false }) {
   return {
     system: 'Tu extrais les décisions et les actions d\'une réunion de projet. Tu réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.',
     user: `Objectif de la réunion : ${task}
@@ -56,7 +58,7 @@ ${registryText ? `Décisions DÉJÀ au registre du projet (ne les répète pas, 
 - origin "human" : l'humain a tranché (réponse à une question, consigne, refus d'une proposition) ;
 - origin "agents" : hypothèse d'un agent que l'humain n'a pas contredite, ou décision déléguée aux agents.
 N'inclus pas les idées simplement évoquées, ni les questions restées sans réponse.
-Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".
+Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".${challenger ? '\nRELECTURE DU CONTRADICTEUR : pour au plus 2 décisions FRAGILES (fort enjeu — argent engagé, difficile à défaire, légal, conditionne la suite — ET justification faible ou alternative non examinée), ajoute "vigilance" : le risque en une phrase et comment le vérifier. Pour toutes les autres, omets ce champ. Dans le doute, omets-le.' : ''}
 
 ${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas) :\n${actionsText}\n\n` : ''}Liste aussi les ACTIONS concrètes que l'humain (porteur du projet) doit mener hors de BlabIA avant la prochaine réunion, telles qu'elles ressortent des échanges (contacter, visiter, vérifier, chiffrer, rédiger…), 8 au maximum, DANS L'ORDRE où les mener (la première à faire d'abord). Pas d'action pour les agents, pas d'action vague (« réfléchir à… »).
 Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (en jours après la réunion, UNIQUEMENT si une échéance réelle ressort des échanges : rendez-vous, délai imposé, date annoncée ; sinon null — l'ordre suffit).
@@ -97,7 +99,7 @@ function formatRegistryForPrompt(decisions) {
 }
 
 // Décisions proposées au registre + actions proposées (v5.1), en un seul appel
-async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '' }) {
+async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '', challenger = false }) {
   const registry = await listDecisions(projectId);
   const prompt = buildExtractionPrompt({
     task: session.task,
@@ -105,6 +107,7 @@ async function extractMeetingDecisions({ session, messages, historyText, project
     cardsText: decisionCardsText(messages),
     registryText: formatRegistryForPrompt(registry).activeText,
     actionsText,
+    challenger,
   });
   const response = await anthropic.messages.create({
     model: MODEL, max_tokens: 2000,

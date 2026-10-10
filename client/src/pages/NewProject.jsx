@@ -6,6 +6,7 @@ import { Button, Card } from '../components/ui';
 import api from '../utils/api';
 import { useTour } from '../tour/TourContext';
 import QuestionModePicker from '../components/QuestionModePicker';
+import ChallengerToggle from '../components/ChallengerToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 const inputCls = 'w-full px-3.5 py-2.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
@@ -41,6 +42,7 @@ export default function NewProject() {
   const [expertiseLevel, setExpertiseLevel] = useState(3);
   const [humorLevel, setHumorLevel] = useState(2);
   const [questionMode, setQuestionMode] = useState('balanced');
+  const [challengerEnabled, setChallengerEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -69,7 +71,7 @@ export default function NewProject() {
       return;
     }
     try {
-      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, expertiseLevel, humorLevel, questionMode });
+      const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, expertiseLevel, humorLevel, questionMode, challengerEnabled });
       navigate(`/projects/${data.id}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
@@ -120,6 +122,7 @@ export default function NewProject() {
             <LevelSlider label="Humour" value={humorLevel} onChange={setHumorLevel}
               labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
             <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
+            <ChallengerToggle checked={challengerEnabled} onChange={setChallengerEnabled} />
           </Block>
 
           {error && (

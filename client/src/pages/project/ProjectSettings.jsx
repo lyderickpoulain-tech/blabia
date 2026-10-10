@@ -5,6 +5,7 @@ import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
 import QuestionModePicker from '../../components/QuestionModePicker';
+import ChallengerToggle from '../../components/ChallengerToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../../components/LevelSlider';
 
 // Paramètres du projet (refonte UX v5.1) : tout ce qui était empilé en bas de
@@ -57,6 +58,7 @@ function IdentitySection({ project, setProject, canEdit }) {
     name: project.name, description: project.description || '',
     expertiseLevel: project.expertiseLevel || 3, humorLevel: project.humorLevel || 2,
     questionMode: project.questionMode || 'balanced',
+    challengerEnabled: project.challengerEnabled !== false,
   });
   const [st, run] = useSave();
   const submit = e => { e.preventDefault(); run(async () => {
@@ -80,6 +82,7 @@ function IdentitySection({ project, setProject, canEdit }) {
             <LevelSlider label="Humour" value={f.humorLevel} onChange={v => setF(x => ({ ...x, humorLevel: v }))} labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
           </div>
           <QuestionModePicker value={f.questionMode} onChange={v => setF(x => ({ ...x, questionMode: v }))} />
+          <ChallengerToggle checked={f.challengerEnabled} onChange={v => setF(x => ({ ...x, challengerEnabled: v }))} disabled={!canEdit} />
         </fieldset>
         {canEdit && <SaveRow {...st} disabled={!f.name.trim()} />}
       </form>

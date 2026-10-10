@@ -4,7 +4,7 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
 import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
-import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Button, IconButton, Badge, SectionLabel } from './ui';
 
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
@@ -331,6 +331,12 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                             </div>
                             {d.rejectedOptions?.length > 0 && (
                               <p className="text-[11px] text-ink-faint px-1.5">Écarté : {d.rejectedOptions.join(', ')}</p>
+                            )}
+                            {d.vigilance && (
+                              <p className="text-xs text-await bg-await-bg border border-await-border rounded-lg px-2 py-1.5 mx-1.5 flex items-start gap-1.5">
+                                <ShieldAlert size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+                                <span><strong>Contradicteur :</strong> {d.vigilance}</span>
+                              </p>
                             )}
                           </div>
                         </li>

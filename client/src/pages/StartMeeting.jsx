@@ -5,6 +5,7 @@ import { useProject, PageHeader } from '../components/project/ProjectShell';
 import { Button, Card } from '../components/ui';
 import api from '../utils/api';
 import QuestionModePicker from '../components/QuestionModePicker';
+import ChallengerToggle from '../components/ChallengerToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 // v5.0 : decision | claude_code | stack (phase 4)
@@ -124,6 +125,7 @@ export default function StartMeeting() {
   const [humorLevel,        setHumorLevel]        = useState(project?.humorLevel || 2);
   const [questionMode,      setQuestionMode]      = useState(project?.questionMode || 'balanced');
   const [showAdvanced,      setShowAdvanced]      = useState(false);
+  const [challenger,        setChallenger]        = useState(project?.challengerEnabled !== false);
   const [starting,          setStarting]          = useState(false);
   const [error,             setError]             = useState('');
 
@@ -247,6 +249,7 @@ export default function StartMeeting() {
         expertiseLevel,
         humorLevel,
         questionMode,
+        ...(challenger ? {} : { challengerEnabled: false }), // sinon : réglage du projet
         ...(milestoneId ? { milestoneId } : {})
       });
 
@@ -412,6 +415,11 @@ export default function StartMeeting() {
                 onChange={e => setAutoPrepare(e.target.checked)} className="mt-1 w-5 h-5 shrink-0 accent-action" />
             </label>
             <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
+            <ChallengerToggle checked={challenger} onChange={setChallenger}
+              hint={project?.challengerEnabled === false
+                ? 'Désactivé dans les paramètres du projet.'
+                : 'Pour cette réunion : point de vigilance seulement sur les choix à fort enjeu (2 au plus). Décochez pour une réunion sans contradicteur.'}
+              disabled={project?.challengerEnabled === false} />
           </div>
         </Step>
 

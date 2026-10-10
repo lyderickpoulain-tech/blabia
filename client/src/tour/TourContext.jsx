@@ -49,8 +49,9 @@ export function TourProvider({ children }) {
     const { data } = await api.post('/projects/demo');
     const { data: sessions } = await api.get(`/projects/${data.id}/sessions`);
     const open = (sessions || []).find(s => s.status === 'open');
+    const past = (sessions || []).find(s => s.status === 'accepted');
     if (data.created) notifyDemoChanged();
-    return { demoId: data.id, meetingId: open?.id || null };
+    return { demoId: data.id, meetingId: open?.id || null, pastMeetingId: past?.id || null };
   }, []);
 
   const start = useCallback(async (chapterIds) => {
@@ -112,7 +113,8 @@ export function TourProvider({ children }) {
   }, [ensureDemo]);
 
   // Navigation vers la page de l'étape
-  const ctx = useMemo(() => ({ demoId: tour?.demoId, meetingId: tour?.meetingId }), [tour?.demoId, tour?.meetingId]);
+  const ctx = useMemo(() => ({ demoId: tour?.demoId, meetingId: tour?.meetingId, pastMeetingId: tour?.pastMeetingId }),
+    [tour?.demoId, tour?.meetingId, tour?.pastMeetingId]);
   const targetPath = chapter ? stepPath(chapter, tour.stepIdx, ctx) : null;
   useEffect(() => {
     if (targetPath && location.pathname !== targetPath) navigate(targetPath);

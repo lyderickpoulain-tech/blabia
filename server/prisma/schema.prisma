@@ -69,6 +69,7 @@ model Project {
   expertiseLevel    Int       @default(3) // v5.0 : 1 (découverte) à 5 (expert) — défaut des réunions du projet
   humorLevel        Int       @default(2) // v5.0 : 1 (sobre) à 5 (réunion de potes) — défaut des réunions du projet
   questionMode      String    @default("balanced") // v5.0 : "delegate" (4 questions) | "balanced" (8) | "control" (15) — défaut des réunions du projet
+  challengerEnabled Boolean   @default(true) // v5.1 : contradicteur (avocat du diable sélectif, services/challenger.js), activé par défaut
   isDemo            Boolean   @default(false) // v5.1 : projet exemple de la visite guidée (services/demoProject.js), sans appel à l'IA, supprimé en fin de visite
   createdAt         DateTime  @default(now())
   updatedAt     DateTime        @updatedAt
@@ -176,6 +177,7 @@ model Session {
   expertiseLevel          Int?      // v5.0 : 1 à 5, null = hérite de Project.expertiseLevel
   humorLevel              Int?      // v5.0 : 1 à 5, null = hérite de Project.humorLevel
   questionMode            String?   // v5.0 : "delegate" | "balanced" | "control" (budget de questions 4 / 8 / 15), null = hérite de Project.questionMode
+  challengerEnabled       Boolean?  // v5.1 : contradicteur — false = désactivé pour cette réunion, null = hérite de Project.challengerEnabled
   milestoneId     String?
   todos           TodoItem[]
   createdAt       DateTime  @default(now())

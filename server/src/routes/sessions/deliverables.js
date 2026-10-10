@@ -187,7 +187,8 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
         system: summaryPrompt.system,
         messages: [{ role: 'user', content: summaryPrompt.user }]
       }),
-      extractMeetingDecisions({ session, messages, historyText, projectId, actionsText })
+      extractMeetingDecisions({ session, messages, historyText, projectId, actionsText,
+        challenger: (session.challengerEnabled ?? project.challengerEnabled) !== false })
         .catch(err => { console.error('[generate-deliverable] extraction décisions :', err.message); return null; }),
     ]);
     let summary = summaryResponse.content[0].text.trim();

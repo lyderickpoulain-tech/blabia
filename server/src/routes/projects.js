@@ -17,7 +17,7 @@ router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
   'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context',
-  'expertiseLevel', 'humorLevel', 'questionMode', 'createdAt', 'updatedAt', 'userId'
+  'expertiseLevel', 'humorLevel', 'questionMode', 'challengerEnabled', 'createdAt', 'updatedAt', 'userId'
 ];
 
 function clampLevel(v, fallback) {
@@ -133,7 +133,7 @@ router.post('/', async (req, res) => {
   if (req.user.role === 'user') {
     return res.status(403).json({ error: 'Votre compte ne permet pas de créer des projets' });
   }
-  const { name, description, objectif, contexte, notes, hasTechnicalStack, expertiseLevel, humorLevel, questionMode } = req.body;
+  const { name, description, objectif, contexte, notes, hasTechnicalStack, expertiseLevel, humorLevel, questionMode, challengerEnabled } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -157,6 +157,7 @@ router.post('/', async (req, res) => {
         expertiseLevel: clampLevel(expertiseLevel, 3),
         humorLevel: clampLevel(humorLevel, 2),
         questionMode: isQuestionMode(questionMode) ? questionMode : DEFAULT_QUESTION_MODE,
+        challengerEnabled: challengerEnabled !== false,
         userId: req.user.id,
         createdAt: now,
         updatedAt: now
@@ -245,7 +246,7 @@ router.get('/:id/stats', async (req, res) => {
 
 // PATCH /api/projects/:id — mettre à jour les champs du projet (propriétaire ou admin)
 router.patch('/:id', async (req, res) => {
-  const { name, description, devDirectory, hasTechnicalStack, expertiseLevel, humorLevel, questionMode } = req.body;
+  const { name, description, devDirectory, hasTechnicalStack, expertiseLevel, humorLevel, questionMode, challengerEnabled } = req.body;
   if (name !== undefined && !name?.trim()) {
     return res.status(400).json({ error: 'Le nom du projet est requis' });
   }
@@ -265,6 +266,7 @@ router.patch('/:id', async (req, res) => {
     if (expertiseLevel !== undefined)   updates.expertiseLevel     = clampLevel(expertiseLevel, project.expertiseLevel);
     if (humorLevel !== undefined)       updates.humorLevel         = clampLevel(humorLevel, project.humorLevel);
     if (isQuestionMode(questionMode))   updates.questionMode       = questionMode;
+    if (typeof challengerEnabled === 'boolean') updates.challengerEnabled = challengerEnabled;
 
     const [updated] = await db('Project')
       .where({ id: req.params.id })

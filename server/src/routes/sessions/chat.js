@@ -21,6 +21,10 @@ const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const {
+  CHALLENGER, challengesLeft, challengerAvailable, priorVigilanceText,
+  buildOrchestratorChallengeSection, buildChallengerTurnSection,
+} = require('../../services/challenger');
+const {
   prepTurnsFor, AGENT_PREPARATION_SECTION, ORCHESTRATOR_PREPARATION_NOTE,
   buildPrepSynthesisPrompt, parsePrepSynthesis,
 } = require('../../services/prompts/preparationPrompt');
@@ -60,9 +64,12 @@ async function loadMessages(sessionId) {
 
 async function orchestrate({ session, project, messages, activeAgents,
   lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false,
-  artifactRequested = false, decisionBudget, preparing = false }) {
+  artifactRequested = false, decisionBudget, preparing = false, challengerOn = false }) {
 
-  if (activeAgents.length === 1 && !preparing) {
+  // Contradicteur : disponible seulement sur fort enjeu, 2 fois par réunion au plus
+  const canChallenge = challengerAvailable({ enabled: challengerOn, messages, preparing });
+
+  if (activeAgents.length === 1 && !preparing && !canChallenge) {
     return { agentId: activeAgents[0].id, reason: '', shouldClose: false };
   }
 
@@ -133,6 +140,9 @@ async function orchestrate({ session, project, messages, activeAgents,
     delegated,
     turnCount: countAgentTurns(messages),
     decisionsLeft: Math.max(0, decisionBudget - countDecisions(messages)),
+    challengeSection: canChallenge
+      ? buildOrchestratorChallengeSection({ left: challengesLeft(messages), priorText: priorVigilanceText(messages) })
+      : '',
   });
 
   try {
@@ -151,6 +161,9 @@ async function orchestrate({ session, project, messages, activeAgents,
       agentId:     agentsForSelection[idx].id,
       reason:      dec.reason      || '',
       shouldClose: dec.shouldClose === true,
+      // Le contradicteur ne parle que si l'orchestrateur l'estime utile ET qu'il reste disponible
+      challenge:       canChallenge && dec.challenge === true && !!String(dec.challengeTarget || '').trim(),
+      challengeTarget: String(dec.challengeTarget || '').trim().slice(0, 300),
       usage: {
         inputTokens:  response.usage?.input_tokens  || 0,
         outputTokens: response.usage?.output_tokens || 0,
@@ -322,6 +335,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     // Registre des décisions du projet (chargé une fois par requête)
     const decisionRegistry = formatRegistryForPrompt(await listDecisions(projectId));
     const actionsText = formatActionsForPrompt(await listActions(projectId));
+    // Contradicteur : réglage de la réunion, sinon celui du projet (activé par défaut)
+    const challengerOn = (session.challengerEnabled ?? project.challengerEnabled) !== false;
     const today = new Date().toLocaleDateString('fr-FR');
 
     // Réunions du projet avec référence courte (R1, R2…) — positionnement des
@@ -410,6 +425,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         artifactRequested:    turnCount === 0 && wantsArtifact,
         decisionBudget,
         preparing:            !!prepare,
+        challengerOn,
       });
       const turnArtifact = turnCount === 0 && wantsArtifact ? artifactText : null;
 
@@ -422,7 +438,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         break;
       }
 
-      const agent = activeAgents.find(a => a.id === next.agentId);
+      const isChallenge = next.challenge === true;
+      const agent = isChallenge ? CHALLENGER : activeAgents.find(a => a.id === next.agentId);
       if (!agent) break;
       if (abortController.signal.aborted) break;
 
@@ -453,6 +470,9 @@ router.post('/:sessionId/chat', async (req, res) => {
         decisionRegistry,
         actionsText,
         today,
+        challengerSection: isChallenge
+          ? buildChallengerTurnSection({ target: next.challengeTarget, priorText: priorVigilanceText(currentMessages) })
+          : '',
         preparationSection: prepare ? AGENT_PREPARATION_SECTION : '',
         pastCodePromptsText,
         expertiseLevel,
@@ -561,6 +581,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         agentName: agent.name,
         turnId,
         ...(i === 0 && next.reason ? { reason: next.reason } : {}),
+        // Point de vigilance du contradicteur : attend « J'en tiens compte » / « Écarter »
+        ...(i === 0 && isChallenge ? { vigilance: { status: 'open', target: next.challengeTarget } } : {}),
         ...(i === 0 && hasWebSearchSources ? { webSearch: { queries: agentWebSearch.queries, sources: agentWebSearch.sources } } : {}),
         content:   bubbleContent,
         timestamp: new Date().toISOString(),

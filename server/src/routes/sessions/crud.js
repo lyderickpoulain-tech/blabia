@@ -23,6 +23,7 @@ router.post('/', async (req, res) => {
     expertiseLevel: expertiseLevelParam,
     humorLevel: humorLevelParam,
     questionMode: questionModeParam,
+    challengerEnabled: challengerParam,
   } = req.body;
   const { projectId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
@@ -67,6 +68,8 @@ router.post('/', async (req, res) => {
         expertiseLevel,
         humorLevel,
         questionMode,
+        // Contradicteur : false = désactivé pour cette réunion, sinon hérite du projet
+        challengerEnabled: challengerParam === false ? false : null,
         projectId,
         milestoneId: milestoneId || null,
         createdAt: now

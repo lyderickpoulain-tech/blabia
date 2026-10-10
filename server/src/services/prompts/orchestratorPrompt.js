@@ -41,6 +41,7 @@ function buildOrchestratorPrompt({
   delegated = false,
   turnCount,
   decisionsLeft = null,
+  challengeSection = '', // v5.1 : contradicteur disponible (services/challenger.js)
 }) {
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
   const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
@@ -68,14 +69,16 @@ ${humanPriorityNote}
 Si la dernière contribution contient beaucoup de jargon technique ou est difficile à comprendre pour un non-expert, donne la priorité à un agent qui peut reformuler ou vulgariser ce qui vient d'être dit.
 ${delegated ? `⚡ L'humain a délégué une décision aux agents. Les agents doivent débattre entre eux, argumenter leurs positions et converger vers une recommandation claire. L'agent le plus pertinent propose une conclusion en dernier.\n` : ''}Derniers échanges :
 ${recentMessagesText || '(début de réunion)'}
-
+${challengeSection}
 Décide maintenant :
 1. Quel agent doit prendre la parole ? (numéro de 1 à ${agentsForSelection.length})
 2. Pourquoi ? (1 phrase courte)
 3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
 
 Réponds UNIQUEMENT avec ce JSON :
-{"agentIndex": 1, "reason": "...", "shouldClose": false}`;
+${challengeSection
+    ? '{"agentIndex": 1, "reason": "...", "shouldClose": false, "challenge": false, "challengeTarget": ""}'
+    : '{"agentIndex": 1, "reason": "...", "shouldClose": false}'}`;
 }
 
 module.exports = { buildOrchestratorPrompt, MAX_TURNS };
