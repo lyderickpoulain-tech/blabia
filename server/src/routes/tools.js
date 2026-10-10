@@ -15,13 +15,28 @@ const { listDecisions, formatRegistryForPrompt } = require('../services/decision
 
 // Réunion « outils » (type stack) : déjà tenue ? sinon, celle prévue au plan. Sert à la
 // suggérer avant tout développement (démarrage d'une réunion Claude Code, Développements).
-async function toolsMeetingStatus(projectId) {
-  const done = await db('Session').where({ projectId, status: 'accepted' })
+// Les outils sont « choisis » si une réunion « outils » a été conclue OU si les catégories
+// nécessaires pour construire et publier (zones main et delivery du catalogue : interface,
+// serveur, données, code, dépôt, hébergement, domaine) ont un outil validé — qu'il ait été
+// renseigné en réunion ou sur la page Outils. Les autres catégories ne bloquent pas.
+const BUILD_ZONES = ['main', 'delivery'];
+function missingBuildTools(tools, needs) {
+  const validated = tools.filter(t => t.status === 'validated');
+  if (!validated.length) return null; // rien de choisi
+  if (!needs) return [];
+  return needs
+    .map(n => CATEGORIES.find(c => c.id === n.category))
+    .filter(c => c && BUILD_ZONES.includes(c.zone) && !validated.some(t => t.category === c.id))
+    .map(c => c.label);
+}
+async function toolsMeetingStatus(project, tools, needs) {
+  const meeting = await db('Session').where({ projectId: project.id, status: 'accepted' })
     .whereRaw(`"intention"::text LIKE '%stack%'`).first('id');
-  if (done) return { done: true, planned: null };
-  const planned = await db('Milestone').where({ projectId, type: 'stack' }).whereNot({ status: 'done' })
+  const missing = missingBuildTools(tools, needs);
+  if (meeting || (missing && !missing.length)) return { done: true, planned: null, missing: [] };
+  const planned = await db('Milestone').where({ projectId: project.id, type: 'stack' }).whereNot({ status: 'done' })
     .orderBy('displayOrder', 'asc').first('id', 'title');
-  return { done: false, planned: planned || null };
+  return { done: false, planned: planned || null, missing: missing || [] };
 }
 
 const router = express.Router();
@@ -65,9 +80,10 @@ router.get('/projects/:id/tools', authMiddleware, async (req, res) => {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     const tools = await getProjectTools(project);
+    const needs = project.toolNeeds ? parseJsonField(project.toolNeeds, []) : null;
     res.json({
-      tools, total: monthlyTotal(tools), needs: project.toolNeeds ? parseJsonField(project.toolNeeds, []) : null,
-      toolsMeeting: await toolsMeetingStatus(project.id),
+      tools, total: monthlyTotal(tools), needs,
+      toolsMeeting: await toolsMeetingStatus(project, tools, needs),
       guide: project.toolsGuide ? { text: project.toolsGuide, at: project.toolsGuideAt } : null,
       guideChat: parseJsonField(project.toolsGuideChat, []),
     });

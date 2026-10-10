@@ -303,15 +303,29 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect((await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: owner.token })).body.created).toEqual([]);
     // Réunion « outils » suggérée avant de développer : celle du plan, tant qu'aucune n'a été tenue
     let tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
-    expect(tools.toolsMeeting).toMatchObject({ done: false, planned: { title: 'Choisir les outils : hébergement, nom de domaine…' } });
+    expect(tools.toolsMeeting).toMatchObject({ done: false, planned: { title: 'Choisir les outils : hébergement, nom de domaine…' }, missing: [] });
     expect(tools.guide).toBeNull();
+
+    // Outils renseignés sur la page Outils, sans réunion (cas du projet BlabIA) : reconnus.
+    // Seules les catégories pour construire et publier comptent (pas la surveillance, etc.).
+    await h.db('Project').where({ id: site.id }).update({ toolNeeds: JSON.stringify([
+      { category: 'frontend', need: 'Pages' }, { category: 'hosting', need: 'En ligne' }, { category: 'monitoring', need: 'Alertes' }]) });
+    const put = tools => h.request('PUT', `/api/projects/${site.id}/tools`, { token: owner.token, body: { tools } });
+    await put([{ name: 'React', category: 'frontend', status: 'validated' }]);
+    tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
+    expect(tools.toolsMeeting).toMatchObject({ done: false, missing: ['Où vit l\'application en ligne'] });
+    await put([{ name: 'React', category: 'frontend', status: 'validated' }, { name: 'Railway', category: 'hosting', status: 'validated' }]);
+    tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
+    expect(tools.toolsMeeting).toEqual({ done: true, planned: null, missing: [] });
+    await put([]);
+    await h.db('Project').where({ id: site.id }).update({ toolNeeds: null });
     // Guide de mise en place : seulement une fois des outils retenus
     expect((await h.request('POST', `/api/projects/${site.id}/tools/guide`, { token: owner.token })).status).toBe(400);
     const s = (await h.request('POST', `/api/projects/${site.id}/sessions`, { token: owner.token,
       body: { task: 'Choisir les outils', intention: ['stack'], activeAgents: [{ id: 'a1', name: 'Léa', role: 'Dev', systemPrompt: '' }] } })).body.session;
     await h.db('Session').where({ id: s.id }).update({ status: 'accepted' });
     tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
-    expect(tools.toolsMeeting).toEqual({ done: true, planned: null });
+    expect(tools.toolsMeeting).toEqual({ done: true, planned: null, missing: [] });
   });
 
   it('site web : BlabIA crée le dépôt au retour de GitHub, l’ouvre à l’application et l’équipe', async () => {
