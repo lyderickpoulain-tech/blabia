@@ -10,7 +10,7 @@ const harness = require('./harness');
 // ── GitHub simulé ────────────────────────────────────────────────────────────
 function fakeGitHub() {
   const gh = {
-    calls: [], files: {}, secrets: new Set(), issues: [], pulls: [], runs: [], dispatches: [], comments: {},
+    calls: [], files: {}, branches: {}, secrets: new Set(), issues: [], pulls: [], runs: [], dispatches: [], comments: {},
     repo: { full_name: 'moi/app', private: false, default_branch: 'main' },
   };
   const json = (status, data) => ({ status, ok: status < 400, text: async () => (data === undefined ? '' : JSON.stringify(data)), json: async () => data });
@@ -42,6 +42,15 @@ function fakeGitHub() {
     }
     if ((m = p.match(/^\/repos\/moi\/app\/actions\/workflows\/([\w.-]+)\/dispatches$/))) { gh.dispatches.push({ workflow: m[1], ...body }); return json(204); }
     if ((m = p.match(/^\/repos\/moi\/app\/actions\/workflows\/([\w.-]+)\/runs$/))) return json(200, { workflow_runs: gh.runs.filter(r => r.workflow === m[1]) });
+    if ((m = p.match(/^\/repos\/moi\/app\/compare\/main\.\.\.(.+)$/))) {
+      const commits = gh.branches[decodeURIComponent(m[1])];
+      return commits ? json(200, { ahead_by: commits.length, commits: commits.map(message => ({ commit: { message } })) }) : json(404, { message: 'Not Found' });
+    }
+    if (method === 'POST' && p === '/repos/moi/app/pulls') {
+      const pr = { number: 100 + gh.pulls.length, head: body.head, html_url: `https://github.com/moi/app/pull/${100 + gh.pulls.length}`, state: 'open', merged: false,
+        body: body.body, files: [{ filename: 'client/src/Page.jsx', additions: 8, deletions: 1 }] };
+      gh.pulls.push(pr); return json(201, pr);
+    }
     if (p === '/repos/moi/app/pulls') return json(200, gh.pulls.filter(pr => `moi:${pr.head}` === u.searchParams.get('head')));
     if ((m = p.match(/^\/repos\/moi\/app\/pulls\/(\d+)(\/files)?$/))) {
       const pr = gh.pulls.find(x => x.number === Number(m[1]));
@@ -182,6 +191,29 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     const a = await h.request('POST', `/api/projects/${projectId}/dev-tasks/${t.id}/abandon`, { token: owner.token });
     expect(a.body.status).toBe('abandoned');
     expect(gh.issues[1].state).toBe('closed');
+  });
+
+  it('branche poussée sans pull request : BlabIA l’ouvre lui-même (et récupère un ancien échec)', async () => {
+    // Ancien échec « sans pull request », branche poussée ensuite visible : récupéré
+    let r = await h.request('POST', `/api/projects/${projectId}/dev-tasks`, { token: owner.token, body: { sessionId } });
+    expect(r.body.issueNumber).toBe(3);
+    gh.runs.push({ workflow: 'blabia-dev.yml', display_title: 'BlabIA dev #3', status: 'completed', conclusion: 'success', html_url: 'https://github.com/moi/app/actions/runs/12', created_at: new Date().toISOString() });
+    let t = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
+    expect(t.status).toBe('failed'); // pas encore de branche
+    gh.branches['blabia/dev-3'] = ['Lien « Voir le dépôt » sous le titre'];
+    t = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
+    expect(t).toMatchObject({ status: 'ready', error: null });
+    expect(t.summary).toContain('Lien « Voir le dépôt » sous le titre');
+    expect(gh.pulls.at(-1)).toMatchObject({ head: 'blabia/dev-3' });
+    expect(gh.pulls.at(-1).body).toContain('Closes #3');
+    await h.request('POST', `/api/projects/${projectId}/dev-tasks/${t.id}/abandon`, { token: owner.token });
+
+    // Cas direct : fin du travail, branche poussée, pas de pull request → ouverte aussitôt
+    r = await h.request('POST', `/api/projects/${projectId}/dev-tasks`, { token: owner.token, body: { sessionId } });
+    gh.branches['blabia/dev-4'] = ['Deuxième essai'];
+    gh.runs.push({ workflow: 'blabia-dev.yml', display_title: 'BlabIA dev #4', status: 'completed', conclusion: 'success', html_url: 'https://github.com/moi/app/actions/runs/13', created_at: new Date().toISOString() });
+    t = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
+    expect(t).toMatchObject({ status: 'ready', prNumber: gh.pulls.at(-1).number });
   });
 
   it('projet exemple et compte « user » : refusés', async () => {

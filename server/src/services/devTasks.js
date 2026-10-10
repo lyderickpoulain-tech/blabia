@@ -135,11 +135,43 @@ async function findRun(inst, repo, workflowFile, runName, since) {
   return (data?.workflow_runs || []).find(r => r.display_title === runName && (!since || new Date(r.created_at) >= new Date(new Date(since).getTime() - 10 * 1000))) || null;
 }
 
+// Filet de sécurité : Claude Code a poussé sa branche mais n'a pas pu ouvrir la pull
+// request (réglage du dépôt « Allow GitHub Actions to create and approve pull requests »
+// désactivé par défaut) ; BlabIA l'ouvre avec son application. Renvoie son numéro ou null.
+async function openPrFromBranch(inst, task) {
+  const branch = wf.devBranch(task.issueNumber);
+  const { default_branch: base } = await github.gh(inst, 'GET', `/repos/${task.repo}`);
+  let cmp;
+  try {
+    cmp = await github.gh(inst, 'GET', `/repos/${task.repo}/compare/${base}...${branch}`);
+  } catch (err) {
+    if (err.status === 404) return null; // branche absente : rien à proposer
+    throw err;
+  }
+  if (!cmp?.ahead_by) return null;
+  const commits = (cmp.commits || []).map(c => `- ${String(c.commit?.message || '').split('\n')[0]}`).join('\n');
+  const pr = await github.gh(inst, 'POST', `/repos/${task.repo}/pulls`, {
+    title: `BlabIA : ${task.title}`, head: branch, base,
+    body: `Modifications réalisées par Claude Code (pull request ouverte par BlabIA) :\n${commits}\n\nCloses #${task.issueNumber}`,
+  });
+  return pr.number;
+}
+
+const NO_PR_RE = /pull request/i;
+
 // Relit l'état d'un développement auprès de GitHub ; renvoie la ligne à jour
 async function refreshTask(task, inst) {
-  if (!REFRESHABLE.includes(task.status)) return task;
   const repo = task.repo;
   const patch = {};
+  // Échec « sans pull request » : la branche a peut-être été poussée (ancien développement)
+  if (task.status === 'failed' && !task.prNumber && task.issueNumber && NO_PR_RE.test(task.error || '')) {
+    const prNumber = await openPrFromBranch(inst, task);
+    if (!prNumber) return task;
+    const [row] = await db('DevTask').where({ id: task.id })
+      .update({ ...(await loadPr(inst, repo, prNumber)).patch, status: 'ready', readyAt: new Date(), error: null, finishedAt: null }).returning('*');
+    return row;
+  }
+  if (!REFRESHABLE.includes(task.status)) return task;
 
   if (task.status === 'running') {
     const owner = repo.split('/')[0];
@@ -148,7 +180,10 @@ async function refreshTask(task, inst) {
     if (run) patch.runUrl = run.html_url;
     if (prs[0]) {
       Object.assign(patch, (await loadPr(inst, repo, prs[0].number)).patch, { status: 'ready', readyAt: new Date(), error: null });
+    } else if (run?.status === 'completed' && run.conclusion === 'success' && (patch.prNumber = await openPrFromBranch(inst, task))) {
+      Object.assign(patch, (await loadPr(inst, repo, patch.prNumber)).patch, { status: 'ready', readyAt: new Date(), error: null });
     } else if (run?.status === 'completed') {
+      delete patch.prNumber;
       // Terminé sans pull request : l'explication de Claude Code est le dernier commentaire de la demande
       const comments = await github.gh(inst, 'GET', `/repos/${repo}/issues/${task.issueNumber}/comments?per_page=100`) || [];
       const last = comments.filter(c => c.user?.type === 'Bot').pop();
