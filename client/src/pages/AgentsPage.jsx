@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, X, Bot } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Button, IconButton, Badge, Card, SectionLabel } from '../components/ui';
 import api from '../utils/api';
+import { notifyError } from '../utils/notify';
 
 const inputCls = 'w-full px-3.5 py-2.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
 
@@ -145,7 +146,7 @@ export default function AgentsPage() {
   useEffect(() => {
     api.get('/agents')
       .then(({ data }) => setAgents(data))
-      .catch(() => {})
+      .catch(err => notifyError(err, 'Impossible de charger les agents.'))
       .finally(() => setLoading(false));
   }, []);
 

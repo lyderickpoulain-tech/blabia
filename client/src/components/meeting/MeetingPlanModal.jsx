@@ -40,7 +40,7 @@ export default function MeetingPlanModal({ projectId, sessionId, keptSuggestions
   useEffect(() => {
     api.get(`/projects/${projectId}/plan`)
       .then(({ data }) => setMilestones(data.milestones || []))
-      .catch(() => {})
+      .catch(() => setError('Impossible de charger le plan des réunions.'))
       .finally(() => setLoading(false));
   }, [projectId]);
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import api from '../utils/api';
+import { notifyError } from '../utils/notify';
 
 async function copyToClipboard(text) {
   try {
@@ -63,7 +64,7 @@ export default function QuickExportModal({ milestone, projectId, onClose, onRefr
       onRefresh?.();
       if (newStatus === 'done') setStatusDone(true);
       else onClose();
-    } catch {}
+    } catch (err) { notifyError(err, 'Le statut n’a pas pu être modifié.'); }
     setSaving(false);
   };
 

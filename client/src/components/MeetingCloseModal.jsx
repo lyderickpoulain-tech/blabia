@@ -6,6 +6,7 @@ import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
 import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Button, IconButton, Badge, SectionLabel } from './ui';
+import { notifyError } from '../utils/notify';
 
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
 // à l'ouverture, puis assistant en 3 étapes : relecture CR + livrable → revue
@@ -83,7 +84,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
     try {
       const { data } = await api.patch(`/projects/${projectId}/sessions/${session.id}/meeting-suggestions/${id}`, body);
       setSuggestions(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
-    } catch {}
+    } catch (err) { notifyError(err, 'La suggestion de réunion n’a pas pu être mise à jour.'); }
     setSuggestionBusyId(null);
   };
   const handleKeepSuggestion    = (id) => patchSuggestion(id, { status: 'kept' });

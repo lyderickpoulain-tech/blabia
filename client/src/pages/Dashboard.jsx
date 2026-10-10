@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import { Button, Badge, Card } from '../components/ui';
 import { formatUSD } from '../utils/cost';
 import api from '../utils/api';
+import { notifyError } from '../utils/notify';
 
 const STATUS_TABS = [
   { key: 'active',   label: 'Actifs' },
@@ -75,7 +76,7 @@ export default function Dashboard() {
   useEffect(() => {
     const load = () => api.get('/projects')
       .then(({ data }) => setProjects(data))
-      .catch(() => {})
+      .catch(err => notifyError(err, 'Impossible de charger vos projets.'))
       .finally(() => setLoading(false));
     load();
     // Visite guidée : projet exemple créé ou supprimé

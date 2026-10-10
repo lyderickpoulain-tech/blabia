@@ -277,7 +277,7 @@ router.post('/:sessionId/chat', async (req, res) => {
   res.flushHeaders();
 
   const send = (type, data = {}) => {
-    try { res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); } catch {}
+    try { res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); } catch {} // navigateur déjà déconnecté : rien à faire
   };
 
   const heartbeatInterval = setInterval(() => {
@@ -696,7 +696,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
       send('turn_complete', { sessionId, pendingDecision: decisionEmitted, tokensUsed: updatedTokens });
     } catch {
-      await db('Project').where({ id: projectId }).update({ updatedAt: new Date() }).catch(() => {});
+      await db('Project').where({ id: projectId }).update({ updatedAt: new Date() }).catch(err => console.error('[chat] date de mise à jour du projet :', err.message));
       send('turn_complete', { sessionId, pendingDecision: decisionEmitted });
     }
     res.end();
@@ -707,7 +707,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       return;
     }
     console.error('[sessions/chat]', err.message, err.stack);
-    try { send('error', { message: `Erreur : ${err.message}` }); } catch {}
+    try { send('error', { message: `Erreur : ${err.message}` }); } catch {} // navigateur déjà déconnecté
     res.end();
   } finally {
     clearInterval(heartbeatInterval);

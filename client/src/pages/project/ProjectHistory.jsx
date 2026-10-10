@@ -7,6 +7,7 @@ import { Badge, Button, Card } from '../../components/ui';
 import { formatUSD, kindLabel } from '../../utils/cost';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 import ExportModal from '../../components/ExportModal';
+import { notifyError } from '../../utils/notify';
 
 // Historique : les réunions tenues (refonte UX v5.1 — remplace la liste
 // « Réunions » de l'ancienne page projet).
@@ -128,7 +129,7 @@ export default function ProjectHistory() {
 
   useEffect(() => {
     api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(() => setSessions([]));
-    api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(() => {});
+    api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(err => notifyError(err, 'Coût de l’IA indisponible.'));
   }, [project.id]);
 
   const dlg = deliverableSession;

@@ -14,6 +14,7 @@ import ConversationFeed from '../components/meeting/ConversationFeed';
 import { RotateCcw } from 'lucide-react';
 import { Button } from '../components/ui';
 import api from '../utils/api';
+import { notifyError } from '../utils/notify';
 
 // ── Palette agent (initiale + couleur de bulle) ───────────────────────────────
 
@@ -211,7 +212,7 @@ export default function MeetingRoom() {
       const enabled    = data.filter(a => a.enabled !== false);
       const activeIds  = new Set((currentActive || activeAgents).map(a => a.id));
       setAvailableForAdd(enabled.filter(a => !activeIds.has(a.agentId || a.id)));
-    } catch {}
+    } catch (err) { notifyError(err, 'Impossible de charger les agents disponibles.'); }
     setLoadingAvailable(false);
   }, [projectId, activeAgents]);
 
@@ -398,7 +399,7 @@ export default function MeetingRoom() {
         `/projects/${projectId}/sessions/${sessionId}/answer-decision`,
         { messageId, answer: null, status: 'deferred' }
       );
-    } catch {}
+    } catch (err) { notifyError(err, 'La question n’a pas pu être reportée.'); }
     setMessages(prev => prev.map(m =>
       m.id === messageId ? { ...m, status: 'deferred' } : m
     ));
@@ -450,7 +451,7 @@ export default function MeetingRoom() {
     try {
       const { data } = await api.patch(`/projects/${projectId}/sessions/${sessionId}/meeting-suggestions/${id}`, body);
       setStepSuggestions(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
-    } catch {}
+    } catch (err) { notifyError(err, 'La suggestion de réunion n’a pas pu être mise à jour.'); }
     setMeetingSuggestionBusyId(null);
   }, [projectId, sessionId]);
   const handleKeepMeeting    = useCallback((id) => patchMeetingSuggestion(id, { status: 'kept' }), [patchMeetingSuggestion]);
@@ -691,7 +692,7 @@ export default function MeetingRoom() {
               setStreamingAgent(null);
               setIsStreaming(false);
             }
-          } catch {}
+          } catch {} // ligne du flux illisible (coupée en deux) : ignorée, la suivante complète
         }
       }
     } catch (err) {
@@ -900,7 +901,7 @@ export default function MeetingRoom() {
       await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { task: taskDraft.trim() });
       setSession(prev => ({ ...prev, task: taskDraft.trim() }));
       setEditingTask(false);
-    } catch {}
+    } catch (err) { notifyError(err, 'Le titre de la réunion n’a pas pu être enregistré.'); }
     setSavingTask(false);
   }, [taskDraft, savingTask, projectId, sessionId]);
 
@@ -911,7 +912,7 @@ export default function MeetingRoom() {
     try {
       await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { intention: [newType] });
       setSession(prev => ({ ...prev, intention: [newType] }));
-    } catch {}
+    } catch (err) { notifyError(err, 'Le livrable n’a pas pu être modifié.'); }
     setSavingIntention(false);
   }, [savingIntention, projectId, sessionId]);
 
@@ -922,7 +923,7 @@ export default function MeetingRoom() {
       const { data } = await api.patch(`/projects/${projectId}/sessions/${sessionId}`, { [field]: value });
       // Le mode de questions change le budget : le serveur renvoie le nouveau
       if (data?.decisionBudget) setSession(prev => ({ ...prev, decisionBudget: data.decisionBudget }));
-    } catch {}
+    } catch (err) { notifyError(err, 'Le réglage n’a pas été enregistré : il s’applique seulement à cet écran.'); }
   }, [projectId, sessionId]);
 
   // ── Refonte UX v5.1 : temps de la réunion, panneau, briefing, illustration ──

@@ -204,7 +204,7 @@ router.patch('/:sessionId/code-status', async (req, res) => {
         await db('Milestone').where({ id: session.milestoneId }).update({
           status: status === 'implemented' ? 'done' : 'blocked'
         });
-      } catch {}
+      } catch (err) { console.error('[decisions] recalcul du statut de la réunion :', err.message); }
     }
 
     if (status === 'not_generated') {
@@ -249,7 +249,7 @@ router.patch('/:sessionId/code-status', async (req, res) => {
       timestamp: new Date().toISOString(),
       meta: { codeStatus: status }
     };
-    await appendTimelineEntry(sessionId, implEntry).catch(() => {});
+    await appendTimelineEntry(sessionId, implEntry).catch(err => console.error('[decisions] historique de la réunion :', err.message));
 
     res.json({ codeStatus: status });
   } catch (err) {

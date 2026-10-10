@@ -6,6 +6,7 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 import QuickExportModal from './QuickExportModal';
 import { SessionDrawer, STATUS_LABELS, TYPE_ICON, TYPE_LABEL, trunc } from './meeting/MilestoneDrawers';
 import { InsertButton, InsertForm } from './meeting/MeetingInsertControls';
+import { notifyError } from '../utils/notify';
 
 // v5.0 phase 3.2 : decision | claude_code | stack
 const TYPES = ['decision', 'claude_code', 'stack'];
@@ -268,7 +269,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
       setMilestones(data.milestones || []);
       setMilestoneSessions(data.milestoneSessions || {});
       if (data.devDirectory !== undefined) setDevDirectory(data.devDirectory);
-    } catch {}
+    } catch (err) { notifyError(err, 'Impossible de charger le plan des réunions.'); }
     setLoading(false);
   }, [projectId]);
 
@@ -278,7 +279,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
     try {
       await api.post(`/projects/${projectId}/milestones`, { title, type });
       loadMilestones();
-    } catch {}
+    } catch (err) { notifyError(err, 'La réunion n’a pas pu être ajoutée au plan.'); }
   };
 
   const handleDeleteMilestone = useCallback(async (milestoneId) => {

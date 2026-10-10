@@ -48,17 +48,17 @@ export default function ProjectShell() {
         decisionsReopened: data.filter(d => d.status === 'reopened').length,
         decisionsActive:   data.filter(d => d.status === 'active').length,
       })))
-      .catch(() => {});
+      .catch(() => {}); // pastille de la barre latérale : la page concernée signale l'erreur
     api.get(`/projects/${id}/actions`)
       .then(({ data }) => {
         const today = new Date().toISOString().slice(0, 10);
         const open = data.filter(a => a.status !== 'done');
         setCounts(c => ({ ...c, actionsOpen: open.length, actionsOverdue: open.filter(a => a.dueDate && String(a.dueDate).slice(0, 10) < today).length }));
       })
-      .catch(() => {});
+      .catch(() => {}); // pastille de la barre latérale : la page concernée signale l'erreur
     api.get(`/projects/${id}/tools`)
       .then(({ data }) => setCounts(c => ({ ...c, toolsAttention: attentionCount(data.tools, data.needs) })))
-      .catch(() => {});
+      .catch(() => {}); // pastille de la barre latérale : la page concernée signale l'erreur
   }, [id]);
 
   useEffect(() => {

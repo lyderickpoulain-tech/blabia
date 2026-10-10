@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { notifyError } from '../../utils/notify';
 
 export const STATUS_OPTS   = ['pending', 'in_progress', 'done', 'blocked'];
 export const STATUS_LABELS = { pending: 'À tenir', in_progress: 'En cours', done: 'Terminée', blocked: 'Bloquée' };
@@ -32,7 +33,7 @@ export function SessionDrawer({ milestone, linkedSession, projectId, navigate, o
           setPinnedDecisions(data.messages.filter(m => m.pinned && m.role === 'agent'));
         }
       })
-      .catch(() => {});
+      .catch(() => {}); // décisions épinglées : complément facultatif
   }, [linkedSession?.id, projectId]);
 
   const changeStatus = async (s) => {
@@ -41,7 +42,7 @@ export function SessionDrawer({ milestone, linkedSession, projectId, navigate, o
     try {
       await api.patch(`/projects/${projectId}/milestones/${milestone.id}`, { status: s });
       onRefresh();
-    } catch {}
+    } catch (err) { notifyError(err, 'Le statut de la réunion n’a pas pu être modifié.'); }
     setSaving(false);
   };
 

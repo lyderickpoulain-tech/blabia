@@ -77,7 +77,7 @@ router.post('/', async (req, res) => {
       .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId', 'webSearchEnabled', 'expertiseLevel', 'humorLevel', 'questionMode']);
     await db('Project').where({ id: projectId }).update({ updatedAt: now });
     if (milestoneId) {
-      try { await db('Milestone').where({ id: milestoneId, projectId }).update({ status: 'in_progress' }); } catch {}
+      try { await db('Milestone').where({ id: milestoneId, projectId }).update({ status: 'in_progress' }); } catch (err) { console.error('[sessions] statut de la réunion du plan :', err.message); }
     }
     res.status(201).json({
       session: { ...session, activeAgents: agentsWithJoin, messages: [] },

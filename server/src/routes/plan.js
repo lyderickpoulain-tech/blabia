@@ -244,7 +244,7 @@ router.post('/:id/todos', async (req, res) => {
       try {
         const autoStatus = await computeMilestoneStatus(milestoneId);
         if (autoStatus) await db('Milestone').where({ id: milestoneId }).update({ status: autoStatus });
-      } catch {}
+      } catch (err) { console.error('[plan] recalcul du statut de la réunion :', err.message); }
     }
 
     res.status(201).json(todo);
@@ -311,14 +311,14 @@ router.patch('/:id/todos/:tid', async (req, res) => {
       try {
         const autoStatus = await computeMilestoneStatus(affectedMilestoneId);
         if (autoStatus) await db('Milestone').where({ id: affectedMilestoneId }).update({ status: autoStatus });
-      } catch {}
+      } catch (err) { console.error('[plan] recalcul du statut de la réunion :', err.message); }
     }
     // Si la tâche a changé de jalon, recalculer aussi l'ancien jalon
     if (updates.milestoneId !== undefined && existing.milestoneId && existing.milestoneId !== updates.milestoneId) {
       try {
         const oldStatus = await computeMilestoneStatus(existing.milestoneId);
         if (oldStatus) await db('Milestone').where({ id: existing.milestoneId }).update({ status: oldStatus });
-      } catch {}
+      } catch (err) { console.error('[plan] recalcul du statut de la réunion :', err.message); }
     }
 
     res.json(updated);
@@ -345,7 +345,7 @@ router.delete('/:id/todos/:tid', async (req, res) => {
       try {
         const autoStatus = await computeMilestoneStatus(existing.milestoneId);
         if (autoStatus !== null) await db('Milestone').where({ id: existing.milestoneId }).update({ status: autoStatus });
-      } catch {}
+      } catch (err) { console.error('[plan] recalcul du statut de la réunion :', err.message); }
     }
 
     res.json({ message: 'Tâche supprimée' });

@@ -9,6 +9,7 @@ import GenerateTimelineModal from '../../components/GenerateTimelineModal';
 import { totalLabel } from '../../utils/toolsCatalog';
 import { formatUSD } from '../../utils/cost';
 import { isOverdueAction } from './ProjectActions';
+import { notifyError } from '../../utils/notify';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
@@ -109,15 +110,15 @@ export default function ProjectDashboard() {
   const [actions, setActions] = useState([]);     // actions entre les réunions
   const [showGenerate, setShowGenerate] = useState(false);
 
-  const loadStats = () => api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(() => {});
+  const loadStats = () => api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(err => notifyError(err, 'Coût de l’IA indisponible.'));
   const loadPlan = () => api.get(`/projects/${project.id}/plan`).then(({ data }) => setPlan(data)).catch(() => setPlan({ milestones: [], milestoneSessions: {} }));
   useEffect(() => {
     loadPlan();
     loadStats();
-    api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(() => {});
-    api.get(`/projects/${project.id}/decisions`).then(({ data }) => setDecisions(data)).catch(() => {});
-    api.get(`/projects/${project.id}/actions`).then(({ data }) => setActions(data)).catch(() => {});
-    api.get(`/projects/${project.id}/tools`).then(({ data }) => setTools(data)).catch(() => {});
+    api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(err => notifyError(err, 'Impossible de charger les réunions.'));
+    api.get(`/projects/${project.id}/decisions`).then(({ data }) => setDecisions(data)).catch(err => notifyError(err, 'Impossible de charger les décisions.'));
+    api.get(`/projects/${project.id}/actions`).then(({ data }) => setActions(data)).catch(err => notifyError(err, 'Impossible de charger les actions.'));
+    api.get(`/projects/${project.id}/tools`).then(({ data }) => setTools(data)).catch(err => notifyError(err, 'Impossible de charger les outils.'));
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const milestones = [...(plan?.milestones || [])].sort((a, b) => a.displayOrder - b.displayOrder);

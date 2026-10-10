@@ -7,6 +7,7 @@ import api from '../utils/api';
 import QuestionModePicker from '../components/QuestionModePicker';
 import ChallengerToggle from '../components/ChallengerToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
+import { notifyError } from '../utils/notify';
 
 // v5.0 : decision | claude_code | stack (phase 4)
 const DELIVERABLES = [
@@ -138,14 +139,14 @@ export default function StartMeeting() {
         setAvailableAgents(enabled);
         setSelectedAgentIds(new Set(enabled.slice(0, 2).map(a => a.agentId || a.id)));
       })
-      .catch(() => {})
+      .catch(err => notifyError(err, 'Impossible de charger les agents du projet.'))
       .finally(() => setAgentsLoading(false));
   }, [projectId]);
 
   useEffect(() => {
     api.get('/models')
       .then(({ data }) => { setModels(data.models || []); setModel(m => m || data.default); })
-      .catch(() => {});
+      .catch(() => {}); // liste des modèles : à défaut, le serveur applique le modèle par défaut
   }, []);
 
   // Auto-suggestion si pré-rempli depuis le plan
@@ -173,7 +174,7 @@ export default function StartMeeting() {
         setNewAgentSuggestion(data.newAgentSuggestion);
         setSuggestedScope('project');
       }
-    } catch {}
+    } catch (err) { notifyError(err, 'La suggestion d’agents a échoué.'); }
     setSuggestingAgents(false);
   };
 
@@ -192,7 +193,7 @@ export default function StartMeeting() {
       setSelectedAgentIds(prev => new Set([...prev, agent.id]));
       setSuggestionReasons(prev => ({ ...prev, [agent.id]: newAgentSuggestion.reason }));
       setNewAgentSuggestion(null);
-    } catch {}
+    } catch (err) { notifyError(err, 'L’agent suggéré n’a pas pu être créé.'); }
     setCreatingSuggested(false);
   };
 

@@ -42,7 +42,7 @@ export function TourProvider({ children }) {
   useEffect(() => {
     if (!user || cleaned.current) return;
     cleaned.current = true;
-    if (!readStored()) api.delete('/projects/demo').then(({ data }) => { if (data?.deleted) notifyDemoChanged(); }).catch(() => {});
+    if (!readStored()) api.delete('/projects/demo').then(({ data }) => { if (data?.deleted) notifyDemoChanged(); }).catch(() => {}); // nettoyage en arrière-plan, retenté au prochain chargement
   }, [user]);
 
   const ensureDemo = useCallback(async () => {
@@ -80,7 +80,7 @@ export function TourProvider({ children }) {
   const markDone = useCallback(chapterId => {
     api.patch('/users/me/tour', { chapter: chapterId })
       .then(({ data }) => patchUser?.({ tourProgress: data.tourProgress }))
-      .catch(() => {});
+      .catch(() => {}); // progression de la visite : perte sans gravité
   }, [patchUser]);
 
   const chapter = tour ? chapterById(tour.queue[tour.chapterIdx]) : null;

@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import { TourProvider } from './tour/TourContext';
 import PageLoader from './components/PageLoader';
+import Toaster from './components/Toaster';
 
 // Pages chargées à la demande (v5.1) : le premier chargement ne contient plus
 // toute l'application, chaque page arrive quand on y va.
@@ -32,7 +33,7 @@ const PrintRegistry    = lazy(() => import('./pages/print/PrintPages').then(m =>
 
 export default function App() {
   useEffect(() => {
-    fetch('/api/ping').catch(() => {});
+    fetch('/api/ping').catch(() => {}); // réveil du serveur : échec sans conséquence, volontairement silencieux
   }, []);
 
   return (
@@ -98,6 +99,7 @@ export default function App() {
       </Routes>
       </Suspense>
       </TourProvider>
+      <Toaster />
     </div>
   );
 }
