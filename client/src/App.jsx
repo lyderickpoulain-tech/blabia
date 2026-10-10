@@ -1,10 +1,16 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Suspense, lazy, useEffect } from 'react';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import { TourProvider } from './tour/TourContext';
 import PageLoader from './components/PageLoader';
 import Toaster from './components/Toaster';
+
+// Ancienne vue des tâches (/projects/:id/plan, retirée) → actions entre les réunions
+function LegacyPlanRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/projects/${id}/actions`} replace />;
+}
 
 // Pages chargées à la demande (v5.1) : le premier chargement ne contient plus
 // toute l'application, chaque page arrive quand on y va.
@@ -24,7 +30,6 @@ const AdminUsers       = lazy(() => import('./pages/AdminUsers'));
 const ProfilePage      = lazy(() => import('./pages/ProfilePage'));
 const AgentsPage       = lazy(() => import('./pages/AgentsPage'));
 const MyTools          = lazy(() => import('./pages/MyTools'));
-const PlanView         = lazy(() => import('./pages/PlanView'));
 const StartMeeting     = lazy(() => import('./pages/StartMeeting'));
 const MeetingRoom      = lazy(() => import('./pages/MeetingRoom'));
 const PrintSession     = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintSession })));
@@ -63,9 +68,8 @@ export default function App() {
           <Route path="parametres" element={<ProjectSettings />} />
           <Route path="meeting/new" element={<StartMeeting />} />
         </Route>
-        <Route path="/projects/:id/plan" element={
-          <ProtectedRoute><PlanView /></ProtectedRoute>
-        } />
+        {/* Ancienne vue des tâches (retirée) : remplacée par les actions entre les réunions */}
+        <Route path="/projects/:id/plan" element={<LegacyPlanRedirect />} />
         <Route path="/projects/:id/meeting/:sid" element={
           <ProtectedRoute><MeetingRoom /></ProtectedRoute>
         } />

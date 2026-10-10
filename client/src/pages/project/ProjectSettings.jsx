@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Archive, RotateCcw, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
@@ -295,10 +295,6 @@ export default function ProjectSettings() {
         )}
 
         {canManage && <MembersSection project={project} />}
-
-        <Section title="Ancienne vue des tâches" subtitle="Jalons et tâches de la version précédente, conservés en l'état.">
-          <Link to={`/projects/${project.id}/plan`} className="text-sm font-bold">Ouvrir l'ancienne vue</Link>
-        </Section>
 
         {canManage && (
           <section aria-labelledby="danger" className="border border-red-200 rounded-2xl p-5 space-y-3 bg-white">
