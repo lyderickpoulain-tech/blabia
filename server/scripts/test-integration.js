@@ -7,5 +7,6 @@ if (!process.env.TEST_DATABASE_URL) {
   console.error('TEST_DATABASE_URL manquant (ex. postgresql://postgres:<mot de passe>@localhost:5432/blabia_test).');
   process.exit(1);
 }
-const r = spawnSync('npx', ['vitest', 'run', 'src/__integration__'], { stdio: 'inherit', shell: true, env: process.env });
+// Un fichier après l'autre : chacun vide la base de test au démarrage
+const r = spawnSync('npx', ['vitest', 'run', 'src/__integration__', '--no-file-parallelism'], { stdio: 'inherit', shell: true, env: process.env });
 process.exit(r.status ?? 1);
