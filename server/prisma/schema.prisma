@@ -16,6 +16,7 @@ model User {
   techStack        Json            @default("{}")    // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule
   toolbox          Json            @default("{}")    // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule
   tools            Json?           // v5.0 phase 4 : « Mes outils » [{ id, catalogId, name, category, cost, status: using|account|to_try, note }] — NULL = pas encore migré (cf. toolsStore.js)
+  tutorialSeenAt   DateTime?       // v5.1 : guide de prise en main vu (NULL = à afficher à la connexion)
   createdAt        DateTime        @default(now())
   projects           Project[]
   invitations        Invitation[]

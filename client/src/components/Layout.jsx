@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { FolderKanban, Bot, Wrench, Shield, LogOut } from 'lucide-react';
+import { FolderKanban, Bot, Wrench, Shield, LogOut, LifeBuoy } from 'lucide-react';
+import Tutorial from './Tutorial';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_VERSION, APP_BUILD } from '../version';
 
@@ -8,7 +10,11 @@ const navCls = ({ isActive }) => `shrink-0 inline-flex items-center gap-2 px-3 h
 }`;
 
 export default function Layout({ children, wide = false }) {
-  const { user, logout } = useAuth();
+  const { user, logout, markTutorialSeen } = useAuth();
+  // Guide : ouvert d'office tant qu'il n'a jamais été vu (tutorialSeenAt === null), sinon à la demande
+  const [guideOpen, setGuideOpen] = useState(false);
+  const showGuide = guideOpen || user?.tutorialSeenAt === null;
+  const closeGuide = () => { setGuideOpen(false); if (!user?.tutorialSeenAt) markTutorialSeen(); };
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
@@ -44,6 +50,11 @@ export default function Layout({ children, wide = false }) {
             ))}
           </nav>
           <div className="flex items-center gap-2 ml-auto">
+            <button onClick={() => setGuideOpen(true)} aria-label="Guide de prise en main" title="Guide de prise en main"
+              className="inline-flex items-center gap-2 h-10 px-3 rounded-[10px] text-sm font-semibold text-ai hover:bg-ai-bg transition">
+              <LifeBuoy size={17} aria-hidden="true" />
+              <span className="hidden md:inline">Guide</span>
+            </button>
             <Link to="/profile" title="Mon profil"
               className="hidden sm:inline-flex items-center gap-2 h-10 px-2 rounded-[10px] text-sm font-semibold text-ink-soft hover:bg-canvas transition max-w-[220px]">
               <span className="w-7 h-7 rounded-full bg-ai-light text-ai text-xs font-extrabold inline-flex items-center justify-center shrink-0">
@@ -73,6 +84,8 @@ export default function Layout({ children, wide = false }) {
       <main className={`flex-1 w-full mx-auto px-4 py-6 ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
         {children}
       </main>
+
+      {showGuide && user && <Tutorial role={user.role} onClose={closeGuide} />}
 
       <footer className="text-center py-2 text-[10px] text-ink-faint/60 select-none">
         BlabIA v{APP_VERSION} — {APP_BUILD}

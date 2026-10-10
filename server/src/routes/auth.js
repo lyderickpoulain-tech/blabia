@@ -47,7 +47,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     res.json({
       token: makeToken(user),
-      user: { id: user.id, email: user.email, role: user.role }
+      user: { id: user.id, email: user.email, role: user.role, username: user.username, tutorialSeenAt: user.tutorialSeenAt }
     });
   } catch (err) {
     console.error('[auth/login]', err.message);
@@ -93,7 +93,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     const hashed = await bcrypt.hash(password, 12);
     const [user] = await db('User')
       .insert({ id: randomUUID(), email: invitation.email, password: hashed, role: 'member', username: cleanUsername })
-      .returning(['id', 'email', 'role', 'username']);
+      .returning(['id', 'email', 'role', 'username', 'tutorialSeenAt']);
 
     await db('Invitation').where({ token }).update({ used: true });
 
@@ -121,7 +121,7 @@ router.post('/register', registerLimiter, async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'username', 'createdAt')
+      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'createdAt')
       .where({ id: req.user.id })
       .limit(1);
 

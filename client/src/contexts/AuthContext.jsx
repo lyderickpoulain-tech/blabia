@@ -24,13 +24,19 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  // Guide de prise en main : vu (terminé ou fermé) — mémorisé côté serveur, tous appareils
+  const markTutorialSeen = async () => {
+    setUser(u => u && { ...u, tutorialSeenAt: u.tutorialSeenAt || new Date().toISOString() });
+    try { await api.post('/users/me/tutorial-seen'); } catch { /* sans gravité : reproposé à la prochaine connexion */ }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, markTutorialSeen }}>
       {children}
     </AuthContext.Provider>
   );

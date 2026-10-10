@@ -11,7 +11,7 @@ const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 router.get('/me', async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'username', 'createdAt')
+      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'createdAt')
       .where({ id: req.user.id })
       .limit(1);
     if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
@@ -41,6 +41,19 @@ router.patch('/me/username', async (req, res) => {
     res.json({ username: trimmed });
   } catch (err) {
     console.error('[users/me/username PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/users/me/tutorial-seen — guide de prise en main terminé ou fermé
+router.post('/me/tutorial-seen', async (req, res) => {
+  try {
+    const [row] = await db('User').where({ id: req.user.id })
+      .update({ tutorialSeenAt: new Date() }).returning(['tutorialSeenAt']);
+    if (!row) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json(row);
+  } catch (err) {
+    console.error('[users/me/tutorial-seen POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
