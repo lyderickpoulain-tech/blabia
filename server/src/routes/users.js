@@ -25,10 +25,20 @@ router.get('/me', async (req, res) => {
 // PATCH /api/users/me/username — définir ou modifier son pseudo
 router.patch('/me/username', async (req, res) => {
   const { username } = req.body;
-  if (!username || typeof username !== 'string') {
+  if (typeof username !== 'string') {
     return res.status(400).json({ error: 'Pseudo requis' });
   }
   const trimmed = username.trim();
+  // Chaîne vide : suppression du pseudo
+  if (!trimmed) {
+    try {
+      await db('User').where({ id: req.user.id }).update({ username: null });
+      return res.json({ username: null });
+    } catch (err) {
+      console.error('[users/me/username PATCH]', err.message);
+      return res.status(500).json({ error: 'Erreur serveur' });
+    }
+  }
   if (!USERNAME_REGEX.test(trimmed)) {
     return res.status(400).json({ error: 'Pseudo invalide (3-20 caractères, lettres, chiffres, - ou _)' });
   }

@@ -20,7 +20,6 @@ const ProjectDocuments = lazy(() => import('./pages/project/ProjectDocuments'));
 const ProjectTools     = lazy(() => import('./pages/project/ProjectTools'));
 const ProjectTeam      = lazy(() => import('./pages/project/ProjectTeam'));
 const ProjectSettings  = lazy(() => import('./pages/project/ProjectSettings'));
-const AdminInvitations = lazy(() => import('./pages/AdminInvitations'));
 const AdminUsers       = lazy(() => import('./pages/AdminUsers'));
 const ProfilePage      = lazy(() => import('./pages/ProfilePage'));
 const AgentsPage       = lazy(() => import('./pages/AgentsPage'));
@@ -84,9 +83,7 @@ export default function App() {
         } />
         <Route path="/profile/environment" element={<Navigate to="/outils" replace />} />
         <Route path="/profile/toolbox" element={<Navigate to="/outils" replace />} />
-        <Route path="/admin/invitations" element={
-          <ProtectedRoute adminOnly><AdminInvitations /></ProtectedRoute>
-        } />
+        <Route path="/admin/invitations" element={<Navigate to="/admin/users?onglet=invitations" replace />} />
         <Route path="/admin/users" element={
           <ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>
         } />

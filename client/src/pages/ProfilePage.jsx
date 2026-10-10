@@ -1,8 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { Mail, AtSign, Shield, Bell, Send } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
+import { Button, Card } from '../components/ui';
 import api from '../utils/api';
 import { dayName } from '../components/RemindersToggle';
+
+const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
+const ROLE_LABEL = { user: 'Utilisateur (collaborateur invité)', member: 'Membre', admin: 'Administrateur', supervisor: 'Superviseur' };
+const inputCls = 'h-11 px-3.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
+
+function Section({ icon: Icon, title, children }) {
+  return (
+    <section className="px-5 py-5">
+      <h2 className="flex items-center gap-2 text-sm font-extrabold text-ink mb-3">
+        <Icon size={16} className="text-action" aria-hidden="true" /> {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
 
 // Rappels hebdomadaires (v5.1) : jour d'envoi, commun à tous les projets où ils sont activés
 function ReminderSettings() {
@@ -22,78 +39,56 @@ function ReminderSettings() {
     } catch { setStatus('Envoi impossible.'); }
   };
   return (
-    <div className="px-6 py-5">
-      <label htmlFor="reminder-day" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Rappels des actions</label>
+    <Section icon={Bell} title="Rappels des actions">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-gray-700">Chaque</span>
-        <select id="reminder-day" value={day} onChange={e => save(Number(e.target.value))}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blabia-blue bg-white">
+        <label htmlFor="reminder-day" className="text-sm text-ink-soft">Chaque</label>
+        <select id="reminder-day" value={day} onChange={e => save(Number(e.target.value))} className={`${inputCls} pr-8`}>
           {[1, 2, 3, 4, 5, 6, 7].map(d => <option key={d} value={d}>{dayName(d)}</option>)}
         </select>
-        <span className="text-sm text-gray-700">matin</span>
-        <button type="button" onClick={test} className="ml-auto px-3 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50">M'envoyer le rappel maintenant</button>
+        <span className="text-sm text-ink-soft">matin</span>
+        <Button size="sm" variant="secondary" onClick={test} className="ml-auto">
+          <Send size={14} aria-hidden="true" /> M'envoyer le rappel maintenant
+        </Button>
       </div>
-      <p className="text-xs text-gray-400 mt-2">Un e-mail par semaine avec les actions en retard, de la semaine et les prochaines, pour les projets où vous avez activé le rappel (page Actions ou Paramètres du projet).</p>
-      {status && <p className="text-xs font-medium text-gray-600 mt-1" role="status">{status}</p>}
-    </div>
+      <p className="text-xs text-ink-faint mt-2">Un e-mail par semaine avec les actions en retard, de la semaine et les prochaines, pour les projets où vous avez activé le rappel (page Actions ou Paramètres du projet).</p>
+      {status && <p className="text-xs font-bold text-ink-soft mt-1" role="status">{status}</p>}
+    </Section>
   );
 }
 
-const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
-
-const ROLE_LABEL = {
-  user:       'Utilisateur',
-  member:     'Membre',
-  admin:      'Administrateur',
-  supervisor: 'Superviseur',
-};
-
 export default function ProfilePage() {
-  const { user, login } = useAuth();
+  const { user, patchUser } = useAuth();
+  const [username,   setUsername]   = useState(user?.username || '');
+  const [saving,     setSaving]     = useState(false);
+  const [saveResult, setSaveResult] = useState(null); // { type: 'ok'|'error', message }
+  const [checking,   setChecking]   = useState(false);
+  const [available,  setAvailable]  = useState(null); // true | false | null
 
-  const [username,    setUsername]    = useState(user?.username || '');
-  const [saving,      setSaving]      = useState(false);
-  const [saveResult,  setSaveResult]  = useState(null); // { type: 'ok'|'error', message }
-  const [checking,    setChecking]    = useState(false);
-  const [available,   setAvailable]   = useState(null); // true | false | null
+  const val = username.trim();
+  const formatOk  = val === '' || USERNAME_REGEX.test(val);
+  const unchanged = val === (user?.username || '');
 
-  // Validation format
-  const formatOk = username.trim() === '' || USERNAME_REGEX.test(username.trim());
-  const unchanged = username.trim() === (user?.username || '');
-
-  // Vérification disponibilité en temps réel (debounce 500ms)
+  // Disponibilité vérifiée en direct (après 500 ms sans frappe)
   useEffect(() => {
-    const val = username.trim();
-    if (!val || !USERNAME_REGEX.test(val) || val === user?.username) {
-      setAvailable(null);
-      return;
-    }
+    if (!val || !USERNAME_REGEX.test(val) || val === user?.username) { setAvailable(null); return; }
     setChecking(true);
     const timer = setTimeout(async () => {
-      try {
-        const { data } = await api.get(`/users/check-username/${val}`);
-        setAvailable(data.available);
-      } catch {
-        setAvailable(null);
-      } finally {
-        setChecking(false);
-      }
+      try { const { data } = await api.get(`/users/check-username/${val}`); setAvailable(data.available); }
+      catch { setAvailable(null); }
+      finally { setChecking(false); }
     }, 500);
     return () => clearTimeout(timer);
-  }, [username, user?.username]);
+  }, [val, user?.username]);
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    const val = username.trim();
-    if (!val) return;
-    if (!USERNAME_REGEX.test(val)) return;
+  const saveUsername = async (next) => {
     setSaving(true);
     setSaveResult(null);
     try {
-      await api.patch('/users/me/username', { username: val });
-      setSaveResult({ type: 'ok', message: `Pseudo @${val} enregistré.` });
-      // Rafraîchir le profil dans le contexte sans re-login
+      const { data } = await api.patch('/users/me/username', { username: next });
+      patchUser?.({ username: data.username }); // en-tête et menus à jour sans reconnexion
+      setUsername(data.username || '');
       setAvailable(null);
+      setSaveResult({ type: 'ok', message: data.username ? `Pseudo @${data.username} enregistré.` : 'Pseudo supprimé.' });
     } catch (err) {
       setSaveResult({ type: 'error', message: err.response?.data?.error || 'Erreur lors de la sauvegarde' });
     } finally {
@@ -101,113 +96,53 @@ export default function ProfilePage() {
     }
   };
 
-  const handleClear = async () => {
-    setSaving(true);
-    setSaveResult(null);
-    try {
-      await api.patch('/users/me/username', { username: '' });
-      setUsername('');
-      setSaveResult({ type: 'ok', message: 'Pseudo supprimé.' });
-    } catch (err) {
-      setSaveResult({ type: 'error', message: err.response?.data?.error || 'Erreur' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Indicateur disponibilité
-  let availabilityIndicator = null;
-  const val = username.trim();
-  if (val && val !== user?.username) {
-    if (!formatOk) {
-      availabilityIndicator = <span className="text-xs text-red-500">Format invalide (3-20 car., lettres, chiffres, - ou _)</span>;
-    } else if (checking) {
-      availabilityIndicator = <span className="text-xs text-gray-400">Vérification…</span>;
-    } else if (available === true) {
-      availabilityIndicator = <span className="text-xs text-green-600">✓ Disponible</span>;
-    } else if (available === false) {
-      availabilityIndicator = <span className="text-xs text-red-500">✗ Déjà utilisé</span>;
-    }
+  const canSave = !unchanged && val && formatOk && available === true && !saving;
+  let indicator = null;
+  if (val && !unchanged) {
+    if (!formatOk) indicator = <span className="text-red-600">Format invalide (3 à 20 caractères : lettres, chiffres, - ou _)</span>;
+    else if (checking) indicator = <span className="text-ink-faint">Vérification…</span>;
+    else if (available === true) indicator = <span className="text-ok font-bold">✓ Disponible</span>;
+    else if (available === false) indicator = <span className="text-red-600 font-bold">Déjà utilisé</span>;
   }
-
-  const canSave = !unchanged && formatOk && (available === true || val === '') && !saving;
 
   return (
     <Layout>
-      <div className="max-w-lg mx-auto py-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Mon profil</h1>
+      <div className="max-w-xl mx-auto">
+        <h1 className="text-2xl font-extrabold text-ink mb-5">Mon profil</h1>
+        <Card className="divide-y divide-line">
+          <Section icon={Mail} title="E-mail">
+            <p className="text-sm text-ink-soft">{user?.email}</p>
+            <p className="text-xs text-ink-faint mt-0.5">Non modifiable</p>
+          </Section>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
+          <Section icon={Shield} title="Rôle">
+            <p className="text-sm text-ink-soft">{ROLE_LABEL[user?.role] ?? user?.role}</p>
+          </Section>
 
-          {/* Email (non modifiable) */}
-          <div className="px-6 py-5">
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Email</label>
-            <p className="text-sm text-gray-700">{user?.email}</p>
-            <p className="text-xs text-gray-400 mt-0.5">Non modifiable</p>
-          </div>
-
-          {/* Rôle */}
-          <div className="px-6 py-5">
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Rôle</label>
-            <p className="text-sm text-gray-700">{ROLE_LABEL[user?.role] ?? user?.role}</p>
-          </div>
-
-          {/* Pseudo */}
-          <div className="px-6 py-5">
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pseudo</label>
-            <form onSubmit={handleSave} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm font-medium shrink-0">@</span>
-                <input
-                  type="text"
-                  value={username}
+          <Section icon={AtSign} title="Pseudo">
+            <form onSubmit={e => { e.preventDefault(); if (canSave) saveUsername(val); }} className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-ink-faint text-sm font-bold">@</span>
+                <input type="text" value={username} maxLength={20} placeholder="monpseudo" aria-label="Pseudo"
                   onChange={e => { setUsername(e.target.value); setSaveResult(null); }}
-                  placeholder="monpseudo"
-                  maxLength={20}
-                  className={`flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 transition ${
-                    !formatOk && val ? 'border-red-300 focus:ring-red-400' : 'border-gray-300 focus:ring-blabia-blue'
-                  }`}
-                />
+                  className={`${inputCls} flex-1 ${!formatOk && val ? 'border-red-300' : ''}`} />
               </div>
-
-              {availabilityIndicator && <div>{availabilityIndicator}</div>}
-
-              <p className="text-xs text-gray-400">
-                3 à 20 caractères. Lettres, chiffres, tiret (-) et underscore (_) uniquement.
-                Permet d'être invité sur des projets par pseudo plutôt que par email.
-              </p>
-
+              {indicator && <p className="text-xs">{indicator}</p>}
+              <p className="text-xs text-ink-faint">Permet d'être invité sur des projets par pseudo plutôt que par e-mail.</p>
               {saveResult && (
-                <p className={`text-xs font-medium ${saveResult.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
-                  {saveResult.type === 'ok' ? '✓ ' : '⚠ '}{saveResult.message}
-                </p>
+                <p role="status" className={`text-xs font-bold ${saveResult.type === 'ok' ? 'text-ok' : 'text-red-600'}`}>{saveResult.message}</p>
               )}
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={!canSave}
-                  className="px-4 py-2 bg-blabia-blue text-white text-sm font-medium rounded-lg transition disabled:opacity-40"
-                >
-                  {saving ? 'Enregistrement…' : 'Enregistrer'}
-                </button>
+              <div className="flex gap-2 pt-1">
+                <Button type="submit" size="sm" variant="primary" disabled={!canSave}>{saving ? 'Enregistrement…' : 'Enregistrer'}</Button>
                 {user?.username && (
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    disabled={saving}
-                    className="px-4 py-2 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition disabled:opacity-40"
-                  >
-                    Supprimer le pseudo
-                  </button>
+                  <Button size="sm" variant="ghost" onClick={() => saveUsername('')} disabled={saving}>Supprimer le pseudo</Button>
                 )}
               </div>
             </form>
-          </div>
+          </Section>
 
           <ReminderSettings />
-
-        </div>
+        </Card>
       </div>
     </Layout>
   );

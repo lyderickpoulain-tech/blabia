@@ -17,10 +17,15 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Ouvre la session (connexion ou inscription par invitation)
+  const signIn = (token, nextUser) => {
+    localStorage.setItem('token', token);
+    setUser(nextUser);
+  };
+
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('token', data.token);
-    setUser(data.user);
+    signIn(data.token, data.user);
     return data.user;
   };
 
@@ -39,7 +44,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, markTutorialSeen, patchUser }}>
+    <AuthContext.Provider value={{ user, loading, login, signIn, logout, markTutorialSeen, patchUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,44 +1,51 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Users, Mail, MailCheck, UserPlus, Trash2, Copy, Check, X } from 'lucide-react';
 import Layout from '../components/Layout';
+import { Button, IconButton, Badge, Card } from '../components/ui';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { notifyError } from '../utils/notify';
 
 // ── Badges rôle ───────────────────────────────────────────────────────────────
 
 const ROLE_BADGE = {
-  user:       { label: 'User',       cls: 'bg-gray-100 text-gray-500 border-gray-200'       },
-  member:     { label: 'Member',     cls: 'bg-blue-50 text-blue-600 border-blue-200'         },
-  admin:      { label: 'Admin',      cls: 'bg-blue-100 text-blue-800 border-blue-300'        },
-  supervisor: { label: 'Supervisor', cls: 'bg-orange-100 text-orange-700 border-orange-300'  },
+  user:       { label: 'Utilisateur',    tone: 'muted'  },
+  member:     { label: 'Membre',         tone: 'action' },
+  admin:      { label: 'Administrateur', tone: 'ai'     },
+  supervisor: { label: 'Superviseur',    tone: 'await'  },
 };
 
 function RoleBadge({ role }) {
   const cfg = ROLE_BADGE[role] || ROLE_BADGE.member;
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.cls}`}>
-      {cfg.label}
-    </span>
-  );
+  return <Badge tone={cfg.tone}>{cfg.label}</Badge>;
 }
 
 function InviteStatusBadge({ used }) {
-  return used
-    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Utilisée</span>
-    : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">En attente</span>;
+  return used ? <Badge tone="muted">Utilisée</Badge> : <Badge tone="ok">En attente</Badge>;
 }
 
 function CopyButton({ token }) {
   const [copied, setCopied] = useState(false);
   const link = `${window.location.origin}/login?token=${token}`;
   const copy = async () => {
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    catch (err) { notifyError(err, 'Copie impossible : sélectionnez le lien à la main.'); }
   };
   return (
-    <button onClick={copy} className="text-xs text-blabia-blue hover:text-blue-800 transition" title={link}>
-      {copied ? '✓ Copié' : 'Copier le lien'}
+    <button onClick={copy} title={link} className="inline-flex items-center gap-1 text-xs font-bold text-action hover:underline">
+      {copied ? <><Check size={13} aria-hidden="true" /> Copié</> : <><Copy size={13} aria-hidden="true" /> Copier le lien</>}
     </button>
+  );
+}
+
+function Notice({ tone, onClose, children }) {
+  return (
+    <div role={tone === 'error' ? 'alert' : 'status'} className={`mb-4 flex items-start justify-between gap-3 px-4 py-3 rounded-xl border text-sm ${
+      tone === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-ok-light/60 border-ok-border text-ok'}`}>
+      <span>{children}</span>
+      <button onClick={onClose} aria-label="Fermer" className="shrink-0"><X size={15} aria-hidden="true" /></button>
+    </div>
   );
 }
 
@@ -61,7 +68,8 @@ function RoleDropdown({ user: target, requesterRole, onRoleChange, updating }) {
       value={target.role}
       disabled={updating}
       onChange={e => onRoleChange(target.id, e.target.value)}
-      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-2 focus:ring-blabia-blue outline-none disabled:opacity-50"
+      aria-label={`Rôle de ${target.email}`}
+      className="text-xs h-8 border border-line rounded-lg px-2 bg-white text-ink-soft focus:ring-2 focus:ring-action outline-none disabled:opacity-50"
     >
       {availableRoles.map(r => (
         <option key={r} value={r}>{ROLE_BADGE[r]?.label ?? r}</option>
@@ -74,7 +82,9 @@ function RoleDropdown({ user: target, requesterRole, onRoleChange, updating }) {
 
 export default function AdminUsers() {
   const { user: me } = useAuth();
-  const [tab, setTab] = useState('users');
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('onglet') === 'invitations' ? 'invitations' : 'users';
+  const setTab = t => setParams(t === 'users' ? {} : { onglet: t }, { replace: true });
 
   // État utilisateurs
   const [users, setUsers]           = useState([]);
@@ -104,8 +114,8 @@ export default function AdminUsers() {
     try {
       const { data } = await api.get('/admin/users');
       setUsers(data);
-    } catch {
-      // silently fail
+    } catch (err) {
+      notifyError(err, 'Impossible de charger les comptes.');
     } finally {
       setUsersLoading(false);
     }
@@ -116,8 +126,8 @@ export default function AdminUsers() {
     try {
       const { data } = await api.get('/admin/invitations');
       setInvitations(data);
-    } catch {
-      // silently fail
+    } catch (err) {
+      notifyError(err, 'Impossible de charger les invitations.');
     } finally {
       setInvLoading(false);
     }
@@ -169,7 +179,7 @@ export default function AdminUsers() {
       await api.delete(`/admin/invitations/${id}`);
       setInvitations(prev => prev.filter(i => i.id !== id));
     } catch (err) {
-      alert(err.response?.data?.error || 'Erreur lors de la suppression');
+      notifyError(err, 'Erreur lors de la suppression');
     }
   };
 
@@ -188,251 +198,166 @@ export default function AdminUsers() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  const counts = ['supervisor', 'admin', 'member', 'user'].map(r => [r, users.filter(u => u.role === r).length]).filter(([, n]) => n);
+  const thCls = 'text-left text-[11px] font-extrabold uppercase tracking-wider text-ink-muted px-4 py-3';
+
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Administration</h1>
-          <p className="text-gray-500 text-sm mt-1">Gérez les utilisateurs et les accès</p>
+          <h1 className="text-2xl font-extrabold text-ink">Administration</h1>
+          <p className="text-sm text-ink-muted mt-1">Les comptes, leurs rôles et les invitations.</p>
         </div>
         {tab === 'invitations' && (
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleTestEmail}
-              disabled={testStatus === 'sending'}
-              className="text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 px-3 py-2 rounded-lg transition disabled:opacity-50"
-            >
-              {testStatus === 'sending' ? 'Envoi…' : '📧 Tester email'}
-            </button>
-            <button
-              onClick={() => { setShowInvModal(true); setInvError(''); }}
-              className="bg-blabia-blue text-white font-medium px-4 py-2 rounded-lg transition text-sm"
-            >
-              + Inviter
-            </button>
+            <Button size="sm" variant="secondary" onClick={handleTestEmail} disabled={testStatus === 'sending'}>
+              <MailCheck size={15} aria-hidden="true" /> {testStatus === 'sending' ? 'Envoi…' : 'Tester l’e-mail'}
+            </Button>
+            <Button size="sm" variant="primary" onClick={() => { setShowInvModal(true); setInvError(''); }}>
+              <UserPlus size={15} aria-hidden="true" /> Inviter
+            </Button>
           </div>
         )}
       </div>
 
       {/* Onglets */}
-      <div data-tour="admin-tabs" className="flex gap-1 mb-6 border-b border-gray-200">
-        {[
-          { id: 'users',       label: '👥 Utilisateurs' },
-          { id: 'invitations', label: '✉️ Invitations'   },
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
-              tab === t.id
-                ? 'border-blabia-blue text-blabia-blue'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t.label}
+      <div data-tour="admin-tabs" role="tablist" className="inline-flex bg-white border border-line rounded-[10px] p-1 gap-1 mb-5">
+        {[{ id: 'users', label: 'Comptes', icon: Users }, { id: 'invitations', label: 'Invitations', icon: Mail }].map(t => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm transition ${tab === t.id ? 'bg-action-light text-action font-extrabold' : 'text-ink-muted font-semibold hover:bg-canvas'}`}>
+            <t.icon size={15} aria-hidden="true" /> {t.label}
           </button>
         ))}
       </div>
 
-      {/* ── Onglet Utilisateurs ───────────────────────────────────────────── */}
+      {/* ── Comptes ───────────────────────────────────────────────────────── */}
       {tab === 'users' && (
         <>
-          {roleError && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between">
-              {roleError}
-              <button onClick={() => setRoleError('')} className="ml-4 font-bold">×</button>
-            </div>
-          )}
+          {roleError && <Notice tone="error" onClose={() => setRoleError('')}>{roleError}</Notice>}
 
-          <div data-tour="admin-users" className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <Card data-tour="admin-users" className="overflow-hidden">
             <table className="w-full hidden md:table">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Email</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Rôle actuel</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Membre depuis</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Action</th>
-                </tr>
+              <thead className="bg-canvas border-b border-line">
+                <tr><th className={thCls}>Compte</th><th className={thCls}>Rôle</th><th className={thCls}>Depuis le</th><th className={thCls}>Modifier le rôle</th></tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-line">
                 {usersLoading ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">Chargement…</td></tr>
+                  <tr><td colSpan={4} className="text-center py-8 text-ink-faint">Chargement…</td></tr>
                 ) : users.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">Aucun utilisateur</td></tr>
+                  <tr><td colSpan={4} className="text-center py-8 text-ink-faint">Aucun compte</td></tr>
                 ) : users.map(u => (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      {u.email}
-                      {u.username && <span className="ml-1.5 text-xs text-gray-400">@{u.username}</span>}
-                      {u.id === me?.id && <span className="ml-2 text-xs text-gray-400">(vous)</span>}
+                  <tr key={u.id} className="hover:bg-canvas/60">
+                    <td className="px-4 py-3 text-sm">
+                      <span className="font-bold text-ink">{u.email}</span>
+                      {u.username && <span className="ml-1.5 text-xs text-ink-faint">@{u.username}</span>}
+                      {u.id === me?.id && <span className="ml-2 text-xs text-ink-faint">(vous)</span>}
                     </td>
                     <td className="px-4 py-3"><RoleBadge role={u.role} /></td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{formatDate(u.createdAt)}</td>
+                    <td className="px-4 py-3 text-sm text-ink-muted">{formatDate(u.createdAt)}</td>
                     <td className="px-4 py-3">
-                      {u.id !== me?.id && (
-                        <RoleDropdown
-                          user={u}
-                          requesterRole={me?.role}
-                          onRoleChange={handleRoleChange}
-                          updating={updatingId === u.id}
-                        />
-                      )}
+                      {u.id !== me?.id && <RoleDropdown user={u} requesterRole={me?.role} onRoleChange={handleRoleChange} updating={updatingId === u.id} />}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            {/* Cards mobile */}
-            <div className="md:hidden divide-y divide-gray-100">
-              {usersLoading ? (
-                <p className="text-center text-gray-400 py-8">Chargement…</p>
-              ) : users.map(u => (
+            <div className="md:hidden divide-y divide-line">
+              {usersLoading ? <p className="text-center text-ink-faint py-8">Chargement…</p> : users.map(u => (
                 <div key={u.id} className="p-4 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{u.email}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{formatDate(u.createdAt)}</p>
+                    <p className="text-sm font-bold text-ink truncate">{u.email}</p>
+                    <p className="text-xs text-ink-faint mt-0.5">{formatDate(u.createdAt)}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {u.id !== me?.id ? (
-                      <RoleDropdown
-                        user={u}
-                        requesterRole={me?.role}
-                        onRoleChange={handleRoleChange}
-                        updating={updatingId === u.id}
-                      />
-                    ) : (
-                      <RoleBadge role={u.role} />
-                    )}
-                  </div>
+                  {u.id !== me?.id
+                    ? <RoleDropdown user={u} requesterRole={me?.role} onRoleChange={handleRoleChange} updating={updatingId === u.id} />
+                    : <RoleBadge role={u.role} />}
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          <p className="text-xs text-gray-400 mt-3">
-            {users.length} utilisateur{users.length !== 1 ? 's' : ''} ·{' '}
-            {users.filter(u => u.role === 'supervisor').length} supervisor ·{' '}
-            {users.filter(u => u.role === 'admin').length} admin ·{' '}
-            {users.filter(u => u.role === 'member').length} member ·{' '}
-            {users.filter(u => u.role === 'user').length} user
+          <p className="text-xs text-ink-faint mt-3">
+            {users.length} compte{users.length !== 1 ? 's' : ''}{counts.length > 0 && ' · '}{counts.map(([r, n]) => `${n} ${ROLE_BADGE[r].label.toLowerCase()}`).join(' · ')}
           </p>
+          <ul className="mt-3 text-xs text-ink-muted space-y-0.5">
+            <li><strong className="text-ink-soft">Membre</strong> : crée et mène ses propres projets.</li>
+            <li><strong className="text-ink-soft">Utilisateur</strong> : collaborateur, voit seulement les projets où il est invité.</li>
+            <li><strong className="text-ink-soft">Administrateur</strong> : tous les projets et l’administration.</li>
+          </ul>
         </>
       )}
 
-      {/* ── Onglet Invitations ─────────────────────────────────────────────── */}
+      {/* ── Invitations ───────────────────────────────────────────────────── */}
       {tab === 'invitations' && (
         <>
-          {testStatus === 'ok' && (
-            <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm flex justify-between">
-              <span>✓ Email de test envoyé</span>
-              <button onClick={() => setTestStatus('idle')} className="ml-4 font-bold">×</button>
-            </div>
-          )}
-          {testStatus === 'error' && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between">
-              <span>⚠ {testError}</span>
-              <button onClick={() => setTestStatus('idle')} className="ml-4 font-bold">×</button>
-            </div>
-          )}
-          {invSuccess && (
-            <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm flex justify-between">
-              {invSuccess}
-              <button onClick={() => setInvSuccess('')} className="ml-4 font-bold">×</button>
-            </div>
-          )}
+          {testStatus === 'ok' && <Notice tone="ok" onClose={() => setTestStatus('idle')}>E-mail de test envoyé.</Notice>}
+          {testStatus === 'error' && <Notice tone="error" onClose={() => setTestStatus('idle')}>{testError}</Notice>}
+          {invSuccess && <Notice tone="ok" onClose={() => setInvSuccess('')}>{invSuccess}</Notice>}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <Card className="overflow-hidden">
             <table className="w-full hidden md:table">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Email</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Statut</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Date</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Lien</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
+              <thead className="bg-canvas border-b border-line">
+                <tr><th className={thCls}>Invité</th><th className={thCls}>Statut</th><th className={thCls}>Date</th><th className={thCls}>Lien</th><th className="px-4 py-3"></th></tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-line">
                 {invLoading ? (
-                  <tr><td colSpan={5} className="text-center py-8 text-gray-400">Chargement…</td></tr>
+                  <tr><td colSpan={5} className="text-center py-8 text-ink-faint">Chargement…</td></tr>
                 ) : invitations.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-8 text-gray-400">Aucune invitation</td></tr>
+                  <tr><td colSpan={5} className="text-center py-8 text-ink-faint">Aucune invitation</td></tr>
                 ) : invitations.map(inv => (
-                  <tr key={inv.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{inv.email}</td>
+                  <tr key={inv.id} className="hover:bg-canvas/60">
+                    <td className="px-4 py-3 text-sm font-bold text-ink">{inv.email}</td>
                     <td className="px-4 py-3"><InviteStatusBadge used={inv.used} /></td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{formatDate(inv.createdAt)}</td>
+                    <td className="px-4 py-3 text-sm text-ink-muted">{formatDate(inv.createdAt)}</td>
                     <td className="px-4 py-3">{!inv.used && <CopyButton token={inv.token} />}</td>
                     <td className="px-4 py-3 text-right">
                       {!inv.used && (
-                        <button onClick={() => handleDeleteInvitation(inv.id)} className="text-xs text-red-500 hover:text-red-700 transition">
-                          Supprimer
-                        </button>
+                        <IconButton size="sm" label="Supprimer l’invitation" className="hover:!text-red-600" onClick={() => handleDeleteInvitation(inv.id)}>
+                          <Trash2 size={15} aria-hidden="true" />
+                        </IconButton>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            {/* Cards mobile */}
-            <div className="md:hidden divide-y divide-gray-100">
-              {invLoading ? (
-                <p className="text-center text-gray-400 py-8 px-4">Chargement…</p>
-              ) : invitations.length === 0 ? (
-                <p className="text-center text-gray-400 py-8 px-4">Aucune invitation</p>
-              ) : invitations.map(inv => (
-                <div key={inv.id} className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="font-medium text-gray-900 text-sm break-all">{inv.email}</p>
-                    <InviteStatusBadge used={inv.used} />
-                  </div>
-                  <p className="text-xs text-gray-400 mb-3">{formatDate(inv.createdAt)}</p>
-                  <div className="flex items-center gap-3">
-                    {!inv.used && <CopyButton token={inv.token} />}
+            <div className="md:hidden divide-y divide-line">
+              {invLoading ? <p className="text-center text-ink-faint py-8 px-4">Chargement…</p>
+                : invitations.length === 0 ? <p className="text-center text-ink-faint py-8 px-4">Aucune invitation</p>
+                : invitations.map(inv => (
+                  <div key={inv.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-bold text-ink text-sm break-all">{inv.email}</p>
+                      <InviteStatusBadge used={inv.used} />
+                    </div>
+                    <p className="text-xs text-ink-faint mb-2">{formatDate(inv.createdAt)}</p>
                     {!inv.used && (
-                      <button onClick={() => handleDeleteInvitation(inv.id)} className="text-xs text-red-500 hover:text-red-700">
-                        Supprimer
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <CopyButton token={inv.token} />
+                        <button onClick={() => handleDeleteInvitation(inv.id)} className="text-xs font-bold text-red-600">Supprimer</button>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
-          </div>
+          </Card>
 
-          {/* Modal invitation */}
           {showInvModal && (
-            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">Inviter quelqu'un</h2>
+            <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div role="dialog" aria-modal="true" aria-labelledby="inv-title" className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                <h2 id="inv-title" className="text-lg font-extrabold text-ink mb-4">Inviter quelqu’un</h2>
                 <form onSubmit={handleCreateInvitation} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email ou @pseudo</label>
-                    <input
-                      type="text"
-                      required
-                      value={invEmail}
-                      onChange={e => setInvEmail(e.target.value)}
-                      placeholder="invite@example.com ou @pseudo"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none"
-                      autoFocus
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    L'invité recevra un lien d'inscription avec le rôle <strong>member</strong> par défaut. Vous pourrez modifier son rôle après inscription.
-                  </p>
-                  {invError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{invError}</div>
-                  )}
-                  <div className="flex gap-3 pt-2">
-                    <button type="button" onClick={() => setShowInvModal(false)} className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
-                      Annuler
-                    </button>
-                    <button type="submit" disabled={submitting} className="flex-1 bg-blabia-blue text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50">
-                      {submitting ? 'Envoi…' : 'Envoyer l\'invitation'}
-                    </button>
+                  <label className="block">
+                    <span className="block text-sm font-bold text-ink-soft mb-1">E-mail ou @pseudo</span>
+                    <input type="text" required value={invEmail} onChange={e => setInvEmail(e.target.value)} autoFocus
+                      placeholder="invite@exemple.com ou @pseudo"
+                      className="w-full h-11 px-3.5 border border-line rounded-[10px] text-sm text-ink outline-none focus:ring-2 focus:ring-action focus:border-transparent" />
+                  </label>
+                  <p className="text-xs text-ink-muted">L’invité reçoit un lien d’inscription avec le rôle <strong>Membre</strong>. Vous pourrez changer son rôle après son inscription.</p>
+                  {invError && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-[10px] text-sm">{invError}</div>}
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="secondary" className="flex-1" onClick={() => setShowInvModal(false)}>Annuler</Button>
+                    <Button type="submit" variant="primary" className="flex-1" disabled={submitting}>{submitting ? 'Envoi…' : 'Envoyer l’invitation'}</Button>
                   </div>
                 </form>
               </div>
