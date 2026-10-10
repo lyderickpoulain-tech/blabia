@@ -6,6 +6,8 @@ import { Button, Badge, Card } from '../components/ui';
 import { formatUSD } from '../utils/cost';
 import api from '../utils/api';
 import { notifyError } from '../utils/notify';
+import { useTour } from '../tour/TourContext';
+import NewProjectChoiceModal from '../components/NewProjectChoiceModal';
 
 const STATUS_TABS = [
   { key: 'active',   label: 'Actifs' },
@@ -71,7 +73,11 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState('active');
   const [archiving, setArchiving] = useState(null);
+  const [choosing, setChoosing] = useState(false);
   const navigate = useNavigate();
+  const tour = useTour();
+  // « Nouveau projet » : choix projet de démo / formulaire (direct pendant la visite guidée)
+  const newProject = () => (tour?.active ? navigate('/projects/new') : setChoosing(true));
 
   useEffect(() => {
     const load = () => api.get('/projects')
@@ -126,7 +132,7 @@ export default function Dashboard() {
             {totalCost > 0 && <> · {formatUSD(totalCost)} de coût IA au total</>}
           </p>
         </div>
-        <Button data-tour="new-project" variant="primary" onClick={() => navigate('/projects/new')}>
+        <Button data-tour="new-project" variant="primary" onClick={newProject}>
           <Plus size={18} aria-hidden="true" /> Nouveau projet
         </Button>
       </div>
@@ -175,7 +181,7 @@ export default function Dashboard() {
             <>
               <p className="text-base font-extrabold text-ink mb-1">Aucun projet pour l'instant</p>
               <p className="text-sm text-ink-muted mb-4">Décrivez votre idée : BlabIA compose une équipe d'agents et propose un plan de réunions.</p>
-              <Button variant="primary" onClick={() => navigate('/projects/new')}>
+              <Button variant="primary" onClick={newProject}>
                 <Plus size={18} aria-hidden="true" /> Créer mon premier projet
               </Button>
             </>
@@ -186,6 +192,7 @@ export default function Dashboard() {
           )}
         </Card>
       )}
+      {choosing && <NewProjectChoiceModal onClose={() => setChoosing(false)} />}
     </Layout>
   );
 }

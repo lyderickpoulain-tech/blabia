@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, FlaskConical } from 'lucide-react';
-import { notifyError } from '../utils/notify';
+import { ArrowLeft } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import api from '../utils/api';
@@ -50,19 +49,6 @@ export default function NewProject() {
   const tour = useTour();
   const inTour = tour?.active && tour.chapterId === 'create';
 
-  // Projet de test pré-rempli (POST /projects/test-sample)
-  const [creatingSample, setCreatingSample] = useState(false);
-  const createSample = async () => {
-    setCreatingSample(true);
-    try {
-      const { data } = await api.post('/projects/test-sample');
-      navigate(`/projects/${data.id}`);
-    } catch (err) {
-      notifyError(err, 'Le projet de test n’a pas pu être créé.');
-      setCreatingSample(false);
-    }
-  };
-
   // Visite guidée : formulaire pré-rempli avec le projet exemple (salon de thé)
   useEffect(() => {
     if (!tour?.step?.prefill) return;
@@ -102,20 +88,6 @@ export default function NewProject() {
 
         <h1 className="text-2xl font-extrabold text-ink">Nouveau projet</h1>
         <p className="text-sm text-ink-muted mt-1 mb-5">Plus le brief est précis, moins les agents auront de questions à vous poser.</p>
-
-        {/* Projet de test pré-rempli (masqué pendant la visite guidée, qui crée son propre exemple) */}
-        {!inTour && (
-          <Card className="p-4 mb-4 flex flex-wrap items-center gap-3 border-ai-border bg-ai-bg">
-            <FlaskConical size={20} className="text-ai shrink-0" aria-hidden="true" />
-            <div className="flex-1 min-w-[220px]">
-              <p className="text-sm font-extrabold text-ink">Pour essayer BlabIA sans partir de zéro</p>
-              <p className="text-xs text-ink-muted">Un projet de test pré-rempli (salon de thé) : plan, réunions, décisions, actions, documents, missions. Les agents y sont actifs, avec le coût habituel.</p>
-            </div>
-            <Button variant="secondary" size="sm" disabled={creatingSample} onClick={createSample} className="text-ai border-ai-border">
-              {creatingSample ? 'Création…' : 'Créer un projet de test pré-rempli'}
-            </Button>
-          </Card>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Block title="Identité" tour="np-identity">

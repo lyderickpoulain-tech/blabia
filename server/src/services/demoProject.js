@@ -126,7 +126,7 @@ async function createTestProject(user) {
   const stamp = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Paris' });
   return seedSalonProject(user, {
     isDemo: false,
-    name: `Projet de test — Salon de thé (${stamp})`,
+    name: `Projet de démo — Salon de thé (${stamp})`,
     description: 'Projet pré-rempli pour tester BlabIA : réunions, décisions, actions, documents et missions. Les agents sont actifs : les réunions et les missions ont un coût réel.',
   });
 }

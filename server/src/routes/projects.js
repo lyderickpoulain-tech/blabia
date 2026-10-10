@@ -119,7 +119,7 @@ router.post('/demo', async (req, res) => {
   }
 });
 
-// POST /api/projects/test-sample — projet de test pré-rempli (même contenu que l'exemple),
+// POST /api/projects/test-sample — projet de démo pré-rempli (même contenu que l'exemple),
 // agents actifs, conservé. Comme toute création de projet : interdit au rôle « user ».
 router.post('/test-sample', async (req, res) => {
   if (req.user.role === 'user') return res.status(403).json({ error: 'Votre compte ne permet pas de créer des projets' });
@@ -127,7 +127,7 @@ router.post('/test-sample', async (req, res) => {
     res.status(201).json(await createTestProject(req.user));
   } catch (err) {
     console.error('[projects/test-sample POST]', err.message);
-    res.status(500).json({ error: 'Impossible de créer le projet de test' });
+    res.status(500).json({ error: 'Impossible de créer le projet de démo' });
   }
 });
 

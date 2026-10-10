@@ -128,6 +128,11 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                 La visite se déroule sur les vraies pages, avec un <strong>projet exemple</strong> : un salon de thé à Lyon.
                 Les agents ne sont pas sollicités (aucun coût) et l'exemple est supprimé à la fin.
               </p>
+              {kind !== 'user' && (
+                <p className="text-xs text-ink-muted text-center">
+                  Pour essayer ensuite avec des agents actifs : « Nouveau projet » → <strong>« Créer un projet de démo »</strong> (le même salon de thé, conservé, avec le coût habituel).
+                </p>
+              )}
               <ol className="space-y-1.5">
                 {chapters.map((c, i) => {
                   const done = !!tourProgress?.[c.id];

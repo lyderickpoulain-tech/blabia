@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'module';
 
-// Projet de test pré-rempli (bouton « Créer un projet de test pré-rempli ») : même
+// Projet de démo pré-rempli (« Nouveau projet » → « Créer un projet de démo ») : même
 // contenu que l'exemple de la visite, mais agents ACTIFS et conservé.
 const require = createRequire(import.meta.url);
 const harness = require('./harness');
 
-describe.skipIf(!harness.enabled)('projet de test pré-rempli', () => {
+describe.skipIf(!harness.enabled)('projet de démo pré-rempli', () => {
   let h, member, invited;
   beforeAll(async () => {
     h = await harness.start();
@@ -24,7 +24,7 @@ describe.skipIf(!harness.enabled)('projet de test pré-rempli', () => {
     pid = r.body.id;
     const [p] = await h.db('Project').where({ id: pid });
     expect(p.isDemo).toBe(false);
-    expect(p.name).toMatch(/^Projet de test — Salon de thé/);
+    expect(p.name).toMatch(/^Projet de démo — Salon de thé/);
     const count = async t => Number((await h.db(t).where({ projectId: pid }).count('* as n'))[0].n);
     expect({ réunions: await count('Session'), plan: await count('Milestone'), décisions: await count('Decision'),
       actions: await count('TodoItem'), documents: await count('ProjectDocument'), missions: await count('AgentMission') })

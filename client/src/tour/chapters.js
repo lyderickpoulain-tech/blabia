@@ -19,7 +19,7 @@ export const CHAPTERS = [
     steps: [
       { path: () => '/dashboard', target: 'new-project', placement: 'bottom',
         title: 'Tout commence par un projet',
-        body: 'Un projet, c’est un objectif à atteindre : ouvrir un commerce, organiser un événement, lancer une application… Créons-en un ensemble, pour l’exemple.' },
+        body: 'Un projet, c’est un objectif à atteindre : ouvrir un commerce, organiser un événement, lancer une application… Ce bouton propose aussi un « projet de démo » déjà avancé, pour essayer avec de vrais agents. Ici, créons-en un ensemble, pour l’exemple.' },
       { path: () => '/projects/new', target: 'np-identity', prefill: true,
         title: 'Un nom, une description',
         body: 'Pour la visite, le formulaire est pré-rempli : un salon de thé à Lyon. Rien ne sera envoyé aux agents.' },
