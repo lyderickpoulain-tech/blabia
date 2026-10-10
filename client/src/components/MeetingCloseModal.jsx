@@ -4,14 +4,8 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
 import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
-
-const TYPE_META = {
-  decision:    { icon: '🤝', label: 'Décision' },
-  claude_code: { icon: '💻', label: 'Claude Code' },
-  stack:       { icon: '🔧', label: 'Outils' },
-};
-
-const STEPS = ['generating', 'review', 'suggestions'];
+import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Button, IconButton, Badge, SectionLabel } from './ui';
 
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
 // à l'ouverture, puis assistant en 3 étapes : relecture CR + livrable → revue
@@ -44,8 +38,6 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   const [applyError,     setApplyError]     = useState('');
   const [abandonConfirm, setAbandonConfirm] = useState(false);
   const [abandoning,     setAbandoning]     = useState(false);
-
-  const meta = TYPE_META[meetingType] || TYPE_META.decision;
 
   useEffect(() => { generate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -153,232 +145,250 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
     }
   };
 
-  const stepIndex = STEPS.indexOf(step);
+  const decisionMessages = (Array.isArray(session.messages) ? session.messages : []).filter(m => m.type === 'decision');
+  const deferred = decisionMessages.filter(m => m.status === 'deferred' || m.status === 'pending');
+  const answered = decisionMessages.filter(m => m.status === 'answered');
 
   return (
     <>
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] flex flex-col">
+    <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="close-title"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
 
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
+        {/* En-tête */}
+        <div className="flex items-start gap-3 px-5 pt-4 pb-3 border-b border-line shrink-0">
+          <span className="w-10 h-10 rounded-xl bg-ok-light text-ok inline-flex items-center justify-center shrink-0">
+            <Flag size={20} aria-hidden="true" />
+          </span>
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-gray-900">🏁 Conclure la réunion</h2>
-            <p className="text-xs text-gray-400 mt-0.5 truncate">{session.task}</p>
+            <h2 id="close-title" className="text-lg font-extrabold text-ink">Conclure la réunion</h2>
+            <p className="text-xs text-ink-muted truncate">{session.task}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">✕</button>
+          <IconButton label="Fermer" size="sm" onClick={onClose}><X size={18} aria-hidden="true" /></IconButton>
         </div>
 
         {/* Fil des étapes */}
-        {step !== 'generating' && (
-          <div className="flex items-center gap-1.5 px-5 py-2 border-b border-gray-50 shrink-0 text-[10px] text-gray-400">
-            <span className={step === 'review' ? 'font-semibold text-blabia-blue' : ''}>1. Relecture</span>
-            <span>→</span>
-            <span className={step === 'suggestions' ? 'font-semibold text-blabia-blue' : ''}>2. Réunions suggérées</span>
-          </div>
-        )}
+        <ol className="flex items-center gap-2 px-5 py-2.5 border-b border-line shrink-0 text-xs">
+          {[['review', 'Relecture'], ['suggestions', 'Suite du plan']].map(([key, label], i) => {
+            const active = step === key || (key === 'review' && step === 'generating');
+            const done   = key === 'review' && step === 'suggestions';
+            return (
+              <li key={key} className="flex items-center gap-2">
+                {i > 0 && <span className="w-6 h-px bg-line" aria-hidden="true" />}
+                <span className={`w-5 h-5 rounded-full inline-flex items-center justify-center text-[11px] font-extrabold ${
+                  done ? 'bg-ok text-white' : active ? 'bg-action text-white' : 'bg-muted-light text-ink-muted'
+                }`}>
+                  {done ? <Check size={12} strokeWidth={3} aria-hidden="true" /> : i + 1}
+                </span>
+                <span className={active ? 'font-extrabold text-ink' : 'font-semibold text-ink-muted'}>{label}</span>
+              </li>
+            );
+          })}
+        </ol>
 
         {/* Corps */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
           {step === 'generating' && (
-            <div className="flex items-center gap-3 py-10 justify-center">
-              <span className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-sm text-gray-400">Génération du compte-rendu{meetingType === 'claude_code' ? ' et du prompt' : ''}…</span>
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <span className="w-8 h-8 border-2 border-ai border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm font-bold text-ai">BlabIA rédige le compte-rendu{meetingType === 'claude_code' ? ' et le prompt' : ''}…</p>
+              <p className="text-xs text-ink-faint">Il identifie aussi les décisions à inscrire au registre.</p>
             </div>
           )}
 
           {genError && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
-              <p className="text-sm text-red-700">⚠️ {genError}</p>
-              <button onClick={generate} className="text-xs text-red-600 underline hover:no-underline">Réessayer</button>
+            <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
+              <p className="text-sm text-red-700">{genError}</p>
+              <Button size="sm" variant="danger" onClick={generate}><RotateCcw size={14} aria-hidden="true" /> Réessayer</Button>
             </div>
           )}
 
           {step === 'review' && !genError && (
             <>
-              {/* Décisions */}
-              {(() => {
-                const allDecisions = (Array.isArray(session.messages) ? session.messages : [])
-                  .filter(m => m.type === 'decision');
-                const deferred = allDecisions.filter(m => m.status === 'deferred' || m.status === 'pending');
-                const answered = allDecisions.filter(m => m.status === 'answered');
-                if (allDecisions.length === 0) return null;
-                return (
-                  <div className="space-y-2">
-                    {deferred.length > 0 && (
-                      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-2">
-                        <h3 className="text-xs font-semibold text-orange-700 uppercase tracking-wide">⏸ À traiter ({deferred.length})</h3>
-                        <ul className="space-y-1.5">
-                          {deferred.map((m, i) => (
-                            <li key={m.id || i} className="text-sm text-orange-900 flex items-start gap-2">
-                              <span className="text-orange-400 shrink-0 mt-0.5 font-bold">·</span>
-                              <span className="leading-snug">{m.question}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {answered.length > 0 && (
-                      <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
-                        <h3 className="text-xs font-semibold text-green-700 uppercase tracking-wide">✅ Actées ({answered.length})</h3>
-                        <ul className="space-y-1.5">
-                          {answered.map((m, i) => (
-                            <li key={m.id || i} className="text-sm text-gray-700 flex items-start gap-2">
-                              <span className="text-green-500 shrink-0 mt-0.5 font-bold">·</span>
-                              <span className="leading-snug">
-                                <span className="text-gray-600">{m.question}</span>
-                                {m.answer && <span className="font-semibold text-green-700"> → {m.answer}</span>}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* Arbitrages de la réunion */}
+              {decisionMessages.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {answered.length > 0 && (
+                    <div className="rounded-xl border border-ok-border bg-ok-light/50 p-3.5">
+                      <SectionLabel className="!text-ok mb-2">Actées · {answered.length}</SectionLabel>
+                      <ul className="space-y-1.5">
+                        {answered.map((m, i) => (
+                          <li key={m.id || i} className="text-sm text-ink-soft leading-snug">
+                            {m.question}
+                            {m.answer && <span className="font-extrabold text-ok"> → {m.answer}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {deferred.length > 0 && (
+                    <div className="rounded-xl border border-await-border bg-await-bg p-3.5">
+                      <SectionLabel className="!text-await mb-2">Restent à trancher · {deferred.length}</SectionLabel>
+                      <ul className="space-y-1.5">
+                        {deferred.map((m, i) => (
+                          <li key={m.id || i} className="text-sm text-ink-soft leading-snug">{m.question}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {/* Compte-rendu (toujours, éditable) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">📋</span>
-                  <span className="text-sm font-semibold text-gray-700">Compte-rendu</span>
+              {/* Compte-rendu (éditable) */}
+              <section className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                    <FileText size={16} className="text-ai" aria-hidden="true" /> Compte-rendu
+                    <Badge tone="ai">Rédigé par BlabIA</Badge>
+                  </h3>
+                  <Button size="sm" variant="ghost" onClick={() => setShowFullContent(true)}>
+                    <Maximize2 size={14} aria-hidden="true" /> Plein écran
+                  </Button>
                 </div>
                 <textarea
                   value={summary}
                   onChange={e => setSummary(e.target.value)}
                   rows={8}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-400 resize-none text-gray-700 leading-relaxed"
+                  aria-label="Compte-rendu"
+                  className="w-full px-3.5 py-3 border border-ai-border bg-ai-bg rounded-xl text-sm outline-none focus:ring-2 focus:ring-ai resize-y text-ink-soft leading-relaxed"
                 />
-                <button
-                  onClick={() => setShowFullContent(true)}
-                  className="text-xs text-blabia-blue hover:text-blabia-blue font-medium"
-                >
-                  Lire en plein écran →
-                </button>
-              </div>
+                <p className="text-[11px] text-ink-faint">Modifiable : c'est ce texte qui sera mémorisé dans le projet.</p>
+              </section>
 
               {/* Livrable claude_code (éditable) */}
               {meetingType === 'claude_code' && deliverable !== null && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">💻</span>
-                    <span className="text-sm font-semibold text-gray-700">Prompt Claude Code</span>
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                      <Code2 size={16} className="text-ai" aria-hidden="true" /> Prompt Claude Code
+                    </h3>
+                    <Button size="sm" variant={copied ? 'secondary' : 'primary'} onClick={handleCopyDeliverable}>
+                      {copied ? <><Check size={14} aria-hidden="true" /> Copié</> : <><Copy size={14} aria-hidden="true" /> Copier</>}
+                    </Button>
                   </div>
                   <textarea
                     value={deliverable}
                     onChange={e => setDeliverable(e.target.value)}
                     rows={8}
-                    className="w-full px-3 py-2.5 bg-gray-900 text-green-300 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-blue-400 resize-none leading-relaxed"
+                    aria-label="Prompt Claude Code"
+                    className="w-full px-3.5 py-3 bg-ink text-green-200 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-action resize-y leading-relaxed"
                   />
-                  <button
-                    onClick={handleCopyDeliverable}
-                    className="w-full flex items-center justify-center gap-2 bg-blabia-blue hover:bg-blabia-blue-dark text-white font-semibold py-2 rounded-xl text-sm transition"
-                  >
-                    {copied ? '✓ Copié !' : '📋 Copier le prompt'}
-                  </button>
-                </div>
+                </section>
               )}
 
               {/* Registre des décisions du projet */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">📒</span>
-                  <span className="text-sm font-semibold text-gray-700">Décisions à inscrire au registre du projet</span>
-                </div>
+              <section className="space-y-2">
+                <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                  <ScrollText size={16} className="text-action" aria-hidden="true" /> Décisions à inscrire au registre
+                </h3>
                 {decisionProposals === null ? (
-                  <p className="text-xs text-amber-700">L'extraction des décisions n'a pas abouti. Vous pourrez les ajouter à la main dans le registre du projet.</p>
+                  <p className="text-xs text-await bg-await-bg border border-await-border rounded-[10px] px-3 py-2">
+                    L'extraction des décisions n'a pas abouti. Vous pourrez les ajouter à la main dans le registre du projet.
+                  </p>
                 ) : decisionProposals.length === 0 ? (
-                  <p className="text-xs text-gray-400">Aucune décision tranchée identifiée dans cette réunion.</p>
+                  <p className="text-xs text-ink-faint">Aucune décision tranchée identifiée dans cette réunion.</p>
                 ) : (
                   <>
-                    <p className="text-xs text-gray-400">Les agents s'y référeront dans les prochaines réunions et ne reposeront plus ces questions. Décochez ce qui n'a pas été vraiment décidé.</p>
-                    {decisionProposals.map(d => (
-                      <div key={d.key} className={`flex items-start gap-2 border rounded-xl p-2.5 ${d.keep ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}`}>
-                        <input type="checkbox" checked={d.keep} onChange={e => updateProposal(d.key, { keep: e.target.checked })} className="mt-1.5 accent-blabia-blue" />
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <input
-                            value={d.statement}
-                            onChange={e => updateProposal(d.key, { statement: e.target.value })}
-                            disabled={!d.keep}
-                            className="w-full text-sm border border-transparent hover:border-gray-200 focus:border-blue-300 rounded-md px-1.5 py-0.5 outline-none bg-transparent"
-                          />
-                          <div className="flex items-center gap-2 flex-wrap px-1.5">
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${d.origin === 'human' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                              {d.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des agents'}
-                            </span>
-                            {d.rationale && <span className="text-[11px] text-gray-500">{d.rationale}</span>}
+                    <p className="text-xs text-ink-muted">Les agents s'y référeront aux prochaines réunions et ne reposeront plus ces questions. Décochez ce qui n'a pas vraiment été décidé.</p>
+                    <ul className="space-y-1.5">
+                      {decisionProposals.map(d => (
+                        <li key={d.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 transition ${
+                          d.keep ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'
+                        }`}>
+                          <input type="checkbox" checked={d.keep} aria-label="Inscrire cette décision"
+                            onChange={e => updateProposal(d.key, { keep: e.target.checked })} className="mt-1.5 w-4 h-4 accent-action shrink-0" />
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <input
+                              value={d.statement}
+                              onChange={e => updateProposal(d.key, { statement: e.target.value })}
+                              disabled={!d.keep}
+                              aria-label="Énoncé de la décision"
+                              className="w-full text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-0.5 outline-none bg-transparent"
+                            />
+                            <div className="flex items-center gap-2 flex-wrap px-1.5">
+                              <Badge tone={d.origin === 'human' ? 'action' : 'ai'} className="!text-[10px] !px-2 !py-0.5">
+                                {d.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des agents'}
+                              </Badge>
+                              {d.rationale && <span className="text-[11px] text-ink-muted">{d.rationale}</span>}
+                            </div>
+                            {d.rejectedOptions?.length > 0 && (
+                              <p className="text-[11px] text-ink-faint px-1.5">Écarté : {d.rejectedOptions.join(', ')}</p>
+                            )}
                           </div>
-                          {d.rejectedOptions?.length > 0 && (
-                            <p className="text-[11px] text-gray-400 px-1.5">Écarté : {d.rejectedOptions.join(', ')}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                        </li>
+                      ))}
+                    </ul>
                   </>
                 )}
-              </div>
+              </section>
 
               {/* Livrable stack : outils proposés, validés un par un (phase 4.3) */}
               {meetingType === 'stack' && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🧰</span>
-                    <span className="text-sm font-semibold text-gray-700">Outils proposés ({toolSuggestions.length})</span>
-                  </div>
+                <section className="space-y-2">
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                    <Wrench size={16} className="text-action" aria-hidden="true" /> Outils proposés · {toolSuggestions.length}
+                  </h3>
                   {toolSuggestions.length === 0 && (
-                    <p className="text-xs text-gray-400">Aucun outil complémentaire proposé : vos outils actuels couvrent les besoins discutés.</p>
+                    <p className="text-xs text-ink-faint">Aucun outil complémentaire proposé : vos outils actuels couvrent les besoins discutés.</p>
                   )}
                   {toolSuggestions.map(t => {
                     const decision = toolDecisions[t.id];
                     return (
-                      <div key={t.id} className={`border rounded-xl p-3 space-y-1 ${
-                        decision === 'validated' ? 'border-green-300 bg-green-50'
-                          : decision === 'refused' ? 'border-gray-200 bg-gray-50 opacity-70' : 'border-gray-200 bg-white'
+                      <div key={t.id} className={`border rounded-xl p-3 space-y-1 transition ${
+                        decision === 'validated' ? 'border-ok-border bg-ok-light/50'
+                          : decision === 'refused' ? 'border-line bg-canvas opacity-70' : 'border-line bg-white'
                       }`}>
-                        <p className="text-sm font-semibold text-gray-900">{t.name}</p>
-                        {t.need && <p className="text-xs text-gray-700"><span className="text-gray-400">Besoin :</span> {t.need}</p>}
-                        {t.why && <p className="text-xs text-gray-600"><span className="text-gray-400">Pourquoi :</span> {t.why}</p>}
-                        <p className="text-xs text-gray-500">
-                          💶 {costLabel(t.cost)}{t.cost?.freeTier && ` · gratuit jusqu'à : ${t.cost.freeTier}`}
+                        <p className="text-sm font-extrabold text-ink">{t.name}</p>
+                        {t.need && <p className="text-xs text-ink-soft"><span className="text-ink-faint">Besoin :</span> {t.need}</p>}
+                        {t.why && <p className="text-xs text-ink-soft"><span className="text-ink-faint">Pourquoi :</span> {t.why}</p>}
+                        <p className="text-xs text-ink-muted">
+                          {costLabel(t.cost)}{t.cost?.freeTier && ` · gratuit jusqu'à : ${t.cost.freeTier}`}
                           {t.priceSource
-                            ? <> · <a href={t.priceSource} target="_blank" rel="noopener noreferrer" className="text-blabia-blue hover:underline">source</a></>
-                            : <span className="text-amber-600"> · indicatif, à vérifier</span>}
+                            ? <> · <a href={t.priceSource} target="_blank" rel="noopener noreferrer" className="text-action font-semibold hover:underline">source</a></>
+                            : <span className="text-await"> · indicatif, à vérifier</span>}
                         </p>
                         <div className="flex gap-2 pt-1">
-                          <button onClick={() => setToolDecisions(d => ({ ...d, [t.id]: 'validated' }))}
-                            className={`text-xs px-3 py-1 rounded-lg border ${decision === 'validated' ? 'bg-green-600 border-green-600 text-white' : 'border-green-300 text-green-700 hover:bg-green-50'}`}>
-                            ✓ Valider
+                          <button type="button" aria-pressed={decision === 'validated'}
+                            onClick={() => setToolDecisions(d => ({ ...d, [t.id]: 'validated' }))}
+                            className={`inline-flex items-center gap-1 text-xs font-bold px-3 h-8 rounded-[10px] border-2 transition ${
+                              decision === 'validated' ? 'bg-ok-light border-ok text-ok' : 'border-line text-ink-muted hover:border-ok-border'}`}>
+                            <Check size={13} aria-hidden="true" /> Valider
                           </button>
-                          <button onClick={() => setToolDecisions(d => ({ ...d, [t.id]: 'refused' }))}
-                            className={`text-xs px-3 py-1 rounded-lg border ${decision === 'refused' ? 'bg-gray-600 border-gray-600 text-white' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                            ✕ Refuser
+                          <button type="button" aria-pressed={decision === 'refused'}
+                            onClick={() => setToolDecisions(d => ({ ...d, [t.id]: 'refused' }))}
+                            className={`inline-flex items-center gap-1 text-xs font-bold px-3 h-8 rounded-[10px] border-2 transition ${
+                              decision === 'refused' ? 'bg-muted-light border-muted text-ink-soft' : 'border-line text-ink-muted hover:border-ink-faint'}`}>
+                            <X size={13} aria-hidden="true" /> Refuser
                           </button>
                         </div>
                       </div>
                     );
                   })}
                   {toolSuggestions.some(t => !toolDecisions[t.id]) && (
-                    <p className="text-xs text-amber-600">Les outils sans décision restent « suggérés » dans les outils du projet.</p>
+                    <p className="text-xs text-await">Les outils sans décision restent « suggérés » dans les outils du projet.</p>
                   )}
-                </div>
+                </section>
               )}
             </>
           )}
 
           {step === 'suggestions' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  💡 Réunions suggérées {suggestions.length > 0 ? `(${suggestions.length})` : ''}
-                </h3>
-                <button onClick={() => setShowPlan(true)} className="text-xs text-blabia-blue hover:underline font-medium">
-                  📅 Voir le plan des réunions
-                </button>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
+                    <Lightbulb size={16} className="text-ai" aria-hidden="true" />
+                    Réunions suggérées {suggestions.length > 0 && `· ${suggestions.length}`}
+                  </h3>
+                  <p className="text-xs text-ink-muted mt-0.5">Celles que vous gardez rejoignent le plan du projet à la validation.</p>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => setShowPlan(true)}>
+                  <ListOrdered size={14} aria-hidden="true" /> Voir le plan
+                </Button>
               </div>
               {suggestions.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">Aucune réunion suggérée pendant cette réunion.</p>
+                <p className="text-sm text-ink-faint text-center py-8">Aucune réunion suggérée pendant cette réunion.</p>
               ) : (
                 <div className="space-y-2 -mx-4">
                   {suggestions.map(s => (
@@ -395,71 +405,55 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                 </div>
               )}
               {pendingSuggestions.length > 0 && (
-                <p className="text-xs text-amber-600 text-center">
-                  {pendingSuggestions.length} suggestion{pendingSuggestions.length > 1 ? 's' : ''} encore en attente de décision.
+                <p className="text-xs text-await text-center">
+                  {pendingSuggestions.length} suggestion{pendingSuggestions.length > 1 ? 's' : ''} encore sans décision : elle{pendingSuggestions.length > 1 ? 's' : ''} ne sera{pendingSuggestions.length > 1 ? 'ont' : ''} pas ajoutée{pendingSuggestions.length > 1 ? 's' : ''} au plan.
                 </p>
               )}
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="shrink-0 border-t border-gray-100 p-4 space-y-2">
+        {/* Pied */}
+        <div className="shrink-0 border-t border-line px-5 py-3.5 space-y-2">
           {applyError && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {applyError}</p>
+            <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-[10px] px-3 py-2">{applyError}</p>
           )}
           {!abandonConfirm ? (
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setAbandonConfirm(true)} disabled={applying || abandoning}
+                className="text-ink-faint hover:!text-red-700">
+                <Ban size={14} aria-hidden="true" /> Abandonner
+              </Button>
+              <div className="flex-1" />
               {step === 'review' && (
-                <button
-                  onClick={() => setStep('suggestions')}
-                  disabled={!!genError}
-                  className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50"
-                >
-                  Suivant →
-                </button>
+                <Button variant="primary" onClick={() => setStep('suggestions')} disabled={!!genError}>
+                  Suivant <ArrowRight size={16} aria-hidden="true" />
+                </Button>
               )}
               {step === 'suggestions' && (
                 <>
-                  <button
-                    onClick={() => setStep('review')}
-                    className="border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium py-2.5 px-4 rounded-xl text-sm transition"
-                  >
-                    ← Retour
-                  </button>
-                  <button
-                    onClick={handleApply}
-                    disabled={applying}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
+                  <Button variant="secondary" onClick={() => setStep('review')}>
+                    <ArrowLeft size={16} aria-hidden="true" /> Retour
+                  </Button>
+                  <Button variant="primary" onClick={handleApply} disabled={applying} className="!bg-ok hover:!bg-green-800">
                     {applying
                       ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      : '✅ Valider'}
-                  </button>
+                      : <><Check size={16} aria-hidden="true" /> Valider et clore</>}
+                  </Button>
                 </>
               )}
-              <button
-                onClick={() => setAbandonConfirm(true)}
-                disabled={applying || abandoning}
-                className="border border-gray-300 text-gray-500 hover:bg-gray-50 font-medium py-2.5 px-4 rounded-xl text-sm transition disabled:opacity-50"
-                title="Abandonner la réunion"
-              >
-                🚫
-              </button>
             </div>
           ) : (
             <div className="space-y-3">
               <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center space-y-1">
-                <p className="text-sm font-semibold text-red-700">🚫 Abandonner cette réunion ?</p>
-                <p className="text-xs text-red-600">Cette action est définitive. Aucun livrable ne sera généré.</p>
+                <p className="text-sm font-extrabold text-red-700">Abandonner cette réunion ?</p>
+                <p className="text-xs text-red-600">Action définitive : aucun compte-rendu ni livrable ne sera enregistré.</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setAbandonConfirm(false)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
-                  Annuler
-                </button>
-                <button onClick={handleAbandon} disabled={abandoning} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
-                  {abandoning ? '…' : "🚫 Confirmer l'abandon"}
-                </button>
+                <Button variant="secondary" className="flex-1" onClick={() => setAbandonConfirm(false)}>Annuler</Button>
+                <Button className="flex-1 !bg-red-600 hover:!bg-red-700 !text-white !border-transparent" onClick={handleAbandon} disabled={abandoning}>
+                  {abandoning ? '…' : 'Confirmer l’abandon'}
+                </Button>
               </div>
             </div>
           )}

@@ -1,7 +1,10 @@
-﻿import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Plus, Pencil, Trash2, X, Bot } from 'lucide-react';
 import Layout from '../components/Layout';
+import { Button, IconButton, Badge, Card, SectionLabel } from '../components/ui';
 import api from '../utils/api';
+
+const inputCls = 'w-full px-3.5 py-2.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
 
 // ── Formulaire création / modification ────────────────────────────────────────
 function AgentForm({ initial = {}, onSave, onCancel }) {
@@ -36,105 +39,56 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Emoji + Nom */}
       <div className="flex items-end gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">Emoji</label>
-          <input
-            type="text"
-            value={emoji}
-            onChange={e => setEmoji(e.target.value)}
-            maxLength={2}
-            className="w-14 text-center text-2xl px-1 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none"
-          />
-        </div>
-        <div className="flex-1">
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">
-            Nom <span className="text-red-400">*</span>
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            maxLength={100}
-            placeholder="Ex : Juriste, Data Scientist, Coach…"
-            autoFocus={!isEdit}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none text-sm"
-          />
-        </div>
-      </div>
-
-      {/* Rôle */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1.5">
-          Rôle <span className="text-red-400">*</span>
-          <span className="font-normal text-gray-400 ml-1">— courte description affichée dans la liste</span>
+        <label className="block">
+          <span className="block text-sm font-bold text-ink-soft mb-1">Emoji</span>
+          <input type="text" value={emoji} onChange={e => setEmoji(e.target.value)} maxLength={2}
+            className="w-14 h-11 text-center text-2xl border border-line rounded-[10px] outline-none focus:ring-2 focus:ring-action" />
         </label>
-        <input
-          type="text"
-          value={role}
-          onChange={e => setRole(e.target.value)}
-          maxLength={200}
-          placeholder="Ex : Analyse les aspects légaux et identifie les risques juridiques"
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none text-sm"
-        />
-      </div>
-
-      {/* Prompt système */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1.5">
-          Prompt système <span className="text-red-400">*</span>
+        <label className="block flex-1">
+          <span className="block text-sm font-bold text-ink-soft mb-1">Nom</span>
+          <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={100}
+            placeholder="Ex : Juriste, Data Scientist, Coach…" autoFocus={!isEdit} className={inputCls} />
         </label>
-        <textarea
-          value={systemPrompt}
-          onChange={e => setSystemPrompt(e.target.value)}
-          rows={5}
-          placeholder="Ex : Tu es un expert en droit des affaires. Tu analyses les aspects légaux, identifies les risques juridiques et proposes des solutions conformes à la réglementation en vigueur. Tu réponds en français de façon précise et structurée."
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blabia-blue outline-none text-sm resize-none"
-        />
-        <p className="text-xs text-gray-400 mt-1">
-          Définit le comportement de l'agent pendant les sessions. Commence par "Tu es…"
-        </p>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-          {error}
-        </div>
-      )}
+      <label className="block">
+        <span className="block text-sm font-bold text-ink-soft mb-1">
+          Rôle <span className="font-semibold text-ink-faint">— affiché dans les listes</span>
+        </span>
+        <input type="text" value={role} onChange={e => setRole(e.target.value)} maxLength={200}
+          placeholder="Ex : Analyse les aspects légaux et identifie les risques juridiques" className={inputCls} />
+      </label>
 
-      <div className="flex gap-3 pt-1">
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 sm:flex-none sm:px-6 border border-gray-300 text-gray-700 py-2.5 rounded-xl hover:bg-gray-50 transition text-sm font-medium"
-          >
-            Annuler
-          </button>
-        )}
-        <button
-          type="submit"
-          disabled={!isValid || loading}
-          className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white py-2.5 rounded-xl transition text-sm font-medium disabled:opacity-50"
-        >
-          {loading ? 'Enregistrement…' : isEdit ? 'Enregistrer les modifications' : 'Créer l\'agent'}
-        </button>
+      <label className="block">
+        <span className="block text-sm font-bold text-ink-soft mb-1">Instructions</span>
+        <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={5}
+          placeholder="Ex : Tu es un expert en droit des affaires. Tu analyses les aspects légaux, identifies les risques juridiques et proposes des solutions conformes à la réglementation en vigueur."
+          className={`${inputCls} resize-y`} />
+        <span className="block text-[11px] text-ink-faint mt-1">Ce qui guide le comportement de l'agent en réunion. Commencez par « Tu es… ».</span>
+      </label>
+
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
+
+      <div className="flex justify-end gap-2 pt-1">
+        {onCancel && <Button variant="secondary" onClick={onCancel}>Annuler</Button>}
+        <Button type="submit" variant="primary" disabled={!isValid || loading}>
+          {loading ? 'Enregistrement…' : isEdit ? 'Enregistrer' : 'Créer l\'agent'}
+        </Button>
       </div>
     </form>
   );
 }
 
-// ── Modale de modification ─────────────────────────────────────────────────────
-function EditModal({ agent, onSave, onClose }) {
+function Modal({ title, onClose, children, size = 'max-w-lg' }) {
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-gray-900">Modifier l'agent</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+    <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div role="dialog" aria-modal="true" aria-label={title} className={`bg-white rounded-2xl shadow-xl w-full ${size} p-6 max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-extrabold text-ink">{title}</h2>
+          {onClose && <IconButton size="sm" label="Fermer" onClick={onClose}><X size={18} aria-hidden="true" /></IconButton>}
         </div>
-        <AgentForm initial={agent} onSave={onSave} onCancel={onClose} />
+        {children}
       </div>
     </div>
   );
@@ -146,107 +100,36 @@ function AgentCard({ agent, onEdit, onDelete }) {
   const isDefault = agent.isDefault;
 
   return (
-    <div className={`rounded-xl border p-4 transition ${
-      isDefault
-        ? 'bg-gray-50 border-gray-200'
-        : 'bg-white border-gray-200 shadow-sm hover:shadow-md'
-    }`}>
+    <Card className={`p-4 ${isDefault ? '' : 'hover:border-action-border transition'}`}>
       <div className="flex items-start gap-3">
-        <span className="text-2xl shrink-0 mt-0.5 select-none">{agent.emoji || '🤖'}</span>
-
+        <span className="w-10 h-10 rounded-full bg-canvas text-xl inline-flex items-center justify-center shrink-0 select-none">{agent.emoji || '🤖'}</span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className={`font-semibold text-sm ${isDefault ? 'text-gray-600' : 'text-gray-900'}`}>
-              {agent.name}
-            </h3>
-            {isDefault && (
-              <span className="text-xs font-medium bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full shrink-0">
-                Défaut
-              </span>
-            )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-extrabold text-sm text-ink">{agent.name}</h3>
+            {isDefault && <Badge tone="muted" className="!text-[10px] !py-0.5">BlabIA</Badge>}
           </div>
-          <p className={`text-xs leading-relaxed ${isDefault ? 'text-gray-400' : 'text-gray-500'}`}>
-            {agent.role}
-          </p>
+          <p className="text-xs text-ink-muted leading-relaxed mt-0.5">{agent.role}</p>
 
-          {/* Prompt système — agents personnels uniquement */}
-          {!isDefault && (
+          {!isDefault && agent.systemPrompt && (
             <div className="mt-2">
-              <p className={`text-xs text-gray-400 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
-                {agent.systemPrompt}
-              </p>
+              <p className={`text-xs text-ink-faint leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>{agent.systemPrompt}</p>
               {agent.systemPrompt.length > 100 && (
-                <button
-                  onClick={() => setExpanded(v => !v)}
-                  className="text-xs text-blue-500 hover:text-blabia-blue mt-0.5"
-                >
-                  {expanded ? 'Réduire' : 'Voir plus'}
+                <button onClick={() => setExpanded(v => !v)} className="text-xs font-bold text-action hover:underline mt-0.5">
+                  {expanded ? 'Réduire' : 'Voir les instructions'}
                 </button>
               )}
             </div>
           )}
         </div>
 
-        {/* Boutons actions — agents personnels */}
         {!isDefault && onEdit && onDelete && (
-          <div className="flex items-center gap-1 shrink-0 -mt-0.5">
-            <button
-              onClick={() => onEdit(agent)}
-              className="p-2 text-gray-400 hover:text-blabia-blue hover:bg-blue-50 rounded-lg transition"
-              title="Modifier"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => onDelete(agent)}
-              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-              title="Supprimer"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
+          <div className="flex items-center shrink-0 -mt-1 -mr-1">
+            <IconButton size="sm" label="Modifier" onClick={() => onEdit(agent)}><Pencil size={15} aria-hidden="true" /></IconButton>
+            <IconButton size="sm" label="Supprimer" onClick={() => onDelete(agent)} className="hover:!text-red-600"><Trash2 size={15} aria-hidden="true" /></IconButton>
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Modale de confirmation de suppression ─────────────────────────────────────
-function DeleteModal({ agent, onConfirm, onCancel, loading }) {
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Supprimer l'agent</h2>
-        <p className="text-sm text-gray-600 mb-5">
-          Supprimer <strong className="text-gray-900">{agent.name}</strong> ?
-          Cet agent ne sera plus disponible pour les nouvelles sessions.
-          <br />
-          <span className="text-gray-400 text-xs mt-1 block">Cette action est irréversible.</span>
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl hover:bg-gray-50 transition text-sm font-medium disabled:opacity-50"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl transition text-sm font-medium disabled:opacity-50"
-          >
-            {loading ? 'Suppression…' : 'Supprimer'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Card>
   );
 }
 
@@ -268,8 +151,6 @@ export default function AgentsPage() {
 
   const defaultAgents  = agents.filter(a =>  a.isDefault);
   const personalAgents = agents.filter(a => !a.isDefault);
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleCreate = async (data) => {
     const { data: newAgent } = await api.post('/agents', data);
@@ -297,116 +178,75 @@ export default function AgentsPage() {
   };
 
   return (
-    <Layout>
-      <div className="max-w-2xl mx-auto">
-
-        {/* Navigation */}
-        <Link to="/dashboard" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-5">
-          ← Tableau de bord
-        </Link>
-
-        {/* En-tête */}
-        <div className="flex items-start justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Bibliothèque d'agents</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Créez et gérez vos agents personnalisés. Les agents par défaut sont disponibles pour tous.
-            </p>
-          </div>
-          {!showCreate && (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="shrink-0 bg-blabia-blue hover:bg-blabia-blue text-white text-sm font-medium px-4 py-2 rounded-xl transition"
-            >
-              + Créer un agent
-            </button>
-          )}
+    <Layout wide>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">Agents</h1>
+          <p className="text-sm text-ink-muted mt-1">Votre bibliothèque d'agents, à inviter dans les équipes de vos projets.</p>
         </div>
-
-        {/* Formulaire de création */}
-        {showCreate && (
-          <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-6 mb-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Nouvel agent personnalisé</h2>
-            <AgentForm onSave={handleCreate} onCancel={() => setShowCreate(false)} />
-          </div>
-        )}
-
-        {/* Chargement */}
-        {loading && (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blabia-blue" />
-          </div>
-        )}
-
-        {!loading && (
-          <>
-            {/* Section agents personnels */}
-            {personalAgents.length > 0 && (
-              <section className="mb-8">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Mes agents ({personalAgents.length})
-                </p>
-                <div className="space-y-3">
-                  {personalAgents.map(agent => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      onEdit={setEditingAgent}
-                      onDelete={setDeletingAgent}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Empty state agents personnels */}
-            {personalAgents.length === 0 && !showCreate && (
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 mb-8 text-center">
-                <p className="text-sm font-medium text-blabia-blue mb-1">Aucun agent personnalisé</p>
-                <p className="text-xs text-blue-500 mb-4">
-                  Créez vos propres agents pour enrichir vos sessions.
-                </p>
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="text-sm bg-blabia-blue hover:bg-blabia-blue text-white px-4 py-2 rounded-xl transition font-medium"
-                >
-                  Créer mon premier agent
-                </button>
-              </div>
-            )}
-
-            {/* Section agents par défaut */}
-            <section>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Agents par défaut ({defaultAgents.length})
-              </p>
-              <div className="space-y-3">
-                {defaultAgents.map(agent => (
-                  <AgentCard key={agent.id} agent={agent} />
-                ))}
-              </div>
-            </section>
-          </>
-        )}
+        <Button variant="primary" onClick={() => setShowCreate(true)}>
+          <Plus size={18} aria-hidden="true" /> Créer un agent
+        </Button>
       </div>
 
-      {/* Modale de modification */}
-      {editingAgent && (
-        <EditModal
-          agent={editingAgent}
-          onSave={handleEdit}
-          onClose={() => setEditingAgent(null)}
-        />
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-8 h-8 border-2 border-action border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="space-y-8">
+          <section>
+            <SectionLabel className="mb-3">Mes agents · {personalAgents.length}</SectionLabel>
+            {personalAgents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                {personalAgents.map(agent => (
+                  <AgentCard key={agent.id} agent={agent} onEdit={setEditingAgent} onDelete={setDeletingAgent} />
+                ))}
+              </div>
+            ) : (
+              <Card className="p-6 text-center">
+                <Bot size={28} className="mx-auto text-ink-faint mb-2" aria-hidden="true" />
+                <p className="text-sm font-extrabold text-ink mb-1">Aucun agent personnalisé</p>
+                <p className="text-xs text-ink-muted mb-4">Un expert qui manque à vos réunions ? Créez-le une fois, invitez-le partout.</p>
+                <Button size="sm" variant="primary" onClick={() => setShowCreate(true)}>Créer mon premier agent</Button>
+              </Card>
+            )}
+          </section>
+
+          <section>
+            <SectionLabel className="mb-3">Fournis par BlabIA · {defaultAgents.length}</SectionLabel>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+              {defaultAgents.map(agent => <AgentCard key={agent.id} agent={agent} />)}
+            </div>
+          </section>
+        </div>
       )}
 
-      {/* Modale de confirmation de suppression */}
+      {showCreate && (
+        <Modal title="Nouvel agent" onClose={() => setShowCreate(false)}>
+          <AgentForm onSave={handleCreate} onCancel={() => setShowCreate(false)} />
+        </Modal>
+      )}
+
+      {editingAgent && (
+        <Modal title="Modifier l'agent" onClose={() => setEditingAgent(null)}>
+          <AgentForm initial={editingAgent} onSave={handleEdit} onCancel={() => setEditingAgent(null)} />
+        </Modal>
+      )}
+
       {deletingAgent && (
-        <DeleteModal
-          agent={deletingAgent}
-          onConfirm={handleDelete}
-          onCancel={() => setDeletingAgent(null)}
-          loading={deleting}
-        />
+        <Modal title="Supprimer l'agent" size="max-w-sm" onClose={deleting ? null : () => setDeletingAgent(null)}>
+          <p className="text-sm text-ink-soft mb-1">
+            Supprimer <strong className="text-ink">{deletingAgent.name}</strong> ? Il ne sera plus disponible pour les nouvelles réunions.
+          </p>
+          <p className="text-xs text-ink-faint mb-5">Cette action est irréversible.</p>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setDeletingAgent(null)} disabled={deleting}>Annuler</Button>
+            <Button className="flex-1 !bg-red-600 hover:!bg-red-700 !text-white !border-transparent" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Suppression…' : 'Supprimer'}
+            </Button>
+          </div>
+        </Modal>
       )}
     </Layout>
   );

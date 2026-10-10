@@ -5,8 +5,8 @@ export default function LevelSlider({ label, value, onChange, labels, icons, dis
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
-        <span className="text-xs text-gray-500 flex items-center gap-1">
+        <label className="text-sm font-bold text-ink-soft">{label}</label>
+        <span className="text-xs font-bold text-action bg-action-light rounded-full px-2 py-0.5 flex items-center gap-1">
           {icons && <span>{icons[idx]}</span>}
           {labels[idx]}
         </span>
@@ -19,9 +19,9 @@ export default function LevelSlider({ label, value, onChange, labels, icons, dis
         value={value}
         disabled={disabled}
         onChange={e => onChange(Number(e.target.value))}
-        className="w-full accent-blabia-blue disabled:opacity-50"
+        className="w-full accent-action disabled:opacity-50"
       />
-      <div className="flex justify-between text-[10px] text-gray-300 mt-0.5 px-0.5">
+      <div className="flex justify-between text-[10px] text-ink-faint mt-0.5 px-0.5">
         <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
       </div>
     </div>

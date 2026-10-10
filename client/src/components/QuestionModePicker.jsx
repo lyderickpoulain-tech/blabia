@@ -10,25 +10,26 @@ export default function QuestionModePicker({ value, onChange, compact = false })
   const current = QUESTION_MODES.find(m => m.id === value) || QUESTION_MODES[1];
   return (
     <div className="space-y-1.5">
-      {!compact && <p className="text-sm font-medium text-gray-700">Questions des agents</p>}
+      {!compact && <p className="text-sm font-bold text-ink-soft">Questions des agents</p>}
       <div className="grid grid-cols-3 gap-1.5">
         {QUESTION_MODES.map(m => (
           <button
             key={m.id}
             type="button"
+            aria-pressed={current.id === m.id}
             onClick={() => onChange(m.id)}
-            className={`text-xs rounded-lg border px-2 py-1.5 transition flex flex-col items-center gap-0.5 leading-tight ${
+            className={`text-xs rounded-[10px] border-2 px-2 py-1.5 transition flex flex-col items-center gap-0.5 leading-tight ${
               current.id === m.id
-                ? 'bg-blabia-blue border-blabia-blue text-white'
-                : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+                ? 'bg-action-light border-action text-action font-extrabold'
+                : 'bg-white border-line text-ink-muted font-semibold hover:border-action-border'
             }`}
           >
             <span>{m.icon}</span>
-            <span className="font-medium text-center">{m.label}</span>
+            <span className="text-center">{m.label}</span>
           </button>
         ))}
       </div>
-      <p className="text-[11px] text-gray-400">{current.hint}</p>
+      <p className="text-[11px] text-ink-faint">{current.hint}</p>
     </div>
   );
 }

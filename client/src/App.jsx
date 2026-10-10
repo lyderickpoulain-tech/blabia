@@ -49,12 +49,10 @@ export default function App() {
           <Route path="outils" element={<ProjectTools />} />
           <Route path="equipe" element={<ProjectTeam />} />
           <Route path="parametres" element={<ProjectSettings />} />
+          <Route path="meeting/new" element={<StartMeeting />} />
         </Route>
         <Route path="/projects/:id/plan" element={
           <ProtectedRoute><PlanView /></ProtectedRoute>
-        } />
-        <Route path="/projects/:id/meeting/new" element={
-          <ProtectedRoute><StartMeeting /></ProtectedRoute>
         } />
         <Route path="/projects/:id/meeting/:sid" element={
           <ProtectedRoute><MeetingRoom /></ProtectedRoute>

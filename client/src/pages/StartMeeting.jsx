@@ -1,15 +1,17 @@
-﻿import { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import ProjectLayout from '../components/ProjectLayout';
+import { useState, useEffect } from 'react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Handshake, Code2, Wrench, Sparkles, Check, Plus, X, Lightbulb, ChevronDown, Globe, Play, Coffee } from 'lucide-react';
+import { useProject, PageHeader } from '../components/project/ProjectShell';
+import { Button, Card } from '../components/ui';
 import api from '../utils/api';
 import QuestionModePicker from '../components/QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
 // v5.0 : decision | claude_code | stack (phase 4)
 const DELIVERABLES = [
-  { id: 'decision',    icon: '🤝', label: 'Prise de décision', desc: 'Relevé de décisions structuré + mémorisé dans le projet' },
-  { id: 'claude_code', icon: '💻', label: 'Claude Code',       desc: 'Prompt prêt pour le développement' },
-  { id: 'stack',       icon: '🔧', label: 'Outils',            desc: 'Revue des outils du projet, catégorie par catégorie, avec coûts' },
+  { id: 'decision',    icon: Handshake, label: 'Prise de décision', desc: 'Relevé de décisions structuré, mémorisé dans le projet' },
+  { id: 'claude_code', icon: Code2,     label: 'Claude Code',       desc: 'Prompt prêt pour le développement' },
+  { id: 'stack',       icon: Wrench,    label: 'Outils',            desc: 'Revue des outils du projet, catégorie par catégorie, avec coûts' },
 ];
 
 // Rétrocompat : anciennes valeurs de Milestone.type encore rencontrées (avant migration)
@@ -20,51 +22,92 @@ const MT_MAP = {
   stack: 'stack', stack_check: 'stack',
 };
 
-function AgentScopeSelector({ scope, onChange, size = 'sm' }) {
+const MODELS = [
+  { id: 'claude-sonnet-4-6', label: 'Sonnet', desc: 'Rapide et économique' },
+  { id: 'claude-opus-4-8',   label: 'Opus',   desc: 'Plus puissant, plus lent' },
+];
+
+const inputCls = 'w-full px-3.5 py-2.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
+
+// Section numérotée du formulaire
+function Step({ n, title, hint, aside, children }) {
   return (
-    <div className="space-y-1">
-      <p className={`${size === 'xs' ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500`}>Disponibilité :</p>
-      <div className="flex flex-col gap-1">
-        {[
-          { value: 'project', label: 'Pour ce projet uniquement', desc: null },
-          { value: 'global',  label: 'Enregistrer dans BlabIA',   desc: 'Disponible dans tous vos projets' },
-        ].map(opt => (
-          <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="radio"
-              value={opt.value}
-              checked={scope === opt.value}
-              onChange={() => onChange(opt.value)}
-              className="mt-0.5 shrink-0 accent-blabia-blue"
-            />
-            <div>
-              <span className={`${size === 'xs' ? 'text-[11px]' : 'text-xs'} font-medium text-gray-700`}>{opt.label}</span>
-              {opt.desc && <p className="text-[10px] text-gray-400 leading-tight">{opt.desc}</p>}
-            </div>
-          </label>
-        ))}
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="w-7 h-7 shrink-0 rounded-full bg-action-light text-action text-sm font-extrabold inline-flex items-center justify-center">{n}</span>
+          <div className="min-w-0">
+            <h2 className="text-base font-extrabold text-ink leading-7">{title}</h2>
+            {hint && <p className="text-xs text-ink-faint">{hint}</p>}
+          </div>
+        </div>
+        {aside}
       </div>
-    </div>
+      {children}
+    </Card>
+  );
+}
+
+// Carte sélectionnable : fond clair + texte coloré + coche (lisible, cf. retours v5.1)
+function ChoiceCard({ active, onClick, children, className = '' }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active}
+      className={`relative text-left rounded-xl border-2 transition ${
+        active ? 'border-action bg-action-light' : 'border-line bg-white hover:border-action-border'
+      } ${className}`}>
+      {active && (
+        <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-action text-white inline-flex items-center justify-center">
+          <Check size={13} strokeWidth={3} aria-hidden="true" />
+        </span>
+      )}
+      {children}
+    </button>
+  );
+}
+
+function Toggle({ checked, onChange, label }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}
+      className={`relative inline-flex w-11 h-6 shrink-0 rounded-full transition-colors ${checked ? 'bg-action' : 'bg-line'}`}>
+      <span className={`inline-block w-4 h-4 mt-1 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  );
+}
+
+function AgentScopeSelector({ scope, onChange }) {
+  return (
+    <fieldset className="space-y-1">
+      <legend className="text-xs font-bold text-ink-muted mb-1">Disponibilité</legend>
+      {[
+        { value: 'project', label: 'Pour ce projet uniquement', desc: null },
+        { value: 'global',  label: 'Enregistrer dans BlabIA',   desc: 'Disponible dans tous vos projets' },
+      ].map(opt => (
+        <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+          <input type="radio" value={opt.value} checked={scope === opt.value} onChange={() => onChange(opt.value)}
+            className="mt-0.5 shrink-0 accent-action" />
+          <span>
+            <span className="text-xs font-semibold text-ink-soft">{opt.label}</span>
+            {opt.desc && <span className="block text-[11px] text-ink-faint leading-tight">{opt.desc}</span>}
+          </span>
+        </label>
+      ))}
+    </fieldset>
   );
 }
 
 export default function StartMeeting() {
   const { id: projectId } = useParams();
+  const { project } = useProject();
   const location = useLocation();
   const navigate  = useNavigate();
-  // StartMeeting rend lui-même <ProjectLayout> plus bas : il ne peut pas consommer
-  // son propre contexte via useProjectPanel() (cf. ProjectLayout.jsx), d'où ce ref.
-  const panelRef = useRef(null);
 
-  // Pré-remplissage depuis la timeline (location.state)
+  // Pré-remplissage depuis le plan (location.state)
   const milestoneId    = location.state?.milestoneId    || null;
   const milestoneTitle = location.state?.milestoneTitle || '';
   const milestoneType  = location.state?.milestoneType  || null;
 
   const [task, setTask]               = useState(milestoneTitle);
-  const [deliverable, setDeliverable] = useState(
-    () => milestoneType && MT_MAP[milestoneType] ? MT_MAP[milestoneType] : 'summary'
-  );
+  const [deliverable, setDeliverable] = useState(() => MT_MAP[milestoneType] || 'decision');
 
   const [availableAgents,    setAvailableAgents]    = useState([]);
   const [selectedAgentIds,   setSelectedAgentIds]   = useState(new Set());
@@ -79,9 +122,10 @@ export default function StartMeeting() {
   const [model,             setModel]             = useState('claude-sonnet-4-6');
   const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
   const [autoPrepare,       setAutoPrepare]       = useState(!!location.state?.autoPrepare);
-  const [expertiseLevel,    setExpertiseLevel]    = useState(3);
-  const [humorLevel,        setHumorLevel]        = useState(2);
-  const [questionMode,      setQuestionMode]      = useState('balanced');
+  const [expertiseLevel,    setExpertiseLevel]    = useState(project?.expertiseLevel || 3);
+  const [humorLevel,        setHumorLevel]        = useState(project?.humorLevel || 2);
+  const [questionMode,      setQuestionMode]      = useState(project?.questionMode || 'balanced');
+  const [showAdvanced,      setShowAdvanced]      = useState(false);
   const [starting,          setStarting]          = useState(false);
   const [error,             setError]             = useState('');
 
@@ -98,18 +142,7 @@ export default function StartMeeting() {
       .finally(() => setAgentsLoading(false));
   }, [projectId]);
 
-  // Pré-remplissage des curseurs depuis les défauts du projet
-  useEffect(() => {
-    api.get(`/projects/${projectId}`)
-      .then(({ data }) => {
-        if (data.expertiseLevel) setExpertiseLevel(data.expertiseLevel);
-        if (data.humorLevel)     setHumorLevel(data.humorLevel);
-        if (data.questionMode)   setQuestionMode(data.questionMode);
-      })
-      .catch(() => {});
-  }, [projectId]);
-
-  // Auto-suggestion si pré-rempli depuis la timeline
+  // Auto-suggestion si pré-rempli depuis le plan
   useEffect(() => {
     if (!milestoneTitle) return;
     handleSuggestAgents(milestoneTitle, milestoneType);
@@ -169,20 +202,18 @@ export default function StartMeeting() {
     if (!newAgentForm.name.trim() || creatingAgent) return;
     setCreatingAgent(true);
     try {
-      console.log('[handleCreateAgent] POST /agents', { name: newAgentForm.name, role: newAgentForm.role });
       const { data: agent } = await api.post('/agents', {
         name:         newAgentForm.name.trim(),
         role:         newAgentForm.role.trim(),
-        systemPrompt: newAgentForm.systemPrompt.trim()
+        systemPrompt: newAgentForm.systemPrompt.trim(),
+        isDefault:    newAgentForm.scope === 'global'
       });
-      console.log('[handleCreateAgent] agent créé', agent.id, agent.name);
       await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'manual' });
-      console.log('[handleCreateAgent] agent lié au projet', projectId);
       setAvailableAgents(prev => [...prev, { ...agent, agentId: agent.id, enabled: true }]);
       setSelectedAgentIds(prev => new Set([...prev, agent.id]));
-      setNewAgentForm({ open: false, name: '', role: '', systemPrompt: '' });
+      setNewAgentForm({ open: false, name: '', role: '', systemPrompt: '', scope: 'project' });
     } catch (err) {
-      console.error('[handleCreateAgent] erreur', err.response?.data?.error || err.message);
+      setError(err.response?.data?.error || 'Erreur lors de la création de l\'agent');
     }
     setCreatingAgent(false);
   };
@@ -215,7 +246,6 @@ export default function StartMeeting() {
         ...(milestoneId ? { milestoneId } : {})
       });
 
-      if (milestoneId) panelRef.current?.();
       // La salle de réunion lance la préparation dès l'ouverture (si au moins 2 agents)
       navigate(`/projects/${projectId}/meeting/${data.session.id}`, { state: { autoPrepare: autoPrepare && activeAgents.length >= 2 } });
     } catch (err) {
@@ -225,325 +255,236 @@ export default function StartMeeting() {
   };
 
   const canStart = task.trim().length > 0 && selectedAgentIds.size >= 1 && !starting;
+  const prepPossible = selectedAgentIds.size >= 2;
+  const modelLabel = MODELS.find(m => m.id === model)?.label;
 
   return (
-    <ProjectLayout projectId={projectId} panelRef={panelRef}>
-      <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="max-w-3xl">
+      <PageHeader
+        title="Nouvelle réunion"
+        subtitle={milestoneTitle ? `Étape du plan : ${milestoneTitle}` : 'Fixez l’objectif, choisissez les agents, puis lancez.'}
+      />
 
-        <Link to={`/projects/${projectId}`}
-          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-5">
-          ← Retour au projet
-        </Link>
+      <div className="space-y-4">
 
-        <h1 className="text-xl font-bold text-gray-900 mb-6">Nouvelle réunion</h1>
+        {/* ── 1. Objectif ─────────────────────────────────────────────────── */}
+        <Step n={1} title="Objectif" hint="Que doit permettre cette réunion ?">
+          <textarea
+            value={task}
+            onChange={e => setTask(e.target.value)}
+            rows={3}
+            aria-label="Objectif de la réunion"
+            placeholder="Ex : Définir les fonctionnalités principales du site…"
+            className={`${inputCls} resize-none`}
+            autoFocus
+          />
+        </Step>
 
-        <div className="space-y-5">
-
-          {/* ── Section 1 : Objectif ────────────────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-3">
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-0.5">
-                Objectif <span className="text-red-400">*</span>
-              </label>
-              <p className="text-xs text-gray-400 mb-2">Quel est l'objectif de cette réunion ?</p>
-            </div>
-            <textarea
-              value={task}
-              onChange={e => setTask(e.target.value)}
-              rows={4}
-              placeholder="Ex : Définir les fonctionnalités principales du site..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none resize-none transition"
-              autoFocus
-            />
+        {/* ── 2. Livrable ─────────────────────────────────────────────────── */}
+        <Step n={2} title="Livrable attendu" hint="Ce que BlabIA produira à la clôture.">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {DELIVERABLES.map(d => {
+              const active = deliverable === d.id;
+              return (
+                <ChoiceCard key={d.id} active={active} onClick={() => setDeliverable(d.id)} className="p-4">
+                  <d.icon size={22} className={active ? 'text-action' : 'text-ink-muted'} aria-hidden="true" />
+                  <p className={`mt-2 text-sm font-extrabold ${active ? 'text-action' : 'text-ink'}`}>{d.label}</p>
+                  <p className="text-xs text-ink-muted leading-snug mt-0.5 pr-4">{d.desc}</p>
+                </ChoiceCard>
+              );
+            })}
           </div>
+        </Step>
 
-          {/* ── Section 2 : Livrable attendu ────────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-3">
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-0.5">
-                Livrable attendu <span className="text-red-400">*</span>
-              </label>
-              <p className="text-xs text-gray-400">Que doit produire cette réunion ?</p>
+        {/* ── 3. Agents invités ───────────────────────────────────────────── */}
+        <Step n={3} title="Agents invités"
+          hint={`${selectedAgentIds.size} sélectionné${selectedAgentIds.size > 1 ? 's' : ''} · 1 minimum, 2 pour la préparation`}
+          aside={
+            <Button size="sm" variant="secondary" onClick={() => handleSuggestAgents()}
+              disabled={suggestingAgents || !task.trim()}
+              title={!task.trim() ? 'Renseignez d’abord l’objectif' : undefined}
+              className="text-ai border-ai-border bg-ai-bg hover:bg-ai-light">
+              {suggestingAgents
+                ? <><span className="w-3.5 h-3.5 border-2 border-ai border-t-transparent rounded-full animate-spin" /> Suggestion…</>
+                : <><Sparkles size={15} aria-hidden="true" /> Suggérer</>}
+            </Button>
+          }>
+          {agentsLoading ? (
+            <div className="flex justify-center py-6">
+              <div className="w-6 h-6 border-2 border-action border-t-transparent rounded-full animate-spin" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {DELIVERABLES.map(d => {
-                const active = deliverable === d.id;
-                return (
-                  <button key={d.id} type="button" onClick={() => setDeliverable(d.id)}
-                    className={`flex flex-col items-start gap-1.5 p-4 rounded-xl border-2 text-left transition ${
-                      active
-                        ? 'border-blabia-blue bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}>
-                    <span className="text-2xl">{d.icon}</span>
-                    <p className={`font-semibold text-sm ${active ? 'text-blabia-blue' : 'text-gray-800'}`}>
-                      {d.label}
-                    </p>
-                    <p className="text-xs text-gray-400 leading-snug">{d.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ── Section 3 : Agents invités ──────────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-0.5">
-                  Agents invités <span className="text-red-400">*</span>
-                </label>
-                <p className="text-xs text-gray-400">Minimum 1 agent requis.</p>
-              </div>
-              <button
-                onClick={() => handleSuggestAgents()}
-                disabled={suggestingAgents || !task.trim()}
-                className="flex items-center gap-1.5 text-xs text-blabia-blue hover:text-blabia-blue border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition disabled:opacity-40 shrink-0"
-              >
-                {suggestingAgents ? (
-                  <>
-                    <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                    Suggestion…
-                  </>
-                ) : '✨ Suggestion IA'}
-              </button>
-            </div>
-
-            {agentsLoading ? (
-              <div className="flex justify-center py-6">
-                <div className="w-6 h-6 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : (
-              <div className="space-y-2">
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {availableAgents.map(a => {
                   const id     = a.agentId || a.id;
                   const active = selectedAgentIds.has(id);
                   return (
-                    <div key={id} onClick={() => toggleAgent(id)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition ${
-                        active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
-                      }`}>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
-                        active ? 'bg-blabia-blue text-white' : 'bg-gray-200 text-gray-600'
-                      }`}>
+                    <ChoiceCard key={id} active={active} onClick={() => toggleAgent(id)} className="flex items-start gap-3 px-3.5 py-3">
+                      <span className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${active ? 'bg-white' : 'bg-canvas'}`}>
                         {a.emoji || a.name?.[0] || '?'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold ${active ? 'text-blue-800' : 'text-gray-700'}`}>
-                          {a.name}
-                        </p>
-                        <p className="text-xs text-gray-400 truncate">{a.role}</p>
+                      </span>
+                      <span className="flex-1 min-w-0 pr-5">
+                        <span className={`block text-sm font-extrabold truncate ${active ? 'text-action' : 'text-ink'}`}>{a.name}</span>
+                        <span className="block text-xs text-ink-muted truncate">{a.role}</span>
                         {active && suggestionReasons[id] && (
-                          <p className="text-[10px] text-blue-500 italic mt-0.5 truncate">✨ {suggestionReasons[id]}</p>
+                          <span className="block text-[11px] text-ai mt-1 leading-snug">{suggestionReasons[id]}</span>
                         )}
-                      </div>
-                      {active && (
-                        <svg className="w-4 h-4 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
-                        </svg>
-                      )}
-                    </div>
+                      </span>
+                    </ChoiceCard>
                   );
                 })}
+              </div>
 
-                {/* Carte — Agent suggéré (compétence manquante) */}
-                {newAgentSuggestion && (
-                  <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <span className="text-base shrink-0 mt-0.5">💡</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Agent suggéré pour cette réunion</p>
-                        <p className="text-sm font-semibold text-gray-900">{newAgentSuggestion.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 leading-snug">{newAgentSuggestion.role}</p>
-                        {newAgentSuggestion.reason && (
-                          <p className="text-xs text-amber-600 italic mt-1">"{newAgentSuggestion.reason}"</p>
-                        )}
-                      </div>
-                    </div>
-                    <AgentScopeSelector
-                      scope={suggestedScope}
-                      onChange={setSuggestedScope}
-                      size="xs"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleCreateSuggestedAgent}
-                        disabled={creatingSuggested}
-                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium py-2 rounded-lg transition disabled:opacity-50"
-                      >
-                        {creatingSuggested ? 'Création…' : '+ Créer et ajouter'}
-                      </button>
-                      <button
-                        onClick={() => setNewAgentSuggestion(null)}
-                        className="text-sm text-gray-400 hover:text-gray-600 px-3"
-                      >
-                        Ignorer
-                      </button>
+              {/* Agent suggéré (compétence manquante) */}
+              {newAgentSuggestion && (
+                <div className="border border-ai-border bg-ai-bg rounded-xl p-4 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <Lightbulb size={18} className="text-ai shrink-0 mt-0.5" aria-hidden="true" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-extrabold text-ai uppercase tracking-wider mb-1">Compétence manquante</p>
+                      <p className="text-sm font-extrabold text-ink">{newAgentSuggestion.name}</p>
+                      <p className="text-xs text-ink-muted mt-0.5 leading-snug">{newAgentSuggestion.role}</p>
+                      {newAgentSuggestion.reason && (
+                        <p className="text-xs text-ink-soft mt-1.5">{newAgentSuggestion.reason}</p>
+                      )}
                     </div>
                   </div>
-                )}
-
-                {/* Créer un agent inline */}
-                {newAgentForm.open ? (
-                  <div className="border border-blue-200 bg-blue-50 rounded-xl p-4 space-y-2">
-                    <input
-                      autoFocus type="text" placeholder="Nom de l'agent" value={newAgentForm.name}
-                      onChange={e => setNewAgentForm(p => ({ ...p, name: e.target.value }))}
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-                    />
-                    <input
-                      type="text" placeholder="Rôle / spécialité" value={newAgentForm.role}
-                      onChange={e => setNewAgentForm(p => ({ ...p, role: e.target.value }))}
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-                    />
-                    <textarea
-                      placeholder="Prompt système (optionnel)" value={newAgentForm.systemPrompt}
-                      onChange={e => setNewAgentForm(p => ({ ...p, systemPrompt: e.target.value }))}
-                      rows={2}
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 bg-white resize-none"
-                    />
-                    <AgentScopeSelector
-                      scope={newAgentForm.scope}
-                      onChange={scope => setNewAgentForm(p => ({ ...p, scope }))}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleCreateAgent}
-                        disabled={!newAgentForm.name.trim() || creatingAgent}
-                        className="flex-1 bg-blabia-blue text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50"
-                      >
-                        {creatingAgent ? 'Création…' : 'Créer et inviter'}
-                      </button>
-                      <button
-                        onClick={() => setNewAgentForm(p => ({ ...p, open: false }))}
-                        className="text-sm text-gray-400 hover:text-gray-600 px-3"
-                      >✕</button>
-                    </div>
+                  <AgentScopeSelector scope={suggestedScope} onChange={setSuggestedScope} />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="primary" className="flex-1" onClick={handleCreateSuggestedAgent} disabled={creatingSuggested}>
+                      {creatingSuggested ? 'Création…' : <><Plus size={15} aria-hidden="true" /> Créer et inviter</>}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setNewAgentSuggestion(null)}>Ignorer</Button>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setNewAgentForm(p => ({ ...p, open: true }))}
-                    className="w-full py-2.5 border-2 border-dashed border-gray-200 hover:border-blue-300 rounded-xl text-xs text-gray-400 hover:text-blue-500 transition"
-                  >
-                    + Créer un agent
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── Section B2 : Pédagogie et humour ────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
-            <LevelSlider
-              label="Maîtrise du sujet de l'interlocuteur"
-              value={expertiseLevel}
-              onChange={setExpertiseLevel}
-              labels={EXPERTISE_LABELS}
-            />
-            <LevelSlider
-              label="Humour"
-              value={humorLevel}
-              onChange={setHumorLevel}
-              labels={HUMOR_LABELS}
-              icons={HUMOR_ICONS}
-            />
-            <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
-          </div>
-
-          {/* ── Section C : Modèle + Recherche web ─────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
-
-            {/* Sélecteur de modèle */}
-            <div>
-              <p className="text-sm font-semibold text-gray-800 mb-2">Modèle IA</p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: 'claude-sonnet-4-6', label: 'Sonnet', desc: 'Rapide et économique' },
-                  { id: 'claude-opus-4-8',   label: 'Opus',   desc: 'Plus puissant, plus lent' },
-                ].map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setModel(m.id)}
-                    className={`flex flex-col items-start px-4 py-3 rounded-xl border-2 text-left transition ${
-                      model === m.id
-                        ? 'border-blabia-blue bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <p className={`text-sm font-semibold ${model === m.id ? 'text-blabia-blue' : 'text-gray-800'}`}>{m.label}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{m.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Préparation sans l'humain (refonte UX v5.1) */}
-            <div className="pt-1 border-t border-gray-100">
-              <label className="flex items-start justify-between gap-4 cursor-pointer">
-                <span>
-                  <span className="block text-sm font-semibold text-gray-800">Préparer avant mon arrivée</span>
-                  <span className="block text-xs text-gray-400 mt-0.5">Les agents débattent d'abord entre eux ; vous arrivez sur un briefing avec les seules décisions qui vous reviennent. Au moins 2 agents.</span>
-                </span>
-                <input type="checkbox" checked={autoPrepare} onChange={e => setAutoPrepare(e.target.checked)}
-                  className="mt-1 w-5 h-5 shrink-0 accent-blabia-blue" />
-              </label>
-            </div>
-
-            {/* Toggle Recherche web */}
-            <div className="pt-1 border-t border-gray-100">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">Recherche web 🌐</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Les agents pourront chercher des informations en temps réel</p>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={webSearchEnabled}
-                  onClick={() => setWebSearchEnabled(v => !v)}
-                  className={`relative inline-flex w-11 h-6 shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${
-                    webSearchEnabled ? 'bg-blabia-blue' : 'bg-gray-200'
-                  }`}
-                >
-                  <span className={`inline-block w-4 h-4 mt-1 bg-white rounded-full shadow transition-transform duration-200 ${
-                    webSearchEnabled ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
+              )}
+
+              {/* Créer un agent */}
+              {newAgentForm.open ? (
+                <div className="border border-line bg-canvas rounded-xl p-4 space-y-2">
+                  <input autoFocus type="text" placeholder="Nom de l'agent" aria-label="Nom de l'agent" value={newAgentForm.name}
+                    onChange={e => setNewAgentForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
+                  <input type="text" placeholder="Rôle / spécialité" aria-label="Rôle" value={newAgentForm.role}
+                    onChange={e => setNewAgentForm(p => ({ ...p, role: e.target.value }))} className={inputCls} />
+                  <textarea placeholder="Instructions (optionnel)" aria-label="Instructions" value={newAgentForm.systemPrompt} rows={2}
+                    onChange={e => setNewAgentForm(p => ({ ...p, systemPrompt: e.target.value }))} className={`${inputCls} resize-none`} />
+                  <AgentScopeSelector scope={newAgentForm.scope} onChange={scope => setNewAgentForm(p => ({ ...p, scope }))} />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="primary" className="flex-1" onClick={handleCreateAgent}
+                      disabled={!newAgentForm.name.trim() || creatingAgent}>
+                      {creatingAgent ? 'Création…' : 'Créer et inviter'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setNewAgentForm(p => ({ ...p, open: false }))} aria-label="Annuler">
+                      <X size={16} aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setNewAgentForm(p => ({ ...p, open: true }))}
+                  className="w-full h-11 inline-flex items-center justify-center gap-1.5 border-2 border-dashed border-line hover:border-action-border rounded-xl text-sm font-semibold text-ink-faint hover:text-action transition">
+                  <Plus size={16} aria-hidden="true" /> Créer un agent
                 </button>
-              </div>
-              {webSearchEnabled && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
-                  ⚠️ La recherche web entraîne un coût supplémentaire par requête Anthropic. Activez uniquement si les agents ont besoin d'informations actuelles.
-                </p>
               )}
             </div>
-
-          </div>
-
-          {/* ── Erreur ──────────────────────────────────────────────────────── */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-start gap-2">
-              <span className="mt-0.5">⚠️</span>
-              <span>{error}</span>
-            </div>
           )}
+        </Step>
 
-          {/* ── Bouton démarrer ─────────────────────────────────────────────── */}
-          <button
-            onClick={handleStart}
-            disabled={!canStart}
-            className="w-full bg-blabia-blue hover:bg-blabia-blue active:bg-blue-800 text-white font-semibold py-3.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm shadow-sm"
-          >
-            {starting ? (
-              <>
-                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Démarrage…
-              </>
-            ) : '🚀 Démarrer la réunion'}
+        {/* ── 4. Déroulé ──────────────────────────────────────────────────── */}
+        <Step n={4} title="Déroulé" hint="Votre place dans la réunion.">
+          <div className="space-y-4">
+            <label className={`flex items-start gap-3 rounded-xl border p-3.5 transition ${
+              autoPrepare && prepPossible ? 'border-ai-border bg-ai-bg' : 'border-line'
+            } ${prepPossible ? 'cursor-pointer' : 'opacity-60'}`}>
+              <Coffee size={20} className={`shrink-0 mt-0.5 ${autoPrepare && prepPossible ? 'text-ai' : 'text-ink-muted'}`} aria-hidden="true" />
+              <span className="flex-1">
+                <span className="block text-sm font-extrabold text-ink">Préparer avant mon arrivée</span>
+                <span className="block text-xs text-ink-muted mt-0.5">
+                  Les agents débattent d'abord entre eux ; vous arrivez sur un briefing avec les seules décisions qui vous reviennent.
+                  {!prepPossible && ' Invitez au moins 2 agents.'}
+                </span>
+              </span>
+              <input type="checkbox" checked={autoPrepare && prepPossible} disabled={!prepPossible}
+                onChange={e => setAutoPrepare(e.target.checked)} className="mt-1 w-5 h-5 shrink-0 accent-action" />
+            </label>
+            <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
+          </div>
+        </Step>
+
+        {/* ── Réglages avancés (repliés) ─────────────────────────────────── */}
+        <Card>
+          <button type="button" onClick={() => setShowAdvanced(v => !v)} aria-expanded={showAdvanced}
+            className="w-full flex items-center justify-between gap-3 px-5 h-14 text-left">
+            <span className="min-w-0">
+              <span className="block text-sm font-extrabold text-ink">Réglages avancés</span>
+              {!showAdvanced && (
+                <span className="block text-xs text-ink-faint truncate">
+                  {modelLabel} · {EXPERTISE_LABELS[expertiseLevel - 1]} · humour {HUMOR_LABELS[humorLevel - 1].toLowerCase()} · recherche web {webSearchEnabled ? 'activée' : 'désactivée'}
+                </span>
+              )}
+            </span>
+            <ChevronDown size={18} className={`text-ink-muted shrink-0 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
 
+          {showAdvanced && (
+            <div className="px-5 pb-5 space-y-5 border-t border-line pt-4">
+              <div>
+                <p className="text-sm font-bold text-ink-soft mb-2">Modèle IA</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {MODELS.map(m => (
+                    <ChoiceCard key={m.id} active={model === m.id} onClick={() => setModel(m.id)} className="px-4 py-3">
+                      <p className={`text-sm font-extrabold ${model === m.id ? 'text-action' : 'text-ink'}`}>{m.label}</p>
+                      <p className="text-xs text-ink-muted mt-0.5">{m.desc}</p>
+                    </ChoiceCard>
+                  ))}
+                </div>
+              </div>
+
+              <LevelSlider label="Maîtrise du sujet de l'interlocuteur" value={expertiseLevel}
+                onChange={setExpertiseLevel} labels={EXPERTISE_LABELS} />
+              <LevelSlider label="Humour" value={humorLevel} onChange={setHumorLevel}
+                labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
+
+              <div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-start gap-2.5">
+                    <Globe size={18} className="text-ink-muted shrink-0 mt-0.5" aria-hidden="true" />
+                    <div>
+                      <p className="text-sm font-bold text-ink-soft">Recherche web</p>
+                      <p className="text-xs text-ink-faint mt-0.5">Les agents pourront chercher des informations en temps réel.</p>
+                    </div>
+                  </div>
+                  <Toggle checked={webSearchEnabled} onChange={setWebSearchEnabled} label="Recherche web" />
+                </div>
+                {webSearchEnabled && (
+                  <p className="text-xs text-await bg-await-bg border border-await-border rounded-[10px] px-3 py-2 mt-3">
+                    Chaque recherche est facturée en plus par Anthropic. À activer seulement si les agents ont besoin d'informations récentes.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {error && (
+          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
+        )}
+
+        {/* ── Lancement ───────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+          {!canStart && !starting && (
+            <p className="text-xs text-ink-faint">
+              {!task.trim() ? 'Renseignez l’objectif pour lancer.' : 'Invitez au moins un agent.'}
+            </p>
+          )}
+          <Button variant="primary" onClick={handleStart} disabled={!canStart} className="min-w-[220px]">
+            {starting
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Démarrage…</>
+              : <><Play size={16} aria-hidden="true" /> {autoPrepare && prepPossible ? 'Lancer la préparation' : 'Démarrer la réunion'}</>}
+          </Button>
         </div>
+
       </div>
-    </ProjectLayout>
+    </div>
   );
 }

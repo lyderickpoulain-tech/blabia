@@ -1,9 +1,35 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import Layout from '../components/Layout';
+import { Button, Card } from '../components/ui';
 import api from '../utils/api';
 import QuestionModePicker from '../components/QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
+
+const inputCls = 'w-full px-3.5 py-2.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
+
+function Field({ label, optional, hint, children }) {
+  return (
+    <label className="block">
+      <span className="block text-sm font-bold text-ink-soft mb-1">
+        {label} {optional && <span className="text-ink-faint font-semibold">(optionnel)</span>}
+      </span>
+      {children}
+      {hint && <span className="block text-[11px] text-ink-faint mt-1">{hint}</span>}
+    </label>
+  );
+}
+
+function Block({ title, hint, children }) {
+  return (
+    <Card className="p-5">
+      <h2 className="text-base font-extrabold text-ink">{title}</h2>
+      {hint && <p className="text-xs text-ink-muted mt-0.5 mb-4">{hint}</p>}
+      <div className={`space-y-4 ${hint ? '' : 'mt-4'}`}>{children}</div>
+    </Card>
+  );
+}
 
 export default function NewProject() {
   const [name, setName] = useState('');
@@ -33,134 +59,60 @@ export default function NewProject() {
 
   return (
     <Layout>
-      <div className="max-w-lg mx-auto">
-        <Link to="/dashboard" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-6">
-          ← Retour au tableau de bord
+      <div className="max-w-2xl mx-auto">
+        <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink mb-4">
+          <ArrowLeft size={16} aria-hidden="true" /> Mes projets
         </Link>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h1 className="text-xl font-bold text-gray-900 mb-1">Nouveau projet</h1>
-          <p className="text-gray-500 text-sm mb-6">Définissez le contexte de votre projet IA</p>
+        <h1 className="text-2xl font-extrabold text-ink">Nouveau projet</h1>
+        <p className="text-sm text-ink-muted mt-1 mb-5">Plus le brief est précis, moins les agents auront de questions à vous poser.</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nom du projet <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Ex : Stratégie de communication Q3"
-                maxLength={100}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition"
-                autoFocus
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Block title="Identité">
+            <Field label="Nom du projet">
+              <input type="text" required value={name} onChange={e => setName(e.target.value)}
+                placeholder="Ex : Stratégie de communication Q3" maxLength={100} className={inputCls} autoFocus />
+            </Field>
+            <Field label="Description" optional hint="Affichée dans la liste de vos projets.">
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="Quelques mots sur ce projet…" rows={2} maxLength={500} className={`${inputCls} resize-none`} />
+            </Field>
+          </Block>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description <span className="text-gray-400 font-normal">(optionnel)</span>
-              </label>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Quelques mots sur le contexte de ce projet…"
-                rows={2}
-                maxLength={500}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none"
-              />
-            </div>
+          <Block title="Brief" hint="Transmis aux agents dès la première réunion : ils arrivent avec ce contexte.">
+            <Field label="Objectif principal" optional>
+              <textarea value={objectif} onChange={e => setObjectif(e.target.value)}
+                placeholder="Que cherchez-vous à accomplir ?" rows={3} className={`${inputCls} resize-none`} />
+            </Field>
+            <Field label="Contexte" optional>
+              <textarea value={contexte} onChange={e => setContexte(e.target.value)}
+                placeholder="Qui sont les utilisateurs ? Quelles contraintes (budget, délai, compétences) ?" rows={3} className={`${inputCls} resize-none`} />
+            </Field>
+            <Field label="Notes initiales" optional>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Idées, inspirations, références, contraintes techniques…" rows={2} className={`${inputCls} resize-none`} />
+            </Field>
+          </Block>
 
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Brief projet</p>
-              <p className="text-xs text-gray-400 mb-3 leading-relaxed">
-                Ce brief est transmis aux agents dès la première réunion — ils arrivent avec ce contexte dès le départ.
-              </p>
+          <Block title="Façon de travailler" hint="Valeurs par défaut des réunions, modifiables à chaque réunion.">
+            <LevelSlider label="Maîtrise du sujet de l'interlocuteur" value={expertiseLevel}
+              onChange={setExpertiseLevel} labels={EXPERTISE_LABELS} />
+            <LevelSlider label="Humour" value={humorLevel} onChange={setHumorLevel}
+              labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
+            <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
+          </Block>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Objectif principal <span className="text-gray-400 font-normal">(optionnel)</span>
-                  </label>
-                  <textarea
-                    value={objectif}
-                    onChange={e => setObjectif(e.target.value)}
-                    placeholder="Quel est l'objectif de ce projet ? Que cherchez-vous à accomplir ?"
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none text-sm"
-                  />
-                </div>
+          {error && (
+            <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
+          )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Contexte <span className="text-gray-400 font-normal">(optionnel)</span>
-                  </label>
-                  <textarea
-                    value={contexte}
-                    onChange={e => setContexte(e.target.value)}
-                    placeholder="Quel est le contexte ? Qui sont les utilisateurs ? Quelles contraintes ?"
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes initiales <span className="text-gray-400 font-normal">(optionnel)</span>
-                  </label>
-                  <textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Idées, inspirations, références, contraintes techniques…"
-                    rows={2}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blabia-blue focus:border-transparent outline-none transition resize-none text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-4 space-y-4">
-              <LevelSlider
-                label="Maîtrise du sujet de l'interlocuteur"
-                value={expertiseLevel}
-                onChange={setExpertiseLevel}
-                labels={EXPERTISE_LABELS}
-              />
-              <LevelSlider
-                label="Humour"
-                value={humorLevel}
-                onChange={setHumorLevel}
-                labels={HUMOR_LABELS}
-                icons={HUMOR_ICONS}
-              />
-              <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <Link
-                to="/dashboard"
-                className="flex-1 text-center border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
-              >
-                Annuler
-              </Link>
-              <button
-                type="submit"
-                disabled={loading || !name.trim()}
-                className="flex-1 bg-blabia-blue hover:bg-blabia-blue text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Création…' : 'Créer le projet'}
-              </button>
-            </div>
-          </form>
-        </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => navigate('/dashboard')}>Annuler</Button>
+            <Button type="submit" variant="primary" disabled={loading || !name.trim()} className="min-w-[180px]">
+              {loading ? 'Création…' : 'Créer le projet'}
+            </Button>
+          </div>
+        </form>
       </div>
     </Layout>
   );

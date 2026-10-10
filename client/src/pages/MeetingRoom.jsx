@@ -11,6 +11,8 @@ import BriefingView from '../components/meeting/BriefingView';
 import { DELEGATE } from '../components/DecisionCard';
 import ArtifactCard from '../components/meeting/ArtifactCard';
 import ConversationFeed from '../components/meeting/ConversationFeed';
+import { RotateCcw } from 'lucide-react';
+import { Button } from '../components/ui';
 import api from '../utils/api';
 
 // ── Palette agent (initiale + couleur de bulle) ───────────────────────────────
@@ -1205,31 +1207,30 @@ export default function MeetingRoom() {
 
     {/* Modale réinitialisation réunion */}
     {showResetModal && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">⚠️ Réinitialiser cette réunion ?</h3>
-          <p className="text-sm text-gray-600">Cette action va :</p>
-          <ul className="text-sm text-gray-700 space-y-1 pl-4 list-disc">
-            <li>Effacer tous les échanges de cette réunion</li>
-            <li>Supprimer sa contribution à la mémoire du projet</li>
-            <li>Réinitialiser la mémoire des étapes suivantes</li>
+      <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div role="dialog" aria-modal="true" aria-labelledby="reset-title" className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <span className="w-10 h-10 rounded-xl bg-await-light text-await inline-flex items-center justify-center shrink-0">
+              <RotateCcw size={20} aria-hidden="true" />
+            </span>
+            <div>
+              <h3 id="reset-title" className="text-lg font-extrabold text-ink">Réinitialiser cette réunion ?</h3>
+              <p className="text-sm text-ink-muted">Elle repartira de zéro, avec le même objectif et les mêmes agents.</p>
+            </div>
+          </div>
+          <ul className="text-sm text-ink-soft space-y-1.5 bg-await-bg border border-await-border rounded-xl p-3.5">
+            <li>• Tous les échanges de cette réunion sont effacés</li>
+            <li>• Sa contribution à la mémoire du projet est retirée</li>
+            <li>• La mémoire des étapes suivantes est réinitialisée</li>
           </ul>
-          <p className="text-sm text-gray-500 italic">Les étapes précédentes sont conservées.</p>
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => setShowResetModal(false)}
-              disabled={resettingSession}
-              className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition"
-            >
+          <p className="text-xs text-ink-faint">Les étapes précédentes sont conservées.</p>
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowResetModal(false)} disabled={resettingSession}>
               Annuler
-            </button>
-            <button
-              onClick={handleResetSession}
-              disabled={resettingSession}
-              className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium transition disabled:opacity-50"
-            >
-              {resettingSession ? 'Réinitialisation…' : '🔄 Réinitialiser'}
-            </button>
+            </Button>
+            <Button variant="await" className="flex-1" onClick={handleResetSession} disabled={resettingSession}>
+              {resettingSession ? 'Réinitialisation…' : <><RotateCcw size={15} aria-hidden="true" /> Réinitialiser</>}
+            </Button>
           </div>
         </div>
       </div>
