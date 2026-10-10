@@ -1,4 +1,4 @@
-# blabia-workflow v1 — installé par BlabIA, ne pas modifier à la main
+# blabia-workflow v2 — installé par BlabIA, ne pas modifier à la main
 # Lancé uniquement par BlabIA (bouton « Mettre en ligne »).
 # Si le secret BLABIA_DB_URL existe : sauvegarde de la base, chiffrée avec
 # BLABIA_BACKUP_PASSWORD, conservée 90 jours ; la fusion n'a lieu que si elle a réussi.
