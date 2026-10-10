@@ -423,7 +423,9 @@ router.post('/:sessionId/chat', async (req, res) => {
       const next = await orchestrate({
         session, project, messages: currentMessages, activeAgents,
         lastAgentId, consecutiveCount,
-        humanMessage:         hasText ? humanMessage : null,
+        // Premier tour seulement : une mention « @agent » désigne qui répond, pas qui parle à
+        // tous les tours (l'agent mentionné reparlait sinon jusqu'à MAX_TURNS, sans clôture)
+        humanMessage:         turnCount === 0 && hasText ? humanMessage : null,
         resumeAfterDecision:  turnCount === 0 && resumeAfterDecision,
         delegated:            turnCount === 0 && !!delegated,
         artifactRequested:    turnCount === 0 && wantsArtifact,
@@ -655,6 +657,9 @@ router.post('/:sessionId/chat', async (req, res) => {
       consecutiveCount = next.agentId === lastAgentId ? consecutiveCount + 1 : 1;
       lastAgentId      = next.agentId;
       turnCount++;
+      // Réunion à un seul agent (hors préparation) : il répond une fois puis rend la main
+      // (sans orchestrateur, rien ne l'arrêtait avant MAX_TURNS). Après le contradicteur, il répond.
+      if (!prepare && activeAgents.length === 1 && !isChallenge) conversationDone = true;
       currentMessages  = await loadMessages(sessionId);
     }
 
