@@ -104,9 +104,9 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 6. **Rappels par email** (Resend déjà branché) et **export** du compte-rendu / du registre (PDF, Word).
 
 ### C. Code
-1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Reste possible : un modèle léger pour l'orchestrateur, l'analyse des besoins et les commandes rapides.
+1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).
-3. Éviter l'appel d'orchestration quand le choix est évident (mention @, un seul candidat).
+3. ~~Éviter l'appel d'orchestration quand le choix est évident~~ — abandonné : avec Haiku l'appel coûte ~0,0001 $, et le sauter ferait perdre la suggestion de clôture (`shouldClose`). La mention @ et la réunion à un seul agent court-circuitent déjà l'appel.
 4. Découper `ProjectView.jsx` (~1 250 lignes) et `MeetingRoom.jsx` (~1 150 lignes) ; chargement des pages à la demande (bundle principal ~650 Ko).
 5. Notifications d'erreur côté client (beaucoup de `catch {}` silencieux : c'est ce qui a masqué le bug `updatedAt`).
 6. Tests : boucle de réunion avec IA simulée ; test de contrôle d'accès de toutes les routes.
