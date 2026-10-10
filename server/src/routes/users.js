@@ -11,7 +11,7 @@ const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 router.get('/me', async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'createdAt')
+      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'createdAt')
       .where({ id: req.user.id })
       .limit(1);
     if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
@@ -54,6 +54,23 @@ router.post('/me/tutorial-seen', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[users/me/tutorial-seen POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/users/me/tour — chapitre de la visite guidée terminé { chapter }
+const TOUR_CHAPTERS = ['create', 'shared', 'dashboard', 'plan', 'meeting', 'close', 'admin'];
+router.patch('/me/tour', async (req, res) => {
+  const { chapter } = req.body;
+  if (!TOUR_CHAPTERS.includes(chapter)) return res.status(400).json({ error: 'Chapitre inconnu' });
+  try {
+    const [row] = await db('User').where({ id: req.user.id })
+      .update({ tourProgress: db.raw(`"tourProgress" || ?::jsonb`, [JSON.stringify({ [chapter]: new Date().toISOString() })]) })
+      .returning(['tourProgress']);
+    if (!row) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json(row);
+  } catch (err) {
+    console.error('[users/me/tour PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

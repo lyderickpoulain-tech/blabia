@@ -30,13 +30,16 @@ export function AuthProvider({ children }) {
     try { await api.post('/users/me/tutorial-seen'); } catch { /* sans gravité : reproposé à la prochaine connexion */ }
   };
 
+  // Mise à jour locale du profil (ex. progression de la visite guidée)
+  const patchUser = patch => setUser(u => u && { ...u, ...patch });
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, markTutorialSeen }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, markTutorialSeen, patchUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -5,12 +5,12 @@ const isCustom = c => /^autre/i.test(c || '');
 
 // Pastille de choix : sélection lisible (fond clair + texte coloré + coche),
 // jamais de texte blanc sur fond coloré.
-export function ChoicePill({ selected, recommended, onClick, children, tone = 'action' }) {
+export function ChoicePill({ selected, recommended, onClick, children, tone = 'action', ...rest }) {
   const sel = tone === 'ai'
     ? 'bg-ai-light border-ai text-ai'
     : 'bg-action-light border-action text-action';
   return (
-    <button type="button" onClick={onClick} aria-pressed={selected}
+    <button type="button" onClick={onClick} aria-pressed={selected} {...rest}
       className={`min-h-[36px] px-3 py-1 rounded-full border text-[13px] font-semibold inline-flex items-center gap-1.5 transition ${
         selected ? sel : `bg-white text-ink-soft hover:border-action-border hover:bg-action-light/40 ${recommended ? 'border-ai-border' : 'border-line'}`
       }`}>

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { LayoutDashboard, ListOrdered, History, ScrollText, Wrench, Users, Settings } from 'lucide-react';
 import Layout from '../Layout';
+import { Badge } from '../ui';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { attentionCount } from '../../utils/toolsCatalog';
@@ -81,8 +82,9 @@ export default function ProjectShell() {
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-faint">Projet</p>
               <p className="text-base font-extrabold text-ink leading-snug break-words">{project.name}</p>
               {project.status === 'archived' && <p className="text-xs font-bold text-ink-faint mt-0.5">Archivé</p>}
+              {project.isDemo && <Badge tone="ai" className="mt-1">Projet exemple</Badge>}
             </div>
-            <nav className="flex md:flex-col gap-1 overflow-x-auto pb-1 md:pb-0">
+            <nav data-tour="shell-nav" className="flex md:flex-col gap-1 overflow-x-auto pb-1 md:pb-0">
               {NAV.map(item => {
                 const badge = item.badge ? badgeOf(item.badge) : 0;
                 return (

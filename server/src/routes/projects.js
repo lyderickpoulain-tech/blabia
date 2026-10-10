@@ -9,6 +9,7 @@ const { findProject } = require('../utils/projectHelpers');
 const { isQuestionMode, DEFAULT_QUESTION_MODE } = require('../services/questionModes');
 const { parseJsonField } = require('../utils/parseJsonField');
 const { LEGACY_COST_SQL, projectCostReport } = require('../services/usageReports');
+const { ensureDemoProject, deleteDemoProjects } = require('../services/demoProject');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -45,6 +46,7 @@ router.get('/', async (req, res) => {
         'Project.createdAt',
         'Project.updatedAt',
         'Project.userId',
+        'Project.isDemo',
         db.raw('COUNT(DISTINCT "Session"."id")::int AS "sessionCount"'),
         db.raw(`(SELECT COUNT(*)::int FROM "Session" WHERE "projectId" = "Project"."id" AND status = 'open') AS "openSessionCount"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status != 'cancelled') AS "todoTotal"`),
@@ -101,6 +103,27 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('[projects GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/demo — projet exemple de la visite guidée (créé s'il n'existe pas)
+router.post('/demo', async (req, res) => {
+  try {
+    const demo = await ensureDemoProject(req.user);
+    res.status(demo.created ? 201 : 200).json(demo);
+  } catch (err) {
+    console.error('[projects/demo POST]', err.message);
+    res.status(500).json({ error: 'Impossible de créer le projet exemple' });
+  }
+});
+
+// DELETE /api/projects/demo — fin de visite : suppression du projet exemple de l'utilisateur
+router.delete('/demo', async (req, res) => {
+  try {
+    res.json({ deleted: await deleteDemoProjects(req.user.id) });
+  } catch (err) {
+    console.error('[projects/demo DELETE]', err.message);
+    res.status(500).json({ error: 'Impossible de supprimer le projet exemple' });
   }
 });
 

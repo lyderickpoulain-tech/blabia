@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import api from '../utils/api';
+import { useTour } from '../tour/TourContext';
 import QuestionModePicker from '../components/QuestionModePicker';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 
@@ -21,9 +22,9 @@ function Field({ label, optional, hint, children }) {
   );
 }
 
-function Block({ title, hint, children }) {
+function Block({ title, hint, tour, children }) {
   return (
-    <Card className="p-5">
+    <Card className="p-5" data-tour={tour}>
       <h2 className="text-base font-extrabold text-ink">{title}</h2>
       {hint && <p className="text-xs text-ink-muted mt-0.5 mb-4">{hint}</p>}
       <div className={`space-y-4 ${hint ? '' : 'mt-4'}`}>{children}</div>
@@ -43,11 +44,30 @@ export default function NewProject() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const tour = useTour();
+  const inTour = tour?.active && tour.chapterId === 'create';
+
+  // Visite guidée : formulaire pré-rempli avec le projet exemple (salon de thé)
+  useEffect(() => {
+    if (!tour?.step?.prefill) return;
+    setName('Salon de thé « Les Feuilles Vagabondes »');
+    setDescription('Ouvrir un salon de thé et une boutique de thés en vrac à Lyon.');
+    setObjectif('Ouvrir un salon de thé cosy doublé d’une boutique de thés en vrac, rentable dès la deuxième année.');
+    setContexte('Projet porté par une seule personne. Apport de 25 000 €, prêt bancaire en négociation. Aucune expérience de la restauration.');
+    setNotes('Ateliers de dégustation le week-end, vente en ligne plus tard. Circuits courts, zéro déchet.');
+    setExpertiseLevel(2); setHumorLevel(3); setQuestionMode('balanced');
+  }, [tour?.step?.prefill]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    if (inTour) {
+      // Visite guidée : c'est le projet exemple (jeu de données fixe) qui est créé
+      try { await tour.createDemo(); } catch { setError('Le projet exemple n’a pas pu être créé.'); }
+      setLoading(false);
+      return;
+    }
     try {
       const { data } = await api.post('/projects', { name, description, objectif, contexte, notes, expertiseLevel, humorLevel, questionMode });
       navigate(`/projects/${data.id}`);
@@ -68,7 +88,7 @@ export default function NewProject() {
         <p className="text-sm text-ink-muted mt-1 mb-5">Plus le brief est précis, moins les agents auront de questions à vous poser.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Block title="Identité">
+          <Block title="Identité" tour="np-identity">
             <Field label="Nom du projet">
               <input type="text" required value={name} onChange={e => setName(e.target.value)}
                 placeholder="Ex : Stratégie de communication Q3" maxLength={100} className={inputCls} autoFocus />
@@ -79,7 +99,7 @@ export default function NewProject() {
             </Field>
           </Block>
 
-          <Block title="Brief" hint="Transmis aux agents dès la première réunion : ils arrivent avec ce contexte.">
+          <Block title="Brief" tour="np-brief" hint="Transmis aux agents dès la première réunion : ils arrivent avec ce contexte.">
             <Field label="Objectif principal" optional>
               <textarea value={objectif} onChange={e => setObjectif(e.target.value)}
                 placeholder="Que cherchez-vous à accomplir ?" rows={3} className={`${inputCls} resize-none`} />
@@ -94,7 +114,7 @@ export default function NewProject() {
             </Field>
           </Block>
 
-          <Block title="Façon de travailler" hint="Valeurs par défaut des réunions, modifiables à chaque réunion.">
+          <Block title="Façon de travailler" tour="np-work" hint="Valeurs par défaut des réunions, modifiables à chaque réunion.">
             <LevelSlider label="Maîtrise du sujet de l'interlocuteur" value={expertiseLevel}
               onChange={setExpertiseLevel} labels={EXPERTISE_LABELS} />
             <LevelSlider label="Humour" value={humorLevel} onChange={setHumorLevel}
@@ -108,7 +128,7 @@ export default function NewProject() {
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="secondary" onClick={() => navigate('/dashboard')}>Annuler</Button>
-            <Button type="submit" variant="primary" disabled={loading || !name.trim()} className="min-w-[180px]">
+            <Button data-tour="np-submit" type="submit" variant="primary" disabled={loading || !name.trim()} className="min-w-[180px]">
               {loading ? 'Création…' : 'Créer le projet'}
             </Button>
           </div>

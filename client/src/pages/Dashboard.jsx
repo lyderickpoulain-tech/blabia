@@ -23,12 +23,15 @@ function ProjectCard({ project, archiving, onArchive, onOpen }) {
   const sessions  = project.sessionCount ?? 0;
   const archived  = project.status !== 'active';
   return (
-    <Card className={`group flex flex-col p-4 transition hover:border-action-border hover:shadow-sm ${archived ? 'opacity-75' : ''}`}>
+    <Card data-tour={project.isDemo ? 'project-card-demo' : undefined}
+      className={`group flex flex-col p-4 transition hover:border-action-border hover:shadow-sm ${archived ? 'opacity-75' : ''} ${project.isDemo ? 'border-ai-border' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <Link to={`/projects/${project.id}`} className="min-w-0 flex-1 focus-visible:outline-none">
           <h2 className="text-base font-extrabold text-ink leading-snug group-hover:text-action transition break-words">{project.name}</h2>
         </Link>
-        {archived
+        {project.isDemo
+          ? <Badge tone="ai">Exemple</Badge>
+          : archived
           ? <Badge tone="muted">Archivé</Badge>
           : open && <Badge tone="await"><Radio size={12} aria-hidden="true" /> Réunion en cours</Badge>}
       </div>
@@ -70,10 +73,14 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/projects')
+    const load = () => api.get('/projects')
       .then(({ data }) => setProjects(data))
       .catch(() => {})
       .finally(() => setLoading(false));
+    load();
+    // Visite guidée : projet exemple créé ou supprimé
+    window.addEventListener('blabia:demo-changed', load);
+    return () => window.removeEventListener('blabia:demo-changed', load);
   }, []);
 
   const filtered = useMemo(() => {
@@ -118,7 +125,7 @@ export default function Dashboard() {
             {totalCost > 0 && <> · {formatUSD(totalCost)} de coût IA au total</>}
           </p>
         </div>
-        <Button variant="primary" onClick={() => navigate('/projects/new')}>
+        <Button data-tour="new-project" variant="primary" onClick={() => navigate('/projects/new')}>
           <Plus size={18} aria-hidden="true" /> Nouveau projet
         </Button>
       </div>

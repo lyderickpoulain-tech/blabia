@@ -17,6 +17,8 @@ const KIND_LABELS = {
   'generate-timeline':     'Plan des réunions',
   'tools/analyze':         'Analyse des outils',
   'export/claude-code':    'Prompts Claude Code',
+  'extract-file':          'Lecture de fichiers joints',
+  'generate-memory':       'Mémoire du projet',
 };
 
 export function kindLabel(kind = '') {

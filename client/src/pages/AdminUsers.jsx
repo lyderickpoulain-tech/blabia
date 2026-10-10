@@ -215,7 +215,7 @@ export default function AdminUsers() {
       </div>
 
       {/* Onglets */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div data-tour="admin-tabs" className="flex gap-1 mb-6 border-b border-gray-200">
         {[
           { id: 'users',       label: '👥 Utilisateurs' },
           { id: 'invitations', label: '✉️ Invitations'   },
@@ -244,7 +244,7 @@ export default function AdminUsers() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div data-tour="admin-users" className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <table className="w-full hidden md:table">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>

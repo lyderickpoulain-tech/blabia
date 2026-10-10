@@ -23,9 +23,9 @@ const QUICK_COMMANDS = [
   { cmd: '/rechercher',        label: 'Rechercher sur le web', placeholder: '/rechercher ' },
 ];
 
-function SummaryCard({ icon: Icon, title, meta, to, linkLabel, children }) {
+function SummaryCard({ icon: Icon, title, meta, to, linkLabel, tour, children }) {
   return (
-    <Card as="section" className="p-5 flex flex-col gap-3">
+    <Card as="section" data-tour={tour} className="p-5 flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-extrabold text-ink flex items-center gap-2"><Icon size={17} className="text-action" aria-hidden="true" />{title}</h2>
         {meta && <span className="text-xs font-semibold text-ink-faint">{meta}</span>}
@@ -57,7 +57,7 @@ function AskBlabIA({ projectId, onDone }) {
   };
 
   return (
-    <Card as="section" className="p-5 space-y-3">
+    <Card as="section" data-tour="pd-ask" className="p-5 space-y-3">
       <h2 className="text-base font-extrabold text-ink flex items-center gap-2"><Sparkles size={17} className="text-ai" aria-hidden="true" />Demander à BlabIA</h2>
       <form onSubmit={submit} className="flex gap-2">
         <label htmlFor="ask" className="sr-only">Votre question ou commande</label>
@@ -147,7 +147,7 @@ export default function ProjectDashboard() {
       </div>
 
       {/* Prochaine étape */}
-      <Card as="section" aria-labelledby="next-title" className="p-5 border-action-border flex flex-wrap items-center gap-5">
+      <Card as="section" data-tour="pd-next" aria-labelledby="next-title" className="p-5 border-action-border flex flex-wrap items-center gap-5">
         {plan === null ? (
           <div className="w-6 h-6 border-2 border-action border-t-transparent rounded-full animate-spin" />
         ) : next ? (
@@ -193,7 +193,7 @@ export default function ProjectDashboard() {
 
       {/* Points d'attention */}
       {attention.length > 0 && (
-        <section aria-labelledby="att-title" className="bg-await-bg border border-await-border rounded-2xl p-5 space-y-2">
+        <section data-tour="pd-attention" aria-labelledby="att-title" className="bg-await-bg border border-await-border rounded-2xl p-5 space-y-2">
           <h2 id="att-title" className="text-sm font-extrabold text-await flex items-center gap-2"><AlertTriangle size={16} aria-hidden="true" />{attention.length} point{attention.length > 1 ? 's attendent' : ' attend'} votre arbitrage</h2>
           <ul className="space-y-1.5">
             {attention.map((a, i) => (
@@ -247,7 +247,7 @@ export default function ProjectDashboard() {
           )}
         </SummaryCard>
 
-        <SummaryCard icon={History} title="Historique" meta={`${sessions.length} réunion${sessions.length !== 1 ? 's' : ''}`} to="historique" linkLabel="Voir l'historique">
+        <SummaryCard tour="pd-history" icon={History} title="Historique" meta={`${sessions.length} réunion${sessions.length !== 1 ? 's' : ''}`} to="historique" linkLabel="Voir l'historique">
           {stats && (
             <div className="mb-3" title={stats.legacyCostUSD > 0 ? `${formatUSD(stats.realCostUSD)} réels + ${formatUSD(stats.legacyCostUSD)} estimés avant le suivi` : 'Calculé à partir des tokens exacts de chaque appel'}>
               <p className="text-xs text-ink-faint">Coût de l'IA</p>

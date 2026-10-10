@@ -30,7 +30,7 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
           </div>
 
           {summary && (
-            <section aria-labelledby="briefing-synth" className="bg-ai-bg border border-ai-border rounded-2xl p-5 space-y-3">
+            <section data-tour="mr-synthesis" aria-labelledby="briefing-synth" className="bg-ai-bg border border-ai-border rounded-2xl p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 id="briefing-synth" className="text-base font-extrabold text-ai flex items-center gap-2">
                   <Sparkles size={16} aria-hidden="true" /> Synthèse de la préparation
@@ -45,7 +45,7 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
             </section>
           )}
 
-          <section aria-labelledby="briefing-dec" className="space-y-3">
+          <section data-tour="mr-decisions" aria-labelledby="briefing-dec" className="space-y-3">
             <h3 id="briefing-dec" className="text-base font-extrabold text-ink">À vous de trancher</h3>
             {decisions.map((d, i) => {
               const done = !!answerOf(d.id);
@@ -65,7 +65,7 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
                     ) : (
                       <ChoicePill key={j} selected={picked[d.id] === c} recommended={j === 0} onClick={() => setPicked(p => ({ ...p, [d.id]: c }))}>{c}</ChoicePill>
                     ))}
-                    <ChoicePill tone="ai" selected={picked[d.id] === DELEGATE} onClick={() => setPicked(p => ({ ...p, [d.id]: DELEGATE }))}>
+                    <ChoicePill tone="ai" data-tour={i === 0 ? 'mr-delegate' : undefined} selected={picked[d.id] === DELEGATE} onClick={() => setPicked(p => ({ ...p, [d.id]: DELEGATE }))}>
                       Laisser les agents décider
                     </ChoicePill>
                   </div>
@@ -87,7 +87,7 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
           <p className="text-sm font-semibold text-ink-muted">
             {allAnswered ? 'Tout est tranché.' : `${answeredCount} sur ${decisions.length} tranchée${answeredCount > 1 ? 's' : ''}`}
           </p>
-          <button type="button" disabled={!allAnswered || submitting}
+          <button data-tour="mr-submit" type="button" disabled={!allAnswered || submitting}
             onClick={() => onSubmit(Object.fromEntries(decisions.map(d => [d.id, answerOf(d.id)])))}
             className="h-11 px-5 rounded-[10px] bg-action text-white text-sm font-bold inline-flex items-center gap-2 hover:bg-action-dark disabled:opacity-40 disabled:cursor-not-allowed">
             {submitting ? 'Lancement…' : 'Valider mes réponses et lancer la réunion'} <ArrowRight size={16} aria-hidden="true" />

@@ -70,7 +70,7 @@ export default function MeetingHeader({
         </span>
       </div>
 
-      <PhaseStepper phase={phase} skipped={skippedPhases} />
+      <div data-tour="mr-phases"><PhaseStepper phase={phase} skipped={skippedPhases} /></div>
 
       <div className="flex items-center gap-1 ml-auto">
         {decisionBudget ? (
@@ -131,7 +131,7 @@ export default function MeetingHeader({
 
         {isClosed
           ? <Badge tone={session.status === 'accepted' ? 'ok' : 'muted'}>{statusLabel}</Badge>
-          : <Button size="md" variant="secondary" onClick={onConclude}>Conclure</Button>}
+          : <Button data-tour="mr-conclude" size="md" variant="secondary" onClick={onConclude}>Conclure</Button>}
       </div>
     </header>
   );

@@ -15,6 +15,7 @@ import AdminInvitations from './pages/AdminInvitations';
 import AdminUsers from './pages/AdminUsers';
 import ProfilePage from './pages/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
+import { TourProvider } from './tour/TourContext';
 
 import AgentsPage from './pages/AgentsPage';
 import MyTools from './pages/MyTools';
@@ -29,6 +30,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-canvas">
+      <TourProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Login />} />
@@ -78,6 +80,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      </TourProvider>
     </div>
   );
 }

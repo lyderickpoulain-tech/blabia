@@ -66,4 +66,27 @@ async function recordUsage(model, usage) {
   }
 }
 
-module.exports = { usageMiddleware, runWithUsage, recordUsage, parseUsageTarget };
+// Routes qui sollicitent l'IA (UsageLog.kind) : refusées sur un projet exemple
+const AI_KINDS = [
+  'chat', 'extract-file', 'generate-deliverable', 'generate-memory', 'sessions/suggest-agents',
+  'quick-command', 'generate-timeline', 'tools/analyze', 'export/claude-code',
+];
+
+// Monté après usageMiddleware. Projet exemple (visite guidée) : jeu de données
+// fixe, l'IA n'est jamais appelée — donc aucun coût, et pas de contenu altéré.
+async function demoGuard(req, res, next) {
+  if (req.method !== 'POST') return next();
+  const ctx = store.getStore();
+  if (!ctx?.projectId || !AI_KINDS.includes(ctx.kind)) return next();
+  try {
+    const [p] = await db('Project').where({ id: ctx.projectId }).select('isDemo').limit(1);
+    if (p?.isDemo) {
+      return res.status(403).json({ demo: true, error: 'Projet exemple : les agents ne sont pas sollicités pendant la visite guidée. Créez votre propre projet pour les faire travailler.' });
+    }
+  } catch (err) {
+    console.error('[demoGuard]', err.message);
+  }
+  next();
+}
+
+module.exports = { usageMiddleware, demoGuard, runWithUsage, recordUsage, parseUsageTarget, AI_KINDS };

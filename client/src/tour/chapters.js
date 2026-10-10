@@ -1,0 +1,140 @@
+// Visite guidée (v5.1) : chapitres et bulles, sur les vraies pages, avec le
+// projet exemple « Les Feuilles Vagabondes » (server/src/services/demoProject.js).
+//
+// Étape : {
+//   path(ctx)    → page à afficher (ctx = { demoId, meetingId }) ; absent = page courante
+//   target       → valeur de l'attribut data-tour de l'élément mis en évidence ; absent = bulle centrée
+//   title, body  → contenu de la bulle
+//   placement    → 'bottom' | 'top' | 'right' | 'left' (défaut : au mieux)
+//   interactive  → l'élément mis en évidence reste cliquable
+//   waitAction   → pas de bouton « Suivant » : la page appelle tour.next() (ex. créer le projet)
+//   prefill      → demande à la page de se pré-remplir (formulaire de création)
+// }
+
+const demo = sub => ctx => `/projects/${ctx.demoId}${sub}`;
+
+export const CHAPTERS = [
+  {
+    id: 'create', label: 'Créer un projet', roles: ['admin', 'member'],
+    steps: [
+      { path: () => '/dashboard', target: 'new-project', placement: 'bottom',
+        title: 'Tout commence par un projet',
+        body: 'Un projet, c’est un objectif à atteindre : ouvrir un commerce, organiser un événement, lancer une application… Créons-en un ensemble, pour l’exemple.' },
+      { path: () => '/projects/new', target: 'np-identity', prefill: true,
+        title: 'Un nom, une description',
+        body: 'Pour la visite, le formulaire est pré-rempli : un salon de thé à Lyon. Rien ne sera envoyé aux agents.' },
+      { target: 'np-brief',
+        title: 'Le brief : le plus important',
+        body: 'Objectif, contexte, contraintes : les agents le lisent avant chaque réunion. Plus il est précis, moins ils vous poseront de questions.' },
+      { target: 'np-work',
+        title: 'Votre façon de travailler',
+        body: 'Votre maîtrise du sujet (les agents adaptent leur vocabulaire), le ton, et surtout combien de questions vous voulez trancher par réunion.' },
+      { target: 'np-submit', interactive: true, waitAction: true, placement: 'top',
+        title: 'Créez le projet',
+        body: 'Cliquez sur « Créer le projet ».' },
+      { path: demo(''), target: 'pd-next',
+        title: 'Le projet est prêt',
+        body: 'Normalement, BlabIA vous propose ici un plan de réunions tiré du brief. Pour l’exemple, avançons de quelques jours : une première réunion a eu lieu, et les agents ont préparé la deuxième.' },
+    ],
+  },
+  {
+    id: 'shared', label: 'Vos projets partagés', roles: ['user'],
+    steps: [
+      { path: () => '/dashboard', target: 'project-card-demo', placement: 'bottom',
+        title: 'Les projets partagés avec vous',
+        body: 'Chaque projet auquel vous êtes invité apparaît ici, avec son avancement. Celui-ci est un exemple créé pour la visite.' },
+      { path: demo(''), target: 'pd-next',
+        title: 'Le tableau de bord du projet',
+        body: 'Le propriétaire gère le brief, l’équipe d’agents et le plan. Vous, vous participez aux réunions et suivez les décisions.' },
+    ],
+  },
+  {
+    id: 'dashboard', label: 'Le tableau de bord', roles: ['admin', 'member', 'user'],
+    steps: [
+      { path: demo(''), target: 'shell-nav', placement: 'right',
+        title: 'Tout le projet, à gauche',
+        body: 'Plan, historique, décisions, outils, équipe d’agents, paramètres : une page par sujet.' },
+      { target: 'pd-next',
+        title: 'La prochaine étape',
+        body: 'La réunion à tenir maintenant. Deux façons de la lancer : préparée par les agents avant votre arrivée, ou directement avec vous.' },
+      { target: 'pd-attention',
+        title: 'Ce qui attend votre arbitrage',
+        body: 'Toujours en ambre. Ici, une décision remise en question : les agents la retraiteront à la prochaine réunion.' },
+      { target: 'pd-history',
+        title: 'Historique et coût',
+        body: 'Les dernières réunions conclues et le coût réel de l’IA pour ce projet. Ici 0 $ : pour l’exemple, les agents n’ont pas été sollicités.' },
+      { target: 'pd-ask', placement: 'top',
+        title: 'Demander à BlabIA',
+        body: 'Un résumé, la prochaine étape, une recherche : BlabIA répond à partir de tout ce qui a été dit et décidé dans le projet.' },
+    ],
+  },
+  {
+    id: 'plan', label: 'Le plan des réunions', roles: ['admin', 'member'],
+    steps: [
+      { path: demo('/reunions'), target: 'plan-list', placement: 'right',
+        title: 'Le plan',
+        body: 'Les réunions à tenir, dans l’ordre. Glissez pour réordonner, insérez une réunion entre deux autres.' },
+      { target: 'plan-current', placement: 'bottom',
+        title: 'La réunion en cours',
+        body: 'Un clic sur une réunion permet de la reprendre, de la préparer ou de la démarrer.' },
+      { target: 'plan-generate', placement: 'bottom',
+        title: 'Laisser BlabIA proposer',
+        body: 'À partir du brief, BlabIA propose une suite de réunions. Les réunions suggérées pendant les échanges s’y ajoutent aussi, si vous les gardez.' },
+    ],
+  },
+  {
+    id: 'meeting', label: 'En réunion', roles: ['admin', 'member', 'user'],
+    steps: [
+      { path: ctx => `/projects/${ctx.demoId}/meeting/${ctx.meetingId}`, target: 'mr-phases', placement: 'bottom',
+        title: 'Les temps de la réunion',
+        body: 'Préparation (les agents entre eux), briefing (votre arrivée), échanges, conclusion. Ici, les agents ont déjà préparé : vous arrivez au briefing.' },
+      { target: 'mr-synthesis',
+        title: 'La synthèse',
+        body: 'Ce que les agents retiennent de leur débat, en quelques lignes. Le débat complet reste consultable.' },
+      { target: 'mr-decisions', interactive: true, placement: 'top',
+        title: 'À vous de trancher',
+        body: 'Choisissez une option pour chaque question : la recommandation des agents est en premier. Essayez !' },
+      { target: 'mr-delegate', interactive: true,
+        title: 'Pas d’avis ?',
+        body: '« Laisser les agents décider » : ils tranchent ce point entre eux. Vous pourrez toujours les contredire ensuite.' },
+      { target: 'mr-submit', placement: 'top',
+        title: 'Lancer les échanges',
+        body: 'Vos réponses partent ensemble et la discussion reprend. Pendant les échanges, écrivez à tout moment pour réorienter le débat ou contredire un agent.' },
+      { target: 'mr-conclude', placement: 'bottom',
+        title: 'Conclure',
+        body: 'Quand le sujet est traité : BlabIA rédige le compte-rendu, vous le relisez et choisissez les décisions à inscrire au registre.' },
+    ],
+  },
+  {
+    id: 'close', label: 'Décisions et historique', roles: ['admin', 'member', 'user'],
+    steps: [
+      { path: demo('/historique'), target: 'hist-first',
+        title: 'Les réunions tenues',
+        body: 'Chaque réunion conclue garde son compte-rendu, et peut être reprise si besoin.' },
+      { path: demo('/decisions'), target: 'dec-registry', placement: 'top',
+        title: 'Le registre des décisions',
+        body: 'Tout ce qui a été tranché, avec la raison et les options écartées. Les agents s’y réfèrent et ne reposent plus ces questions.' },
+      { target: 'dec-reopened',
+        title: 'Changer d’avis',
+        body: 'Une décision ne tient plus ? Remettez-la en question avec un motif : elle sera retraitée à la prochaine réunion.' },
+    ],
+  },
+  {
+    id: 'admin', label: 'Administration', roles: ['admin'],
+    steps: [
+      { path: () => '/admin/users', target: 'admin-users',
+        title: 'Les comptes',
+        body: 'Admin : tous les projets et l’administration. Membre : crée et mène ses projets. User : collaborateur, voit seulement les projets où il est invité.' },
+      { target: 'admin-tabs', placement: 'bottom',
+        title: 'Inviter',
+        body: 'Dans « Invitations », envoyez une invitation par e-mail, éventuellement liée à un projet : la personne le rejoint dès son inscription.' },
+    ],
+  },
+];
+
+export const roleKind = role => (role === 'admin' || role === 'supervisor') ? 'admin' : role === 'user' ? 'user' : 'member';
+
+export const chaptersFor = role => CHAPTERS.filter(c => c.roles.includes(roleKind(role)));
+
+// Chapitres qui n'ont pas besoin du projet exemple au démarrage
+export const NEEDS_DEMO_AT_START = id => !['create', 'admin'].includes(id);

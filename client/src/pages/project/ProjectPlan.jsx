@@ -16,7 +16,7 @@ export default function ProjectPlan() {
     <>
       <PageHeader title="Plan" subtitle="Les réunions à venir, dans l'ordre. Glissez pour réordonner, cliquez pour préparer ou lancer une réunion.">
         {project.brief && (
-          <Button variant="secondary" onClick={() => setShowGenerate(true)} className="text-ai border-ai-border">
+          <Button data-tour="plan-generate" variant="secondary" onClick={() => setShowGenerate(true)} className="text-ai border-ai-border">
             <Sparkles size={16} /> Proposer un plan avec l'IA
           </Button>
         )}

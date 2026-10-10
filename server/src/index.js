@@ -20,6 +20,8 @@ app.use(express.json({ limit: '10mb' }));
 
 // Coût réel de l'IA : rattache les appels Anthropic de la requête au projet / à la réunion
 app.use(require('./services/usage').usageMiddleware);
+// Projet exemple de la visite guidée : routes IA refusées (aucun coût)
+app.use(require('./services/usage').demoGuard);
 
 // ── Routes publiques (avant tout routeur : aucune authentification) ──────────
 // Healthcheck Railway : doit répondre 200 sans jeton, sinon le déploiement échoue.

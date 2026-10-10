@@ -42,7 +42,7 @@ function StatusBadge({ status }) {
   return <Badge tone="await">Interrompue</Badge>;
 }
 
-function SessionItem({ session, projectId, cost, onViewDeliverable }) {
+function SessionItem({ session, projectId, cost, onViewDeliverable, tour }) {
   const navigate = useNavigate();
   const [reopening, setReopening] = useState(false);
   const type = intentionOf(session);
@@ -59,7 +59,7 @@ function SessionItem({ session, projectId, cost, onViewDeliverable }) {
   };
 
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3" style={{ paddingLeft: 16 + session.depth * 20 }}>
+    <li data-tour={tour} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3" style={{ paddingLeft: 16 + session.depth * 20 }}>
       {session.depth > 0 && <CornerDownRight size={14} className="text-ink-faint shrink-0" aria-label="Suite de la réunion précédente" />}
       <div className="flex-1 min-w-[200px]">
         <Link to={path} className="text-sm font-bold text-ink hover:text-action">{session.task}</Link>
@@ -151,9 +151,13 @@ export default function ProjectHistory() {
           <p className="text-sm text-ink-faint text-center py-10">Aucune réunion pour l'instant.</p>
         ) : (
           <ul className="divide-y divide-line">
-            {buildThreads(sessions).map(s => (
-              <SessionItem key={s.id} session={s} projectId={project.id} cost={stats?.bySession?.[s.id] || 0} onViewDeliverable={setDeliverableSession} />
-            ))}
+            {(() => {
+              const threads = buildThreads(sessions);
+              const firstDone = threads.find(s => s.status === 'accepted')?.id; // ancre de la visite guidée
+              return threads.map(s => (
+              <SessionItem key={s.id} tour={s.id === firstDone ? 'hist-first' : undefined} session={s} projectId={project.id} cost={stats?.bySession?.[s.id] || 0} onViewDeliverable={setDeliverableSession} />
+            ));
+            })()}
           </ul>
         )}
       </div>

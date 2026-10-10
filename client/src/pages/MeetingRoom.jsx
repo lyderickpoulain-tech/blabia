@@ -52,6 +52,7 @@ export default function MeetingRoom() {
 
   const [session,      setSession]      = useState(null);
   const [project,      setProject]      = useState(null);
+  const [demoHint,     setDemoHint]     = useState(''); // projet exemple : ce qui se passerait en vrai
   const [messages,     setMessages]     = useState([]);
   const [activeAgents, setActiveAgents] = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -947,6 +948,11 @@ export default function MeetingRoom() {
   // Briefing : toutes les réponses envoyées ensemble, puis une seule reprise
   const submitBriefing = useCallback(async (answersById) => {
     if (briefingSubmitting) return;
+    // Projet exemple (visite guidée) : les agents ne sont pas sollicités
+    if (project?.isDemo) {
+      setDemoHint('Dans un vrai projet, vos réponses partiraient maintenant aux agents et les échanges commenceraient.');
+      return;
+    }
     setBriefingSubmitting(true);
     setSendError('');
     const anyDelegated = pendingPrepDecisions.some(d => answersById[d.id] === DELEGATE);
@@ -971,7 +977,7 @@ export default function MeetingRoom() {
       setSendError('Vos réponses n’ont pas pu être envoyées. Réessayez.');
     }
     setBriefingSubmitting(false);
-  }, [briefingSubmitting, pendingPrepDecisions, projectId, sessionId]);
+  }, [briefingSubmitting, pendingPrepDecisions, projectId, sessionId, project?.isDemo]);
 
   // « Je contredis » : la saisie s'ouvre adressée à l'agent
   const handleContradict = useCallback((agentName) => {
@@ -1052,6 +1058,13 @@ export default function MeetingRoom() {
         onConclude={handleConclude}
         onReset={() => setShowResetModal(true)}
       />
+
+      {project?.isDemo && (
+        <div role="status" className="shrink-0 bg-ai-bg border-b border-ai-border px-4 py-1.5 text-[13px] text-center">
+          <span className="font-extrabold text-ai">Projet exemple</span>
+          <span className="text-ink-soft"> · {demoHint || 'Les agents ne sont pas sollicités pendant la visite guidée : explorez librement, rien n’est envoyé.'}</span>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 flex">
         <main className="flex-1 min-w-0 flex flex-col">

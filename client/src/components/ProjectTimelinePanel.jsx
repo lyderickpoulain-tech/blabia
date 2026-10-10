@@ -146,6 +146,7 @@ function PanelBody({
                 >
                   {/* Mini-carte réunion */}
                   <div
+                    data-tour={m.status === 'in_progress' ? 'plan-current' : undefined}
                     onClick={() => onMilestoneClick(m, linked)}
                     className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition select-none ${locked ? 'opacity-60' : ''}`}
                     title={m.title}
@@ -342,7 +343,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
   return (
     <>
       {variant === 'page' ? (
-        <div className="bg-white border border-line rounded-2xl overflow-hidden">
+        <div data-tour="plan-list" className="bg-white border border-line rounded-2xl overflow-hidden">
           {progress && <div className="px-4 py-3 border-b border-line">{progress}</div>}
           <div style={{ height: 'calc(100vh - 260px)', minHeight: 420, display: 'flex', flexDirection: 'column' }}>
             <PanelBody {...panelBodyProps} isMobile={false} devDirectory={devDirectory} />

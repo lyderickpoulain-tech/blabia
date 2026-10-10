@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { FolderKanban, Bot, Wrench, Shield, LogOut, LifeBuoy } from 'lucide-react';
 import Tutorial from './Tutorial';
+import { useTour } from '../tour/TourContext';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_VERSION, APP_BUILD } from '../version';
 
@@ -12,9 +13,13 @@ const navCls = ({ isActive }) => `shrink-0 inline-flex items-center gap-2 px-3 h
 export default function Layout({ children, wide = false }) {
   const { user, logout, markTutorialSeen } = useAuth();
   // Guide : ouvert d'office tant qu'il n'a jamais été vu (tutorialSeenAt === null), sinon à la demande
+  // Ouvert à la demande : directement sur les chapitres de la visite guidée
   const [guideOpen, setGuideOpen] = useState(false);
-  const showGuide = guideOpen || user?.tutorialSeenAt === null;
+  const tour = useTour();
+  const firstVisit = user?.tutorialSeenAt === null;
+  const showGuide = (guideOpen || firstVisit) && !tour?.active;
   const closeGuide = () => { setGuideOpen(false); if (!user?.tutorialSeenAt) markTutorialSeen(); };
+  const startTour = chapterIds => { closeGuide(); tour?.start(chapterIds); };
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
@@ -50,7 +55,7 @@ export default function Layout({ children, wide = false }) {
             ))}
           </nav>
           <div className="flex items-center gap-2 ml-auto">
-            <button onClick={() => setGuideOpen(true)} aria-label="Guide de prise en main" title="Guide de prise en main"
+            <button data-tour="nav-guide" onClick={() => setGuideOpen(true)} aria-label="Guide de prise en main" title="Guide de prise en main"
               className="inline-flex items-center gap-2 h-10 px-3 rounded-[10px] text-sm font-semibold text-ai hover:bg-ai-bg transition">
               <LifeBuoy size={17} aria-hidden="true" />
               <span className="hidden md:inline">Guide</span>
@@ -85,7 +90,10 @@ export default function Layout({ children, wide = false }) {
         {children}
       </main>
 
-      {showGuide && user && <Tutorial role={user.role} onClose={closeGuide} />}
+      {showGuide && user && (
+        <Tutorial role={user.role} tourProgress={user.tourProgress} initialScreen={firstVisit ? 'welcome' : 'chapters'}
+          onClose={closeGuide} onStart={startTour} />
+      )}
 
       <footer className="text-center py-2 text-[10px] text-ink-faint/60 select-none">
         BlabIA v{APP_VERSION} — {APP_BUILD}

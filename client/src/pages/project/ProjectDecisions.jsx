@@ -7,7 +7,9 @@ export default function ProjectDecisions() {
   return (
     <>
       <PageHeader title="Décisions" subtitle="Ce qui est tranché pour ce projet. Les agents ne reposent pas ces questions ; remettez une décision en question pour qu'ils la retraitent." />
-      <DecisionRegistryPanel projectId={project.id} onChanged={refreshCounts} />
+      <div data-tour="dec-registry">
+        <DecisionRegistryPanel projectId={project.id} onChanged={refreshCounts} />
+      </div>
     </>
   );
 }

@@ -150,7 +150,7 @@ export default function DecisionRegistryPanel({ projectId, onChanged }) {
           {reopened.length > 0 && (
             <section className="space-y-2">
               <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Remises en question ({reopened.length})</h3>
-              {reopened.map(d => <DecisionItem key={d.id} decision={d} onPatch={patch} onDelete={remove} />)}
+              {reopened.map((d, i) => <div key={d.id} data-tour={i === 0 ? 'dec-reopened' : undefined}><DecisionItem decision={d} onPatch={patch} onDelete={remove} /></div>)}
             </section>
           )}
 
