@@ -23,8 +23,9 @@ function PanelBody({
   projectId, milestones, milestoneSessions,
   loading, showAdd, setShowAdd, onAdd, onMilestoneClick,
   sessionDrawer, setSessionDrawer,
-  onRefresh, onDeleteMilestone, onShowDeliverable, navigate, isMobile, devDirectory,
+  onRefresh, onDeleteMilestone, onShowDeliverable, navigate, isMobile, devDirectory, variant,
 }) {
+  const isPage = variant === 'page';
   const [title, setTitle]           = useState('');
   const [type, setType]             = useState('decision');
   const [saving, setSaving]         = useState(false);
@@ -149,7 +150,11 @@ function PanelBody({
                   <div
                     data-tour={m.status === 'in_progress' ? 'plan-current' : undefined}
                     onClick={() => onMilestoneClick(m, linked)}
-                    className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg hover:bg-canvas active:bg-canvas-deep cursor-pointer transition select-none ${locked ? 'opacity-60' : ''}`}
+                    className={`group flex items-center cursor-pointer transition select-none ${
+                      isPage
+                        ? 'gap-3 p-4 rounded-xl bg-white border border-line shadow-card hover:bg-canvas active:bg-canvas-deep'
+                        : 'gap-1.5 px-2 py-2 rounded-lg hover:bg-canvas active:bg-canvas-deep'
+                    } ${locked ? 'opacity-60' : ''}`}
                     title={m.title}
                   >
                     <div
@@ -163,12 +168,14 @@ function PanelBody({
                     >
                       {locked ? '🔒' : '⠿'}
                     </div>
-                    <span className="text-sm shrink-0 leading-none">{TYPE_ICON[m.type] || '🤝'}</span>
+                    <span className={`shrink-0 leading-none ${isPage ? 'text-lg' : 'text-sm'}`}>{TYPE_ICON[m.type] || '🤝'}</span>
                     <span className="flex-1 min-w-0 leading-snug">
-                      <span className="text-xs text-ink truncate block">{trunc(m.title)}</span>
-                      <span className="flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`} />
-                        <span className="text-[9px] text-ink-faint truncate">{STATUS_LABELS[m.status] || m.status}</span>
+                      <span className={`text-ink truncate block ${isPage ? 'text-sm font-medium' : 'text-xs'}`}>{trunc(m.title)}</span>
+                      <span className={`flex items-center ${isPage ? 'gap-1.5 mt-0.5 whitespace-nowrap' : 'gap-1'}`}>
+                        <span className={`rounded-full shrink-0 ${isPage ? 'w-2 h-2' : 'w-1.5 h-1.5'} ${sd.cls} ${sd.pulse ? 'animate-pulse' : ''}`} />
+                        <span className={`text-ink-faint truncate ${isPage ? 'text-xs' : 'text-[9px]'}`}>
+                          {isPage ? `${TYPE_LABEL[m.type] || 'Réunion'} · ` : ''}{STATUS_LABELS[m.status] || m.status}
+                        </span>
                       </span>
                       {m.type === 'claude_code' && (
                         <span className={`text-[9px] truncate block ${devDirectory ? 'text-ink-faint' : 'text-await'}`}>
@@ -347,7 +354,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0, varian
         <div data-tour="plan-list" className="bg-white border border-line rounded-2xl overflow-hidden">
           {progress && <div className="px-4 py-3 border-b border-line">{progress}</div>}
           <div style={{ height: 'calc(100vh - 260px)', minHeight: 420, display: 'flex', flexDirection: 'column' }}>
-            <PanelBody {...panelBodyProps} isMobile={false} devDirectory={devDirectory} />
+            <PanelBody {...panelBodyProps} isMobile={false} devDirectory={devDirectory} variant="page" />
           </div>
         </div>
       ) : (<>
