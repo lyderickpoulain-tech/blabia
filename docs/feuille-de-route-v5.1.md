@@ -152,9 +152,12 @@ cd C:\BlabIA\client; npm run build
 ```
 
 ### Déploiement
-1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-09-19-21.dump`.
+1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-10-08-15.dump`.
 2. `git push origin main` → Railway redéploie ; les migrations s'appliquent au démarrage (`prisma migrate deploy`).
 3. Vérifier dans les logs Railway : migrations appliquées, serveur démarré, healthcheck `/api/health` en 200.
+
+Variables Railway du service applicatif (en plus de `DATABASE_URL`, `ANTHROPIC_API_KEY`, `JWT_SECRET`, `RESEND_API_KEY`, `FRONTEND_URL`) :
+- `CRON_SECRET` : déclenchement externe des rappels hebdomadaires. **cron-job.org** (tâche « RappelsBlabIA ») appelle chaque heure `POST https://blabia-production.up.railway.app/api/reminders/run` avec l'en-tête `x-cron-secret`. Réponses : 200 = OK, 403 = secret différent, 503 = variable absente du service. Utile si le service est mis en veille (pas de changement de plan Railway souhaité).
 
 Restauration en cas de problème :
 ```powershell
