@@ -67,7 +67,11 @@ router.post('/:id/github/install', async (req, res) => {
     if (!status.accessible) return res.status(409).json({ error: status.error || 'Choisissez d’abord un dépôt accessible.' });
     await dev.installWorkflows(project);
     res.json(await dev.repoStatus(project));
-  } catch (err) { fail(res, 'install', err); }
+  } catch (err) {
+    // Permission « Workflows » absente ou pas encore acceptée sur l'installation
+    if (err.status === 403) err.message = 'GitHub refuse l’écriture des automatisations : l’application BlabIA doit avoir les permissions « Contents » et « Workflows » en lecture et écriture, acceptées sur votre installation (github.com/settings/installations).';
+    fail(res, 'install', err);
+  }
 });
 
 // GET /api/projects/:id/dev-tasks — développements (état relu auprès de GitHub)

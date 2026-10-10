@@ -30,6 +30,8 @@ function fakeGitHub() {
     let m;
     if ((m = p.match(/^\/repos\/moi\/app\/contents\/(.+)$/))) {
       const path = decodeURIComponent(m[1]);
+      // Jeton créé avant un changement de permissions : refusé une fois
+      if (method === 'PUT' && gh.denyNextWrite) { gh.denyNextWrite = false; return json(403, { message: 'Resource not accessible by integration' }); }
       if (method === 'PUT') { gh.files[path] = { sha: `sha-${path.length}`, content: body.content }; return json(201, {}); }
       return gh.files[path] ? json(200, gh.files[path]) : json(404, { message: 'Not Found' });
     }
@@ -110,7 +112,10 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     let s = (await h.request('PUT', `/api/projects/${projectId}/github`, { token: owner.token, body: { repo: 'moi/app' } })).body;
     expect(s).toMatchObject({ accessible: true, defaultBranch: 'main', workflows: { installed: false }, ready: false });
 
+    gh.denyNextWrite = true; // jeton en cache aux anciennes permissions : BlabIA en redemande un
+    const tokensBefore = gh.calls.filter(c => c.includes('/access_tokens')).length;
     s = (await h.request('POST', `/api/projects/${projectId}/github/install`, { token: owner.token })).body;
+    expect(gh.calls.filter(c => c.includes('/access_tokens')).length).toBe(tokensBefore + 1);
     expect(s.workflows).toEqual({ installed: true, current: true });
     const devFile = Buffer.from(gh.files['.github/workflows/blabia-dev.yml'].content, 'base64').toString();
     expect(devFile).toContain('allowed_bots: "blabia-app[bot]"');

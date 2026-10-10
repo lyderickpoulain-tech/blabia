@@ -68,9 +68,17 @@ async function installationToken(installationId) {
   return data.token;
 }
 
-// Appel à l'API au nom d'une installation
+// Appel à l'API au nom d'une installation. Un jeton porte les permissions du moment de sa
+// création : après un changement de permissions (accepté sur GitHub), le jeton en cache
+// est refusé (403) ; on en redemande un et on réessaie une fois.
 async function gh(installationId, method, path, body) {
-  return call(await installationToken(installationId), method, path, body);
+  try {
+    return await call(await installationToken(installationId), method, path, body);
+  } catch (err) {
+    if (err.status !== 403 || !tokenCache.has(String(installationId))) throw err;
+    tokenCache.delete(String(installationId));
+    return call(await installationToken(installationId), method, path, body);
+  }
 }
 
 // ── Connexion (« Connecter GitHub ») ─────────────────────────────────────────
