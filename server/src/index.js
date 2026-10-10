@@ -68,10 +68,14 @@ if (isProd) {
 // ─────────────────────────────────────────────────────────────────────────────
 // '0.0.0.0' est indispensable dans Docker : sans ça, Node écoute uniquement
 // sur 127.0.0.1 et le healthcheck Railway (externe au container) ne répond pas.
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`BlabIA server démarré sur le port ${PORT} (mode: ${isProd ? 'production' : 'développement'})`);
-  // Rappels hebdomadaires des actions (services/reminders.js) : vérification horaire
-  require('./services/reminders').startReminderScheduler();
-});
+// Démarré seulement quand le fichier est lancé (node / nodemon / Railway) : les tests
+// d'intégration importent l'application sans ouvrir de port ni lancer les rappels.
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`BlabIA server démarré sur le port ${PORT} (mode: ${isProd ? 'production' : 'développement'})`);
+    // Rappels hebdomadaires des actions (services/reminders.js) : vérification horaire
+    require('./services/reminders').startReminderScheduler();
+  });
+}
 
 module.exports = app;

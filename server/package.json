@@ -6,7 +6,8 @@
     "start": "node src/index.js",
     "seed:admin": "node src/scripts/seed-admin.js",
     "check:web-search": "node src/scripts/check-web-search.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "node scripts/test-integration.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

@@ -5,6 +5,10 @@ const authMiddleware = require('../middleware/auth');
 const { findProject } = require('../utils/projectHelpers');
 const { sanitizeDecision, listDecisions, STATUSES } = require('../services/decisions');
 
+// Colonnes de la table Decision uniquement : sanitizeDecision renvoie aussi des champs
+// d'affichage (ex. vigilance, relecture du contradicteur) qui n'y sont pas stockés.
+const toRow = ({ statement, rationale, rejectedOptions, origin }) => ({ statement, rationale, rejectedOptions: JSON.stringify(rejectedOptions), origin });
+
 const router = express.Router();
 router.use(authMiddleware);
 
@@ -44,7 +48,7 @@ router.post('/:id/decisions/from-session', async (req, res) => {
     const now = new Date();
     const rows = await db('Decision')
       .insert(decisions.map(d => ({
-        ...d, rejectedOptions: JSON.stringify(d.rejectedOptions), projectId: project.id, sessionId: session.id,
+        ...toRow(d), projectId: project.id, sessionId: session.id,
         status: 'active', createdAt: now, updatedAt: now,
       })))
       .returning(RETURN_FIELDS);
@@ -64,7 +68,7 @@ router.post('/:id/decisions', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     const now = new Date();
     const [row] = await db('Decision')
-      .insert({ ...d, rejectedOptions: JSON.stringify(d.rejectedOptions), projectId: project.id, status: 'active', createdAt: now, updatedAt: now })
+      .insert({ ...toRow(d), projectId: project.id, status: 'active', createdAt: now, updatedAt: now })
       .returning(RETURN_FIELDS);
     res.status(201).json(row);
   } catch (err) {
