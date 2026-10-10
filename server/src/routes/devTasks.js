@@ -42,7 +42,7 @@ router.get('/:id/github', async (req, res) => {
   try {
     const { project } = await load(req, res);
     if (!project) return;
-    res.json({ ...(await dev.repoStatus(project)), isOwner: project.userId === req.user.id, suggestedRepoName: github.repoSlug(project.name) });
+    res.json({ ...(await dev.repoStatus(project)), isOwner: project.userId === req.user.id, suggestedRepoName: github.repoSlug(project.name), siteUrl: project.siteUrl || null });
   } catch (err) { fail(res, 'github GET', err); }
 });
 
@@ -76,6 +76,26 @@ router.post('/:id/github/create-repo', async (req, res) => {
     const state = github.signState(req.user.id, `/projects/${project.id}/developpements`, { a: 'create', p: project.id, n: name, v: req.body?.private === false ? 0 : 1 });
     res.json({ url: github.authorizeUrl(state), name });
   } catch (err) { fail(res, 'create-repo', err); }
+});
+
+// PUT /api/projects/:id/site-url { siteUrl } — adresse publique du site (ou vide) : Railway ne
+// la transmet pas à GitHub, BlabIA ne peut donc pas la deviner (« Voir le site »)
+router.put('/:id/site-url', async (req, res) => {
+  try {
+    const { project } = await load(req, res, { owner: true });
+    if (!project) return;
+    let url = String(req.body?.siteUrl || '').trim();
+    if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+    if (url) {
+      try {
+        const u = new URL(url);
+        if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) throw new Error();
+        url = u.toString().replace(/\/$/, '');
+      } catch { return res.status(400).json({ error: 'Adresse invalide (ex. https://monsite.fr).' }); }
+    }
+    await db('Project').where({ id: project.id }).update({ siteUrl: url.slice(0, 500) || null });
+    res.json({ siteUrl: url || null });
+  } catch (err) { fail(res, 'site-url', err); }
 });
 
 // POST /api/projects/:id/github/install — installe ou met à jour les automatisations du dépôt

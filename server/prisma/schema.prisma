@@ -83,6 +83,7 @@ model Project {
   remindersEnabled  Boolean   @default(false) // v5.1 : rappels hebdomadaires par e-mail des actions (services/reminders.js)
   challengerEnabled Boolean   @default(true) // v5.1 : contradicteur (avocat du diable sélectif, services/challenger.js), activé par défaut
   githubRepo        String?   // v5.1 : dépôt GitHub du projet « propriétaire/nom » (développements, services/devTasks.js)
+  siteUrl           String?   // v5.1 : adresse publique du site (renseignée : Railway ne la transmet pas à GitHub)
   isDemo            Boolean   @default(false) // v5.1 : projet exemple de la visite guidée (services/demoProject.js), sans appel à l'IA, supprimé en fin de visite
   createdAt         DateTime  @default(now())
   updatedAt     DateTime        @updatedAt

@@ -246,11 +246,46 @@ function Summary({ text, done }) {
   );
 }
 
+// Adresse publique du site, renseignée une fois par le propriétaire : certains hébergeurs
+// (Railway) ne la transmettent pas à GitHub. Sert à « Voir le site ».
+function SiteAddress({ project, siteUrl, saved, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(saved || '');
+  const [busy, setBusy] = useState(false);
+  const save = async e => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { data } = await api.put(`/projects/${project.id}/site-url`, { siteUrl: value });
+      onSaved(data.siteUrl); setValue(data.siteUrl || ''); setEditing(false);
+    } catch (err) { notifyError(err, 'Adresse non enregistrée.'); } finally { setBusy(false); }
+  };
+  if (editing) {
+    return (
+      <form onSubmit={save} className="mt-1 flex flex-wrap items-center gap-2">
+        <label htmlFor="site-url" className="sr-only">Adresse du site</label>
+        <input id="site-url" autoFocus value={value} onChange={e => setValue(e.target.value)} placeholder="https://monsite.fr"
+          className="h-8 min-w-[220px] flex-1 px-2.5 border border-line rounded-[10px] text-xs text-ink bg-white" />
+        <Button size="sm" type="submit" variant="primary" disabled={busy}>{busy ? '…' : 'Enregistrer'}</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setValue(saved || ''); }}>Annuler</Button>
+      </form>
+    );
+  }
+  return (
+    <span className="mt-1 text-xs font-bold flex flex-wrap items-center gap-x-3 gap-y-1">
+      {siteUrl
+        ? <a className="text-ok inline-flex items-center gap-1.5 break-all" href={siteUrl} target="_blank" rel="noopener noreferrer"><Globe size={13} aria-hidden="true" /> Voir le site en ligne</a>
+        : <span className="text-ink-muted inline-flex items-center gap-1.5"><Globe size={13} aria-hidden="true" /> Adresse du site non renseignée</span>}
+      <button type="button" className="text-action underline min-h-[28px]" onClick={() => setEditing(true)}>{saved ? 'Modifier l’adresse' : 'Renseigner l’adresse du site'}</button>
+    </span>
+  );
+}
+
 // Développement fusionné : ce que l'hébergeur en a fait
-function Publication({ task, projectId }) {
+function Publication({ task, projectId, siteUrl }) {
   const guide = <Link className="underline" to={`/projects/${projectId}/outils`}>Projet › Outils › Guide de mise en place</Link>;
   switch (task.publishState) {
-    case 'live': return <p className="text-sm text-ok font-bold mt-3">Publié par l’hébergeur{task.siteUrl ? <> : <a className="underline break-all" href={task.siteUrl} target="_blank" rel="noreferrer">{task.siteUrl}</a></> : '.'} Vérifiez ce que le résumé indique.</p>;
+    case 'live': return <p className="text-sm text-ok font-bold mt-3">Publié par l’hébergeur{siteUrl ? <> : <a className="underline break-all" href={siteUrl} target="_blank" rel="noreferrer">{siteUrl}</a></> : '.'} Vérifiez ce que le résumé indique.</p>;
     case 'pending': return <p className="text-sm text-ink-muted mt-3">Code fusionné : l’hébergeur publie le site (quelques minutes). Cette page se met à jour toute seule.</p>;
     case 'failed': return <p className="text-sm text-await font-bold mt-3">Code fusionné, mais l’hébergeur n’a pas réussi à publier le site : ouvrez son tableau de bord pour voir l’erreur.</p>;
     case 'no_host': return (
@@ -264,7 +299,7 @@ function Publication({ task, projectId }) {
   }
 }
 
-function TaskCard({ task, status, isOwner, onAction, busy, projectId }) {
+function TaskCard({ task, status, isOwner, onAction, busy, projectId, siteUrl }) {
   const [showFiles, setShowFiles] = useState(false);
   const st = statusOf(task);
   const files = Array.isArray(task.files) ? task.files : [];
@@ -285,7 +320,7 @@ function TaskCard({ task, status, isOwner, onAction, busy, projectId }) {
 
       {task.status === 'running' && <p className="text-sm text-ink-muted mt-3">Claude Code lit la demande, modifie le code et lance les tests. Comptez de 5 à 30 minutes ; cette page se met à jour toute seule.</p>}
       {task.status === 'deploying' && <p className="text-sm text-ink-muted mt-3">Sauvegarde de la base puis fusion en cours. L’hébergeur relié au dépôt publie ensuite le site (quelques minutes).</p>}
-      {task.status === 'deployed' && <Publication task={task} projectId={projectId} />}
+      {task.status === 'deployed' && <Publication task={task} projectId={projectId} siteUrl={task.siteUrl || siteUrl} />}
       {task.error && <p className="text-sm text-await font-bold mt-3 whitespace-pre-wrap">{task.error}</p>}
 
       {task.summary && <Summary text={task.summary} done={['deployed', 'abandoned'].includes(task.status)} />}
@@ -320,8 +355,8 @@ function TaskCard({ task, status, isOwner, onAction, busy, projectId }) {
             <Eye size={15} aria-hidden="true" /> Voir l’aperçu
           </a>
         )}
-        {task.status === 'deployed' && task.publishState === 'live' && task.siteUrl && (
-          <a href={task.siteUrl} target="_blank" rel="noreferrer"
+        {task.status === 'deployed' && task.publishState === 'live' && (task.siteUrl || siteUrl) && (
+          <a href={task.siteUrl || siteUrl} target="_blank" rel="noreferrer"
             className="h-9 px-3 inline-flex items-center gap-1.5 rounded-[10px] text-[13px] font-bold bg-white text-ok border border-ok hover:bg-canvas">
             <Globe size={15} aria-hidden="true" /> Voir le site
           </a>
@@ -412,7 +447,9 @@ export default function ProjectDev() {
   const retry = s => ['failed', 'abandoned'].includes(lastTask.get(s.id)?.status);
   const toLaunch = data.launchable.filter(s => !lastTask.has(s.id) || retry(s));
   const setupVisible = !status.ready || showSetup;
-  const siteUrl = data.tasks.find(t => t.publishState === 'live' && t.siteUrl)?.siteUrl; // dernière publication connue
+  // Adresse du site : renseignée par le propriétaire (Railway ne la transmet pas), sinon
+  // celle déclarée par l'hébergeur à la dernière publication
+  const siteUrl = status.siteUrl || data.tasks.find(t => t.publishState === 'live' && t.siteUrl)?.siteUrl;
 
   return (
     <div className="space-y-4">
@@ -423,11 +460,13 @@ export default function ProjectDev() {
             <Github size={13} aria-hidden="true" /> Voir le dépôt sur GitHub
           </a>
         )}
-        {siteUrl && (
-          <a className="mt-1 text-xs font-bold text-ok flex items-center gap-1.5 break-all" href={siteUrl} target="_blank" rel="noopener noreferrer">
-            <Globe size={13} aria-hidden="true" /> Voir le site en ligne
-          </a>
-        )}
+        {status.isOwner && status.repo
+          ? <SiteAddress project={project} siteUrl={siteUrl} saved={status.siteUrl} onSaved={u => setStatus(st => ({ ...st, siteUrl: u }))} />
+          : siteUrl && (
+            <a className="mt-1 text-xs font-bold text-ok flex items-center gap-1.5 break-all" href={siteUrl} target="_blank" rel="noopener noreferrer">
+              <Globe size={13} aria-hidden="true" /> Voir le site en ligne
+            </a>
+          )}
       </>}>
         {status.ready && status.isOwner && (
           <Button size="sm" variant="ghost" onClick={() => setShowSetup(v => !v)}>{showSetup ? 'Masquer la configuration' : 'Configuration'}</Button>
@@ -468,7 +507,7 @@ export default function ProjectDev() {
         </Card>
       )}
 
-      {data.tasks.map(t => <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} projectId={project.id} onAction={onAction} busy={busy} />)}
+      {data.tasks.map(t => <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} projectId={project.id} siteUrl={siteUrl} onAction={onAction} busy={busy} />)}
     </div>
   );
 }

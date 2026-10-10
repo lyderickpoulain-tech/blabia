@@ -286,6 +286,15 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect((await tasks())[0]).toMatchObject({ publishState: 'live', siteUrl: null });
   });
 
+  it('adresse du site : renseignée par le propriétaire (Railway ne la transmet pas)', async () => {
+    const put = (token, siteUrl) => h.request('PUT', `/api/projects/${projectId}/site-url`, { token, body: { siteUrl } });
+    expect((await put(collaborator.token, 'https://pirate.example')).status).toBe(403);
+    expect((await put(owner.token, 'pas une adresse')).status).toBe(400);
+    expect((await put(owner.token, 'numvibe.fr/')).body).toEqual({ siteUrl: 'https://numvibe.fr' });
+    expect((await h.request('GET', `/api/projects/${projectId}/github`, { token: collaborator.token })).body.siteUrl).toBe('https://numvibe.fr');
+    expect((await put(owner.token, '')).body).toEqual({ siteUrl: null });
+  });
+
   it('projet exemple et compte « user » : refusés', async () => {
     const invited = await h.createUser('user', 'invite@test.local');
     expect((await h.request('POST', '/api/github/connect', { token: invited.token, body: {} })).status).toBe(403);
