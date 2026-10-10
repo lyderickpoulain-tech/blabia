@@ -11,37 +11,13 @@ import BriefingView from '../components/meeting/BriefingView';
 import { DELEGATE } from '../components/DecisionCard';
 import ArtifactCard from '../components/meeting/ArtifactCard';
 import ConversationFeed from '../components/meeting/ConversationFeed';
-import { RotateCcw } from 'lucide-react';
-import { Button } from '../components/ui';
+import ResetMeetingModal from '../components/meeting/ResetMeetingModal';
+import { AGENT_COLORS, STATUS_BADGE, DELIVERABLE_TYPES } from '../components/meeting/meetingConstants';
+import useAttachments from '../hooks/useAttachments';
+import useMeetingAgents from '../hooks/useMeetingAgents';
+import useClickOutside from '../hooks/useClickOutside';
 import api from '../utils/api';
 import { notifyError } from '../utils/notify';
-
-// ── Palette agent (initiale + couleur de bulle) ───────────────────────────────
-
-const AGENT_COLORS = [
-  { bg: 'bg-blue-100',    text: 'text-blue-700',    avatar: 'bg-blue-600',    soft: 'bg-blue-50 ring-1 ring-blue-100'       },
-  { bg: 'bg-violet-100',  text: 'text-violet-700',  avatar: 'bg-violet-600',  soft: 'bg-violet-50 ring-1 ring-violet-100'   },
-  { bg: 'bg-emerald-100', text: 'text-emerald-700', avatar: 'bg-emerald-700', soft: 'bg-emerald-50 ring-1 ring-emerald-100' },
-  { bg: 'bg-rose-100',    text: 'text-rose-700',    avatar: 'bg-rose-600',    soft: 'bg-rose-50 ring-1 ring-rose-100'       },
-  { bg: 'bg-amber-100',   text: 'text-amber-800',   avatar: 'bg-amber-700',   soft: 'bg-amber-50 ring-1 ring-amber-100'     },
-  { bg: 'bg-cyan-100',    text: 'text-cyan-800',    avatar: 'bg-cyan-700',    soft: 'bg-cyan-50 ring-1 ring-cyan-100'       },
-];
-
-// ── Statut badge ─────────────────────────────────────────────────────────────
-
-const STATUS_BADGE = {
-  open:      { label: 'En cours',   cls: 'bg-blue-100 text-blabia-blue'   },
-  accepted:  { label: 'Acceptée',   cls: 'bg-green-100 text-green-700'  },
-  abandoned: { label: 'Abandonnée', cls: 'bg-gray-100 text-gray-500'    },
-};
-
-// v5.0 phase 3.2 : decision | claude_code (stack : phase 4)
-const DELIVERABLE_TYPES = [
-  { id: 'decision',    icon: '🤝', label: 'Décision'    },
-  { id: 'claude_code', icon: '💻', label: 'Claude Code' },
-  { id: 'stack',       icon: '🔧', label: 'Outils'      },
-];
-
 
 // ── MeetingRoom ───────────────────────────────────────────────────────────────
 
@@ -71,12 +47,9 @@ export default function MeetingRoom() {
   const [streamingReason, setStreamingReason] = useState('');
   const [isStreaming,     setIsStreaming]      = useState(false);
 
-  // Pièces jointes (max 3 par message)
-  const [attachments, setAttachments] = useState([]);
-  const [isDragging,  setIsDragging]  = useState(false);
-  const fileInputRef    = useRef(null);
-  const attachmentsRef  = useRef([]);
-  attachmentsRef.current = attachments;
+  // Pièces jointes (max 3 par message) — hooks/useAttachments.js
+  const { attachments, setAttachments, attachmentsRef, fileInputRef, isDragging, processFiles, handleDragOver, handleDragLeave, handleDrop } =
+    useAttachments({ projectId, sessionId, onError: setSendError });
 
   // Refs pour capturer reason dans la closure SSE sans dépendance stale
   const streamingReasonRef  = useRef('');
@@ -88,13 +61,6 @@ export default function MeetingRoom() {
   const [showNewMessage,  setShowNewMessage]  = useState(false);
   const [showDecisions,   setShowDecisions]   = useState(false);
 
-  // ── États + ref pour le dropdown + Agent ─────────────────────────────────
-  const dropdownRef                                 = useRef(null);
-  const [showAgentDropdown,  setShowAgentDropdown]  = useState(false);
-  const [availableForAdd,    setAvailableForAdd]    = useState([]);
-  const [loadingAvailable,   setLoadingAvailable]   = useState(false);
-  const [addingAgentId,      setAddingAgentId]      = useState(null);
-  const [dropdownCreateForm, setDropdownCreateForm] = useState({ open: false, name: '', role: '', creating: false, error: '', scope: 'project' });
 
   // ── États édition inline objectif + livrable ──────────────────────────────
   const intentionDropdownRef                            = useRef(null);
@@ -106,10 +72,12 @@ export default function MeetingRoom() {
   const levelsDropdownRef                                 = useRef(null);
   const [showLevelsDropdown,    setShowLevelsDropdown]    = useState(false);
 
-  // États suggestions d'agent SSE
-  const [agentSuggestions,    setAgentSuggestions]    = useState([]);
-  const agentSuggestionsRef = useRef([]);
-  agentSuggestionsRef.current = agentSuggestions; // sync à chaque rendu pour éviter stale closures
+  // Agents en cours de réunion : menu « + Agent », suggestions d'agents — hooks/useMeetingAgents.js
+  const {
+    dropdownRef, showAgentDropdown, setShowAgentDropdown, availableForAdd, loadingAvailable, addingAgentId,
+    dropdownCreateForm, setDropdownCreateForm, agentSuggestions, setAgentSuggestions,
+    loadAvailableForAdd, handleAddAgent, handleDropdownCreateAgent, handleInviteSuggested, handleDismissSuggestion, handleCreateAndInvite,
+  } = useMeetingAgents({ projectId, sessionId, activeAgents, setActiveAgents, setMessages });
 
   // Réunions suggérées ([SUGGEST_MEETING], phase 3.4)
   const [meetingSuggestions, setStepSuggestions] = useState([]);
@@ -165,8 +133,8 @@ export default function MeetingRoom() {
       setShowResetModal(false);
       setSession(prev => prev ? { ...prev, status: 'open', summary: null } : prev);
       setMessages([]);
-    } catch {
-      // silence — l'utilisateur verra simplement que rien n'a changé
+    } catch (err) {
+      notifyError(err, 'La réunion n’a pas pu être réinitialisée.');
     } finally {
       setResettingSession(false);
     }
@@ -204,162 +172,10 @@ export default function MeetingRoom() {
     }
   }, []);
 
-  // Chargement des agents disponibles (non encore actifs) quand le dropdown s'ouvre
-  const loadAvailableForAdd = useCallback(async (currentActive) => {
-    setLoadingAvailable(true);
-    try {
-      const { data } = await api.get(`/projects/${projectId}/agents`);
-      const enabled    = data.filter(a => a.enabled !== false);
-      const activeIds  = new Set((currentActive || activeAgents).map(a => a.id));
-      setAvailableForAdd(enabled.filter(a => !activeIds.has(a.agentId || a.id)));
-    } catch (err) { notifyError(err, 'Impossible de charger les agents disponibles.'); }
-    setLoadingAvailable(false);
-  }, [projectId, activeAgents]);
-
-  useEffect(() => {
-    if (showAgentDropdown) loadAvailableForAdd();
-  }, [showAgentDropdown]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Fermeture du dropdown au clic extérieur
-  useEffect(() => {
-    if (!showAgentDropdown) return;
-    const handler = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowAgentDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAgentDropdown]);
-
-  useEffect(() => {
-    if (!showIntentionDropdown) return;
-    const handler = (e) => {
-      if (intentionDropdownRef.current && !intentionDropdownRef.current.contains(e.target)) {
-        setShowIntentionDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showIntentionDropdown]);
-
-  useEffect(() => {
-    if (!showMenuDots) return;
-    const handler = (e) => {
-      if (menuDotsRef.current && !menuDotsRef.current.contains(e.target)) {
-        setShowMenuDots(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showMenuDots]);
-
-  useEffect(() => {
-    if (!showLevelsDropdown) return;
-    const handler = (e) => {
-      if (levelsDropdownRef.current && !levelsDropdownRef.current.contains(e.target)) {
-        setShowLevelsDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showLevelsDropdown]);
-
-  // Ajouter un agent à la session (partagé par dropdown + suggestion cards)
-  const handleAddAgent = useCallback(async (agentId) => {
-    if (addingAgentId) return;
-    setAddingAgentId(agentId);
-    try {
-      const { data } = await api.post(
-        `/projects/${projectId}/sessions/${sessionId}/add-agent`,
-        { agentId }
-      );
-      setActiveAgents(prev => [...prev, data.agent]);
-      setMessages(prev => [...prev, {
-        id:        `sys-${Date.now()}`,
-        role:      'system',
-        agentName: null,
-        content:   `${data.agent.emoji || '🤖'} ${data.agent.name} a rejoint la réunion.`,
-        timestamp: new Date().toISOString(),
-        type:      'message',
-        pinned:    false
-      }]);
-      setShowAgentDropdown(false);
-      return data.agent;
-    } catch {
-      return null;
-    } finally {
-      setAddingAgentId(null);
-    }
-  }, [addingAgentId, projectId, sessionId]);
-
-  // Créer un agent depuis le dropdown + Agent et l'ajouter à la réunion
-  const handleDropdownCreateAgent = useCallback(async () => {
-    const { name, role } = dropdownCreateForm;
-    if (!name.trim() || !role.trim()) return;
-    setDropdownCreateForm(p => ({ ...p, creating: true, error: '' }));
-    try {
-      console.log('[dropdownCreate] POST /agents', { name, role });
-      const { data: agent } = await api.post('/agents', { name: name.trim(), role: role.trim() });
-      console.log('[dropdownCreate] agent créé', agent.id, agent.name);
-      await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: 'manual' });
-      console.log('[dropdownCreate] agent lié au projet', projectId);
-      await handleAddAgent(agent.id);
-      setDropdownCreateForm({ open: false, name: '', role: '', creating: false, error: '', scope: 'project' });
-    } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Erreur';
-      console.error('[dropdownCreate] erreur', msg);
-      setDropdownCreateForm(p => ({ ...p, creating: false, error: msg }));
-    }
-  }, [dropdownCreateForm, projectId, handleAddAgent]);
-
-  // Inviter l'agent suggéré : cherche dans la lib par nom, sinon affiche formulaire
-  const handleInviteSuggested = useCallback(async (idx) => {
-    const s = agentSuggestionsRef.current[idx];
-    if (!s || s.inviting) return;
-    setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: true } : x));
-    try {
-      const { data } = await api.get(`/projects/${projectId}/agents`);
-      const match = data.find(a => a.name.toLowerCase() === s.name.toLowerCase() && a.enabled !== false);
-      if (match) {
-        await handleAddAgent(match.agentId || match.id);
-        setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, invited: true, inviting: false } : x));
-      } else {
-        setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, showCreate: true, inviting: false } : x));
-      }
-    } catch {
-      setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: false } : x));
-    }
-  }, [projectId, handleAddAgent]);
-
-  const handleDismissSuggestion = useCallback((idx) => {
-    setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, dismissed: true } : x));
-  }, []);
-
-  // Créer un nouvel agent depuis la carte de suggestion puis l'inviter
-  const handleCreateAndInvite = useCallback(async (idx, form, scope = 'project') => {
-    const s = agentSuggestionsRef.current[idx];
-    if (!s || s.inviting) return;
-    setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: true } : x));
-    try {
-      console.log('[handleCreateAndInvite] POST /agents', { name: form.name, role: form.role, scope });
-      const { data: agent } = await api.post('/agents', {
-        name:         form.name.trim(),
-        role:         form.role.trim(),
-        systemPrompt: form.systemPrompt.trim()
-      });
-      console.log('[handleCreateAndInvite] agent créé', agent.id, agent.name);
-      await api.post(`/projects/${projectId}/agents`, { agentId: agent.id, source: scope === 'global' ? 'global' : 'suggestion' });
-      console.log('[handleCreateAndInvite] agent lié au projet', projectId);
-      await handleAddAgent(agent.id);
-      setAgentSuggestions(prev => prev.map((x, i) =>
-        i === idx ? { ...x, invited: true, inviting: false, showCreate: false } : x
-      ));
-    } catch (err) {
-      console.error('[handleCreateAndInvite] erreur', err.response?.data?.error || err.message);
-      setAgentSuggestions(prev => prev.map((x, i) => i === idx ? { ...x, inviting: false } : x));
-    }
-  }, [projectId, handleAddAgent]);
+  // Menus de l'en-tête : fermeture au clic extérieur
+  useClickOutside(intentionDropdownRef, showIntentionDropdown, () => setShowIntentionDropdown(false));
+  useClickOutside(menuDotsRef, showMenuDots, () => setShowMenuDots(false));
+  useClickOutside(levelsDropdownRef, showLevelsDropdown, () => setShowLevelsDropdown(false));
 
   // Répondre à une décision
   const handleAnswerDecision = useCallback(async (messageId, answer) => {
@@ -809,90 +625,6 @@ export default function MeetingRoom() {
     navigate(location.pathname, { replace: true, state: {} }); // pas de relance au rechargement
   }, [loading, session, messages.length, activeAgents.length, isClosed, location, handlePrepare, navigate]);
 
-  const processFiles = useCallback(async (fileList) => {
-    const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    const ACCEPTED_EXTRACT     = ['.docx', '.xlsx', '.csv'];
-    const ACCEPTED_TEXT_TYPES  = ['text/plain', 'text/markdown', 'text/csv', 'application/json'];
-    const MAX = 3;
-    const remaining = MAX - attachmentsRef.current.length;
-    if (remaining <= 0) return;
-
-    const isAccepted = (f) => {
-      if (ACCEPTED_IMAGE_TYPES.includes(f.type)) return true;
-      if (f.type === 'application/pdf') return true;
-      if (ACCEPTED_TEXT_TYPES.includes(f.type) || f.type.startsWith('text/')) return true;
-      const name = f.name.toLowerCase();
-      return ACCEPTED_EXTRACT.some(ext => name.endsWith(ext));
-    };
-
-    const files = Array.from(fileList).filter(isAccepted).slice(0, remaining);
-    const results = [];
-
-    for (const file of files) {
-      const name = file.name.toLowerCase();
-      const isImage = ACCEPTED_IMAGE_TYPES.includes(file.type);
-      const isPdf   = file.type === 'application/pdf';
-      const needsExtract = name.endsWith('.docx') || name.endsWith('.xlsx') || name.endsWith('.csv');
-
-      if (isImage || isPdf) {
-        // Lecture base64
-        const att = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = e => {
-            const dataUrl = e.target.result;
-            resolve({ name: file.name, type: file.type, size: file.size,
-              isImage, isPdf: isPdf && !isImage,
-              dataUrl: isImage ? dataUrl : null,
-              base64: dataUrl.split(',')[1] });
-          };
-          reader.onerror = () => resolve({ name: file.name, error: true });
-          reader.readAsDataURL(file);
-        });
-        if (!att.error) results.push(att);
-
-      } else if (needsExtract) {
-        // Extraction serveur
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const token = localStorage.getItem('token');
-          const resp = await fetch(
-            `/api/projects/${projectId}/sessions/${sessionId}/extract-file`,
-            { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData }
-          );
-          if (resp.ok) {
-            const { text: extractedText } = await resp.json();
-            results.push({ name: file.name, type: file.type, size: file.size,
-              isImage: false, isPdf: false, extractedText });
-          } else {
-            setSendError(`Impossible d'extraire : ${file.name}`);
-          }
-        } catch {
-          setSendError(`Erreur extraction : ${file.name}`);
-        }
-
-      } else {
-        // Texte brut
-        const att = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = e => resolve({ name: file.name, type: file.type, size: file.size, isImage: false, isPdf: false, text: e.target.result });
-          reader.onerror = () => resolve({ name: file.name, error: true });
-          reader.readAsText(file);
-        });
-        if (!att.error) results.push(att);
-      }
-    }
-
-    setAttachments(prev => [...prev, ...results].slice(0, MAX));
-  }, [projectId, sessionId]);
-
-  const handleDragOver  = useCallback((e) => { e.preventDefault(); setIsDragging(true);  }, []);
-  const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragging(false); }, []);
-  const handleDrop      = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    processFiles(e.dataTransfer.files);
-  }, [processFiles]);
 
   const handleSaveTask = useCallback(async () => {
     if (!taskDraft.trim() || savingTask) return;
@@ -1236,33 +968,7 @@ export default function MeetingRoom() {
 
     {/* Modale réinitialisation réunion */}
     {showResetModal && (
-      <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div role="dialog" aria-modal="true" aria-labelledby="reset-title" className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-          <div className="flex items-start gap-3">
-            <span className="w-10 h-10 rounded-xl bg-await-light text-await inline-flex items-center justify-center shrink-0">
-              <RotateCcw size={20} aria-hidden="true" />
-            </span>
-            <div>
-              <h3 id="reset-title" className="text-lg font-extrabold text-ink">Réinitialiser cette réunion ?</h3>
-              <p className="text-sm text-ink-muted">Elle repartira de zéro, avec le même objectif et les mêmes agents.</p>
-            </div>
-          </div>
-          <ul className="text-sm text-ink-soft space-y-1.5 bg-await-bg border border-await-border rounded-xl p-3.5">
-            <li>• Tous les échanges de cette réunion sont effacés</li>
-            <li>• Sa contribution à la mémoire du projet est retirée</li>
-            <li>• La mémoire des étapes suivantes est réinitialisée</li>
-          </ul>
-          <p className="text-xs text-ink-faint">Les étapes précédentes sont conservées.</p>
-          <div className="flex gap-2 pt-1">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowResetModal(false)} disabled={resettingSession}>
-              Annuler
-            </Button>
-            <Button variant="await" className="flex-1" onClick={handleResetSession} disabled={resettingSession}>
-              {resettingSession ? 'Réinitialisation…' : <><RotateCcw size={15} aria-hidden="true" /> Réinitialiser</>}
-            </Button>
-          </div>
-        </div>
-      </div>
+      <ResetMeetingModal busy={resettingSession} onCancel={() => setShowResetModal(false)} onConfirm={handleResetSession} />
     )}
 
     {/* Modal de clôture v3.0 */}
