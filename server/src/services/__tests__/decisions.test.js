@@ -13,8 +13,8 @@ describe('registre des décisions', () => {
       '{"statement":"Hébergement sur Railway","origin":"inconnue"}' +
       ']}\n```');
     expect(out).toEqual([
-      { statement: 'Lancement en mars', rationale: 'Salon', rejectedOptions: ['Avril'], origin: 'human', vigilance: null },
-      { statement: 'Hébergement sur Railway', rationale: null, rejectedOptions: [], origin: 'human', vigilance: null },
+      { statement: 'Lancement en mars', rationale: 'Salon', rejectedOptions: ['Avril'], origin: 'human', vigilance: null, replaces: null },
+      { statement: 'Hébergement sur Railway', rationale: null, rejectedOptions: [], origin: 'human', vigilance: null, replaces: null },
     ]);
   });
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, RotateCcw, Undo2, Replace, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, RotateCcw, Undo2, Replace, ChevronDown, AlertTriangle, CalendarPlus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import { Button, IconButton, Badge, Card, SectionLabel } from './ui';
 
@@ -9,8 +10,52 @@ import { Button, IconButton, Badge, Card, SectionLabel } from './ui';
 const fmtDate = d => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 const inputCls = 'w-full text-sm text-ink border border-line rounded-[10px] px-3 py-2 outline-none bg-white focus:ring-2 focus:ring-action focus:border-transparent';
 
-function DecisionItem({ decision, onPatch, onDelete }) {
-  const [mode, setMode] = useState(null); // null | 'edit' | 'reopen'
+const MAX_AGENDA = 4; // points à l'ordre du jour d'une réunion (services/agenda.js)
+
+// Mettre une décision remise en question à l'ordre du jour : réunion dédiée (par défaut),
+// ou réunion de décision déjà prévue au plan (sujets liés)
+function AgendaPicker({ projectId, decision, onDone, onCancel }) {
+  const [meetings, setMeetings] = useState(null);
+  const [choice, setChoice] = useState('new');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.get(`/projects/${projectId}/plan`).then(({ data }) => setMeetings((data.milestones || [])
+      .filter(m => m.type === 'decision' && m.status !== 'done' && (Array.isArray(m.agenda) ? m.agenda.length : 0) < MAX_AGENDA)))
+      .catch(() => setMeetings([]));
+  }, [projectId]);
+  const submit = async () => {
+    setBusy(true); setError('');
+    try {
+      await api.post(`/projects/${projectId}/decisions/${decision.id}/agenda`, choice === 'new' ? {} : { milestoneId: choice });
+      onDone();
+    } catch (err) { setError(err.response?.data?.error || 'Impossible de la mettre à l’ordre du jour.'); setBusy(false); }
+  };
+  return (
+    <div className="space-y-2 bg-white border border-line rounded-[10px] p-3">
+      <p className="text-xs font-bold text-ink">Retraiter cette décision dans :</p>
+      <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+        <input type="radio" name={`agenda-${decision.id}`} checked={choice === 'new'} onChange={() => setChoice('new')} className="mt-1 accent-action" />
+        <span><strong>Une nouvelle réunion</strong>, dédiée à ce point (ajoutée à la fin du plan)</span>
+      </label>
+      {(meetings || []).map(m => (
+        <label key={m.id} className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+          <input type="radio" name={`agenda-${decision.id}`} checked={choice === m.id} onChange={() => setChoice(m.id)} className="mt-1 accent-action" />
+          <span>La réunion prévue « {m.title} »{m.agenda?.length ? ` (${m.agenda.length} point${m.agenda.length > 1 ? 's' : ''} déjà)` : ''}</span>
+        </label>
+      ))}
+      {meetings?.length > 0 && <p className="text-[11px] text-ink-faint">Regroupez seulement des sujets liés : {MAX_AGENDA} points au plus par réunion.</p>}
+      {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+      <div className="flex gap-2">
+        <Button size="sm" variant="primary" disabled={busy || meetings === null} onClick={submit}><CalendarPlus size={14} aria-hidden="true" /> {busy ? '…' : 'Mettre à l’ordre du jour'}</Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>Annuler</Button>
+      </div>
+    </div>
+  );
+}
+
+function DecisionItem({ decision, onPatch, onDelete, projectId, onReload }) {
+  const [mode, setMode] = useState(null); // null | 'edit' | 'reopen' | 'agenda'
   const [statement, setStatement] = useState(decision.statement);
   const [rationale, setRationale] = useState(decision.rationale || '');
   const [note, setNote] = useState('');
@@ -42,7 +87,9 @@ function DecisionItem({ decision, onPatch, onDelete }) {
             {reopened && (
               <p className="text-xs text-await font-semibold flex items-start gap-1.5">
                 <AlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
-                <span>Remise en question{decision.reopenNote ? ` : ${decision.reopenNote}` : ''}. Les agents la retraiteront à la prochaine réunion concernée.</span>
+                <span>Remise en question{decision.reopenNote ? ` : ${decision.reopenNote}` : ''}. {decision.agendaMilestone
+                  ? <>À l’ordre du jour de la réunion « <Link className="underline" to={`/projects/${projectId}/reunions`}>{decision.agendaMilestone.title}</Link> » : elle y sera retraitée, puis remplacée par la nouvelle décision.</>
+                  : 'Mettez-la à l’ordre du jour d’une réunion pour qu’elle soit retraitée.'}</span>
               </p>
             )}
             <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-faint pt-0.5">
@@ -63,6 +110,10 @@ function DecisionItem({ decision, onPatch, onDelete }) {
             </div>
           )}
         </div>
+      )}
+
+      {mode === 'agenda' && (
+        <AgendaPicker projectId={projectId} decision={decision} onCancel={() => setMode(null)} onDone={() => { setMode(null); onReload(); }} />
       )}
 
       {mode === 'reopen' && (
@@ -89,6 +140,11 @@ function DecisionItem({ decision, onPatch, onDelete }) {
           {decision.status !== 'active' && (
             <Button size="sm" variant="ghost" className="!h-8 !text-ok hover:!bg-ok-light" disabled={busy} onClick={() => run(() => onPatch(decision.id, { status: 'active' }))}>
               <Undo2 size={14} aria-hidden="true" /> Rétablir
+            </Button>
+          )}
+          {reopened && !decision.agendaMilestone && (
+            <Button size="sm" variant="await" className="!h-8" onClick={() => setMode('agenda')}>
+              <CalendarPlus size={14} aria-hidden="true" /> Mettre à l’ordre du jour
             </Button>
           )}
           {reopened && (
@@ -167,7 +223,7 @@ export default function DecisionRegistryPanel({ projectId, onChanged }) {
       {reopened.length > 0 && (
         <section className="space-y-2">
           <SectionLabel className="!text-await">Remises en question · {reopened.length}</SectionLabel>
-          {reopened.map((d, i) => <div key={d.id} data-tour={i === 0 ? 'dec-reopened' : undefined}><DecisionItem decision={d} onPatch={patch} onDelete={remove} /></div>)}
+          {reopened.map((d, i) => <div key={d.id} data-tour={i === 0 ? 'dec-reopened' : undefined}><DecisionItem decision={d} onPatch={patch} onDelete={remove} projectId={projectId} onReload={load} /></div>)}
         </section>
       )}
 

@@ -7,6 +7,7 @@ const { getProjectTools, formatProjectToolsForPrompt } = require('../../services
 const { extractMeetingDecisions, listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { listActions, formatActionsForPrompt, dropExistingActions } = require('../../services/actions');
 const { requiredCategories, missingTools } = require('../../services/devTools');
+const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { SETUP_CATEGORIES } = require('../../services/tools/catalog');
 const { CATEGORIES: TOOL_CATEGORIES } = require('../../services/tools/catalog');
 
@@ -68,7 +69,7 @@ const router = express.Router({ mergeParams: true });
 
 router.post('/suggest-agents', async (req, res) => {
   const { projectId } = req.params;
-  const { task, milestoneType } = req.body;
+  const { task, milestoneType, milestoneId } = req.body;
   if (!task?.trim()) return res.status(400).json({ error: 'Tâche requise' });
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
@@ -87,6 +88,11 @@ router.post('/suggest-agents', async (req, res) => {
       .orderByRaw('"Agent"."isDefault" DESC, "Agent"."createdAt" ASC');
 
     const agentsList = agents.map(a => `- ${a.name} : ${a.role}`).join('\n');
+    // Ordre du jour (décisions à retraiter, sujets parfois sans lien) : chaque point couvert
+    const agenda = await agendaDecisions(milestoneId ? (await db('Milestone').where({ id: milestoneId, projectId }).first('id'))?.id : null);
+    const agendaBlock = agenda.length
+      ? `\nOrdre du jour (décisions remises en question à retraiter, sujets possiblement sans lien entre eux) :\n${formatAgendaForPrompt(agenda)}\nRÈGLE : chaque point de l'ordre du jour doit être couvert par AU MOINS UN agent réellement compétent sur son sujet ; 2 à 5 agents au total ; dans "reason", cite le ou les points couverts.`
+      : '';
 
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('timeout')), 10_000)
@@ -101,12 +107,12 @@ router.post('/suggest-agents', async (req, res) => {
 
 Projet : "${project.name}"
 Brief : "${project.brief?.trim() || 'non défini'}"
-Objectif de la réunion : "${task.trim()}"${milestoneType ? `\nType d'étape : ${milestoneType}` : ''}
+Objectif de la réunion : "${task.trim()}"${milestoneType ? `\nType d'étape : ${milestoneType}` : ''}${agendaBlock}
 
 Agents disponibles pour CE projet :
 ${agentsList}
 
-1. Sélectionne 2 à 4 agents parmi la liste ci-dessus qui sont DIRECTEMENT utiles. Ne sélectionne pas un agent simplement parce qu'il existe.
+1. Sélectionne 2 à ${agenda.length ? 5 : 4} agents parmi la liste ci-dessus qui sont DIRECTEMENT utiles. Ne sélectionne pas un agent simplement parce qu'il existe.
 2. Si une compétence importante manque pour cet objectif et qu'aucun agent existant ne la couvre, suggère la création d'UN SEUL nouvel agent spécialisé avec un nom et un rôle précis. Sinon, mets null.
 
 Retourne UNIQUEMENT ce JSON :

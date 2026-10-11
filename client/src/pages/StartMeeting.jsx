@@ -171,7 +171,8 @@ export default function StartMeeting() {
     try {
       const { data } = await api.post(`/projects/${projectId}/sessions/suggest-agents`, {
         task: taskValue,
-        ...(milType ? { milestoneType: milType } : {})
+        ...(milType ? { milestoneType: milType } : {}),
+        ...(milestoneId ? { milestoneId } : {}), // ordre du jour : agents couvrant chaque point
       });
       const selected = data.existingSelected || [];
       if (selected.length > 0) {

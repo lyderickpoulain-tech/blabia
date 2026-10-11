@@ -4,6 +4,7 @@ const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { findProject } = require('../utils/projectHelpers');
 const { sanitizeDecision, listDecisions, STATUSES } = require('../services/decisions');
+const { addToAgenda, agendaByDecision } = require('../services/agenda');
 
 // Colonnes de la table Decision uniquement : sanitizeDecision renvoie aussi des champs
 // d'affichage (ex. vigilance, relecture du contradicteur) qui n'y sont pas stockés.
@@ -13,7 +14,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const isAdminOf = req => ['admin', 'supervisor'].includes(req.user.role);
-const RETURN_FIELDS = ['id', 'projectId', 'sessionId', 'statement', 'rationale', 'rejectedOptions', 'origin', 'status', 'reopenNote', 'createdAt', 'updatedAt'];
+const RETURN_FIELDS = ['id', 'projectId', 'sessionId', 'statement', 'rationale', 'rejectedOptions', 'origin', 'status', 'reopenNote', 'supersededBy', 'createdAt', 'updatedAt'];
 
 // GET /api/projects/:id/decisions
 router.get('/:id/decisions', async (req, res) => {
@@ -27,7 +28,9 @@ router.get('/:id/decisions', async (req, res) => {
       ? await db('Session').select('id', 'task').whereIn('id', sessionIds)
       : [];
     const taskById = Object.fromEntries(sessions.map(s => [s.id, s.task]));
-    res.json(decisions.map(d => ({ ...d, sessionTask: d.sessionId ? taskById[d.sessionId] || null : null })));
+    // Décision remise en question déjà à l'ordre du jour d'une réunion du plan
+    const agenda = await agendaByDecision(project.id);
+    res.json(decisions.map(d => ({ ...d, sessionTask: d.sessionId ? taskById[d.sessionId] || null : null, agendaMilestone: agenda[d.id] || null })));
   } catch (err) {
     console.error('[decisions GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -52,6 +55,12 @@ router.post('/:id/decisions/from-session', async (req, res) => {
         status: 'active', createdAt: now, updatedAt: now,
       })))
       .returning(RETURN_FIELDS);
+    // Décision qui en retraite une remise en question (ordre du jour) : l'ancienne est remplacée
+    for (let i = 0; i < decisions.length; i++) {
+      if (!decisions[i].replaces) continue;
+      await db('Decision').where({ id: decisions[i].replaces, projectId: project.id, status: 'reopened' })
+        .update({ status: 'superseded', supersededBy: rows[i].id, reopenNote: null, updatedAt: now });
+    }
     res.status(201).json(rows);
   } catch (err) {
     console.error('[decisions from-session POST]', err.message);
@@ -105,6 +114,24 @@ router.patch('/:id/decisions/:did', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[decisions PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/decisions/:did/agenda { milestoneId? } — met une décision remise
+// en question à l'ordre du jour : réunion de décision existante, sinon nouvelle réunion
+router.post('/:id/decisions/:did/agenda', async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [decision] = await db('Decision').where({ id: req.params.did, projectId: project.id }).limit(1);
+    if (!decision) return res.status(404).json({ error: 'Décision introuvable' });
+    if (decision.status !== 'reopened') return res.status(400).json({ error: 'Seule une décision remise en question se met à l’ordre du jour.' });
+    const milestone = await addToAgenda({ projectId: project.id, decision, milestoneId: req.body?.milestoneId || null, userId: req.user.id });
+    res.status(201).json({ milestone: { id: milestone.id, title: milestone.title } });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('[decisions agenda POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

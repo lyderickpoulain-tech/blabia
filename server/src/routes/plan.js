@@ -24,7 +24,7 @@ router.get('/:id/plan', async (req, res) => {
     const [milestones, todos] = await Promise.all([
       db('Milestone')
         .select([
-          'id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'createdAt', 'createdBy'
+          'id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'createdAt', 'createdBy', 'agenda'
         ])
         .where({ projectId: req.params.id })
         .orderBy('displayOrder', 'asc'),

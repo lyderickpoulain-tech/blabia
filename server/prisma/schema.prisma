@@ -125,6 +125,7 @@ model Milestone {
   type                String     @default("decision") // v5.0 phase 3 : "decision" | "claude_code" | "stack" — anciennes valeurs ("meeting" | "synthesis" | "stack_check" | "technical" | "memory" | "timeline_steps" | "milestone") migrées en phase 3 (stack_check -> stack, tout le reste -> decision)
   checklistData       Json?      // DEPRECATED v5.0 — checklist stack_check, remplacée par les réunions de type stack (phase 4)
   createdFromSessionId String?
+  agenda              Json       @default("[]") // v5.1 : réunion de décision — ids des décisions remises en question à retraiter (services/agenda.js)
   displayOrder        Int        @default(0)
   createdAt    DateTime   @default(now())
   createdBy    String?
@@ -225,6 +226,7 @@ model Decision {
   origin          String   @default("human")  // "human" (arbitrage explicite) | "agents" (hypothèse non contredite)
   status          String   @default("active") // "active" | "reopened" (remise en question) | "superseded"
   reopenNote      String?  // raison de la remise en question
+  supersededBy    String?  // v5.1 : décision qui la remplace (retraitée à l'ordre du jour d'une réunion)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now())
   project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

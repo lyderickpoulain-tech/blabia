@@ -21,6 +21,7 @@ const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { analyzeAndSaveNeeds, formatNeedsForPrompt } = require('../../services/tools/toolNeeds');
 const { sessionCodeContext } = require('../../services/codeContext');
+const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const { listDocuments, formatDocumentsForPrompt } = require('../../services/documents');
 const { proposeMission, listMissions, formatMissionsForPrompt } = require('../../services/missions');
@@ -343,6 +344,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     const missionsText = formatMissionsForPrompt(await listMissions(projectId));
     // Réunion Claude Code d'un projet relié à un dépôt : le code vu par les agents (calculé une fois)
     const codeText = intention[0] === 'claude_code' ? await sessionCodeContext({ ...session, task: freshSession.task }, project) : '';
+    // Ordre du jour : décisions remises en question à retraiter (réunion du plan, services/agenda.js)
+    const agendaText = formatAgendaForPrompt(await agendaDecisions(session.milestoneId));
     // Contradicteur : réglage de la réunion, sinon celui du projet (activé par défaut)
     const challengerOn = (session.challengerEnabled ?? project.challengerEnabled) !== false;
     const today = new Date().toLocaleDateString('fr-FR');
@@ -489,6 +492,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         actionsText,
         documentsText,
         codeText,
+        agendaText,
         missionsText,
         today,
         challengerSection: isChallenge

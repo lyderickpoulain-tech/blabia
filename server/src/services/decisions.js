@@ -7,6 +7,7 @@ const db = require('../utils/db');
 const anthropic = require('./anthropic');
 const { parseJsonField } = require('../utils/parseJsonField');
 const { parseActions, parseTriage } = require('./actions');
+const { agendaDecisions, formatAgendaForPrompt } = require('./agenda');
 
 const { DEFAULT_MODEL: MODEL } = require('./models');
 const ORIGINS  = ['human', 'agents'];
@@ -26,6 +27,8 @@ function sanitizeDecision(d) {
     origin: ORIGINS.includes(d.origin) ? d.origin : 'human',
     // v5.1 : relecture du contradicteur — risque d'une décision fragile, sinon null
     vigilance: clean(d.vigilance, 300) || null,
+    // v5.1 : id de la décision remise en question qu'elle retraite (ordre du jour), sinon null
+    replaces: /^[0-9a-f-]{36}$/i.test(String(d.replaces || '')) ? String(d.replaces) : null,
   };
 }
 
@@ -43,7 +46,7 @@ function decisionCardsText(messages) {
     .join('\n');
 }
 
-function buildExtractionPrompt({ task, historyText, cardsText, registryText, actionsText, challenger = false }) {
+function buildExtractionPrompt({ task, historyText, cardsText, registryText, actionsText, agendaText = '', challenger = false }) {
   return {
     system: 'Tu extrais les décisions et les actions d\'une réunion de projet. Tu réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.',
     user: `Objectif de la réunion : ${task}
@@ -58,7 +61,7 @@ ${registryText ? `Décisions DÉJÀ au registre du projet (ne les répète pas, 
 - origin "human" : l'humain a tranché (réponse à une question, consigne, refus d'une proposition) ;
 - origin "agents" : hypothèse d'un agent que l'humain n'a pas contredite, ou décision déléguée aux agents.
 N'inclus pas les idées simplement évoquées, ni les questions restées sans réponse.
-Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".${challenger ? '\nRELECTURE DU CONTRADICTEUR : pour au plus 2 décisions FRAGILES (fort enjeu — argent engagé, difficile à défaire, légal, conditionne la suite — ET justification faible ou alternative non examinée), ajoute "vigilance" : le risque en une phrase et comment le vérifier. Pour toutes les autres, omets ce champ. Dans le doute, omets-le.' : ''}
+Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".${agendaText ? `\nORDRE DU JOUR de la réunion (décisions remises en question par l'humain, à retraiter) :\n${agendaText}\nQuand une décision prise RETRAITE l'un de ces points (elle le confirme en le précisant, le modifie ou le remplace), ajoute "replaces": "<id du point>". Un point retraité sans nouvelle décision claire : n'invente rien.` : ''}${challenger ? '\nRELECTURE DU CONTRADICTEUR : pour au plus 2 décisions FRAGILES (fort enjeu — argent engagé, difficile à défaire, légal, conditionne la suite — ET justification faible ou alternative non examinée), ajoute "vigilance" : le risque en une phrase et comment le vérifier. Pour toutes les autres, omets ce champ. Dans le doute, omets-le.' : ''}
 
 ${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas, même reformulées) :\n${actionsText}\n\n` : ''}Trie ensuite ce qui reste à faire après la réunion. CHAQUE élément va dans UNE SEULE de ces listes :
 - "toDecide" : les DÉCISIONS QUI RESTENT À PRENDRE (« définir », « trancher », « choisir entre », « arbitrer »…) : ce n'est PAS une action. Une question claire par élément.
@@ -105,12 +108,14 @@ function formatRegistryForPrompt(decisions) {
 // Décisions proposées au registre + actions proposées (v5.1), en un seul appel
 async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '', challenger = false }) {
   const registry = await listDecisions(projectId);
+  const agenda = await agendaDecisions(session.milestoneId);
   const prompt = buildExtractionPrompt({
     task: session.task,
     historyText,
     cardsText: decisionCardsText(messages),
     registryText: formatRegistryForPrompt(registry).activeText,
     actionsText,
+    agendaText: formatAgendaForPrompt(agenda),
     challenger,
   });
   const response = await anthropic.messages.create({
@@ -120,7 +125,10 @@ async function extractMeetingDecisions({ session, messages, historyText, project
   });
   const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
   const raw = parseExtractionJSON(text);
-  return { decisions: parseExtraction(raw), actions: parseActions(raw), triage: parseTriage(raw) };
+  // « replaces » : seulement un point de l'ordre du jour de CETTE réunion (texte joint pour l'affichage)
+  const byId = Object.fromEntries(agenda.map(d => [d.id, d.statement]));
+  const decisions = parseExtraction(raw).map(d => (byId[d.replaces] ? { ...d, replacesStatement: byId[d.replaces] } : { ...d, replaces: null }));
+  return { decisions, actions: parseActions(raw), triage: parseTriage(raw) };
 }
 
 module.exports = {

@@ -73,7 +73,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       setDeliverable(data.deliverable || null);
       if (Array.isArray(data.toolSuggestions)) setToolSuggestions(data.toolSuggestions);
       setDecisionProposals(Array.isArray(data.decisionProposals)
-        ? data.decisionProposals.map((d, i) => ({ ...d, key: i, keep: true }))
+        ? data.decisionProposals.map((d, i) => ({ ...d, key: i, keep: true, replaceKeep: !!d.replaces }))
         : null);
       setActionProposals(Array.isArray(data.actionProposals)
         ? data.actionProposals.map((a, i) => ({ ...a, key: i, keep: true }))
@@ -129,7 +129,9 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       if (kept.length > 0 && !decisionsSavedRef.current) {
         await api.post(`/projects/${projectId}/decisions/from-session`, {
           sessionId: session.id,
-          decisions: kept.map(({ statement, rationale, rejectedOptions, origin }) => ({ statement, rationale, rejectedOptions, origin })),
+          decisions: kept.map(({ statement, rationale, rejectedOptions, origin, replaces, replaceKeep }) => ({
+            statement, rationale, rejectedOptions, origin, ...(replaces && replaceKeep ? { replaces } : {}),
+          })),
         });
         decisionsSavedRef.current = true;
       }
@@ -388,6 +390,12 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                             </div>
                             {d.rejectedOptions?.length > 0 && (
                               <p className="text-[11px] text-ink-faint px-1.5">Écarté : {d.rejectedOptions.join(', ')}</p>
+                            )}
+                            {d.replaces && (
+                              <label className="flex items-start gap-2 text-xs text-ink-soft bg-action-light border border-action-border rounded-lg px-2 py-1.5 mx-1.5 cursor-pointer">
+                                <input type="checkbox" checked={d.replaceKeep} disabled={!d.keep} onChange={e => updateProposal(d.key, { replaceKeep: e.target.checked })} className="mt-0.5 w-3.5 h-3.5 accent-action shrink-0" />
+                                <span><strong>Remplace la décision remise en question :</strong> « {d.replacesStatement} » (elle passera « remplacée »)</span>
+                              </label>
                             )}
                             {d.vigilance && (
                               <p className="text-xs text-await bg-await-bg border border-await-border rounded-lg px-2 py-1.5 mx-1.5 flex items-start gap-1.5">
