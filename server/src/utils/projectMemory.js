@@ -31,4 +31,32 @@ function withoutSession(context, sessionId) {
   return kept.length === entries.length ? null : kept.join(SEPARATOR);
 }
 
-module.exports = { recentMemory, withoutSession };
+// Ajoute une entrée à la mémoire du projet ; au-delà de MAX_CHARS, les plus anciennes sortent.
+// Utilisé pour les comptes rendus de réunion ([SESSION:…], updateProjectContext) et les
+// missions réussies ([MISSION:…], services/missionRunner.js).
+const MAX_CHARS = 10000;
+function appendEntry(context, entry) {
+  const parts = [...(context ? String(context).split(SEPARATOR) : []), entry];
+  while (parts.length > 1 && parts.join(SEPARATOR).length > MAX_CHARS) parts.shift();
+  return parts.join(SEPARATOR);
+}
+async function appendMemory(projectId, entry) {
+  const db = require('./db');
+  const [project] = await db('Project').select('context').where({ id: projectId }).limit(1);
+  await db('Project').where({ id: projectId }).update({ context: appendEntry(project?.context, entry), updatedAt: new Date() });
+}
+
+// Ce qu'une mission réussie laisse en mémoire : la synthèse et la recommandation du rapport
+// (titres « ## Synthèse », « ## Recommandation(s) »), sinon son début ; 1 500 caractères au plus
+function missionDigest(report) {
+  const text = String(report || '');
+  const section = re => { const m = text.match(re); return m ? m[1].trim() : ''; };
+  const parts = [
+    section(/^##\s*Synth[eè]se\s*\n([\s\S]*?)(?=^##\s|(?![\s\S]))/im),
+    section(/^##\s*Recommandations?\s*\n([\s\S]*?)(?=^##\s|(?![\s\S]))/im),
+  ].filter(Boolean);
+  const digest = parts.length ? parts.join('\n') : text.replace(/^#.*\n/, '').trim();
+  return digest.length > 1500 ? `${digest.slice(0, 1499).trim()}…` : digest;
+}
+
+module.exports = { recentMemory, withoutSession, appendEntry, appendMemory, missionDigest, SEPARATOR };

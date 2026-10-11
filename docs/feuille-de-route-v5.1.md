@@ -182,6 +182,7 @@ Constat : une décision remise en question ne revenait que si une réunion « co
 ### D9. Actions confiées à un agent, ou traitées en réunion — codé le 11/10/2026
 - Page Actions, sur chaque action ouverte : « Confier à un agent » (agent du projet, nature devinée du verbe — vérifier → recherche, rédiger → rédaction, analyser → analyse —, plafond, objectif et attendu modifiables) → mission lancée aussitôt (`POST /api/projects/:id/actions/:tid/mission`, `AgentMission.todoId`, migration `20261011000005`), action « en cours », budget mensuel des missions respecté ; l'état de la mission et « Lire » (rapport) s'affichent sur l'action ; l'humain la coche une fois satisfait.
 - « Traiter en réunion » : nouvelle réunion de décision préremplie avec l'action.
+- Mission réussie (depuis une action ou une réunion) → entrée dans la MÉMOIRE du projet (`[MISSION:<id> | date — …]`, `appendMemory` + `missionDigest` dans `utils/projectMemory.js`) : synthèse et recommandation du rapport (1 500 car. max), renvoi au document ; même rotation que les comptes rendus.
 
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).

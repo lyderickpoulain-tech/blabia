@@ -14,7 +14,7 @@ const { costUSD } = require('./pricing');
 const { runWithUsage } = require('./usage');
 const { DEFAULT_MODEL } = require('./models');
 const { KIND_LABEL } = require('./missions');
-const { recentMemory } = require('../utils/projectMemory');
+const { recentMemory, appendMemory, missionDigest } = require('../utils/projectMemory');
 
 const MAX_STEPS = 10;
 const FINALIZE_AT = 0.75;           // part du plafond à partir de laquelle on rédige
@@ -176,6 +176,12 @@ async function runOne(mission) {
       status: 'done', report: content, sources: JSON.stringify(sources), costUSD: cost,
       documentId: doc.id ?? doc, finishedAt: new Date(), error: null,
     });
+    // Mémoire du projet : ce que la mission a établi, relu par les agents à chaque réunion
+    // (le rapport complet reste dans les documents). Un échec ici n'annule pas la mission.
+    try {
+      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      await appendMemory(mission.projectId, `[MISSION:${mission.id} | ${date} — Mission « ${mission.title} » menée pour ${mission.agentName}]\n${missionDigest(report)}\n(Rapport complet : document « Mission — ${mission.title} ».)`);
+    } catch (err) { console.error(`[missions] ${mission.id} mémoire :`, err.message); }
   } catch (err) {
     console.error(`[missions] ${mission.id} :`, err.message);
     await db('AgentMission').where({ id: mission.id }).update({ status: 'failed', error: String(err.message).slice(0, 500), finishedAt: new Date() });

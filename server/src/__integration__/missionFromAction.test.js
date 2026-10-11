@@ -47,6 +47,11 @@ describe.skipIf(!harness.enabled)('mission confiée depuis une action', () => {
     expect(action.mission).toMatchObject({ agentName: 'Juriste', status: 'done' });
     expect(action.mission.documentId).toBeTruthy();
     expect(action.status).toBe('in_progress'); // l'humain coche l'action une fois satisfait
+    // Mémoire du projet : la synthèse et la recommandation, relues par les agents en réunion
+    const { context } = await h.db('Project').where({ id: pid }).first();
+    expect(context).toMatch(/^\[MISSION:[0-9a-f-]+ \| \d\d\/\d\d\/\d{4} — Mission « Vérifier si la démo célébrités pose un problème légal ou d’image » menée pour Juriste\]/);
+    expect(context).toContain('Risque faible si les dates sont publiques et l’usage non commercial.\nAjouter une mention.');
+    expect(context).toContain('(Rapport complet : document « Mission — Vérifier si la démo');
     // Nouvelle mission possible une fois la précédente terminée ; pas sur une action faite
     await h.db('TodoItem').where({ id: actionId }).update({ status: 'done' });
     expect((await h.request('POST', `/api/projects/${pid}/actions/${actionId}/mission`, { token: owner.token, body: { agentName: 'Juriste' } })).status).toBe(409);

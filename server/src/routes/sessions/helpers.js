@@ -2,6 +2,7 @@
 const db         = require('../../utils/db');
 const anthropic  = require('../../services/anthropic');
 const { parseJsonField } = require('../../utils/parseJsonField');
+const { appendMemory } = require('../../utils/projectMemory');
 
 const { DEFAULT_MODEL: MODEL } = require('../../services/models');
 
@@ -24,20 +25,7 @@ async function updateProjectContext(projectId, sessionId, task, content) {
     const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const entry = `[SESSION:${sessionId} | ${date} — ${task}]\n${content}`;
 
-    const [project] = await db('Project').select('context').where({ id: projectId }).limit(1);
-    const current = project?.context || '';
-    let newContext = (current ? current + '\n---\n' : '') + entry;
-
-    const MAX_CHARS = 10000;
-    if (newContext.length > MAX_CHARS) {
-      const parts = newContext.split('\n---\n');
-      while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) {
-        parts.shift();
-      }
-      newContext = parts.join('\n---\n');
-    }
-
-    await db('Project').where({ id: projectId }).update({ context: newContext, updatedAt: new Date() });
+    await appendMemory(projectId, entry); // utils/projectMemory.js (rotation des plus anciennes)
   } catch (err) {
     console.error('[updateProjectContext]', err.message);
   }
