@@ -21,6 +21,7 @@ const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { analyzeAndSaveNeeds, formatNeedsForPrompt } = require('../../services/tools/toolNeeds');
 const { sessionCodeContext } = require('../../services/codeContext');
+const { meetingHistory, withHistory } = require('../../services/prompts/meetingHistory');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const { listDocuments, formatDocumentsForPrompt } = require('../../services/documents');
@@ -468,16 +469,8 @@ router.post('/:sessionId/chat', async (req, res) => {
 
       send('agent_typing', { agentName: agent.name, agentEmoji: agent.emoji, agentRole: agent.role, reason: next.reason || '' });
 
-      const historyLines = currentMessages
-        .slice(-10)
-        .filter(m => m.role !== 'system' || m.type === 'decision_answer' || m.type === 'prep_summary')
-        .map(m => {
-          if (m.role === 'human')                                  return `Participant : ${m.content}`;
-          if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
-          if (m.role === 'system' && m.type === 'prep_summary')    return `[Synthèse de la préparation entre agents]\n${m.content}`;
-          return `${m.agentName} : ${m.content}${m.artifact ? ` [Illustration produite : « ${m.artifact.title} »]` : ''}`;
-        });
-      const historyText  = historyLines.join('\n\n');
+      // Toute la réunion (et non plus les 10 derniers messages), en cache : services/prompts/meetingHistory.js
+      const history = meetingHistory(currentMessages);
 
       // Questions de décision déjà soulevées dans cette réunion — injectées pour éviter les doublons
       const priorDecisionQuestions = currentMessages
@@ -513,8 +506,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         },
       });
 
-      const baseText = historyText
-        ? `Historique de la réunion :\n${historyText}\n\nC'est maintenant ton tour de contribuer.`
+      const baseText = history.blocks.length
+        ? 'C\'est maintenant ton tour de contribuer (l\'historique de la réunion figure dans tes consignes).'
         : `Objectif : ${session.task}\n\nC'est le début de la réunion. Donne ta première contribution.`;
 
       let userMessage;
@@ -550,7 +543,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       try {
         // Tour avec illustration demandée : marge de tokens pour le code (phase 5)
         const agentResult = await callAgent(
-          systemPrompt, userMessage, turnArtifact ? 4000 : 600, session.model || MODEL, abortController.signal,
+          withHistory(systemPrompt, history), userMessage, turnArtifact ? 4000 : 600, session.model || MODEL, abortController.signal,
           session.webSearchEnabled === true
         );
         agentFullText   = agentResult.text;
@@ -564,7 +557,7 @@ router.post('/:sessionId/chat', async (req, res) => {
             ? [...userMessage, { type: 'text', text: 'Reformule sans rédiger le livrable : pose plutôt une question pour clarifier le besoin.' }]
             : `${userMessage}\n\nReformule sans rédiger le livrable : pose plutôt une question pour clarifier le besoin.`;
           const retryResult = await callAgent(
-            systemPrompt, retryMessage, 600, session.model || MODEL, abortController.signal,
+            withHistory(systemPrompt, history), retryMessage, 600, session.model || MODEL, abortController.signal,
             session.webSearchEnabled === true
           );
           agentFullText  = retryResult.text;

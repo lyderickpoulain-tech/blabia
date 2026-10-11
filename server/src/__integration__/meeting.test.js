@@ -69,7 +69,12 @@ describe.skipIf(!harness.enabled)('réunion complète (IA simulée)', () => {
     const agentCall = newCalls.find(isAgent);
     expect(agentCall.system[0].cache_control).toEqual({ type: 'ephemeral' });
     expect(agentCall.system[0].text).toContain('Ouvrir un salon de thé à Lyon.');
-    expect(agentCall.system[1].text).toContain('tu es Max');
+    // Ordre : bloc commun (cache), historique complet (cache sur le dernier message), bloc de l'agent
+    expect(agentCall.system.at(-1).text).toContain('tu es Max');
+    expect(agentCall.system[1].text).toMatch(/^HISTORIQUE DE LA RÉUNION EN COURS/);
+    expect(agentCall.system.filter(b => b.cache_control)).toHaveLength(2);
+    expect(agentCall.system.at(-2).cache_control).toEqual({ type: 'ephemeral' });
+    expect(agentCall.messages[0].content).toContain('historique de la réunion figure dans tes consignes');
   });
 
   it('réponse à la carte de décision', async () => {
