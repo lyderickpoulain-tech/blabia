@@ -171,7 +171,7 @@ Constat (« Site de numérologie ») : 19 actions dont 4 doublons, 3 décisions 
 - **Tri à la conclusion** (`buildExtractionPrompt`, `parseTriage`) : `actions` (vraies actions de l'humain, 5 au plus, `MAX_ACTION_PROPOSALS`), `toDecide` → une réunion de DÉCISION proposée au plan (choix de l'utilisateur), `codeTasks` → une réunion Claude Code proposée (sauf en réunion Claude Code), `toolSetups` → « Outils à mettre en place » (lien Outils), jamais en actions. Doublons écartés côté serveur (`dropExistingActions`, mots communs ≥ 75 % avec une action ouverte). Fenêtre de conclusion : sections « Réunions à ajouter au plan » et « Outils à mettre en place ».
 - **Outil « mis en place »** : `setupDone` sur les outils du projet, case sur la page Outils pour les catégories `SETUP_CATEGORIES` (base, auth, e-mails, IA, paiement, stockage, hébergement, domaine, surveillance, no-code, audience).
 - **Développement conditionné** (`services/devTools.js`) : types d'outils utilisés par le prompt repérés par Haiku, une fois (`Session.requiredTools`, migration `20261011000002`, remis à zéro si le prompt est modifié). Manquant = aucun outil choisi, ou choisi mais pas mis en place → `POST dev-tasks` 409 `missingTools`, sauf `force: true` (« Lancer quand même » après confirmation — choix de l'utilisateur). Pas de lancement automatique à la conclusion dans ce cas ; liste « à lancer » annotée.
-- Reste à faire : ranger les 17 actions ouvertes du « Site de numérologie » (tri proposé à l'utilisateur, à appliquer après son accord).
+- ✅ Fait le 11/10/2026 (accord de l'utilisateur) : 12 actions du « Site de numérologie » annulées (doublons, décisions, outils, code), 2 réunions ajoutées au plan ; sauvegarde de la liste hors du dépôt.
 
 ### D8. Décisions remises en question : ordre du jour — codé le 11/10/2026 (choix de l'utilisateur)
 Constat : une décision remise en question ne revenait que si une réunion « concernée » se tenait, et restait « remise en question » après avoir été retraitée.
@@ -257,7 +257,7 @@ cd C:\BlabIA\client; npm run build
 ```
 
 ### Déploiement
-1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-10-08-15.dump`.
+1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-11-14-22.dump`.
 2. `git push origin main` → Railway redéploie ; les migrations s'appliquent au démarrage (`prisma migrate deploy`).
 3. Vérifier dans les logs Railway : migrations appliquées, serveur démarré, healthcheck `/api/health` en 200.
 

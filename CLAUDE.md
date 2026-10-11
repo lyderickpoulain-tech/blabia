@@ -45,6 +45,14 @@ server/prisma/   schema.prisma + migrations SQL
 - **Phase 5** : illustrations à la demande. Bouton « 🎨 Illustrer » (`artifactRequest: true` sur `/chat`) ou demande explicite détectée (`markers.js#detectArtifactRequest`, y compris `/illustrer`) → l'orchestrateur choisit l'agent, `max_tokens` relevé pour ce tour. Bloc ```mermaid / ```html / ```svg + `[ARTIFACT_TITLE:…]`, extrait par `parseAgentOutput` et stocké sur le message (`artifact: { kind, title, code }`) ; sans demande, le bloc est retiré. Rendu client `components/meeting/ArtifactCard.jsx` : iframe sandboxée (`allow-scripts` sans `allow-same-origin` pour le HTML, aucun script pour SVG/Mermaid), `mermaid` chargé à la demande en `securityLevel: 'strict'`. Titres listés en fin de compte-rendu.
 - `TodoItem`/`PlanView.jsx` (page `/projects/:id/plan`) restent **hors périmètre v5** — non touchés, peuvent afficher des icônes de repli pour les nouveaux types.
 
+## Règles du projet (aussi pour Claude Code lancé depuis BlabIA)
+
+- **Chaque fonctionnalité visible met à jour, dans le même développement** : le guide (`client/src/components/Tutorial.jsx`, écran « Le principe »), la visite guidée (`client/src/tour/chapters.js`) et, si la fonctionnalité s'y prête, le projet exemple (`server/src/services/demoProject.js`) ; ainsi que la feuille de route (`docs/feuille-de-route-v5.1.md`).
+- **`server/.env` désigne la base de PRODUCTION.** Jamais de commande Prisma (`migrate`, `db push`, `reset`…) sans `DATABASE_URL` explicite vers une base de test : utiliser `npm run db:migrate:test` (refuse toute base dont le nom ne contient pas « test »). Les migrations de prod s'appliquent seules au démarrage sur Railway.
+- **Sauvegarde avant migration** : « Mettre en ligne » dans BlabIA sauvegarde la base (chiffrée) avant la fusion ; un déploiement manuel commence par un `pg_dump` (procédure dans la feuille de route, § Déploiement). Claude Code ne fusionne et ne déploie jamais lui-même.
+- **Tests** : unitaires `cd server && npx vitest run` ; intégration `TEST_DATABASE_URL=… npm run test:integration` (base de test locale uniquement). Les modules qui ouvrent la base ne se chargent pas au début d'un fichier de test d'intégration (après `harness.start()` seulement).
+- **Modèles Claude** : définis dans `server/src/services/models.js` ; tout appel passe par `server/src/services/anthropic.js` (réglages Claude 5, journal des coûts) ; lire le texte d'une réponse avec `anthropic.textOf(response)`, jamais `content[0].text`.
+
 ## Conventions
 
 - **Migrations non destructives.** Base de prod = données réelles. On ajoute des colonnes, on copie les données en SQL dans la migration, on marque l'ancien champ `// DEPRECATED` dans le schéma. **Aucun `DROP` de colonne ou de table.** Toujours faire un `pg_dump` avant un déploiement qui inclut une migration.
@@ -72,6 +80,6 @@ cd server && npm test           # vitest (server/src/**/__tests__)
 
 # Prisma
 cd server && npx prisma validate
-cd server && npx prisma migrate deploy   # applique les migrations en attente
+cd server && npm run db:migrate:test     # migrations sur la base de TEST (TEST_DATABASE_URL) — jamais migrate deploy depuis server/ (server/.env = prod)
 cd server && npx prisma generate
 ```
