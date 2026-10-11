@@ -445,32 +445,6 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                 )}
               </section>
 
-              {/* Réunions proposées : décisions restées à prendre, travail de code (v5.1) */}
-              {meetingProposals.length > 0 && (
-                <section className="space-y-2">
-                  <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
-                    <CalendarPlus size={16} className="text-action" aria-hidden="true" /> Réunions à ajouter au plan
-                  </h3>
-                  <p className="text-xs text-ink-muted">Ce qui reste à décider, ou à développer, n’est pas une action pour vous : BlabIA propose une réunion pour le traiter. Décochez ce que vous ne voulez pas.</p>
-                  <ul className="space-y-1.5">
-                    {meetingProposals.map(m => (
-                      <li key={m.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 ${m.keep ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'}`}>
-                        <input type="checkbox" checked={m.keep} aria-label="Ajouter cette réunion au plan"
-                          onChange={e => updateMeeting(m.key, { keep: e.target.checked })} className="mt-2 w-4 h-4 accent-action shrink-0" />
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge tone={m.type === 'claude_code' ? 'ai' : 'action'} className="!text-[10px] !px-2 !py-0.5">{m.type === 'claude_code' ? 'Claude Code' : 'Décision'}</Badge>
-                            <input value={m.title} onChange={e => updateMeeting(m.key, { title: e.target.value })} disabled={!m.keep} aria-label="Titre de la réunion"
-                              className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
-                          </div>
-                          <p className="text-[11px] text-ink-muted whitespace-pre-line px-1.5">{m.description}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
               {/* Outils à mettre en place : relèvent de la page Outils, pas des actions (v5.1) */}
               {toolSetups.length > 0 && (
                 <section className="space-y-1.5">
@@ -540,7 +514,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                 <div>
                   <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
                     <Lightbulb size={16} className="text-ai" aria-hidden="true" />
-                    Réunions suggérées {suggestions.length > 0 && `· ${suggestions.length}`}
+                    Réunions à ajouter au plan {(suggestions.length + meetingProposals.length) > 0 && `· ${suggestions.length + meetingProposals.length}`}
                   </h3>
                   <p className="text-xs text-ink-muted mt-0.5">Celles que vous gardez rejoignent le plan du projet à la validation.</p>
                 </div>
@@ -548,10 +522,38 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   <ListOrdered size={14} aria-hidden="true" /> Voir le plan
                 </Button>
               </div>
+              {/* Réunions proposées par BlabIA à la conclusion : décisions restées à prendre, travail
+                  de code (v5.1) — dans la même étape que les suggestions des agents */}
+              {meetingProposals.length > 0 && (
+                <section className="space-y-2">
+                  <p className="flex items-center gap-1.5 text-xs font-extrabold text-ink-soft">
+                    <CalendarPlus size={14} className="text-action" aria-hidden="true" /> Proposées par BlabIA à la conclusion
+                  </p>
+                  <p className="text-xs text-ink-muted">Ce qui reste à décider, ou à développer, n’est pas une action pour vous : une réunion pour le traiter. Décochez ce que vous ne voulez pas.</p>
+                  <ul className="space-y-1.5">
+                    {meetingProposals.map(m => (
+                      <li key={m.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 ${m.keep ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'}`}>
+                        <input type="checkbox" checked={m.keep} aria-label="Ajouter cette réunion au plan"
+                          onChange={e => updateMeeting(m.key, { keep: e.target.checked })} className="mt-2 w-4 h-4 accent-action shrink-0" />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge tone={m.type === 'claude_code' ? 'ai' : 'action'} className="!text-[10px] !px-2 !py-0.5">{m.type === 'claude_code' ? 'Claude Code' : 'Décision'}</Badge>
+                            <input value={m.title} onChange={e => updateMeeting(m.key, { title: e.target.value })} disabled={!m.keep} aria-label="Titre de la réunion"
+                              className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
+                          </div>
+                          <p className="text-[11px] text-ink-muted whitespace-pre-line px-1.5">{m.description}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               {suggestions.length === 0 ? (
-                <p className="text-sm text-ink-faint text-center py-8">Aucune réunion suggérée pendant cette réunion.</p>
+                meetingProposals.length === 0 && <p className="text-sm text-ink-faint text-center py-8">Aucune réunion à ajouter au plan.</p>
               ) : (
                 <div className="space-y-2 -mx-4">
+                  {meetingProposals.length > 0 && <p className="px-4 flex items-center gap-1.5 text-xs font-extrabold text-ink-soft"><Lightbulb size={14} className="text-ai" aria-hidden="true" /> Suggérées par les agents pendant la réunion</p>}
                   {suggestions.map(s => (
                     <MeetingSuggestionCard
                       key={s.id}
