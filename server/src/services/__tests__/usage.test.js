@@ -39,7 +39,7 @@ describe('coût réel : tarifs', () => {
 
   it('identifiant daté ou modèle inconnu : tarif de la famille', () => {
     expect(pricesFor('claude-sonnet-4-6-20260101')).toBe(pricesFor('claude-sonnet-4-6'));
-    expect(pricesFor('claude-opus-9-9').input).toBe(5);
+    expect(pricesFor('claude-opus-9-9').input).toBe(4); // famille Opus : tarif d'Opus 5.5 (migration Claude 5)
   });
 });
 

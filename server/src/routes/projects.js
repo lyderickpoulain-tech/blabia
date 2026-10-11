@@ -826,7 +826,7 @@ Retourne UNIQUEMENT du JSON valide sans markdown :
       }]
     });
 
-    const rawText = response.content[0].text.trim()
+    const rawText = anthropic.textOf(response).trim()
       .replace(/```json\n?/g, '').replace(/```\n?/g, '');
     const match = rawText.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'Réponse invalide du modèle' });
@@ -870,7 +870,7 @@ router.post('/:id/quick-command', async (req, res) => {
       return res.json({ type: 'command', command: '/aide', result: help });
     }
 
-    // /rechercher — recherche web via Claude avec tool web_search_20250305
+    // /rechercher — recherche web via Claude (outil web_search_20260318, comme les réunions)
     if (command === '/rechercher') {
       const query = args?.trim() || input.replace(/^\/rechercher\s*/i, '').trim();
       if (!query) return res.status(400).json({ error: 'Requête de recherche requise' });
@@ -878,7 +878,7 @@ router.post('/:id/quick-command', async (req, res) => {
         const searchResponse = await anthropic.messages.create({
           model: DEFAULT_MODEL,
           max_tokens: 800,
-          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          tools: [{ type: 'web_search_20260318', name: 'web_search', max_uses: 3, allowed_callers: ['direct'], user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' } }],
           system: `Tu es l'assistant du projet "${project.name}". Recherche sur le web et réponds en français de façon concise.`,
           messages: [{ role: 'user', content: query }]
         });
@@ -957,7 +957,7 @@ Limite à 5 réunions maximum. Titres courts et actionnables (max 50 chars).`;
       messages: [{ role: 'user', content: userPrompt }]
     });
 
-    const resultText = response.content[0].text;
+    const resultText = anthropic.textOf(response);
 
     if (isAddSteps) {
       try {

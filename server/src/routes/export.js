@@ -66,7 +66,7 @@ ${cdInstruction}
       }]
     });
 
-    res.json({ prompt: response.content[0].text.trim() });
+    res.json({ prompt: anthropic.textOf(response).trim() });
   } catch (err) {
     console.error('[export/claude-code]', err.message);
     res.status(502).json({ error: 'Erreur lors de la génération du prompt' });

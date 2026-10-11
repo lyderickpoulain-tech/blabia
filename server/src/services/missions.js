@@ -14,9 +14,9 @@ const MAX_BUDGET = 3;
 // Chaque niveau fixe le plafond de coût (réservé sur le budget mensuel), le nombre d'étapes,
 // les recherches et lectures web, et le modèle.
 const LEVELS = {
-  light:    { label: 'Légère',      hint: 'quelques recherches, réponse courte',             budget: 0.25, maxSteps: 5,  searches: 3,  fetches: 2,  model: 'claude-sonnet-4-6' },
-  standard: { label: 'Standard',    hint: 'recherche et lectures ciblées',                     budget: 0.6,  maxSteps: 10, searches: 5,  fetches: 6,  model: 'claude-sonnet-4-6' },
-  deep:     { label: 'Approfondie', hint: 'beaucoup plus de sources, modèle le plus puissant', budget: 2.0,  maxSteps: 16, searches: 10, fetches: 10, model: 'claude-opus-4-8' },
+  light:    { label: 'Légère',      hint: 'quelques recherches, réponse courte',             budget: 0.25, maxSteps: 5,  searches: 3,  fetches: 2,  model: 'claude-sonnet-5-5' },
+  standard: { label: 'Standard',    hint: 'recherche et lectures ciblées',                     budget: 0.6,  maxSteps: 10, searches: 5,  fetches: 6,  model: 'claude-sonnet-5-5' },
+  deep:     { label: 'Approfondie', hint: 'beaucoup plus de sources, modèle le plus puissant', budget: 2.0,  maxSteps: 16, searches: 10, fetches: 10, model: 'claude-opus-5-5' },
 };
 const LEVEL_IDS = Object.keys(LEVELS);
 const levelOf = id => (LEVELS[id] ? id : 'standard');

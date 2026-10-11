@@ -4,14 +4,18 @@
 // un modèle absent est facturé au tarif de sa famille (opus / sonnet / haiku), avec un
 // avertissement dans les logs.
 const PRICES = {
+  // Claude 5 (migration du 11/10/2026)
+  'claude-sonnet-5-5': { input: 2, cacheWrite5m: 2.5,  cacheWrite1h: 4,  cacheRead: 0.20, output: 10 },
+  'claude-opus-5-5':   { input: 4, cacheWrite5m: 5,    cacheWrite1h: 8,  cacheRead: 0.20, output: 20 },
+  // Anciens modèles (coûts passés, réunions antérieures)
   'claude-sonnet-4-6': { input: 3, cacheWrite5m: 3.75, cacheWrite1h: 6,  cacheRead: 0.30, output: 15 },
   'claude-opus-4-8':   { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.50, output: 25 },
   // Tarif des prompts ≤ 100 000 tokens (au-delà : x5) — l'orchestrateur en reste très loin
   'claude-haiku-5-5':  { input: 0.10, cacheWrite5m: 0.125, cacheWrite1h: 0.20, cacheRead: 0.01, output: 0.50 },
 };
 const FAMILY_FALLBACK = {
-  opus:   PRICES['claude-opus-4-8'],
-  sonnet: PRICES['claude-sonnet-4-6'],
+  opus:   PRICES['claude-opus-5-5'],
+  sonnet: PRICES['claude-sonnet-5-5'],
   haiku:  { input: 1, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.10, output: 5 },
 };
 const WEB_SEARCH_USD = 10 / 1000; // 10 $ pour 1 000 recherches

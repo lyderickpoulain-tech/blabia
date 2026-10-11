@@ -25,7 +25,7 @@ const DOC_MAX_CHARS = 30000;
 const TOOLS = [
   { type: 'web_search_20260318', name: 'web_search', max_uses: 5, allowed_callers: ['direct'],
     user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' } },
-  { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 6, max_content_tokens: 8000 },
+  { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 6, max_content_tokens: 8000 },
   { name: 'list_project_documents', description: 'Liste les documents de référence du projet (nom et taille).',
     input_schema: { type: 'object', properties: {} } },
   { name: 'read_project_document', description: 'Lit le texte d\'un document de référence du projet, par son nom exact.',

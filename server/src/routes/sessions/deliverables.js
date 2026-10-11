@@ -121,7 +121,7 @@ Retourne UNIQUEMENT ce JSON :
     });
 
     const response = await Promise.race([apiPromise, timeoutPromise]);
-    const text = response.content[0].text.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    const text = anthropic.textOf(response).trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
     const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
     const agentMap = {};
     agents.forEach(a => { agentMap[a.name.toLowerCase()] = a; });
@@ -171,7 +171,7 @@ Restitution :
 ${summary.substring(0, 3000)}`
       }]
     });
-    res.json({ memory: response.content[0].text.trim() });
+    res.json({ memory: anthropic.textOf(response).trim() });
   } catch (err) {
     console.error('[generate-memory]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -240,7 +240,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
         challenger: (session.challengerEnabled ?? project.challengerEnabled) !== false })
         .catch(err => { console.error('[generate-deliverable] extraction décisions :', err.message); return null; }),
     ]);
-    let summary = summaryResponse.content[0].text.trim();
+    let summary = anthropic.textOf(summaryResponse).trim();
     // null = extraction indisponible (la fenêtre de clôture le signale)
     const decisionProposals = extraction ? extraction.decisions : null;
     // Actions : seulement les vraies actions de l'humain, sans reprise d'une action déjà ouverte
@@ -285,12 +285,14 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       const codePrompt = buildClaudeCodePrompt({
         session, brief: project.brief, devDirectory, githubRepo: project.githubRepo || null, stackLines, decisions, registryText, historyText: TRANSCRIPT_REF
       });
+      // 12 000 jetons : à 4 000, le prompt était tronqué (complet : ~7 000) ; effort « medium »,
+      // le plus pertinent pour ce livrable dans l'étude Claude 5 du 11/10/2026
       const deliverableResponse = await anthropic.messages.create({
-        model: MODEL, max_tokens: 4000,
+        model: MODEL, max_tokens: 12000, output_config: { effort: 'medium' },
         system: withTranscript(codePrompt.system),
         messages: [{ role: 'user', content: codePrompt.user }]
       });
-      deliverable = deliverableResponse.content[0].text.trim();
+      deliverable = anthropic.textOf(deliverableResponse).trim();
     }
 
     await db('Session').where({ id: sessionId }).update({

@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { recordUsage } = require('./usage');
+const { currentModel, THINKING_MODELS, DEFAULT_EFFORT, THINKING_HEADROOM } = require('./models');
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.warn('[anthropic] ANTHROPIC_API_KEY manquante — les appels API échoueront');
@@ -7,13 +8,45 @@ if (!process.env.ANTHROPIC_API_KEY) {
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || 'missing' });
 
+// Bascule automatique quand un filtre de sécurité d'un modèle Claude 5 décline la demande :
+// l'API relance la même requête sur un autre modèle, dans le même appel
+const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+
+// Adaptation au modèle (migration Claude 5, services/models.js) — un seul endroit, pour tous
+// les appels présents et futurs :
+// - ancien identifiant (réunion créée avant la migration) → son successeur ;
+// - Claude 5 : effort par défaut, marge de réflexion ajoutée à max_tokens, réflexion
+//   « désactivée » retirée (refusée par ces modèles), bascule en cas de refus.
+function adaptForModel(params) {
+  const model = currentModel(params.model);
+  const p = { ...params, model };
+  if (THINKING_MODELS.has(model)) {
+    if (!p.output_config?.effort) p.output_config = { ...(p.output_config || {}), effort: DEFAULT_EFFORT };
+    if (p.thinking?.type === 'disabled') delete p.thinking;
+    if (p.max_tokens > 0) {
+      p.max_tokens += THINKING_HEADROOM;
+      if (p.fallbacks === undefined) p.fallbacks = 'default';
+    }
+  }
+  return p;
+}
+
 // Coût réel (v5.1) : toute réponse est journalisée dans UsageLog (services/usage.js).
 // Point de passage unique : aucun appel, présent ou futur, n'échappe au décompte.
 const create = client.messages.create.bind(client.messages);
 client.messages.create = async (params, options) => {
-  const response = await create(params, options);
-  if (response?.usage) recordUsage(response.model || params.model, response.usage); // sans attendre
+  const p = adaptForModel(params);
+  const opts = p.fallbacks ? { ...(options || {}), headers: { ...(options?.headers || {}), 'anthropic-beta': FALLBACK_BETA } } : options;
+  const response = await create(p, opts);
+  if (response?.usage) recordUsage(response.model || p.model, response.usage); // sans attendre
+  if (response?.stop_reason === 'refusal') console.warn(`[anthropic] demande déclinée (${response.stop_details?.category || 'sans catégorie'}) — ${p.model}`);
   return response;
 };
 
+// Texte d'une réponse : seulement les blocs « text » (avec la réflexion des modèles Claude 5,
+// le premier bloc n'est plus forcément le texte)
+const textOf = response => (response?.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+
 module.exports = client;
+module.exports.textOf = textOf;
+module.exports.adaptForModel = adaptForModel;
