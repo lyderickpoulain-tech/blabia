@@ -161,7 +161,7 @@ router.get('/:id/milestones/:mid', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
     const [milestone] = await db('Milestone')
-      .select(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder'])
+      .select(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'agenda'])
       .where({ id: req.params.mid, projectId: req.params.id })
       .limit(1);
     if (!milestone) return res.status(404).json({ error: 'Jalon introuvable' });

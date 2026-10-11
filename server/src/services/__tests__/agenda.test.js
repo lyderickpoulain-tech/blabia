@@ -26,3 +26,18 @@ describe('ordre du jour dans les prompts', () => {
   });
 });
 
+
+describe('titre et objectif d’une réunion « Retraiter »', () => {
+  const { shortLabel, objectiveOf } = require('../agenda');
+  it('titre court, coupé à la première proposition ou à la fin d’un mot', () => {
+    expect(shortLabel('Le public cible prioritaire est celui des curieux en questionnement relationnel — personnes cherchant « compatibilité » après une rencontre')).toBe('Le public cible prioritaire est celui des curieux en questionnement relationnel');
+    // Coupé après un mot entier (« de »), jamais au milieu d'un mot
+    expect(shortLabel('Le site propose gratuitement le profil complet, le test aveugle et la compatibilité de base avec un ami ou un partenaire, sans compte'))
+      .toBe('Le site propose gratuitement le profil complet, le test aveugle et la compatibilité de…');
+    expect(shortLabel('Couleurs sobres')).toBe('Couleurs sobres');
+  });
+  it('objectif : la décision complète et le motif', () => {
+    expect(objectiveOf({ statement: 'Public : les curieux — longue précision', reopenNote: 'Les passionnés aussi' }))
+      .toBe('Retraiter la décision remise en question : « Public : les curieux — longue précision ». Motif : Les passionnés aussi');
+  });
+});

@@ -10,7 +10,18 @@ const db = require('../utils/db');
 const { parseJsonField } = require('../utils/parseJsonField');
 
 const MAX_AGENDA = 4;
-const cut = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trim()}…` : s);
+// Titre court d'une décision pour le plan : sa première proposition (avant « — », « : »,
+// « ; » ou « . »), sinon coupée à la fin d'un mot — jamais au milieu (11/10/2026)
+function shortLabel(statement, max = 90) {
+  const text = String(statement || '').trim();
+  const clause = text.split(/\s[—–-]\s|\s?:\s|;\s|\.\s/)[0].trim();
+  const base = clause.length >= 20 ? clause : text;
+  if (base.length <= max) return base;
+  const words = base.slice(0, max).split(/\s+/).slice(0, -1).join(' ');
+  return `${words.replace(/[,;:—–-]+$/, '').trim()}…`;
+}
+// Objectif de la réunion, en entier : la décision complète et le motif de l'humain
+const objectiveOf = d => `Retraiter la décision remise en question : « ${d.statement} »${d.reopenNote ? `. Motif : ${d.reopenNote}` : ''}`;
 
 // Décisions de l'ordre du jour d'une réunion du plan, encore à retraiter, dans l'ordre
 async function agendaDecisions(milestoneId) {
@@ -35,14 +46,17 @@ async function addToAgenda({ projectId, decision, milestoneId, userId }) {
     const agenda = parseJsonField(m.agenda, []);
     if (agenda.includes(decision.id)) return m;
     if (agenda.length >= MAX_AGENDA) throw Object.assign(new Error(`Cette réunion a déjà ${MAX_AGENDA} points à l'ordre du jour : créez-en une nouvelle.`), { status: 409 });
-    const [row] = await db('Milestone').where({ id: m.id }).update({ agenda: JSON.stringify([...agenda, decision.id]) }).returning('*');
+    const [row] = await db('Milestone').where({ id: m.id }).update({
+      agenda: JSON.stringify([...agenda, decision.id]),
+      description: [m.description, objectiveOf(decision)].filter(Boolean).join('\n'),
+    }).returning('*');
     return row;
   }
   const [{ maxOrder }] = await db('Milestone').max('displayOrder as maxOrder').where({ projectId });
   const [row] = await db('Milestone').insert({
     projectId, type: 'decision', status: 'pending', displayOrder: (maxOrder ?? -1) + 1, createdBy: userId,
-    title: cut(`Retraiter : ${decision.statement}`, 140),
-    description: `Décision remise en question : « ${decision.statement} »${decision.reopenNote ? `\nMotif : ${decision.reopenNote}` : ''}`,
+    title: `Retraiter : ${shortLabel(decision.statement)}`,
+    description: objectiveOf(decision),
     agenda: JSON.stringify([decision.id]),
   }).returning('*');
   return row;
@@ -56,4 +70,4 @@ async function agendaByDecision(projectId) {
   return out;
 }
 
-module.exports = { MAX_AGENDA, agendaDecisions, formatAgendaForPrompt, addToAgenda, agendaByDecision };
+module.exports = { shortLabel, objectiveOf, MAX_AGENDA, agendaDecisions, formatAgendaForPrompt, addToAgenda, agendaByDecision };

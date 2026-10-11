@@ -153,6 +153,17 @@ export default function StartMeeting() {
   // Auto-suggestion si pré-rempli depuis le plan — y compris quand on arrive ici depuis cette
   // même page (encadré « choisissez d'abord les outils ») : on reprend alors objectif et livrable
   const firstRender = useRef(true);
+  // Réunion du plan avec un ordre du jour (décisions remises en question) : l'objectif est
+  // pré-rempli avec la décision complète et le motif, pas avec le titre court du plan
+  useEffect(() => {
+    if (!milestoneId) return;
+    api.get(`/projects/${projectId}/milestones/${milestoneId}`).then(({ data }) => {
+      if (Array.isArray(data.agenda) && data.agenda.length && data.description) {
+        setTask(t => (t === milestoneTitle ? data.description : t));
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [milestoneId]);
   useEffect(() => {
     if (!firstRender.current && milestoneTitle) {
       setTask(milestoneTitle);
