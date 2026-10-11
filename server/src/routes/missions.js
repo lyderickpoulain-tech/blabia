@@ -2,7 +2,7 @@ const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const db = require('../utils/db');
 const { findProject } = require('../utils/projectHelpers');
-const { listMissions, monthlyCommitted, MAX_BUDGET } = require('../services/missions');
+const { listMissions, monthlyCommitted, MAX_BUDGET, KINDS, DEFAULT_BUDGET, ACTIVE } = require('../services/missions');
 const { kickMissions } = require('../services/missionRunner');
 
 // Missions des agents (v5.1) : liste, validation (plafond), refus, annulation, relance.
@@ -89,6 +89,48 @@ router.post('/:id/missions/:mid/cancel', async (req, res) => {
     res.json(m);
   } catch (err) {
     console.error('[missions cancel]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/actions/:tid/mission { agentName, kind, objective, deliverable?, budgetUSD? }
+// Confier une action à un agent : la mission part aussitôt (validée par ce clic), avec son
+// plafond ; l'action passe « en cours » et le rapport rejoint les documents du projet.
+router.post('/:id/actions/:tid/mission', async (req, res) => {
+  try {
+    const { project } = await load(req, res);
+    if (!project) return;
+    if (project.isDemo) return res.status(403).json({ demo: true, error: 'Projet exemple : les missions ne sont pas lancées pendant la visite guidée.' });
+    const [action] = await db('TodoItem').where({ id: req.params.tid, projectId: project.id }).whereNull('milestoneId').limit(1);
+    if (!action) return res.status(404).json({ error: 'Action introuvable' });
+    if (!['todo', 'in_progress'].includes(action.status)) return res.status(409).json({ error: 'Cette action est déjà faite ou annulée.' });
+    if (await db('AgentMission').where({ todoId: action.id }).whereIn('status', ACTIVE).first('id')) {
+      return res.status(409).json({ error: 'Une mission est déjà en cours pour cette action.' });
+    }
+    // Agent du projet (agents par défaut ou ajoutés au projet)
+    const agentName = String(req.body?.agentName || '').trim();
+    const [agent] = await db('Agent').leftJoin('ProjectAgent', function () {
+      this.on('ProjectAgent.agentId', '=', 'Agent.id').andOn('ProjectAgent.projectId', '=', db.raw('?', [project.id]));
+    }).where('Agent.name', agentName).where(function () { this.where('Agent.isDefault', true).orWhereNotNull('ProjectAgent.id'); })
+      .select('Agent.name').limit(1);
+    if (!agent) return res.status(400).json({ error: 'Choisissez un agent du projet.' });
+    const kind = KINDS.includes(req.body?.kind) ? req.body.kind : 'research';
+    const objective = String(req.body?.objective || '').trim().slice(0, 4000) || [action.title, action.description].filter(Boolean).join('\n');
+    const wanted = Number(req.body?.budgetUSD);
+    const budgetUSD = round2(Math.min(MAX_BUDGET, Math.max(0.1, Number.isFinite(wanted) ? wanted : DEFAULT_BUDGET[kind])));
+    const refusal = await checkBudget(project, budgetUSD);
+    if (refusal) return res.status(409).json({ error: refusal });
+    const now = new Date();
+    const [m] = await db('AgentMission').insert({
+      projectId: project.id, sessionId: action.sessionId || null, todoId: action.id, agentName: agent.name, kind,
+      title: action.title.slice(0, 200), objective, deliverable: String(req.body?.deliverable || '').trim().slice(0, 1000) || null,
+      status: 'queued', budgetUSD, approvedAt: now, approvedBy: req.user.id,
+    }).returning('*');
+    await db('TodoItem').where({ id: action.id }).update({ status: 'in_progress' });
+    kickMissions();
+    res.status(201).json(m);
+  } catch (err) {
+    console.error('[actions mission POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

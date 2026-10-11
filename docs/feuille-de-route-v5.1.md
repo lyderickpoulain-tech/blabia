@@ -179,6 +179,10 @@ Constat : une décision remise en question ne revenait que si une réunion « co
 - Démarrage : `suggest-agents` reçoit l'ordre du jour (motifs compris) et doit couvrir chaque point par au moins un agent compétent (2 à 5). Réunion : section « ORDRE DU JOUR » dans le bloc commun des agents, un point à la fois, chacun tranché par l'humain.
 - Conclusion : l'extraction marque `replaces` (id d'un point de l'ordre du jour) ; fenêtre de conclusion « Remplace la décision remise en question : … » cochée par défaut ; l'ancienne passe « remplacée » (`Decision.supersededBy`).
 
+### D9. Actions confiées à un agent, ou traitées en réunion — codé le 11/10/2026
+- Page Actions, sur chaque action ouverte : « Confier à un agent » (agent du projet, nature devinée du verbe — vérifier → recherche, rédiger → rédaction, analyser → analyse —, plafond, objectif et attendu modifiables) → mission lancée aussitôt (`POST /api/projects/:id/actions/:tid/mission`, `AgentMission.todoId`, migration `20261011000005`), action « en cours », budget mensuel des missions respecté ; l'état de la mission et « Lire » (rapport) s'affichent sur l'action ; l'humain la coche une fois satisfait.
+- « Traiter en réunion » : nouvelle réunion de décision préremplie avec l'action.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

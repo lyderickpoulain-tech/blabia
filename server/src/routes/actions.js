@@ -15,7 +15,15 @@ router.get('/:id/actions', async (req, res) => {
   try {
     const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
-    res.json(await listActions(req.params.id));
+    const actions = await listActions(req.params.id);
+    // Dernière mission confiée à un agent depuis chaque action (page Actions)
+    const missions = actions.length
+      ? await db('AgentMission').whereIn('todoId', actions.map(a => a.id)).whereNotIn('status', ['rejected', 'cancelled'])
+        .orderBy('createdAt', 'desc').select('id', 'todoId', 'status', 'agentName', 'title', 'costUSD', 'budgetUSD', 'documentId', 'error')
+      : [];
+    const byTodo = {};
+    for (const m of missions) if (!byTodo[m.todoId]) byTodo[m.todoId] = m;
+    res.json(actions.map(a => ({ ...a, mission: byTodo[a.id] || null })));
   } catch (err) {
     console.error('[actions GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

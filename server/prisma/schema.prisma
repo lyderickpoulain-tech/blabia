@@ -154,6 +154,7 @@ model TodoItem {
   milestone    Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   session      Session?   @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   creator      User?      @relation("TodoCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  missions     AgentMission[]
 }
 
 model ProjectMember {
@@ -298,6 +299,7 @@ model AgentMission {
   sources     Json      @default("[]")
   error       String?
   documentId  String?
+  todoId      String?   // v5.1 : action d'où la mission a été confiée (page Actions)
   approvedBy  String?
   createdAt   DateTime  @default(now())
   approvedAt  DateTime?
@@ -306,6 +308,7 @@ model AgentMission {
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   session     Session?         @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   document    ProjectDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  todo        TodoItem?        @relation(fields: [todoId], references: [id], onDelete: SetNull)
   approver    User?            @relation(fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@index([projectId])
