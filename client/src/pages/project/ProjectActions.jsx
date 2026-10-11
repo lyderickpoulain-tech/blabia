@@ -12,6 +12,7 @@ import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 import useMissions from '../../hooks/useMissions';
 import { formatUSD } from '../../utils/cost';
 import { notifySuccess } from '../../utils/notify';
+import { MISSION_LEVELS } from '../../utils/missionLevels';
 
 // Actions entre les réunions (v5.1) : proposées à la conclusion des réunions,
 // cochées et ordonnées ici par l'humain (l'ordre prime, l'échéance est facultative) ;
@@ -24,11 +25,11 @@ export const isOverdueAction = a => a.status !== 'done' && a.dueDate && String(a
 const fmtDue = d => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
 // Confier une action à un agent : mission menée par un sous-agent (recherche, analyse,
-// rédaction), avec un plafond de coût ; le rapport rejoint les documents du projet.
+// rédaction), avec un niveau (légère / standard / approfondie) ; le rapport rejoint les documents.
 const KINDS = [
-  { id: 'research', label: 'Recherche', budget: 0.6, re: /^(v[ée]rifier|rechercher|trouver|comparer|identifier|lister|s.informer|chercher)/i },
-  { id: 'analysis', label: 'Analyse', budget: 0.4, re: /^(analyser|[ée]valuer|estimer|chiffrer|calculer|auditer)/i },
-  { id: 'writing', label: 'Rédaction', budget: 0.3, re: /^(r[ée]diger|[ée]crire|composer|pr[ée]parer un texte|produire)/i },
+  { id: 'research', label: 'Recherche', re: /^(v[ée]rifier|rechercher|trouver|comparer|identifier|lister|s.informer|chercher)/i },
+  { id: 'analysis', label: 'Analyse', re: /^(analyser|[ée]valuer|estimer|chiffrer|calculer|auditer)/i },
+  { id: 'writing', label: 'Rédaction', re: /^(r[ée]diger|[ée]crire|composer|pr[ée]parer un texte|produire)/i },
 ];
 const guessKind = title => (KINDS.find(k => k.re.test(String(title).trim())) || KINDS[0]).id;
 
@@ -37,13 +38,13 @@ function MissionLauncher({ action, agents, budget, onLaunch, onCancel }) {
   const [kind, setKind] = useState(guessKind(action.title));
   const [objective, setObjective] = useState([action.title, action.description].filter(Boolean).join('\n'));
   const [deliverable, setDeliverable] = useState('');
-  const [cap, setCap] = useState(KINDS.find(k => k.id === guessKind(action.title)).budget);
+  const [level, setLevel] = useState('standard');
   const [busy, setBusy] = useState(false);
   const left = budget ? budget.monthlyUSD - budget.spentUSD - budget.reservedUSD : null;
   const submit = async e => {
     e.preventDefault();
     setBusy(true);
-    try { await onLaunch({ agentName, kind, objective, deliverable, budgetUSD: Number(cap) }); } finally { setBusy(false); }
+    try { await onLaunch({ agentName, kind, objective, deliverable, level }); } finally { setBusy(false); }
   };
   return (
     <form onSubmit={submit} className="mt-2 space-y-2 rounded-xl border border-ai-border bg-ai-bg p-3">
@@ -55,14 +56,23 @@ function MissionLauncher({ action, agents, budget, onLaunch, onCancel }) {
           </select>
         </label>
         <label className="text-xs text-ink-soft flex flex-col gap-1">Nature
-          <select value={kind} onChange={e => { setKind(e.target.value); setCap(KINDS.find(k => k.id === e.target.value).budget); }} className={inputCls}>
+          <select value={kind} onChange={e => setKind(e.target.value)} className={inputCls}>
             {KINDS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
           </select>
         </label>
-        <label className="text-xs text-ink-soft flex flex-col gap-1 w-28">Plafond ($)
-          <input type="number" min="0.1" max="3" step="0.1" value={cap} onChange={e => setCap(e.target.value)} className={inputCls} />
-        </label>
+
       </div>
+      <fieldset className="space-y-1">
+        <legend className="text-xs text-ink-soft mb-1">Niveau</legend>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {MISSION_LEVELS.map(l => (
+            <label key={l.id} className={`flex items-start gap-2 rounded-[10px] border px-2.5 py-2 cursor-pointer bg-white ${level === l.id ? 'border-ai ring-1 ring-ai' : 'border-line'}`}>
+              <input type="radio" name={`level-${action.id}`} checked={level === l.id} onChange={() => setLevel(l.id)} className="mt-0.5 accent-ai" />
+              <span className="text-xs"><strong className="text-ink">{l.label}</strong><span className="block text-ink-muted">{l.hint}</span><span className="block text-ink-faint">{formatUSD(l.budgetUSD)} au plus</span></span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="text-xs text-ink-soft flex flex-col gap-1">Ce que l’agent doit faire
         <textarea value={objective} onChange={e => setObjective(e.target.value)} rows={3} className={`${inputCls} h-auto py-2 resize-y`} />
       </label>

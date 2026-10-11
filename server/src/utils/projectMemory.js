@@ -31,19 +31,18 @@ function withoutSession(context, sessionId) {
   return kept.length === entries.length ? null : kept.join(SEPARATOR);
 }
 
-// Ajoute une entrée à la mémoire du projet ; au-delà de MAX_CHARS, les plus anciennes sortent.
-// Utilisé pour les comptes rendus de réunion ([SESSION:…], updateProjectContext) et les
-// missions réussies ([MISSION:…], services/missionRunner.js).
-const MAX_CHARS = 10000;
+// Ajoute une entrée à la mémoire du projet (comptes rendus de réunion [SESSION:…], missions
+// réussies [MISSION:…], souvenirs, code). Rien n'est supprimé : quand les entrées récentes
+// deviennent trop longues, les plus anciennes sont fondues dans la synthèse du projet
+// (services/memory.js, mémoire à deux étages).
 function appendEntry(context, entry) {
-  const parts = [...(context ? String(context).split(SEPARATOR) : []), entry];
-  while (parts.length > 1 && parts.join(SEPARATOR).length > MAX_CHARS) parts.shift();
-  return parts.join(SEPARATOR);
+  return [...(context ? String(context).split(SEPARATOR) : []), entry].join(SEPARATOR);
 }
 async function appendMemory(projectId, entry) {
   const db = require('./db');
   const [project] = await db('Project').select('context').where({ id: projectId }).limit(1);
   await db('Project').where({ id: projectId }).update({ context: appendEntry(project?.context, entry), updatedAt: new Date() });
+  require('../services/memory').consolidateSoon(projectId);
 }
 
 // Ce qu'une mission réussie laisse en mémoire : la synthèse et la recommandation du rapport
@@ -59,4 +58,12 @@ function missionDigest(report) {
   return digest.length > 1500 ? `${digest.slice(0, 1499).trim()}…` : digest;
 }
 
-module.exports = { recentMemory, withoutSession, appendEntry, appendMemory, missionDigest, SEPARATOR };
+// Ce que les agents reçoivent : la synthèse consolidée entière + les entrées récentes
+function memoryForPrompt(project, recentChars = 4000) {
+  const parts = [];
+  if (project?.memorySummary) parts.push(`SYNTHÈSE DU PROJET (consolidée, sources entre parenthèses) :\n${project.memorySummary}`);
+  if (project?.context) parts.push(`DERNIÈRES ENTRÉES (réunions et missions récentes) :\n${recentMemory(project.context, recentChars)}`);
+  return parts.join('\n\n');
+}
+
+module.exports = { recentMemory, withoutSession, appendEntry, appendMemory, missionDigest, memoryForPrompt, SEPARATOR };

@@ -1,6 +1,7 @@
 const express = require('express');
 const { randomUUID } = require('crypto');
 const db = require('../utils/db');
+const { appendMemory, memoryForPrompt } = require('../utils/projectMemory');
 const authMiddleware = require('../middleware/auth');
 const { sendInvitation } = require('../services/email');
 const anthropic = require('../services/anthropic');
@@ -379,16 +380,7 @@ router.patch('/:id/context', async (req, res) => {
 
     const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const entry = `[${date}${sessionTitle ? ` — ${sessionTitle}` : ''}]\n${memory.trim()}`;
-    const current = project.context || '';
-    const separator = current ? '\n---\n' : '';
-    let newContext = current + separator + entry;
-    const MAX_CHARS = 10000;
-    if (newContext.length > MAX_CHARS) {
-      const parts = newContext.split('\n---\n');
-      while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) parts.shift();
-      newContext = parts.join('\n---\n');
-    }
-    await db('Project').where({ id: req.params.id }).update({ context: newContext, updatedAt: new Date() });
+    await appendMemory(req.params.id, entry); // services/memory.js : consolidation, rien n'est perdu
     res.json({ message: 'Souvenir ajouté' });
   } catch (err) {
     console.error('[projects/:id/context PATCH]', err.message);
@@ -405,11 +397,63 @@ router.delete('/:id/context', async (req, res) => {
     const project = await findProject(req.params.id, req.user.id, true);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
-    await db('Project').where({ id: req.params.id }).update({ context: null, updatedAt: new Date() });
+    await db('Project').where({ id: req.params.id }).update({ context: null, memorySummary: null, memorySummaryAt: null, memoryEditedAt: null, updatedAt: new Date() });
     res.json({ message: 'Mémoire réinitialisée' });
   } catch (err) {
     console.error('[projects/:id/context DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── Mémoire à deux étages (services/memory.js) ────────────────────────────────
+// GET /api/projects/:id/memory — synthèse consolidée + entrées récentes
+router.get('/:id/memory', async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    res.json({ summary: project.memorySummary || null, summaryAt: project.memorySummaryAt || null, editedAt: project.memoryEditedAt || null, recent: project.context || null });
+  } catch (err) {
+    console.error('[projects/:id/memory GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/projects/:id/memory-summary { summary } — correction de la synthèse par l'humain
+// (respectée par les consolidations suivantes)
+router.put('/:id/memory-summary', async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (!isOwnerOrAdmin(project, req.user.id, isAdmin)) return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    const summary = String(req.body?.summary ?? '').trim().slice(0, 20000);
+    const now = new Date();
+    await db('Project').where({ id: project.id }).update({ memorySummary: summary || null, memoryEditedAt: summary ? now : null, memorySummaryAt: now });
+    res.json({ summary: summary || null, editedAt: summary ? now : null });
+  } catch (err) {
+    console.error('[projects/:id/memory-summary PUT]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/memory/rebuild — (re)construit la synthèse depuis tout l'historique
+// (comptes rendus des réunions conclues, missions) : récupère ce que l'ancienne mémoire avait perdu
+router.post('/:id/memory/rebuild', async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (!isOwnerOrAdmin(project, req.user.id, isAdmin)) return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    if (project.isDemo) return res.status(403).json({ demo: true, error: 'Projet exemple : pas de synthèse pendant la visite guidée.' });
+    const { rebuildFromHistory, consolidate } = require('../services/memory');
+    await rebuildFromHistory(project.id, { fromScratch: req.body?.fromScratch === true });
+    await consolidate(project.id);
+    const [p] = await db('Project').where({ id: project.id }).select('memorySummary', 'memorySummaryAt', 'memoryEditedAt', 'context').limit(1);
+    res.json({ summary: p.memorySummary || null, summaryAt: p.memorySummaryAt || null, editedAt: p.memoryEditedAt || null, recent: p.context || null });
+  } catch (err) {
+    console.error('[projects/:id/memory/rebuild POST]', err.message);
+    res.status(500).json({ error: 'La synthèse n’a pas pu être construite. Réessayez dans un instant.' });
   }
 });
 
@@ -424,7 +468,7 @@ router.delete('/:id/memory', async (req, res) => {
     }
 
     // Effacer project.context
-    await db('Project').where({ id: req.params.id }).update({ context: null, updatedAt: new Date() });
+    await db('Project').where({ id: req.params.id }).update({ context: null, memorySummary: null, memorySummaryAt: null, memoryEditedAt: null, updatedAt: new Date() });
 
     // Supprimer toutes les réunions tenues du projet (reset complet — pas de
     // simple vidage de contenu : TodoItem.sessionId et Milestone.createdFromSessionId
@@ -866,7 +910,8 @@ router.post('/:id/quick-command', async (req, res) => {
 Brief : ${project.brief || 'non défini'}
 Réunions planifiées : ${milestones.length > 0 ? milestones.map(m => `- ${m.title} (${m.status})`).join('\n') : 'aucune'}
 Réunions tenues (acceptées) : ${sessions.length > 0 ? sessions.map(s => `- ${s.task}`).join('\n') : 'aucune'}
-Mémoire projet : ${project.context?.slice(0, 1000) || 'aucune'}
+Mémoire projet :
+${memoryForPrompt(project, 1500) || 'aucune'}
 ${documentsText ? `\nDocuments de référence du projet (cite-les entre « » quand tu t'en sers) :\n${documentsText}\n` : ''}
 IMPORTANT : Ta réponse N'EST PAS stockée dans la mémoire du projet. C'est une réponse ponctuelle.`;
 

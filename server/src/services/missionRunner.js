@@ -13,8 +13,8 @@ const anthropic = require('./anthropic');
 const { costUSD } = require('./pricing');
 const { runWithUsage } = require('./usage');
 const { DEFAULT_MODEL } = require('./models');
-const { KIND_LABEL } = require('./missions');
-const { recentMemory, appendMemory, missionDigest } = require('../utils/projectMemory');
+const { KIND_LABEL, LEVELS, levelOf } = require('./missions');
+const { memoryForPrompt, appendMemory, missionDigest } = require('../utils/projectMemory');
 
 const MAX_STEPS = 10;
 const FINALIZE_AT = 0.75;           // part du plafond à partir de laquelle on rédige
@@ -57,7 +57,7 @@ Objectif : ${mission.objective}
 ${mission.deliverable ? `Livrable attendu : ${mission.deliverable}\n` : ''}
 Contexte du projet :
 ${project.brief || '(pas de brief)'}
-${project.context ? `\nMémoire du projet (réunions récentes) :\n${recentMemory(project.context)}` : ''}`;
+${memoryForPrompt(project) ? `\nMémoire du projet :\n${memoryForPrompt(project)}` : ''}`;
   return { system, user };
 }
 
@@ -85,15 +85,23 @@ async function runClientTool(block, projectId) {
 }
 
 // Mène une mission jusqu'au rapport ; renvoie { report, sources, cost }
+// Outils et modèle selon le niveau de la mission (légère / standard / approfondie)
+function settingsFor(mission) {
+  const lv = LEVELS[levelOf(mission.level)];
+  const tools = TOOLS.map(t => (t.name === 'web_search' ? { ...t, max_uses: lv.searches } : t.name === 'web_fetch' ? { ...t, max_uses: lv.fetches } : t));
+  return { tools, maxSteps: lv.maxSteps, model: lv.model || DEFAULT_MODEL };
+}
+
 async function executeMission(mission, project) {
   const { system, user } = buildPrompts(mission, project);
+  const { tools, maxSteps, model } = settingsFor(mission);
   const messages = [{ role: 'user', content: user }];
   const sources = new Map();
   let spent = 0;
   let report = '';
 
-  for (let step = 0; step < MAX_STEPS && !report; step++) {
-    const finalizing = spent >= mission.budgetUSD * FINALIZE_AT || step === MAX_STEPS - 1;
+  for (let step = 0; step < maxSteps && !report; step++) {
+    const finalizing = spent >= mission.budgetUSD * FINALIZE_AT || step === maxSteps - 1;
     if (finalizing) {
       const last = messages[messages.length - 1];
       if (last.role === 'user' && Array.isArray(last.content)) last.content.push({ type: 'text', text: FINALIZE });
@@ -101,10 +109,10 @@ async function executeMission(mission, project) {
       else messages.push({ role: 'user', content: FINALIZE });
     }
     const response = await anthropic.messages.create({
-      model: DEFAULT_MODEL, max_tokens: 4000, system, messages, tools: TOOLS,
+      model, max_tokens: 4000, system, messages, tools,
       ...(finalizing ? { tool_choice: { type: 'none' } } : {}),
     });
-    spent += costUSD(response.model || DEFAULT_MODEL, response.usage);
+    spent += costUSD(response.model || model, response.usage);
     collectSources(response.content, sources);
     messages.push({ role: 'assistant', content: response.content });
 
@@ -193,4 +201,4 @@ function kickMissions() {
   setImmediate(() => processMissions().catch(err => console.error('[missions]', err.message)));
 }
 
-module.exports = { processMissions, kickMissions, executeMission, collectSources, TOOLS, MAX_STEPS, FINALIZE_AT };
+module.exports = { processMissions, kickMissions, executeMission, collectSources, settingsFor, TOOLS, MAX_STEPS, FINALIZE_AT };

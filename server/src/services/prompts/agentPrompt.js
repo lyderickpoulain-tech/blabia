@@ -9,7 +9,7 @@
 //  2. Bloc du tour : rôle de l'agent qui parle, raison, budget restant, questions
 //     déjà posées, illustration demandée, outils déjà proposés, préparation.
 
-const { recentMemory } = require('../../utils/projectMemory');
+const { memoryForPrompt } = require('../../utils/projectMemory');
 
 // v5.0 phase 3.2 : decision | claude_code | stack. Nuance spécifique par type —
 // la règle générale "pas de livrable pendant les échanges" (3.3) est universelle,
@@ -179,7 +179,9 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
   const documentsSection = documentsText
     ? `\nDOCUMENTS DE RÉFÉRENCE DU PROJET (fournis par l'humain : appuie-toi dessus, cite le document entre « » quand tu t'en sers, signale toute contradiction entre un document et ce qui se dit) :\n${documentsText}\n`
     : '';
-  const memorySection   = project.context ? `\nMémoire du projet (réunions les plus récentes — ne redemande pas ce qui y est déjà décidé) :\n${recentMemory(project.context)}\n` : '';
+  // Mémoire à deux étages (services/memory.js) : synthèse consolidée entière + entrées récentes
+  const memoryText      = memoryForPrompt(project);
+  const memorySection   = memoryText ? `\nMémoire du projet (ne redemande pas ce qui y est déjà établi) :\n${memoryText}\n` : '';
   const pastCodeSection = pastCodePromptsText
     ? `\nPrompts Claude Code des réunions précédentes :\n${pastCodePromptsText}\n` : '';
   const MEETING_STATUS_LABEL = { pending: 'à tenir', in_progress: 'en cours', done: 'terminée', blocked: 'bloquée' };

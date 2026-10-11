@@ -31,9 +31,9 @@ describe.skipIf(!harness.enabled)('mission confiée depuis une action', () => {
   it('agent du projet obligatoire ; mission lancée, action « en cours » ; une seule à la fois', async () => {
     const url = `/api/projects/${pid}/actions/${actionId}/mission`;
     expect((await h.request('POST', url, { token: owner.token, body: { agentName: 'Inconnu', kind: 'research' } })).status).toBe(400);
-    const r = await h.request('POST', url, { token: owner.token, body: { agentName: 'Juriste', kind: 'research', budgetUSD: 0.5, deliverable: 'Une note avec les risques' } });
+    const r = await h.request('POST', url, { token: owner.token, body: { agentName: 'Juriste', kind: 'research', level: 'light', deliverable: 'Une note avec les risques' } });
     expect(r.status).toBe(201);
-    expect(r.body).toMatchObject({ todoId: actionId, agentName: 'Juriste', kind: 'research', budgetUSD: 0.5, status: 'queued',
+    expect(r.body).toMatchObject({ todoId: actionId, agentName: 'Juriste', kind: 'research', level: 'light', budgetUSD: 0.25, status: 'queued',
       objective: 'Vérifier si la démo célébrités pose un problème légal ou d’image\nDates de naissance de personnalités' });
     expect((await h.db('TodoItem').where({ id: actionId }).first()).status).toBe('in_progress');
   });

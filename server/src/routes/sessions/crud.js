@@ -198,12 +198,14 @@ router.delete('/:sessionId', async (req, res) => {
     const scope = await deletionScope(projectId, sessionId);
     if (scope.devRunning) return res.status(409).json({ error: 'Le développement de cette réunion est en cours : attendez qu’il se termine.' });
 
+    let alreadyConsolidated = false; // compte rendu déjà fondu dans la synthèse du projet
     await db.transaction(async trx => {
       await trx('Decision').where({ projectId, sessionId }).delete();
       await trx('TodoItem').where({ projectId, sessionId }).whereNull('milestoneId').delete();
       const [p] = await trx('Project').where({ id: projectId }).select('context').forUpdate();
       const context = withoutSession(p?.context, sessionId);
       if (context !== null) await trx('Project').where({ id: projectId }).update({ context, updatedAt: new Date() });
+      else alreadyConsolidated = session.status === 'accepted';
       await trx('Session').where({ parentSessionId: sessionId }).update({ parentSessionId: null });
       await trx('Session').where({ id: sessionId }).delete();
       // Étape du plan traitée par cette réunion seule : de nouveau « à tenir »
@@ -211,6 +213,10 @@ router.delete('/:sessionId', async (req, res) => {
         await trx('Milestone').where({ id: session.milestoneId, projectId }).update({ status: 'pending' });
       }
     });
+    if (alreadyConsolidated) {
+      const label = `${session.task} (${new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })})`;
+      setImmediate(() => require('../../services/memory').forgetInSummary(projectId, label).catch(err => console.error('[sessions DELETE] synthèse :', err.message)));
+    }
     res.json({ deleted: true, ...scope, project: project.id });
   } catch (err) {
     console.error('[sessions/:id DELETE]', err.message);

@@ -2,7 +2,7 @@ const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const db = require('../utils/db');
 const { findProject } = require('../utils/projectHelpers');
-const { listMissions, monthlyCommitted, MAX_BUDGET, KINDS, DEFAULT_BUDGET, ACTIVE } = require('../services/missions');
+const { listMissions, monthlyCommitted, KINDS, ACTIVE, LEVELS, LEVEL_IDS } = require('../services/missions');
 const { kickMissions } = require('../services/missionRunner');
 
 // Missions des agents (v5.1) : liste, validation (plafond), refus, annulation, relance.
@@ -35,7 +35,8 @@ router.get('/:id/missions', async (req, res) => {
     if (!project) return;
     const missions = await listMissions(project.id, { sessionId: req.query.sessionId || undefined });
     const { spent, reserved } = await monthlyCommitted(project.id);
-    res.json({ missions, budget: { monthlyUSD: project.missionsMonthlyBudgetUSD, spentUSD: round2(spent), reservedUSD: round2(reserved) } });
+    res.json({ missions, budget: { monthlyUSD: project.missionsMonthlyBudgetUSD, spentUSD: round2(spent), reservedUSD: round2(reserved) },
+      levels: LEVEL_IDS.map(id => ({ id, label: LEVELS[id].label, hint: LEVELS[id].hint, budgetUSD: LEVELS[id].budget })) });
   } catch (err) {
     console.error('[missions GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -49,12 +50,12 @@ router.post('/:id/missions/:mid/approve', async (req, res) => {
     if (!mission) return;
     if (project.isDemo) return res.status(403).json({ demo: true, error: 'Projet exemple : les missions ne sont pas lancées pendant la visite guidée.' });
     if (!['proposed', 'failed'].includes(mission.status)) return res.status(409).json({ error: 'Cette mission ne peut plus être lancée.' });
-    const wanted = Number(req.body?.budgetUSD);
-    const budgetUSD = round2(Math.min(MAX_BUDGET, Math.max(0.1, Number.isFinite(wanted) ? wanted : mission.budgetUSD)));
+    const level = LEVEL_IDS.includes(req.body?.level) ? req.body.level : (mission.level || 'standard');
+    const budgetUSD = LEVELS[level].budget;
     const refusal = await checkBudget(project, budgetUSD);
     if (refusal) return res.status(409).json({ error: refusal });
     const [m] = await db('AgentMission').where({ id: mission.id }).update({
-      status: 'queued', budgetUSD, approvedAt: new Date(), approvedBy: req.user.id, error: null,
+      status: 'queued', level, budgetUSD, approvedAt: new Date(), approvedBy: req.user.id, error: null,
     }).returning('*');
     kickMissions();
     res.json(m);
@@ -116,15 +117,15 @@ router.post('/:id/actions/:tid/mission', async (req, res) => {
     if (!agent) return res.status(400).json({ error: 'Choisissez un agent du projet.' });
     const kind = KINDS.includes(req.body?.kind) ? req.body.kind : 'research';
     const objective = String(req.body?.objective || '').trim().slice(0, 4000) || [action.title, action.description].filter(Boolean).join('\n');
-    const wanted = Number(req.body?.budgetUSD);
-    const budgetUSD = round2(Math.min(MAX_BUDGET, Math.max(0.1, Number.isFinite(wanted) ? wanted : DEFAULT_BUDGET[kind])));
+    const level = LEVEL_IDS.includes(req.body?.level) ? req.body.level : 'standard';
+    const budgetUSD = LEVELS[level].budget;
     const refusal = await checkBudget(project, budgetUSD);
     if (refusal) return res.status(409).json({ error: refusal });
     const now = new Date();
     const [m] = await db('AgentMission').insert({
       projectId: project.id, sessionId: action.sessionId || null, todoId: action.id, agentName: agent.name, kind,
       title: action.title.slice(0, 200), objective, deliverable: String(req.body?.deliverable || '').trim().slice(0, 1000) || null,
-      status: 'queued', budgetUSD, approvedAt: now, approvedBy: req.user.id,
+      status: 'queued', level, budgetUSD, approvedAt: now, approvedBy: req.user.id,
     }).returning('*');
     await db('TodoItem').where({ id: action.id }).update({ status: 'in_progress' });
     kickMissions();

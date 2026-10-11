@@ -65,15 +65,15 @@ describe.skipIf(!harness.enabled)('missions des agents (IA simulée)', () => {
     missionId = ev.mission.id;
   });
 
-  it('budget mensuel : refus si insuffisant, puis validation', async () => {
+  it('budget mensuel : refus si insuffisant, puis validation au niveau choisi (le plafond en découle)', async () => {
     await h.request('PATCH', `/api/projects/${pid}`, { token: owner.token, body: { missionsMonthlyBudgetUSD: 0.5 } });
     const refused = await h.request('POST', `/api/projects/${pid}/missions/${missionId}/approve`, { token: owner.token, body: {} });
     expect(refused.status).toBe(409);
     expect(refused.body.error).toContain('Budget des missions du mois insuffisant');
     await h.request('PATCH', `/api/projects/${pid}`, { token: owner.token, body: { missionsMonthlyBudgetUSD: 5 } });
-    const ok = await h.request('POST', `/api/projects/${pid}/missions/${missionId}/approve`, { token: owner.token, body: { budgetUSD: 0.8 } });
+    const ok = await h.request('POST', `/api/projects/${pid}/missions/${missionId}/approve`, { token: owner.token, body: { level: 'deep' } });
     expect(ok.status).toBe(200);
-    expect(ok.body).toMatchObject({ status: 'queued', budgetUSD: 0.8 });
+    expect(ok.body).toMatchObject({ status: 'queued', level: 'deep', budgetUSD: 2 });
   });
 
   it('exécution : outil du projet, rapport versé aux documents, coût enregistré', async () => {

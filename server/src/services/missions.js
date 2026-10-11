@@ -10,6 +10,16 @@ const KIND_LABEL = { research: 'Recherche', analysis: 'Analyse', writing: 'Réda
 // Plafond par défaut d'une mission (USD), selon sa nature
 const DEFAULT_BUDGET = { research: 0.6, analysis: 0.4, writing: 0.3 };
 const MAX_BUDGET = 3;
+// Niveaux de mission (v5.1, 11/10/2026) : l'humain choisit une profondeur, pas un montant.
+// Chaque niveau fixe le plafond de coût (réservé sur le budget mensuel), le nombre d'étapes,
+// les recherches et lectures web, et le modèle.
+const LEVELS = {
+  light:    { label: 'Légère',      hint: 'quelques recherches, réponse courte',             budget: 0.25, maxSteps: 5,  searches: 3,  fetches: 2,  model: 'claude-sonnet-4-6' },
+  standard: { label: 'Standard',    hint: 'recherche et lectures ciblées',                     budget: 0.6,  maxSteps: 10, searches: 5,  fetches: 6,  model: 'claude-sonnet-4-6' },
+  deep:     { label: 'Approfondie', hint: 'beaucoup plus de sources, modèle le plus puissant', budget: 2.0,  maxSteps: 16, searches: 10, fetches: 10, model: 'claude-opus-4-8' },
+};
+const LEVEL_IDS = Object.keys(LEVELS);
+const levelOf = id => (LEVELS[id] ? id : 'standard');
 const MAX_PER_MEETING = 2;
 const ACTIVE = ['queued', 'running'];
 
@@ -32,7 +42,7 @@ async function proposeMission({ projectId, sessionId, agentName, proposal }) {
   const [m] = await db('AgentMission').insert({
     projectId, sessionId: sessionId || null, agentName, kind,
     title: proposal.title, objective: proposal.objective, deliverable: proposal.deliverable || null,
-    status: 'proposed', budgetUSD: DEFAULT_BUDGET[kind],
+    status: 'proposed', level: 'standard', budgetUSD: LEVELS.standard.budget,
   }).returning('*');
   return m;
 }
@@ -54,4 +64,4 @@ function formatMissionsForPrompt(missions) {
     .join('\n');
 }
 
-module.exports = { KINDS, KIND_LABEL, DEFAULT_BUDGET, MAX_BUDGET, MAX_PER_MEETING, ACTIVE, monthStart, monthlyCommitted, proposeMission, listMissions, formatMissionsForPrompt };
+module.exports = { KINDS, KIND_LABEL, DEFAULT_BUDGET, MAX_BUDGET, LEVELS, LEVEL_IDS, levelOf, MAX_PER_MEETING, ACTIVE, monthStart, monthlyCommitted, proposeMission, listMissions, formatMissionsForPrompt };

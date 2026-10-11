@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Telescope, Search, FileSearch, PenLine, FileText, RotateCcw, X, Play } from 'lucide-react';
 import { Badge, Button } from './ui';
 import { formatUSD } from '../utils/cost';
+import { MISSION_LEVELS, levelById } from '../utils/missionLevels';
 
 // Mission confiée par un agent à un sous-agent (v5.1) : proposée en réunion,
-// validée par l'humain avec un plafond, menée en arrière-plan, rapport versé aux
+// validée par l'humain avec un niveau (légère / standard / approfondie, le plafond en
+// découle), menée en arrière-plan, rapport versé aux
 // documents du projet. Utilisée dans le fil de réunion et sur la page Actions.
 
 export const KIND = {
@@ -21,10 +23,9 @@ const STATUS = {
   rejected:  { label: 'Écartée',                         tone: 'muted' },
   cancelled: { label: 'Annulée',                         tone: 'muted' },
 };
-const BUDGETS = [0.3, 0.6, 1, 2];
 
 export default function MissionCard({ mission, onApprove, onReject, onCancel, onOpenReport, compact = false, disabled = false }) {
-  const [budget, setBudget] = useState(mission.budgetUSD);
+  const [level, setLevel] = useState(mission.level || 'standard');
   const [busy, setBusy] = useState(false);
   const kind = KIND[mission.kind] || KIND.research;
   const status = STATUS[mission.status] || STATUS.proposed;
@@ -51,20 +52,20 @@ export default function MissionCard({ mission, onApprove, onReject, onCancel, on
               {status.label}
             </Badge>
             {mission.status === 'done' && <span className="text-[11px] text-ink-faint">coût réel {formatUSD(mission.costUSD)}</span>}
-            {active && <span className="text-[11px] text-ink-faint">plafond {formatUSD(mission.budgetUSD)}</span>}
+            {active && <span className="text-[11px] text-ink-faint">{levelById(mission.level).label} · {formatUSD(mission.budgetUSD)} au plus</span>}
           </div>
           {mission.status === 'failed' && mission.error && <p className="text-[11px] text-red-700 mt-1">{mission.error}</p>}
 
           {mission.status === 'proposed' && !disabled && (
             <div className="flex flex-wrap items-center gap-2 mt-2.5">
               <label className="text-xs text-ink-soft inline-flex items-center gap-1.5">
-                Plafond
-                <select value={budget} onChange={e => setBudget(Number(e.target.value))} aria-label="Plafond de coût de la mission"
+                Niveau
+                <select value={level} onChange={e => setLevel(e.target.value)} aria-label="Niveau de la mission"
                   className="h-8 border border-line rounded-lg px-1.5 text-xs bg-white">
-                  {[...new Set([...BUDGETS, mission.budgetUSD])].sort((a, b) => a - b).map(b => <option key={b} value={b}>{formatUSD(b)}</option>)}
+                  {MISSION_LEVELS.map(l => <option key={l.id} value={l.id}>{l.label} — {l.hint} (≤ {formatUSD(l.budgetUSD)})</option>)}
                 </select>
               </label>
-              <Button size="sm" variant="primary" className="!h-8" disabled={busy} onClick={() => act(() => onApprove?.(mission, budget))}>
+              <Button size="sm" variant="primary" className="!h-8" disabled={busy} onClick={() => act(() => onApprove?.(mission, level))}>
                 <Play size={13} aria-hidden="true" /> Lancer
               </Button>
               <Button size="sm" variant="ghost" className="!h-8" disabled={busy} onClick={() => act(() => onReject?.(mission))}>
@@ -78,7 +79,7 @@ export default function MissionCard({ mission, onApprove, onReject, onCancel, on
             </Button>
           )}
           {mission.status === 'failed' && onApprove && (
-            <Button size="sm" variant="secondary" className="!h-8 mt-2" disabled={busy} onClick={() => act(() => onApprove(mission, mission.budgetUSD))}>
+            <Button size="sm" variant="secondary" className="!h-8 mt-2" disabled={busy} onClick={() => act(() => onApprove(mission, mission.level || 'standard'))}>
               <RotateCcw size={13} aria-hidden="true" /> Relancer
             </Button>
           )}

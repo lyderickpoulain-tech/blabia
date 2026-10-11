@@ -1,6 +1,7 @@
 const express        = require('express');
 const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
+const { appendMemory } = require('../../utils/projectMemory');
 const { computeMilestoneStatus } = require('../../utils/milestones');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { appendTimelineEntry, patchTimelineEntry } = require('./helpers');
@@ -228,18 +229,7 @@ router.patch('/:sessionId/code-status', async (req, res) => {
       ? `[${date}] Code implémenté et commité — session : ${session.task}`
       : `[${date}] Code non généré — à reprendre : ${session.task}`;
 
-    const [proj] = await db('Project').select('context').where({ id: projectId }).limit(1);
-    const current = proj?.context || '';
-    const separator = current ? '\n---\n' : '';
-    let newContext = current + separator + entry;
-
-    const MAX_CHARS = 10000;
-    if (newContext.length > MAX_CHARS) {
-      const parts = newContext.split('\n---\n');
-      while (parts.length > 1 && parts.join('\n---\n').length > MAX_CHARS) parts.shift();
-      newContext = parts.join('\n---\n');
-    }
-    await db('Project').where({ id: projectId }).update({ context: newContext });
+    await appendMemory(projectId, entry); // services/memory.js : consolidation, rien n'est perdu
 
     const implEntry = {
       id: `impl-${randomUUID()}`,

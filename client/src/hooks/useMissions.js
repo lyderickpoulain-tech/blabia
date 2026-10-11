@@ -44,7 +44,7 @@ export default function useMissions(projectId, { sessionId } = {}) {
 
   return {
     missions, budget, loaded, reload: load, addMission,
-    approve: (m, budgetUSD) => call(m, 'approve', { budgetUSD }, 'Mission lancée : le rapport arrivera dans les documents du projet.'),
+    approve: (m, level) => call(m, 'approve', { level }, 'Mission lancée : le rapport arrivera dans les documents du projet.'),
     reject:  m => call(m, 'reject'),
     cancel:  m => call(m, 'cancel'),
   };

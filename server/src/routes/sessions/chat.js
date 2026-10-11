@@ -346,6 +346,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     const codeText = intention[0] === 'claude_code' ? await sessionCodeContext({ ...session, task: freshSession.task }, project) : '';
     // Ordre du jour : décisions remises en question à retraiter (réunion du plan, services/agenda.js)
     const agendaText = formatAgendaForPrompt(await agendaDecisions(session.milestoneId));
+    // Mémoire à deux étages : projet existant sans synthèse → première synthèse en arrière-plan
+    require('../../services/memory').bootstrapIfNeeded(project);
     // Contradicteur : réglage de la réunion, sinon celui du projet (activé par défaut)
     const challengerOn = (session.challengerEnabled ?? project.challengerEnabled) !== false;
     const today = new Date().toLocaleDateString('fr-FR');

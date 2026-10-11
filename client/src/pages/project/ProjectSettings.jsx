@@ -9,6 +9,8 @@ import ChallengerToggle from '../../components/ChallengerToggle';
 import RemindersToggle from '../../components/RemindersToggle';
 import { useAuth } from '../../contexts/AuthContext';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../../components/LevelSlider';
+import Markdown from '../../components/Markdown';
+import { notifyError, notifySuccess } from '../../utils/notify';
 
 // Paramètres du projet (refonte UX v5.1) : tout ce qui était empilé en bas de
 // l'ancienne page projet — identité, niveaux par défaut, brief, répertoire de
@@ -151,6 +153,78 @@ function DevDirectorySection({ project, setProject, canEdit }) {
           placeholder="ex. C:\MonProjet ou /home/moi/projet" className={`${inputCls} h-11 font-mono`} />
         {canEdit && <SaveRow {...st} />}
       </form>
+    </Section>
+  );
+}
+
+// Mémoire du projet à deux étages (services/memory.js) : synthèse consolidée (rien n'est
+// perdu, chaque point a sa source ; corrigible) + dernières entrées telles quelles
+function MemorySection({ project, canEdit, memoryOpen, setMemoryOpen }) {
+  const [mem, setMem] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState('');
+  useEffect(() => {
+    api.get(`/projects/${project.id}/memory`).then(({ data }) => setMem(data)).catch(() => setMem({ summary: null, recent: project.context || null }));
+  }, [project.id, project.context]);
+  if (!mem || (!mem.summary && !mem.recent)) return null;
+
+  const fmt = d => new Date(d).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const save = async () => {
+    setBusy('save');
+    try { const { data } = await api.put(`/projects/${project.id}/memory-summary`, { summary: draft }); setMem(m => ({ ...m, ...data })); setEditing(false); notifySuccess('Synthèse enregistrée : vos corrections seront respectées.'); }
+    catch (err) { notifyError(err, 'Synthèse non enregistrée.'); } finally { setBusy(''); }
+  };
+  const rebuild = async () => {
+    const msg = mem.editedAt
+      ? 'Reprendre tout l’historique (réunions conclues, missions) dans la synthèse ? Vos corrections sont conservées. Cela peut prendre une minute.'
+      : 'Construire la synthèse à partir de tout l’historique (réunions conclues, missions) ? Cela peut prendre une minute.';
+    if (!confirm(msg)) return;
+    setBusy('rebuild');
+    try { const { data } = await api.post(`/projects/${project.id}/memory/rebuild`, { fromScratch: !mem.editedAt }); setMem(data); notifySuccess('Synthèse à jour.'); }
+    catch (err) { notifyError(err, 'La synthèse n’a pas pu être construite.'); } finally { setBusy(''); }
+  };
+
+  return (
+    <Section title="Mémoire du projet" subtitle="Ce que les agents retiennent du projet. Les entrées anciennes sont fondues dans la synthèse au lieu d'être oubliées ; chaque point indique sa source. Le registre des décisions et les actions sont gardés à part.">
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-extrabold text-ink">Synthèse</p>
+          <span className="text-[11px] text-ink-faint">
+            {mem.summaryAt ? `Mise à jour le ${fmt(mem.summaryAt)}` : 'Pas encore construite'}{mem.editedAt ? ' · corrigée par vous' : ''}
+          </span>
+        </div>
+        {editing ? (
+          <>
+            <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={16} aria-label="Synthèse de la mémoire du projet"
+              className={`${inputCls} py-2 font-mono text-xs leading-relaxed`} />
+            <div className="flex gap-2">
+              <Button size="sm" variant="primary" onClick={save} disabled={busy === 'save'}>{busy === 'save' ? '…' : 'Enregistrer'}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Annuler</Button>
+            </div>
+          </>
+        ) : mem.summary ? (
+          <div className="max-h-96 overflow-y-auto bg-canvas rounded-lg p-3"><Markdown size="synthesis">{mem.summary}</Markdown></div>
+        ) : (
+          <p className="text-xs text-ink-muted">Elle se construit d’elle-même quand la mémoire s’allonge, ou dès maintenant à partir de l’historique.</p>
+        )}
+        {canEdit && !editing && (
+          <div className="flex flex-wrap gap-2">
+            {mem.summary && <Button size="sm" variant="secondary" onClick={() => { setDraft(mem.summary); setEditing(true); }}>Corriger</Button>}
+            <Button size="sm" variant="ghost" onClick={rebuild} disabled={busy === 'rebuild'}>
+              <RotateCcw size={14} aria-hidden="true" /> {busy === 'rebuild' ? 'Construction…' : mem.summary ? 'Reprendre tout l’historique' : 'Construire depuis l’historique'}
+            </Button>
+          </div>
+        )}
+      </div>
+      {mem.recent && (
+        <div className="space-y-2 pt-2">
+          <Button size="sm" variant="ghost" onClick={() => setMemoryOpen(o => !o)}>{memoryOpen ? 'Masquer' : 'Afficher'} les dernières entrées</Button>
+          {memoryOpen && (
+            <pre className="text-xs text-ink-muted whitespace-pre-wrap font-sans leading-relaxed max-h-72 overflow-y-auto bg-canvas rounded-lg p-3">{mem.recent}</pre>
+          )}
+        </div>
+      )}
     </Section>
   );
 }
@@ -311,14 +385,7 @@ export default function ProjectSettings() {
           </div>
         )}
 
-        {project.context && (
-          <Section title="Mémoire brute" subtitle="Les comptes-rendus accumulés, transmis aux agents (les plus récents d'abord). Le registre des décisions en est la version structurée.">
-            <Button size="sm" variant="secondary" onClick={() => setMemoryOpen(o => !o)}>{memoryOpen ? 'Masquer' : 'Afficher'}</Button>
-            {memoryOpen && (
-              <pre className="text-xs text-ink-muted whitespace-pre-wrap font-sans leading-relaxed max-h-72 overflow-y-auto bg-canvas rounded-lg p-3">{project.context}</pre>
-            )}
-          </Section>
-        )}
+        <MemorySection project={project} canEdit={canManage} memoryOpen={memoryOpen} setMemoryOpen={setMemoryOpen} />
 
         {canManage && <MembersSection project={project} />}
 
