@@ -88,6 +88,35 @@ Mots qui disparaissent de l'interface : Timeline, Session, Stack, Étape (pour u
 
 ## 3. Reste à faire (ordre recommandé)
 
+### ★ Prochaines évolutions (consignées le 11/10/2026 — à reprendre en début de session)
+
+**À vérifier en conditions réelles (codé, testé avec IA/GitHub simulés, pas encore vu en vrai)**
+1. Création d'un dépôt par BlabIA (D3) — exige la permission GitHub « Administration : lecture et écriture » acceptée sur l'installation (Deployments : fait).
+2. Site de numérologie sur Railway : Root Directory `/client`, domaine généré, puis adresse du site dans Développements et « Mis en place » sur Railway (page Outils) ; aperçus de PR (« PR Environments ») et états de publication (D4).
+3. Mémoire à deux étages (D10) : « Construire depuis l'historique » sur un vrai projet, relire la synthèse (rien d'oublié ?).
+4. Mission « Légère » depuis une action (D9) ; « Mettre à l'ordre du jour » sur la décision « public cible » du site de numérologie (D8).
+5. Après la migration Claude 5 (D11) : coût par réunion (attendu ≈ −40 % sur Sonnet 5.5), longueur des messages des agents (effort réglable dans `services/models.js`), qualité des comptes rendus.
+6. Historique complet des agents (D12) : ne reposent plus les questions réglées en début de réunion ; coût du 1ᵉʳ tour après une pause > 5 min.
+7. Discussion sous le guide de mise en place (D5) et agents qui voient le code en réunion Claude Code (D6) : premiers usages réels.
+
+**Petites évolutions (prêtes à faire)**
+8. Missions : case « Sans recherche web » au lancement (travail sur les seuls documents du projet).
+9. Glossaire : les commandes rapides parlent encore de « timeline » (A.5).
+10. Refus de sécurité : si toute la chaîne de bascule refuse (`stop_reason: "refusal"`), afficher un message clair dans la bulle de l'agent au lieu d'un texte vide (aujourd'hui : seulement un avertissement dans les journaux).
+11. Projet exemple : illustrer les nouveautés (décision à l'ordre du jour d'une réunion, action confiée à un agent, synthèse de mémoire) pour la visite guidée.
+
+**Chantiers**
+12. Tableau de bord enrichi (B.2) : actions en retard, risques signalés par les agents, budget.
+13. Modèles de projets non informatiques (B.3) : événement, édition, rénovation, création d'activité.
+14. Mode équipe (D2) : branche locale `mode-equipe` (non poussée), à réaligner sur `main` (devTasks.js a beaucoup changé depuis : publication, cache) puis à valider avec un 2ᵉ compte GitHub.
+15. Réunions très longues (> 60 messages) : résumer le début de la réunion au lieu de l'écarter de l'historique des agents (D12).
+16. Cache des réunions : mesurer les réécritures après les pauses ; envisager le TTL d'une heure si elles pèsent (D12).
+17. Colonnes `DEPRECATED` (C.7) : suppression préparée, à faire seulement avec l'accord explicite de l'utilisateur.
+
+**Rappels de méthode**
+- Avant chaque poussée avec migration : sauvegarde de la prod (§ Déploiement) — dernière : `blabia-prod-2026-10-11-14-22.dump`.
+- Étude de modèles : le banc d'essai (rejeu de vraies tâches, jugement à l'aveugle) était un script hors dépôt ; le recréer si besoin, en vérifiant les reproches du juge (un des siens s'est révélé faux).
+
 ### A. Refonte UX (terminée)
 1. ✅ Socle : tokens de couleur Tailwind, Manrope, `lucide-react` 0.469.0, composants partagés (`client/src/components/ui/index.jsx` : Button, IconButton, Badge, Card, SectionLabel).
 2. ✅ **Salle de réunion** (plein écran, hors `ProjectLayout`) : en-tête sur une ligne (`MeetingHeader`, réglages regroupés), quatre temps (`PhaseStepper`), écran Briefing (`BriefingView`), fil compact avec bulles pastel par agent, séparateur entre interlocuteurs et heure (`ConversationFeed`), hypothèses « D'accord · Je contredis », questions à valider explicitement avec « Laisser les agents décider » (`DecisionCard`), panneau latéral repliable en cartes (`MeetingSidePanel`), zone Illustration (`IllustrationPanel`), saisie compacte (`MeetingInputBar`). Reste à restyler : fenêtres de conclusion et de réinitialisation.
