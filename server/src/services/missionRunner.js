@@ -108,8 +108,12 @@ async function executeMission(mission, project) {
       else if (last.role === 'user') last.content = `${last.content}\n\n${FINALIZE}`;
       else messages.push({ role: 'user', content: FINALIZE });
     }
+    // Cache : consignes fixes (point de cache explicite) + conversation qui grossit à chaque
+    // étape (cache automatique) ; sans lui, chaque étape repayait tout ce qui précède
     const response = await anthropic.messages.create({
-      model, max_tokens: 4000, system, messages, tools,
+      model, max_tokens: 4000, messages, tools,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      cache_control: { type: 'ephemeral' },
       ...(finalizing ? { tool_choice: { type: 'none' } } : {}),
     });
     spent += costUSD(response.model || model, response.usage);

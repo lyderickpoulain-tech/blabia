@@ -106,7 +106,9 @@ function formatRegistryForPrompt(decisions) {
 }
 
 // Décisions proposées au registre + actions proposées (v5.1), en un seul appel
-async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '', challenger = false }) {
+// systemPrefix : blocs système partagés et mis en cache (ex. la transcription, placée en tête
+// par la fin de réunion) ; historyText renvoie alors simplement à ce bloc
+async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '', challenger = false, systemPrefix = null }) {
   const registry = await listDecisions(projectId);
   const agenda = await agendaDecisions(session.milestoneId);
   const prompt = buildExtractionPrompt({
@@ -120,7 +122,7 @@ async function extractMeetingDecisions({ session, messages, historyText, project
   });
   const response = await anthropic.messages.create({
     model: MODEL, max_tokens: 2000,
-    system: prompt.system,
+    system: systemPrefix ? [...systemPrefix, { type: 'text', text: prompt.system }] : prompt.system,
     messages: [{ role: 'user', content: prompt.user }],
   });
   const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');

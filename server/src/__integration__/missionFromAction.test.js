@@ -18,7 +18,7 @@ describe.skipIf(!harness.enabled)('mission confiée depuis une action', () => {
     h = await harness.start();
     await h.reset();
     owner = await h.createUser('member', 'actions-mission@test.local');
-    h.ai.responder = p => (typeof p.system === 'string' && p.system.includes('sous-agent de BlabIA')
+    h.ai.responder = p => ((Array.isArray(p.system) ? p.system.map(b => b.text).join('\n') : String(p.system || '')).includes('sous-agent de BlabIA')
       ? { usage: { input_tokens: 1500, output_tokens: 600 }, content: [{ type: 'text', text: '# Démo célébrités\n## Synthèse\nRisque faible si les dates sont publiques et l’usage non commercial.\n## Recommandation\nAjouter une mention.' }] }
       : { text: 'ok' });
     pid = (await h.request('POST', '/api/projects', { token: owner.token, body: { name: 'Numérologie' } })).body.id;

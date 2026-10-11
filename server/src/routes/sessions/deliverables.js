@@ -209,7 +209,18 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
         : `${m.agentName} : ${m.content}${m.artifact ? ` [Illustration produite : « ${m.artifact.title} »]` : ''}`)
       .join('\n\n');
 
-    const sessionContext = `Objectif de la réunion : ${session.task}\n\nTranscription :\n${historyText}`;
+    // Cache : la transcription est placée UNE fois en tête des consignes système (point de
+    // cache), puis relue par le compte rendu, l'extraction et le prompt Claude Code au lieu
+    // d'être payée 2 à 3 fois. Préchauffage (max_tokens 0) avant les appels en parallèle :
+    // sinon, lancés ensemble, aucun ne relit ce que l'autre est en train d'écrire.
+    const transcriptBlock = { type: 'text', cache_control: { type: 'ephemeral' },
+      text: `TRANSCRIPTION DE LA RÉUNION « ${session.task} » (référence pour les consignes qui suivent) :\n\n${historyText}` };
+    const withTranscript = sys => [transcriptBlock, { type: 'text', text: sys }];
+    const TRANSCRIPT_REF = '(la transcription complète figure en tête des consignes, bloc « TRANSCRIPTION DE LA RÉUNION »)';
+    await anthropic.messages.create({ model: MODEL, max_tokens: 0, system: [transcriptBlock], messages: [{ role: 'user', content: '.' }] })
+      .catch(err => console.error('[generate-deliverable] préchauffage du cache :', err.message));
+
+    const sessionContext = `Objectif de la réunion : ${session.task}\n\nTranscription :\n${TRANSCRIPT_REF}`;
     const expertiseLevel = session.expertiseLevel ?? project.expertiseLevel ?? 3;
 
     // ── Compte-rendu (toujours généré) + décisions proposées au registre, en
@@ -222,10 +233,10 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     const [summaryResponse, extraction] = await Promise.all([
       anthropic.messages.create({
         model: MODEL, max_tokens: 4000,
-        system: summaryPrompt.system,
+        system: withTranscript(summaryPrompt.system),
         messages: [{ role: 'user', content: summaryPrompt.user }]
       }),
-      extractMeetingDecisions({ session, messages, historyText, projectId, actionsText,
+      extractMeetingDecisions({ session, messages, historyText: TRANSCRIPT_REF, systemPrefix: [transcriptBlock], projectId, actionsText,
         challenger: (session.challengerEnabled ?? project.challengerEnabled) !== false })
         .catch(err => { console.error('[generate-deliverable] extraction décisions :', err.message); return null; }),
     ]);
@@ -272,11 +283,11 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       const decisions = messages.filter(m => m.pinned || m.type === 'decision');
       const registryText = formatRegistryForPrompt(await listDecisions(projectId)).activeText;
       const codePrompt = buildClaudeCodePrompt({
-        session, brief: project.brief, devDirectory, githubRepo: project.githubRepo || null, stackLines, decisions, registryText, historyText
+        session, brief: project.brief, devDirectory, githubRepo: project.githubRepo || null, stackLines, decisions, registryText, historyText: TRANSCRIPT_REF
       });
       const deliverableResponse = await anthropic.messages.create({
         model: MODEL, max_tokens: 4000,
-        system: codePrompt.system,
+        system: withTranscript(codePrompt.system),
         messages: [{ role: 'user', content: codePrompt.user }]
       });
       deliverable = deliverableResponse.content[0].text.trim();

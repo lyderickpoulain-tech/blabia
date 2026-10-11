@@ -21,8 +21,10 @@ describe.skipIf(!harness.enabled)('réunion complète (IA simulée)', () => {
   const orchestratorPlan = [];     // réponses successives de l'orchestrateur
   const agentReplies = [];         // réponses successives des agents
   const isOrchestrator = p => p.model === ORCHESTRATOR_MODEL;
-  const isAgent = p => Array.isArray(p.system);
-  const isExtraction = p => typeof p.system === 'string' && p.system.includes('Tu extrais');
+  // Reconnu au contenu des consignes (texte simple ou blocs : la fin de réunion met la transcription en cache)
+  const sysText = p => (Array.isArray(p.system) ? p.system.map(b => b.text).join('\n') : String(p.system || ''));
+  const isAgent = p => sysText(p).includes('Tu participes à une réunion');
+  const isExtraction = p => sysText(p).includes('Tu extrais');
 
   beforeAll(async () => {
     h = await harness.start();
@@ -94,8 +96,19 @@ describe.skipIf(!harness.enabled)('réunion complète (IA simulée)', () => {
   });
 
   it('conclusion : compte-rendu, décisions (dont une fragile) et actions proposées, puis inscrites', async () => {
+    const before = h.ai.calls.length;
     const gen = await h.request('POST', `/api/projects/${pid}/sessions/${sid}/generate-deliverable`, { token: owner.token, body: {} });
     expect(gen.status).toBe(200);
+    // Cache : transcription en tête (point de cache), préchauffée puis partagée par le compte
+    // rendu et l'extraction (même premier bloc système, octet pour octet)
+    const calls = h.ai.calls.slice(before);
+    const prewarm = calls.find(c => c.max_tokens === 0);
+    expect(prewarm.system[0]).toMatchObject({ cache_control: { type: 'ephemeral' } });
+    expect(prewarm.system[0].text).toMatch(/^TRANSCRIPTION DE LA RÉUNION/);
+    const users = calls.filter(c => c.max_tokens > 0 && Array.isArray(c.system));
+    expect(users.length).toBeGreaterThanOrEqual(2);
+    for (const c of users) expect(c.system[0]).toEqual(prewarm.system[0]);
+    expect(users.every(c => !String(c.messages[0].content).includes('Participant :'))).toBe(true); // transcription envoyée une seule fois
     expect(gen.body.summary).toContain('Croix-Rousse retenue');
     expect(gen.body.decisionProposals.map(d => !!d.vigilance)).toEqual([false, true]);
     expect(gen.body.actionProposals[0]).toMatchObject({ title: 'Visiter trois locaux', description: 'Croix-Rousse' });

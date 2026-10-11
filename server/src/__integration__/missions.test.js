@@ -23,7 +23,9 @@ const waitFor = async (fn, ms = 5000) => {
 describe.skipIf(!harness.enabled)('missions des agents (IA simulée)', () => {
   let h, owner, pid, sid;
   const agentReplies = [];
-  const isRunner = p => typeof p.system === 'string' && p.system.includes('sous-agent de BlabIA');
+  const sysText = p => (Array.isArray(p.system) ? p.system.map(b => b.text).join('\n') : String(p.system || ''));
+  const isRunner = p => sysText(p).includes('sous-agent de BlabIA');
+  const isAgent = p => sysText(p).includes('Tu participes à une réunion');
 
   beforeAll(async () => {
     h = await harness.start();
@@ -31,7 +33,7 @@ describe.skipIf(!harness.enabled)('missions des agents (IA simulée)', () => {
     owner = await h.createUser('member', 'missions@test.local');
     h.ai.responder = (p) => {
       if (p.model === ORCHESTRATOR_MODEL) return { text: JSON.stringify({ agentIndex: 1, reason: 'Suite', shouldClose: agentReplies.length === 0 }) };
-      if (Array.isArray(p.system)) return agentReplies.shift() || { text: 'Rien à ajouter.' };
+      if (isAgent(p)) return agentReplies.shift() || { text: 'Rien à ajouter.' };
       if (isRunner(p)) {
         const toolResults = p.messages.filter(m => m.role === 'user' && Array.isArray(m.content)).flatMap(m => m.content).filter(b => b.type === 'tool_result');
         if (toolResults.length === 0) {
@@ -99,7 +101,7 @@ describe.skipIf(!harness.enabled)('missions des agents (IA simulée)', () => {
     agentReplies.push({ text: 'Le rapport de mission confirme le devis.' });
     const calls = h.ai.calls.length;
     await (await fetch(`${h.base}/api/projects/${pid}/sessions/${sid2}/chat`, { method: 'POST', headers: { Authorization: `Bearer ${owner.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'On reprend.' }) })).text();
-    const shared = h.ai.calls.slice(calls).find(p => Array.isArray(p.system)).system[0].text;
+    const shared = h.ai.calls.slice(calls).find(isAgent).system[0].text;
     expect(shared).toContain('[terminée] Comparer les devis');
     expect(shared).toContain('« Mission — Comparer les devis »'); // rapport lu comme document
   });
