@@ -471,4 +471,27 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect(t).toMatchObject({ status: 'ready', error: null });
     await h.request('POST', `/api/projects/${projectId}/dev-tasks/${t.id}/abandon`, { token: owner.token });
   });
+
+  it('réinitialisation : développement en attente abandonné sur GitHub (si demandé), note en mémoire sur le site existant', async () => {
+    const r = await h.request('POST', `/api/projects/${projectId}/dev-tasks`, { token: owner.token, body: { sessionId, force: true } });
+    gh.branches[`blabia/dev-${r.body.issueNumber}`] = ['Page Contact'];
+    gh.runs.push({ workflow: 'blabia-dev.yml', display_title: `BlabIA dev #${r.body.issueNumber}`, status: 'completed', conclusion: 'success', html_url: 'https://github.com/moi/app/actions/runs/16', created_at: new Date().toISOString() });
+    const ready = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
+    expect(ready.status).toBe('ready');
+
+    const res = await h.request('DELETE', `/api/projects/${projectId}/memory?abandonDevs=true`, { token: owner.token });
+    expect(res.status).toBe(200);
+    expect(res.body.abandonedDevs).toBeGreaterThanOrEqual(1);
+    expect((await h.db('DevTask').where({ id: ready.id }).first()).status).toBe('abandoned');
+    expect(gh.pulls.find(p => p.number === ready.prNumber).state).toBe('closed');
+    const { context, githubRepo } = await h.db('Project').where({ id: projectId }).first();
+    expect(githubRepo).toBe('moi/app'); // le lien au dépôt reste
+    expect(context).toMatch(/^\[RÉINITIALISATION \| /);
+    expect(context).toContain('Le site existe déjà : son code est dans le dépôt GitHub moi/app');
+    expect(context).toContain('Partir du code actuel');
+    // Sans la case : rien n'est fermé sur GitHub
+    const closedBefore = gh.pulls.filter(p => p.state === 'closed').length;
+    await h.request('DELETE', `/api/projects/${projectId}/memory`, { token: owner.token });
+    expect(gh.pulls.filter(p => p.state === 'closed').length).toBe(closedBefore);
+  });
 });

@@ -487,7 +487,23 @@ router.delete('/:id/memory', async (req, res) => {
       await db('Milestone').where({ projectId: req.params.id }).update({ status: 'pending' });
     }
 
-    res.json({ message: 'Mémoire du projet réinitialisée' });
+    // Projet relié à un dépôt : la réinitialisation ne touche ni le code, ni le site en ligne,
+    // ni les outils. Développements en attente fermés sur GitHub si demandé (?abandonDevs=true),
+    // puis note en mémoire : les agents partent du code existant au lieu de l'ignorer.
+    let abandonedDevs = 0;
+    if (project.githubRepo) {
+      const dev = require('../services/devTasks');
+      if (req.query.abandonDevs === 'true') {
+        const pending = await db('DevTask').where({ projectId: project.id }).whereIn('status', ['ready', 'deploy_failed', 'failed']);
+        for (const task of pending) { await dev.abandonTask(project, task); abandonedDevs++; }
+      }
+      const deployed = await db('DevTask').where({ projectId: project.id, status: 'deployed' }).orderBy('createdAt', 'asc').select('title');
+      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      await appendMemory(project.id, `[RÉINITIALISATION | ${date} — mémoire du projet remise à zéro]
+Le site existe déjà : son code est dans le dépôt GitHub ${project.githubRepo}${deployed.length ? `, issu de ${deployed.length} développement${deployed.length > 1 ? 's' : ''} mis en ligne (${deployed.map(d => `« ${d.title} »`).join(', ').slice(0, 800)})` : ''}. Les décisions qui l'ont façonné ne sont plus connues. Partir du code actuel : le lire avant de décider ce qu'il faut changer, et signaler explicitement ce qui, dans l'existant, contredit les nouveaux choix plutôt que de le défaire sans le dire. Le site en ligne, sa base de données et les outils déjà mis en place restent en service.`);
+    }
+
+    res.json({ message: 'Mémoire du projet réinitialisée', abandonedDevs });
   } catch (err) {
     console.error('[projects/:id/memory DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

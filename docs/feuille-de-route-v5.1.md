@@ -261,6 +261,9 @@ Cas réel (Site de numérologie, dev n° 3 « Revoir la V0 avec plus de contenu 
 - Annulée = statut `cancelled` (jamais effacée) : absente pour les agents et les compteurs ; page Actions, section « Annulées » avec « Rétablir » (`GET /actions?withCancelled=1`).
 Tests : `services/__tests__/actions.test.js`, `__integration__/actionChanges.test.js`.
 
+### D18. Réinitialiser un projet relié à un dépôt — fait le 12/10/2026
+La réinitialisation n'efface que la mémoire de BlabIA : code, site en ligne, base du site et outils restent. Fenêtre de réinitialisation (Paramètres) : encadré « Le site lui-même n'est pas réinitialisé » (nouveau projet « Site web à créer de zéro » conseillé pour repartir d'une page blanche), alerte si un développement est en cours, case « Abandonner les développements en attente » (`DELETE /memory?abandonDevs=true` : pull requests et demandes fermées sur GitHub). Après réinitialisation, note `[RÉINITIALISATION | …]` en mémoire : un site existe déjà (dépôt, développements mis en ligne), partir du code actuel et signaler ce qui contredit les nouveaux choix.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

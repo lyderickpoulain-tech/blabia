@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Archive, RotateCcw, Trash2, GitPullRequest } from 'lucide-react';
+import { Archive, RotateCcw, Trash2, GitPullRequest, Github } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
@@ -326,6 +326,23 @@ export default function ProjectSettings() {
   const [archiving, setArchiving] = useState(false);
   const [modal, setModal] = useState(null); // 'reset' | 'delete'
   const [deleteMilestones, setDeleteMilestones] = useState(false);
+  // Projet relié à un dépôt : développements en attente (pull request ouverte, échec) et en cours
+  const [devInfo, setDevInfo] = useState(null); // { pending, running }
+  const [abandonDevs, setAbandonDevs] = useState(true);
+  const openReset = () => {
+    setDeleteMilestones(false);
+    setAbandonDevs(true);
+    setDevInfo(null);
+    setModal('reset');
+    if (project.githubRepo) {
+      api.get(`/projects/${project.id}/dev-tasks`)
+        .then(({ data }) => setDevInfo({
+          pending: data.tasks.filter(t => ['ready', 'deploy_failed', 'failed'].includes(t.status)).length,
+          running: data.tasks.filter(t => ['running', 'deploying'].includes(t.status)).length,
+        }))
+        .catch(() => setDevInfo({ pending: 0, running: 0 })); // facultatif : l'avertissement reste affiché
+    }
+  };
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -343,12 +360,14 @@ export default function ProjectSettings() {
   const resetMemory = async () => {
     setBusy(true);
     try {
-      await api.delete(`/projects/${project.id}/memory`, { params: { deleteMilestones } });
+      const { data } = await api.delete(`/projects/${project.id}/memory`, {
+        params: { deleteMilestones, ...(project.githubRepo && devInfo?.pending && abandonDevs ? { abandonDevs: true } : {}) },
+      });
       setProject(p => ({ ...p, context: null }));
       setModal(null);
       setDeleteMilestones(false);
       refreshCounts();
-      setNotice('Mémoire du projet réinitialisée.');
+      setNotice(`Mémoire du projet réinitialisée.${data?.abandonedDevs ? ` ${data.abandonedDevs} développement${data.abandonedDevs > 1 ? 's' : ''} en attente abandonné${data.abandonedDevs > 1 ? 's' : ''} sur GitHub.` : ''}`);
     } catch { setNotice('Erreur lors de la réinitialisation.'); }
     setBusy(false);
   };
@@ -398,7 +417,7 @@ export default function ProjectSettings() {
             </div>
             <div className="flex flex-wrap items-center gap-3 justify-between">
               <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Réinitialiser la mémoire : supprime les réunions tenues, le registre des décisions et la mémoire.</p>
-              <Button variant="await" onClick={() => { setDeleteMilestones(false); setModal('reset'); }}><RotateCcw size={15} /> Réinitialiser</Button>
+              <Button variant="await" onClick={openReset}><RotateCcw size={15} /> Réinitialiser</Button>
             </div>
             <div className="flex flex-wrap items-center gap-3 justify-between">
               <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Supprimer le projet et toutes ses données. Irréversible.</p>
@@ -420,6 +439,27 @@ export default function ProjectSettings() {
             <input type="checkbox" checked={deleteMilestones} onChange={e => setDeleteMilestones(e.target.checked)} className="mt-1 accent-await" />
             <span>Supprimer aussi le plan des réunions<span className="block text-xs text-ink-faint">Il devra être reconstruit.</span></span>
           </label>
+          {project.githubRepo && (
+            <div className="rounded-xl border border-await-border bg-await-bg px-3.5 py-3 space-y-2">
+              <p className="text-sm font-bold text-await flex items-center gap-1.5"><Github size={15} aria-hidden="true" /> Le site lui-même n’est pas réinitialisé</p>
+              <ul className="list-disc pl-5 text-xs text-ink-soft space-y-0.5">
+                <li>Le code reste dans le dépôt {project.githubRepo} : les prochains développements partiront du site actuel.</li>
+                <li>Le site en ligne, sa base de données et les outils mis en place (hébergeur, nom de domaine…) restent en service.</li>
+                <li>Les agents recevront une note : un site existe déjà, ils liront son code avant de décider.</li>
+              </ul>
+              <p className="text-xs text-ink-muted">Pour repartir d’une page blanche, créez plutôt un nouveau projet « Site web à créer de zéro » : BlabIA lui crée un dépôt neuf.</p>
+              {devInfo?.running > 0 && (
+                <p className="text-xs font-bold text-await">Un développement est en cours : il continuera sur GitHub. Attendez sa fin ou abandonnez-le depuis Développements.</p>
+              )}
+              {devInfo?.pending > 0 && (
+                <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+                  <input type="checkbox" checked={abandonDevs} onChange={e => setAbandonDevs(e.target.checked)} className="mt-1 accent-await" />
+                  <span>Abandonner {devInfo.pending === 1 ? 'le développement en attente' : `les ${devInfo.pending} développements en attente`}
+                    <span className="block text-xs text-ink-faint">Leurs modifications proposées sont fermées sur GitHub ; sinon elles pourraient entrer en conflit avec les prochains développements.</span></span>
+                </label>
+              )}
+            </div>
+          )}
         </ConfirmByName>
       )}
       {modal === 'delete' && (
