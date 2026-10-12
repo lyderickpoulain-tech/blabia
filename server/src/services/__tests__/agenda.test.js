@@ -41,3 +41,13 @@ describe('titre et objectif d’une réunion « Retraiter »', () => {
       .toBe('Retraiter la décision remise en question : « Public : les curieux — longue précision ». Motif : Les passionnés aussi');
   });
 });
+
+describe('réunion ouverte depuis une action', () => {
+  it('section dédiée dans le bloc commun des agents', () => {
+    const shared = buildAgentSystemPrompt({ agent: { name: 'Léa', role: 'R', systemPrompt: '' }, session: { task: 'T' }, intention: ['decision'], activeAgents: [], project: { name: 'P', brief: 'b' },
+      actionText: '« Rédiger la page Méthode »\nRAPPORT DE LA MISSION…' }).find(b => b.cache_control).text;
+    expect(shared).toContain('ACTION À TRAITER DANS CETTE RÉUNION');
+    expect(shared).toContain('cochée « faite » à la conclusion');
+    expect(shared).toContain('RAPPORT DE LA MISSION');
+  });
+});

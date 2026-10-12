@@ -231,7 +231,8 @@ export default function ProjectActions() {
   };
   // Traiter en réunion : nouvelle réunion préremplie avec l'action comme objectif
   const toMeeting = action => navigate(`/projects/${project.id}/meeting/new`, {
-    state: { milestoneTitle: [action.title, action.description].filter(Boolean).join(' — '), milestoneType: 'decision' },
+    // actionId : la réunion est liée à l'action (rapport de mission transmis aux agents, action cochée à la conclusion)
+    state: { milestoneTitle: [action.title, action.description].filter(Boolean).join(' — '), milestoneType: 'decision', actionId: action.id, actionTitle: action.title },
   });
   const openReport = id => setReport(missionsApi.missions.find(m => m.id === id) || null);
   // Une mission terminée met à jour l'action correspondante

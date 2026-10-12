@@ -567,6 +567,9 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   ))}
                 </div>
               )}
+              {session.todoId && (
+                <p className="text-xs text-ok font-bold text-center">L’action d’où vient cette réunion sera cochée « faite » à la validation.</p>
+              )}
               {pendingSuggestions.length > 0 && (
                 <p className="text-xs text-await text-center">
                   {pendingSuggestions.length} suggestion{pendingSuggestions.length > 1 ? 's' : ''} encore sans décision : elle{pendingSuggestions.length > 1 ? 's' : ''} ne sera{pendingSuggestions.length > 1 ? 'ont' : ''} pas ajoutée{pendingSuggestions.length > 1 ? 's' : ''} au plan.

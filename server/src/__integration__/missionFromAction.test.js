@@ -56,4 +56,28 @@ describe.skipIf(!harness.enabled)('mission confiée depuis une action', () => {
     await h.db('TodoItem').where({ id: actionId }).update({ status: 'done' });
     expect((await h.request('POST', `/api/projects/${pid}/actions/${actionId}/mission`, { token: owner.token, body: { agentName: 'Juriste' } })).status).toBe(409);
   });
+
+  it('« Traiter en réunion » : action et rapport complet transmis aux agents ; action cochée à la conclusion', async () => {
+    const { actionForPrompt } = require('../services/actions'); // après harness.start() : base de test
+    const todo = crypto.randomUUID();
+    await h.db('TodoItem').insert({ id: todo, projectId: pid, title: 'Rédiger la page Méthode', description: 'Ton sérieux', status: 'in_progress', displayOrder: 5 });
+    await h.db('AgentMission').insert({ projectId: pid, todoId: todo, agentName: 'Juriste', kind: 'writing', title: 'Rédiger la page Méthode', objective: 'o', status: 'done', report: '# Page Méthode\n## Synthèse\nBrouillon complet ci-dessous.\n## Texte\nLa numérologie ici est un outil de dialogue.' });
+    // Session liée à l'action ; une action d'un autre projet ou déjà faite est ignorée
+    const s = (await h.request('POST', `/api/projects/${pid}/sessions`, { token: owner.token,
+      body: { task: 'Rédiger la page Méthode', intention: ['decision'], todoId: todo, activeAgents: [{ id: 'a1', name: 'Léa', role: 'Rédactrice', systemPrompt: '' }] } })).body.session;
+    expect((await h.db('Session').where({ id: s.id }).first()).todoId).toBe(todo);
+    const other = (await h.request('POST', `/api/projects/${pid}/sessions`, { token: owner.token,
+      body: { task: 'x', intention: ['decision'], todoId: crypto.randomUUID(), activeAgents: [{ id: 'a1', name: 'Léa', role: 'R', systemPrompt: '' }] } })).body.session;
+    expect((await h.db('Session').where({ id: other.id }).first()).todoId).toBeNull();
+
+    const text = await actionForPrompt(todo, pid);
+    expect(text).toContain('« Rédiger la page Méthode » — Ton sérieux');
+    expect(text).toContain('RAPPORT DE LA MISSION MENÉE POUR Juriste');
+    expect(text).toContain('La numérologie ici est un outil de dialogue.'); // rapport complet, pas seulement la synthèse
+
+    // Abandon : l'action reste à faire ; conclusion : elle est cochée
+    await h.request('PATCH', `/api/projects/${pid}/sessions/${other.id}/status`, { token: owner.token, body: { status: 'abandoned' } });
+    expect((await h.request('PATCH', `/api/projects/${pid}/sessions/${s.id}/status`, { token: owner.token, body: { status: 'accepted' } })).status).toBe(200);
+    expect((await h.db('TodoItem').where({ id: todo }).first()).status).toBe('done');
+  });
 });

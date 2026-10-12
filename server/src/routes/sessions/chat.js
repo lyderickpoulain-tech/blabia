@@ -22,6 +22,7 @@ const { listDecisions, formatRegistryForPrompt } = require('../../services/decis
 const { analyzeAndSaveNeeds, formatNeedsForPrompt } = require('../../services/tools/toolNeeds');
 const { sessionCodeContext } = require('../../services/codeContext');
 const { meetingHistory, withHistory } = require('../../services/prompts/meetingHistory');
+const { actionForPrompt } = require('../../services/actions');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
 const { listDocuments, formatDocumentsForPrompt } = require('../../services/documents');
@@ -345,6 +346,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     const missionsText = formatMissionsForPrompt(await listMissions(projectId));
     // Réunion Claude Code d'un projet relié à un dépôt : le code vu par les agents (calculé une fois)
     const codeText = intention[0] === 'claude_code' ? await sessionCodeContext({ ...session, task: freshSession.task }, project) : '';
+    // Réunion ouverte depuis une action : l'action et le rapport de la mission qui l'a préparée
+    const actionText = await actionForPrompt(session.todoId, projectId);
     // Ordre du jour : décisions remises en question à retraiter (réunion du plan, services/agenda.js)
     const agendaText = formatAgendaForPrompt(await agendaDecisions(session.milestoneId));
     // Mémoire à deux étages : projet existant sans synthèse → première synthèse en arrière-plan
@@ -488,6 +491,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         documentsText,
         codeText,
         agendaText,
+        actionText,
         missionsText,
         today,
         challengerSection: isChallenge

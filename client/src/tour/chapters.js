@@ -134,7 +134,7 @@ export const CHAPTERS = [
         body: 'Le registre des décisions et les actions, en PDF ou en Word. Chaque compte-rendu de réunion s’exporte aussi, depuis l’Historique.' },
       { path: demo('/actions'), target: 'act-list',
         title: 'Les actions, dans l’ordre',
-        body: 'Numérotées dans l’ordre où les mener : flèches pour réordonner, case pour cocher. L’échéance est facultative ; une action en retard passe en ambre. Les agents ouvrent la réunion suivante par un point d’avancement. Une action peut aussi être confiée à un agent (mission) ou traitée en réunion.' },
+        body: 'Numérotées dans l’ordre où les mener : flèches pour réordonner, case pour cocher. L’échéance est facultative ; une action en retard passe en ambre. Les agents ouvrent la réunion suivante par un point d’avancement. Une action peut aussi être confiée à un agent (mission) ou traitée en réunion : les agents y reçoivent le rapport de la mission, et l’action est cochée quand la réunion est conclue.' },
       { target: 'mission-list', placement: 'top',
         title: 'Les missions des agents',
         body: 'En réunion, un agent peut proposer de confier un travail approfondi (recherche, analyse, rédaction) à un sous-agent. Vous la lancez au niveau choisi — légère, standard ou approfondie ; le rapport arrive dans les documents du projet et sa synthèse dans la mémoire. Ici, une mission terminée et une autre qui attend votre accord.' },

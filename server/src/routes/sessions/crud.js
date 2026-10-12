@@ -16,6 +16,7 @@ router.post('/', async (req, res) => {
   const {
     task,
     milestoneId = null,
+    todoId: todoIdParam = null, // réunion ouverte depuis une action (« Traiter en réunion »)
     model: modelParam,
     fullContext: fullContextParam = false,
     intention = [],
@@ -30,6 +31,9 @@ router.post('/', async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const selectedModel = isMeetingModel(modelParam) ? modelParam : MODEL;
+  // Action d'origine : seulement une action ouverte de ce projet
+  const todoId = todoIdParam && (await db('TodoItem').where({ id: String(todoIdParam), projectId: req.params.projectId })
+    .whereIn('status', ['todo', 'in_progress']).first('id'))?.id || null;
   const fullContextEnabled = !!fullContextParam;
   const clampLevel = (v) => {
     const n = Number(v);
@@ -72,6 +76,7 @@ router.post('/', async (req, res) => {
         challengerEnabled: challengerParam === false ? false : null,
         projectId,
         milestoneId: milestoneId || null,
+        todoId: todoId || null,
         createdAt: now
       })
       .returning(['id', 'task', 'status', 'mode', 'model', 'createdAt', 'projectId', 'milestoneId', 'webSearchEnabled', 'expertiseLevel', 'humorLevel', 'questionMode']);
@@ -297,6 +302,10 @@ router.patch('/:sessionId/status', async (req, res) => {
 
     if (status === 'accepted' && s.milestoneId && (s.summary || s.planSuggestions)) {
       await db('Milestone').where({ id: s.milestoneId }).update({ status: 'done' });
+    }
+    // Réunion ouverte depuis une action : l'action est traitée quand la réunion est conclue
+    if (status === 'accepted' && s.todoId) {
+      await db('TodoItem').where({ id: s.todoId, projectId }).whereIn('status', ['todo', 'in_progress']).update({ status: 'done' });
     }
 
     res.json({ status });

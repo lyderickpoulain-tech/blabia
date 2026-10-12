@@ -158,6 +158,7 @@ model TodoItem {
   session      Session?   @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   creator      User?      @relation("TodoCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   missions     AgentMission[]
+  meetings     Session[] @relation("SessionFromAction")
 }
 
 model ProjectMember {
@@ -203,6 +204,7 @@ model Session {
   codeContext     String?   // v5.1 : réunion Claude Code — code du dépôt vu par les agents (services/codeContext.js), calculé au 1er tour
   requiredTools   Json?     // v5.1 : réunion Claude Code — types d'outils utilisés par le développement (services/devTools.js), null = pas encore repéré
   milestoneId     String?
+  todoId          String?   // v5.1 : réunion ouverte depuis une action (« Traiter en réunion ») — cochée à la conclusion
   todos           TodoItem[]
   createdAt       DateTime  @default(now())
   projectId       String
@@ -216,6 +218,7 @@ model Session {
   usageLogs         UsageLog[]
   missions          AgentMission[]
   devTasks          DevTask[]
+  todo            TodoItem? @relation("SessionFromAction", fields: [todoId], references: [id], onDelete: SetNull)
 }
 
 // v5.0 : registre des décisions du projet — alimenté à la clôture des réunions

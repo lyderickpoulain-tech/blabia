@@ -105,6 +105,9 @@ export default function StartMeeting() {
   const milestoneId    = location.state?.milestoneId    || null;
   const milestoneTitle = location.state?.milestoneTitle || '';
   const milestoneType  = location.state?.milestoneType  || null;
+  // Réunion ouverte depuis une action (« Traiter en réunion »)
+  const actionId    = location.state?.actionId    || null;
+  const actionTitle = location.state?.actionTitle || '';
 
   const [task, setTask]               = useState(milestoneTitle);
   const [deliverable, setDeliverable] = useState(() => MT_MAP[milestoneType] || 'decision');
@@ -271,7 +274,8 @@ export default function StartMeeting() {
         humorLevel,
         questionMode,
         ...(challenger ? {} : { challengerEnabled: false }), // sinon : réglage du projet
-        ...(milestoneId ? { milestoneId } : {})
+        ...(milestoneId ? { milestoneId } : {}),
+        ...(actionId ? { todoId: actionId } : {}),
       });
 
       // La salle de réunion lance la préparation dès l'ouverture (si au moins 2 agents)
@@ -294,6 +298,12 @@ export default function StartMeeting() {
       />
 
       <div className="space-y-4">
+
+        {actionId && (
+          <p className="text-sm text-ink-soft bg-ai-bg border border-ai-border rounded-xl px-4 py-3">
+            Réunion liée à l’action <strong>« {actionTitle} »</strong> : les agents reçoivent l’action et, s’il existe, le rapport complet de la mission qui l’a préparée. L’action sera cochée « faite » quand vous conclurez la réunion.
+          </p>
+        )}
 
         {/* ── 1. Objectif ─────────────────────────────────────────────────── */}
         <Step n={1} title="Objectif" hint="Que doit permettre cette réunion ?">

@@ -230,6 +230,9 @@ Constat : la mémoire (`Project.context`) supprimait les entrées au-delà de 10
 ### D12. Les agents voient toute la réunion — fait le 11/10/2026
 Avant : les agents ne recevaient que les 10 derniers messages (fenêtre glissante, aussi incompatible avec le cache). Désormais `services/prompts/meetingHistory.js` : toute la réunion (au-delà de 60 messages, les derniers, début avancé par paliers de 20), un bloc par message dans les consignes système, entre le bloc commun et le bloc propre à l'agent, point de cache sur le dernier message. Vérifié en réel (« Business model », 21 messages) : le tour suivant d'un autre agent relit 13 449 jetons depuis le cache et n'écrit que le nouveau message (0,008 $ au lieu de 0,046 $). Le premier tour après une pause de plus de 5 minutes réécrit le cache (coût d'écriture ×1,25).
 
+### D13. Réunion ouverte depuis une action — fait le 12/10/2026
+« Traiter en réunion » lie la réunion à l'action (`Session.todoId`, migration `20261012000001`). Les agents reçoivent dans le bloc commun l'action et le rapport COMPLET de la dernière mission terminée qui l'a préparée (`services/actions.js` → `actionForPrompt`, plafond 15 000 caractères), avec la consigne de partir de ce travail. À la conclusion (statut `accepted`) l'action est cochée « faite » ; une réunion abandonnée la laisse ouverte. Bandeau dans la préparation de la réunion et rappel dans la fenêtre de clôture.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).
@@ -289,7 +292,7 @@ cd C:\BlabIA\client; npm run build
 ```
 
 ### Déploiement
-1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-11-14-22.dump`.
+1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-12-18-01.dump`.
 2. `git push origin main` → Railway redéploie ; les migrations s'appliquent au démarrage (`prisma migrate deploy`).
 3. Vérifier dans les logs Railway : migrations appliquées, serveur démarré, healthcheck `/api/health` en 200.
 

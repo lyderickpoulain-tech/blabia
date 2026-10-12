@@ -109,4 +109,23 @@ async function createSessionActions({ projectId, sessionId, userId, actions }) {
   }))).returning(['id', 'title', 'description', 'status', 'dueDate', 'sessionId']);
 }
 
-module.exports = { OPEN, dueDateFrom, sanitizeAction, parseActions, parseTriage, dropExistingActions, sameAction, listActions, isOverdue, formatActionsForPrompt, createSessionActions };
+// Réunion ouverte depuis une action (« Traiter en réunion ») : texte pour les agents —
+// l'action, puis le rapport COMPLET de la dernière mission terminée qui l'a préparée
+// (sinon l'état de la mission en cours ou échouée)
+const MISSION_REPORT_CHARS = 15000;
+async function actionForPrompt(todoId, projectId) {
+  if (!todoId) return '';
+  const [a] = await db('TodoItem').where({ id: todoId, projectId }).select('title', 'description').limit(1);
+  if (!a) return '';
+  const [m] = await db('AgentMission').where({ todoId }).whereNotIn('status', ['rejected', 'cancelled'])
+    .orderByRaw(`CASE WHEN status = 'done' THEN 0 ELSE 1 END, "createdAt" DESC`).select('status', 'agentName', 'report', 'error').limit(1);
+  const head = `« ${a.title} »${a.description ? ` — ${a.description}` : ''}`;
+  if (!m) return head;
+  if (m.status === 'done' && m.report) {
+    const report = m.report.length > MISSION_REPORT_CHARS ? `${m.report.slice(0, MISSION_REPORT_CHARS)}\n[…rapport tronqué ; version complète dans les documents du projet]` : m.report;
+    return `${head}\nRAPPORT DE LA MISSION MENÉE POUR ${m.agentName} SUR CETTE ACTION (travail déjà fait : pars de là, ne le refais pas ; dis ce qui reste à trancher ou à faire) :\n${report}`;
+  }
+  return `${head}\n(Une mission confiée à ${m.agentName} sur cette action est ${m.status === 'failed' ? 'en échec' : 'encore en cours'} : son rapport n'est pas disponible.)`;
+}
+
+module.exports = { actionForPrompt, OPEN, dueDateFrom, sanitizeAction, parseActions, parseTriage, dropExistingActions, sameAction, listActions, isOverdue, formatActionsForPrompt, createSessionActions };
