@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Check, Circle, AlertTriangle, ExternalLink, Rocket, Play, Github, RefreshCw, ShieldCheck, Database, ChevronDown, ChevronRight, X, Eye, Globe,
+  Check, Circle, AlertTriangle, ExternalLink, Rocket, Play, Github, RefreshCw, ShieldCheck, Database, ChevronDown, ChevronRight, X, Eye, Globe, RotateCcw
 } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { startGitHubConnect, startRepoCreation, useGitHubReturn } from '../../utils/github';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
-import { Button, Badge, Card } from '../../components/ui';
+import { Button, Badge, Card, IconButton } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 import ToolsMeetingHint from '../../components/project/ToolsMeetingHint';
 
@@ -299,7 +299,7 @@ function Publication({ task, projectId, siteUrl }) {
   }
 }
 
-function TaskCard({ task, status, isOwner, onAction, busy, projectId, siteUrl }) {
+function TaskCard({ task, status, isOwner, onAction, onRetry, busy, projectId, siteUrl }) {
   const [showFiles, setShowFiles] = useState(false);
   const st = statusOf(task);
   const files = Array.isArray(task.files) ? task.files : [];
@@ -315,7 +315,15 @@ function TaskCard({ task, status, isOwner, onAction, busy, projectId, siteUrl })
           <h3 className="text-base font-extrabold text-ink break-words">{task.title}</h3>
           <p className="text-xs text-ink-faint mt-0.5">Lancé le {fmtDate(task.createdAt)} · {task.repo}</p>
         </div>
-        <Badge tone={st.tone}>{(POLLING.includes(task.status) || task.publishState === 'pending') && task.status !== 'ready' && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{st.label}</Badge>
+        <div className="flex items-center gap-1 shrink-0">
+          <Badge tone={st.tone}>{(POLLING.includes(task.status) || task.publishState === 'pending') && task.status !== 'ready' && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{st.label}</Badge>
+          {onRetry && (
+            <IconButton size="sm" label="Relancer ce développement" disabled={busy} onClick={() => onRetry(task)}
+              className="text-action hover:!text-action hover:bg-action-light">
+              <RotateCcw size={17} aria-hidden="true" />
+            </IconButton>
+          )}
+        </div>
       </div>
 
       {task.status === 'running' && <p className="text-sm text-ink-muted mt-3">Claude Code lit la demande, modifie le code et lance les tests. Comptez de 5 à 30 minutes ; cette page se met à jour toute seule.</p>}
@@ -446,6 +454,9 @@ export default function ProjectDev() {
   data.tasks.forEach(t => { if (!lastTask.has(t.sessionId)) lastTask.set(t.sessionId, t); }); // tâches du plus récent au plus ancien
   const retry = s => ['failed', 'abandoned'].includes(lastTask.get(s.id)?.status);
   const toLaunch = data.launchable.filter(s => !lastTask.has(s.id) || retry(s));
+  const launchableIds = new Set(data.launchable.map(s => s.id));
+  const canRetry = t => status.isOwner && status.ready && t.status === 'failed' && t.sessionId
+    && launchableIds.has(t.sessionId) && lastTask.get(t.sessionId)?.id === t.id;
   const setupVisible = !status.ready || showSetup;
   // Adresse du site : renseignée par le propriétaire (Railway ne la transmet pas), sinon
   // celle déclarée par l'hébergeur à la dernière publication
@@ -507,7 +518,11 @@ export default function ProjectDev() {
         </Card>
       )}
 
-      {data.tasks.map(t => <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} projectId={project.id} siteUrl={siteUrl} onAction={onAction} busy={busy} />)}
+      {data.tasks.map(t => (
+        <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} projectId={project.id} siteUrl={siteUrl} onAction={onAction} busy={busy || active}
+          // Développement échoué, le dernier de sa réunion : relancé avec le même prompt
+          onRetry={canRetry(t) ? task => launch({ id: task.sessionId, task: task.title }) : null} />
+      ))}
     </div>
   );
 }
