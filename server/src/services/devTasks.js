@@ -89,7 +89,12 @@ const shortTitle = s => String(s || 'Développement').replace(/\s+/g, ' ').trim(
 async function createTask({ project, session, prompt, userId }) {
   const owner = await ownerOf(project);
   const inst = owner.githubInstallationId;
-  const status = await repoStatus(project);
+  let status = await repoStatus(project);
+  // Automatisations d'une version précédente : mises à jour d'office (droit « Workflows » de l'application)
+  if (status.workflows.installed && !status.workflows.current) {
+    await installWorkflows(project);
+    status = await repoStatus(project);
+  }
   if (!status.ready) {
     const e = new Error('Le dépôt n’est pas prêt : terminez la configuration dans Projet › Développements.');
     e.status = 409; throw e;
@@ -138,7 +143,7 @@ async function findRun(inst, repo, workflowFile, runName, since) {
 // Filet de sécurité : Claude Code a poussé sa branche mais n'a pas pu ouvrir la pull
 // request (réglage du dépôt « Allow GitHub Actions to create and approve pull requests »
 // désactivé par défaut) ; BlabIA l'ouvre avec son application. Renvoie son numéro ou null.
-async function openPrFromBranch(inst, task) {
+async function openPrFromBranch(inst, task, note = '') {
   const branch = wf.devBranch(task.issueNumber);
   const { default_branch: base } = await github.gh(inst, 'GET', `/repos/${task.repo}`);
   let cmp;
@@ -152,12 +157,16 @@ async function openPrFromBranch(inst, task) {
   const commits = (cmp.commits || []).map(c => `- ${String(c.commit?.message || '').split('\n')[0]}`).join('\n');
   const pr = await github.gh(inst, 'POST', `/repos/${task.repo}/pulls`, {
     title: `BlabIA : ${task.title}`, head: branch, base,
-    body: `Modifications réalisées par Claude Code (pull request ouverte par BlabIA) :\n${commits}\n\nCloses #${task.issueNumber}`,
+    body: `${note ? `${note}\n\n` : ''}Modifications réalisées par Claude Code (pull request ouverte par BlabIA) :\n${commits}\n\nCloses #${task.issueNumber}`,
   });
   return pr.number;
 }
 
 const NO_PR_RE = /pull request/i;
+// Exécution « en échec » alors que le travail a été poussé (ex. limite de tours dépassée après
+// la fin du travail) : la pull request est proposée quand même, à relire avant toute mise en ligne
+const RUN_FAILED_RE = /a échoué \(voir le journal/i;
+const FAILED_RUN_NOTE = '> Attention : l’exécution de Claude Code s’est terminée en erreur sur GitHub (par exemple une limite de tours dépassée), mais ses modifications avaient été enregistrées sur la branche. Relisez-les avant de mettre en ligne.';
 
 // ── Publication par l'hébergeur ──────────────────────────────────────────────
 // « Mettre en ligne » fusionne ; c'est l'hébergeur relié au dépôt (Railway, Vercel, Netlify…)
@@ -237,8 +246,8 @@ async function refreshTask(task, inst) {
   const patch = {};
   if (task.status === 'deployed') return refreshPublication(task, inst);
   // Échec « sans pull request » : la branche a peut-être été poussée (ancien développement)
-  if (task.status === 'failed' && !task.prNumber && task.issueNumber && NO_PR_RE.test(task.error || '')) {
-    const prNumber = await openPrFromBranch(inst, task);
+  if (task.status === 'failed' && !task.prNumber && task.issueNumber && (NO_PR_RE.test(task.error || '') || RUN_FAILED_RE.test(task.error || ''))) {
+    const prNumber = await openPrFromBranch(inst, task, RUN_FAILED_RE.test(task.error || '') ? FAILED_RUN_NOTE : '');
     if (!prNumber) return task;
     const [row] = await db('DevTask').where({ id: task.id })
       .update({ ...(await loadPr(inst, repo, prNumber)).patch, status: 'ready', readyAt: new Date(), error: null, finishedAt: null }).returning('*');
@@ -253,7 +262,8 @@ async function refreshTask(task, inst) {
     if (run) patch.runUrl = run.html_url;
     if (prs[0]) {
       Object.assign(patch, (await loadPr(inst, repo, prs[0].number)).patch, { status: 'ready', readyAt: new Date(), error: null });
-    } else if (run?.status === 'completed' && run.conclusion === 'success' && (patch.prNumber = await openPrFromBranch(inst, task))) {
+    } else if (run?.status === 'completed' && ['success', 'failure', 'timed_out'].includes(run.conclusion)
+      && (patch.prNumber = await openPrFromBranch(inst, task, run.conclusion === 'success' ? '' : FAILED_RUN_NOTE))) {
       Object.assign(patch, (await loadPr(inst, repo, patch.prNumber)).patch, { status: 'ready', readyAt: new Date(), error: null });
     } else if (run?.status === 'completed') {
       delete patch.prNumber;

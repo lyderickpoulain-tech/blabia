@@ -238,6 +238,17 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect(t).toMatchObject({ status: 'ready', prNumber: gh.pulls.at(-1).number });
   });
 
+  it('automatisations d’une version précédente : mises à jour d’office (150 tours, commandes de fichiers)', async () => {
+    const path = '.github/workflows/blabia-dev.yml';
+    const current = Buffer.from(gh.files[path].content, 'base64').toString();
+    gh.files[path].content = Buffer.from(current.replace(/# blabia-workflow v\d+/, '# blabia-workflow v2')).toString('base64');
+    const s = (await h.request('GET', `/api/projects/${projectId}/github`, { token: owner.token })).body;
+    expect(s).toMatchObject({ workflows: { installed: true, current: true }, ready: true });
+    const devFile = Buffer.from(gh.files[path].content, 'base64').toString();
+    expect(devFile).toContain('--max-turns 150');
+    expect(devFile).toContain('Bash(mkdir:*)');
+  });
+
   it('publication : aperçu de la PR ; « non publié » sans hébergeur ; adresse du site une fois publié', async () => {
     const tasks = async () => (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks;
     // Le 1er développement, fusionné plus haut : aucun hébergeur n'a jamais publié ce dépôt
@@ -431,5 +442,33 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect((await createVia(third.id)).location).toContain('github=depot-permission');
     expect((await h.db('Project').where({ id: third.id }).first()).githubRepo).toBeNull();
     gh.denyRepoCreation = false;
+  });
+
+  it('exécution « en échec » mais travail poussé : pull request proposée avec un avertissement (et ancien échec récupéré)', async () => {
+    // Un seul développement à la fois : on libère la place
+    for (const x of (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks.filter(x => ['running', 'ready'].includes(x.status))) {
+      await h.request('POST', `/api/projects/${projectId}/dev-tasks/${x.id}/abandon`, { token: owner.token });
+    }
+    let r, t;
+    // Cas réel (Site de numérologie) : travail fini et poussé, mais exécution « en échec »
+    // (71 tours pour une limite de 60) → pull request proposée, avec un avertissement
+    r = await h.request('POST', `/api/projects/${projectId}/dev-tasks`, { token: owner.token, body: { sessionId, force: true } }); // outils non mis en place (test précédent) : lancer quand même
+    expect(r.body.error || '').toBe('');
+    gh.branches[`blabia/dev-${r.body.issueNumber}`] = ['Contenu V0 : 12 profils, 78 duos'];
+    gh.runs.push({ workflow: 'blabia-dev.yml', display_title: `BlabIA dev #${r.body.issueNumber}`, status: 'completed', conclusion: 'failure', html_url: 'https://github.com/moi/app/actions/runs/14', created_at: new Date().toISOString() });
+    t = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
+    expect(t).toMatchObject({ status: 'ready', error: null });
+    expect(gh.pulls.at(-1).body).toContain('s’est terminée en erreur sur GitHub');
+    await h.request('POST', `/api/projects/${projectId}/dev-tasks/${t.id}/abandon`, { token: owner.token });
+
+    // Ancien échec de ce type (avant correction) : récupéré dès que la branche est visible
+    r = await h.request('POST', `/api/projects/${projectId}/dev-tasks`, { token: owner.token, body: { sessionId, force: true } }); // outils non mis en place (test précédent) : lancer quand même
+    gh.runs.push({ workflow: 'blabia-dev.yml', display_title: `BlabIA dev #${r.body.issueNumber}`, status: 'completed', conclusion: 'failure', html_url: 'https://github.com/moi/app/actions/runs/15', created_at: new Date().toISOString() });
+    t = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
+    expect(t).toMatchObject({ status: 'failed', error: 'Le développement a échoué (voir le journal sur GitHub).' }); // rien de poussé
+    gh.branches[`blabia/dev-${r.body.issueNumber}`] = ['Travail poussé'];
+    t = (await h.request('GET', `/api/projects/${projectId}/dev-tasks`, { token: owner.token })).body.tasks[0];
+    expect(t).toMatchObject({ status: 'ready', error: null });
+    await h.request('POST', `/api/projects/${projectId}/dev-tasks/${t.id}/abandon`, { token: owner.token });
   });
 });

@@ -61,7 +61,7 @@ describe('automatisations installées dans le dépôt', () => {
     expect(triggers).toEqual(['\n  workflow_dispatch:']);
     expect(dev).toContain('claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}');
     expect(dev).toContain('allowed_bots: "blabia-app[bot]"');
-    expect(dev).toContain('--max-turns 60');
+    expect(dev).toContain('--max-turns 150');
     expect(dev).toContain('timeout-minutes: 45');
     expect(dev).toContain('blabia/dev-${{ inputs.issue }}');
     expect(dev).toContain('Ne fusionne jamais');

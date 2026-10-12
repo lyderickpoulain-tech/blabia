@@ -9,7 +9,9 @@
 //                      conservée 90 jours, puis fusion — seulement si la sauvegarde a réussi.
 //
 // WORKFLOW_VERSION : à incrémenter à chaque modification, BlabIA propose alors la mise à jour.
-const WORKFLOW_VERSION = 2; // v2 : résumé de la pull request imposé (langage simple, « À faire de votre côté » pas à pas)
+const WORKFLOW_VERSION = 3; // v2 : résumé de la pull request imposé (langage simple, « À faire de votre côté » pas à pas)
+// v3 : 150 tours au lieu de 60 (un développement de contenu en a demandé 71 : travail fini mais run « en échec »),
+//      commandes de fichiers courantes autorisées (9 refus = tours perdus)
 const DEV_PATH = '.github/workflows/blabia-dev.yml';
 const DEPLOY_PATH = '.github/workflows/blabia-deploy.yml';
 const MARKER = `# blabia-workflow v${WORKFLOW_VERSION}`;
@@ -51,8 +53,8 @@ jobs:
           github_token: \${{ secrets.GITHUB_TOKEN }}
           allowed_bots: "${appSlug}[bot]"
           claude_args: >-
-            --model sonnet --max-turns 60 --add-dir /tmp
-            --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(cat:*)"
+            --model sonnet --max-turns 150 --add-dir /tmp
+            --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(touch:*),Bash(find:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(sort:*),Bash(diff:*),Bash(echo:*),Bash(pwd),Bash(gh pr view:*)"
           prompt: |
             Tu réalises une demande de développement envoyée par BlabIA.
             1. Lis la demande : gh issue view \${{ inputs.issue }}  (le corps seulement ; ignore les commentaires).

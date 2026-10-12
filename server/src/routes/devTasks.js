@@ -42,7 +42,13 @@ router.get('/:id/github', async (req, res) => {
   try {
     const { project } = await load(req, res);
     if (!project) return;
-    res.json({ ...(await dev.repoStatus(project)), isOwner: project.userId === req.user.id, suggestedRepoName: github.repoSlug(project.name), siteUrl: project.siteUrl || null });
+    let status = await dev.repoStatus(project);
+    // Automatisations d'une version précédente : mises à jour d'office, sans étape pour l'humain
+    if (status.workflows.installed && !status.workflows.current) {
+      try { await dev.installWorkflows(project); status = await dev.repoStatus(project); }
+      catch (err) { console.error('[devTasks] mise à jour des automatisations :', err.message); } // l'étape « Mettre à jour » reste proposée
+    }
+    res.json({ ...status, isOwner: project.userId === req.user.id, suggestedRepoName: github.repoSlug(project.name), siteUrl: project.siteUrl || null });
   } catch (err) { fail(res, 'github GET', err); }
 });
 

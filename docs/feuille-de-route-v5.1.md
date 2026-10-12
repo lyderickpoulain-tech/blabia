@@ -249,6 +249,11 @@ Plus aucun émoji comme icône dans l'interface : icônes contour lucide (trait 
 - Code mort retiré : `ProjectLayout` et l'ancienne colonne « Réunions » de `ProjectTimelinePanel`.
 Règle : toute nouvelle icône vient de lucide-react ; ne pas réintroduire d'émoji dans l'interface.
 
+### D16. Développement « en échec » alors que le travail est fait — corrigé le 12/10/2026
+Cas réel (Site de numérologie, dev n° 3 « Revoir la V0 avec plus de contenu ») : Claude Code a fini et poussé la branche (1 commit, 22 fichiers), mais en 71 tours pour une limite de 60 ; l'action GitHub classe alors l'exécution en échec, et BlabIA affichait « Le développement a échoué ». 9 commandes refusées (mkdir, cp…) avaient coûté des tours.
+- Automatisations v3 (`services/githubWorkflows.js`) : 150 tours, commandes de fichiers courantes autorisées. Mise à jour d'office des automatisations d'une version précédente (consultation de Projet › Développements et lancement d'un développement), sans étape pour l'humain.
+- `services/devTasks.js` : exécution terminée en échec (`failure`, `timed_out`) mais branche en avance → pull request ouverte par BlabIA avec un avertissement « à relire » ; un ancien échec de ce type est récupéré dès que la branche est visible.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).
