@@ -13,6 +13,7 @@ const anthropic = require('./anthropic');
 const { costUSD } = require('./pricing');
 const { runWithUsage } = require('./usage');
 const { DEFAULT_MODEL } = require('./models');
+const { buildWebSearchTool } = require('./webSearchTool');
 const { KIND_LABEL, LEVELS, levelOf } = require('./missions');
 const { memoryForPrompt, appendMemory, missionDigest } = require('../utils/projectMemory');
 const { codeAccess, sourcePaths, compactTree, readFile } = require('./codeContext');
@@ -25,8 +26,7 @@ const DOC_MAX_CHARS = 30000;
 const CODE_FILE_MAX_CHARS = 20000;
 
 const TOOLS = [
-  { type: 'web_search_20260318', name: 'web_search', max_uses: 5, allowed_callers: ['direct'],
-    user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' } },
+  buildWebSearchTool({ maxUses: 5 }),
   { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 6, max_content_tokens: 8000 },
   { name: 'list_project_documents', description: 'Liste les documents de référence du projet (nom et taille).',
     input_schema: { type: 'object', properties: {} } },
@@ -108,7 +108,7 @@ async function runClientTool(block, projectId, code = null) {
 // Outils et modèle selon le niveau de la mission (légère / standard / approfondie)
 function settingsFor(mission) {
   const lv = LEVELS[levelOf(mission.level)];
-  const tools = TOOLS.map(t => (t.name === 'web_search' ? { ...t, max_uses: lv.searches } : t.name === 'web_fetch' ? { ...t, max_uses: lv.fetches } : t));
+  const tools = TOOLS.map(t => (t.name === 'web_search' ? buildWebSearchTool({ maxUses: lv.searches }) : t.name === 'web_fetch' ? { ...t, max_uses: lv.fetches } : t));
   return { tools, maxSteps: lv.maxSteps, model: lv.model || DEFAULT_MODEL };
 }
 

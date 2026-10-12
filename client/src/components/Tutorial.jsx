@@ -111,7 +111,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                   'La mémoire du projet ne perd rien : les réunions et missions anciennes sont résumées dans une synthèse, que vous pouvez lire et corriger (Paramètres › Mémoire du projet).',
                   'Comptes rendus, décisions et actions s’exportent en PDF ou en Word.',
                   'Projet informatique : le prompt d’une réunion Claude Code se lance depuis BlabIA ; Claude Code travaille dans votre dépôt GitHub avec votre abonnement Claude, et vous mettez en ligne d’un clic (Projet › Développements).',
-                  'Site web à créer de zéro : BlabIA crée le dépôt GitHub et prévoit les réunions dans l’ordre — définir le site, son style, ses outils (hébergement, nom de domaine…), puis le construire. Un guide pas à pas relie ensuite tous les outils, et une discussion sous le guide répond aux questions et aux messages d’erreur (Projet › Outils).',
+                  'Site web à créer de zéro : BlabIA crée le dépôt GitHub et prévoit les réunions dans l’ordre — définir le site, son style, ses outils (hébergement, nom de domaine…), puis le construire. Un guide pas à pas relie ensuite tous les outils (il indique s’il a été vérifié en ligne, avec ses sources), et une discussion sous le guide répond aux questions et aux messages d’erreur (Projet › Outils).',
                 ].map(t => (
                   <li key={t} className="flex gap-2 text-sm text-ink-soft leading-snug">
                     <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-action shrink-0" aria-hidden="true" />{t}

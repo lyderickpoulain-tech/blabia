@@ -9,6 +9,7 @@
 // répond aux questions et aux messages d'erreur ; ces échanges nourrissent le guide suivant.
 const { CATEGORIES } = require('./catalog');
 const { DEFAULT_MODEL } = require('../models');
+const { buildWebSearchTool } = require('../webSearchTool');
 
 const SIMPLE = level => (level ?? 3) <= 2;
 const MAX_CHAT = 40;          // messages conservés
@@ -75,21 +76,109 @@ ${SIMPLE(project.expertiseLevel) ? '- Explique chaque terme technique entre pare
   };
 }
 
-const withSources = res => {
-  const sources = res.webSearch?.sources || [];
-  return `${res.text.trim()}${sources.length ? `\n\n---\nSources consultées : ${sources.slice(0, 8).map(s => `[${s.title || s.url}](${s.url})`).join(' · ')}` : ''}`;
-};
+// ── Exécution avec recherche web ───────────────────────────────────────────────
+// Plafonds de recherches (deux constantes, faciles à changer) : le guide couvre plusieurs
+// services (8 par défaut — 5 serait possible, à confirmer), une réponse de discussion un seul sujet.
+const GUIDE_MAX_SEARCHES = 8;
+const CHAT_MAX_SEARCHES = 3;
+const MAX_RESUMES = 3;          // relances après pause_turn
+const MAX_SOURCES = 20;
+const NO_MORE_SEARCH = '\n\nTu as épuisé ton budget de recherches web : conclus et rédige maintenant la réponse complète, SANS nouvelle recherche.';
+
+const isUnauthorized = err => err?.status === 403
+  || /not.?(enabled|authorized|permitted)|permission|organization/i.test(String(err?.message || ''));
+
+// Sources (url, titre) : résultats de recherche et citations, sans doublons
+function collectSources(content, into) {
+  const add = (url, title) => { if (url && !into.has(url)) into.set(url, { url, title: title || url }); };
+  for (const b of content || []) {
+    if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) b.content.forEach(r => r.type === 'web_search_result' && add(r.url, r.title));
+    if (b.type === 'text' && Array.isArray(b.citations)) b.citations.forEach(c => c.type === 'web_search_result_location' && add(c.url, c.title));
+  }
+}
+
+// Appelle Claude avec l'outil web (budget CUMULÉ de recherches) et relance sur pause_turn.
+// Résultat : { text, check: { status, searches, sources } } — jamais d'échec silencieux :
+// check.status dit si les menus ont réellement été vérifiés en ligne.
+async function runWithWebSearch({ budget, system, user, maxTokens, model = DEFAULT_MODEL, label = 'tools/guide', create }) {
+  const anthropic = require('../anthropic'); // chargé ici : évite un cycle au démarrage
+  const call = create || (p => anthropic.messages.create(p));
+  const sources = new Map();
+  let messages = [{ role: 'user', content: user }];
+  let searches = 0, toolBlocks = 0, successes = 0, toolErrors = 0, resumes = 0;
+  let response = null, unauthorized = false;
+
+  for (;;) {
+    const remaining = budget - searches;
+    // Budget épuisé : l'outil reste déclaré (l'historique contient des blocs server_tool_use ;
+    // max_uses: 0 est refusé) avec 1 recherche au plus, et la consigne de conclure sans chercher.
+    const exhausted = remaining < 1;
+    try {
+      response = await call({
+        model, max_tokens: maxTokens, messages,
+        system: exhausted ? system + NO_MORE_SEARCH : system,
+        tools: [buildWebSearchTool({ maxUses: exhausted ? 1 : remaining })],
+      });
+    } catch (err) {
+      if (!isUnauthorized(err)) throw err;
+      console.warn(`[${label}] recherche web non autorisée (${err.status || '?'}) : ${err.message}`);
+      unauthorized = true;
+      break;
+    }
+    if (response.model && response.model !== model) console.warn(`[${label}] bascule de modèle : ${model} → ${response.model}`);
+    searches += response.usage?.server_tool_use?.web_search_requests || 0;
+    for (const b of response.content || []) {
+      if (b.type === 'server_tool_use' && b.name === 'web_search') toolBlocks++;
+      if (b.type === 'web_search_tool_result') {
+        if (Array.isArray(b.content)) successes++; else toolErrors++;
+      }
+    }
+    collectSources(response.content, sources);
+    if (response.stop_reason !== 'pause_turn' || resumes >= MAX_RESUMES) break;
+    resumes++;
+    // L'outil n'a pas fini : on renvoie la réponse interrompue (recherches comprises)
+    messages = [...messages, { role: 'assistant', content: response.content }];
+  }
+
+  if (unauthorized) {
+    // Pas d'outil web pour cette organisation : le guide est quand même rédigé, mais non vérifié
+    response = await call({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
+    searches = 0; toolBlocks = 0; sources.clear();
+  }
+
+  let status;
+  if (response.stop_reason === 'max_tokens' || response.stop_reason === 'pause_turn') status = 'truncated';
+  else if (unauthorized) status = 'unauthorized';
+  else if (searches === 0 && toolBlocks === 0) status = 'not_searched';
+  else if (successes > 0) status = 'verified';
+  else status = 'error';
+
+  const check = { status, searches, sources: [...sources.values()].slice(0, MAX_SOURCES) };
+  console.log(`[${label}] recherche web : ${status} — ${searches} recherche(s), ${check.sources.length} source(s), ${resumes} relance(s)${toolErrors ? `, ${toolErrors} erreur(s) de l'outil` : ''}, modèle ${response.model || model}`);
+  return { text: require('../anthropic').textOf(response).trim(), check };
+}
 
 async function generateSetupGuide(input) {
-  const { callAgent } = require('../../routes/sessions/helpers'); // chargé ici : évite un cycle au démarrage
   const prompt = buildGuidePrompt(input);
-  return withSources(await callAgent(prompt.system, prompt.user, 6000, DEFAULT_MODEL, null, true));
+  return runWithWebSearch({ budget: GUIDE_MAX_SEARCHES, system: prompt.system, user: prompt.user, maxTokens: 6000, label: 'tools/guide' });
 }
 
 async function answerGuideQuestion(input) {
-  const { callAgent } = require('../../routes/sessions/helpers');
   const prompt = buildGuideChatPrompt(input);
-  return withSources(await callAgent(prompt.system, prompt.user, 2500, DEFAULT_MODEL, null, true));
+  return runWithWebSearch({ budget: CHAT_MAX_SEARCHES, system: prompt.system, user: prompt.user, maxTokens: 2500, label: 'tools/guide/chat' });
 }
 
-module.exports = { buildGuidePrompt, buildGuideChatPrompt, generateSetupGuide, answerGuideQuestion, MAX_CHAT };
+// ── Brouillon et étiquette (route POST /tools/guide) ────────────────────────────
+// Un guide enregistré sans étiquette (toolsGuideCheck NULL, avant cette version) vaut « à vérifier ».
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+const checkStatusOf = check => check?.status || 'unverified';
+const isVerified = check => check?.status === 'verified';
+// Écraser un guide vérifié par un qui ne l'est pas demande la confirmation de l'humain
+const needsOverwriteConfirmation = (previousCheck, nextCheck) => isVerified(previousCheck) && !isVerified(nextCheck);
+const draftExpired = (draft, now = Date.now()) => !draft?.generatedAt || now - new Date(draft.generatedAt).getTime() > DRAFT_TTL_MS;
+
+module.exports = {
+  buildGuidePrompt, buildGuideChatPrompt, generateSetupGuide, answerGuideQuestion, runWithWebSearch, MAX_CHAT,
+  GUIDE_MAX_SEARCHES, CHAT_MAX_SEARCHES, MAX_RESUMES, DRAFT_TTL_MS,
+  checkStatusOf, isVerified, needsOverwriteConfirmation, draftExpired,
+};
