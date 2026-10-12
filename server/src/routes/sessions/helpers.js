@@ -5,6 +5,7 @@ const { parseJsonField } = require('../../utils/parseJsonField');
 const { appendMemory } = require('../../utils/projectMemory');
 
 const { DEFAULT_MODEL: MODEL } = require('../../services/models');
+const { buildWebSearchTool } = require('../../services/webSearchTool');
 
 // ── Similarité lexicale (Jaccard) ─────────────────────────────────────────────
 
@@ -94,7 +95,6 @@ async function appendPendingMeetingSuggestion(sessionId, suggestion) {
 
 const WEB_SEARCH_MAX_USES    = 3;
 const WEB_SEARCH_MAX_PAUSES  = 3;
-const WEB_SEARCH_USER_LOCATION = { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' };
 
 async function callAgent(systemPrompt, userMessage, maxTokens = 600, model = MODEL, signal = null, webSearch = false) {
   let messages = [{ role: 'user', content: userMessage }];
@@ -106,13 +106,7 @@ async function callAgent(systemPrompt, userMessage, maxTokens = 600, model = MOD
   for (let loop = 0; loop <= WEB_SEARCH_MAX_PAUSES; loop++) {
     const apiParams = { model, max_tokens: maxTokens, system: systemPrompt, messages };
     if (webSearch) {
-      apiParams.tools = [{
-        type: 'web_search_20260318',
-        name: 'web_search',
-        max_uses: WEB_SEARCH_MAX_USES,
-        allowed_callers: ['direct'],
-        user_location: WEB_SEARCH_USER_LOCATION,
-      }];
+      apiParams.tools = [buildWebSearchTool({ maxUses: WEB_SEARCH_MAX_USES })];
     }
 
     response = await anthropic.messages.create(apiParams, signal ? { signal } : undefined);

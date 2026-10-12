@@ -12,6 +12,7 @@ const { parseJsonField } = require('../utils/parseJsonField');
 const { LEGACY_COST_SQL, projectCostReport } = require('../services/usageReports');
 const { ensureDemoProject, createTestProject, deleteDemoProjects } = require('../services/demoProject');
 const { DEFAULT_MODEL } = require('../services/models');
+const { buildWebSearchTool } = require('../services/webSearchTool');
 const { listDocuments, formatDocumentsForPrompt } = require('../services/documents');
 
 const router = express.Router();
@@ -894,7 +895,7 @@ router.post('/:id/quick-command', async (req, res) => {
         const searchResponse = await anthropic.messages.create({
           model: DEFAULT_MODEL,
           max_tokens: 800,
-          tools: [{ type: 'web_search_20260318', name: 'web_search', max_uses: 3, allowed_callers: ['direct'], user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' } }],
+          tools: [buildWebSearchTool({ maxUses: 3 })],
           system: `Tu es l'assistant du projet "${project.name}". Recherche sur le web et réponds en français de façon concise.`,
           messages: [{ role: 'user', content: query }]
         });

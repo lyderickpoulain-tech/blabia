@@ -9,7 +9,9 @@ const {
 } = require('../services/tools/toolsStore');
 const { analyzeAndSaveNeeds } = require('../services/tools/toolNeeds');
 const { parseJsonField } = require('../utils/parseJsonField');
-const { generateSetupGuide, answerGuideQuestion, MAX_CHAT } = require('../services/tools/setupGuide');
+const {
+  generateSetupGuide, answerGuideQuestion, MAX_CHAT, needsOverwriteConfirmation, checkStatusOf, draftExpired,
+} = require('../services/tools/setupGuide');
 const { projectRepoText } = require('../services/repoOverview');
 const { listDecisions, formatRegistryForPrompt } = require('../services/decisions');
 
@@ -84,7 +86,7 @@ router.get('/projects/:id/tools', authMiddleware, async (req, res) => {
     res.json({
       tools, total: monthlyTotal(tools), needs,
       toolsMeeting: await toolsMeetingStatus(project, tools, needs),
-      guide: project.toolsGuide ? { text: project.toolsGuide, at: project.toolsGuideAt } : null,
+      guide: project.toolsGuide ? { text: project.toolsGuide, at: project.toolsGuideAt, check: parseJsonField(project.toolsGuideCheck, null) } : null,
       guideChat: parseJsonField(project.toolsGuideChat, []),
     });
   } catch (err) {
@@ -117,19 +119,60 @@ router.post('/projects/:id/tools/guide', authMiddleware, async (req, res) => {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     if (project.isDemo) return res.status(403).json({ demo: true, error: 'Projet exemple : pas de guide pendant la visite guidée.' });
+    if (req.body?.force === true) { // l'humain accepte de remplacer : on promeut le brouillon, sans nouvel appel à l'IA
+      const draft = parseJsonField(project.toolsGuideDraft, null);
+      if (!draft?.text) return res.status(404).json({ error: 'Aucun nouveau guide en attente. Régénérez le guide.' });
+      if (draftExpired(draft)) {
+        await db('Project').where({ id: project.id }).update({ toolsGuideDraft: null });
+        return res.status(410).json({ error: 'Le nouveau guide en attente a plus de 24 h : il a été écarté. Régénérez le guide.' });
+      }
+      const at = new Date(draft.generatedAt);
+      await db('Project').where({ id: project.id }).update({
+        toolsGuide: draft.text, toolsGuideAt: at, toolsGuideCheck: JSON.stringify(draft.check), toolsGuideDraft: null,
+      });
+      return res.json({ text: draft.text, at, check: draft.check });
+    }
     const tools = await getProjectTools(project);
     if (!tools.some(t => t.status === 'validated')) {
       return res.status(400).json({ error: 'Retenez d’abord les outils du projet (réunion « outils » ou ci-dessous) : le guide explique comment les relier.' });
     }
     const registryText = formatRegistryForPrompt(await listDecisions(project.id)).activeText;
     const repoText = await projectRepoText(project); // structure réelle du dépôt
-    const text = await generateSetupGuide({ project, tools, registryText, repoText, chat: parseJsonField(project.toolsGuideChat, []) });
+    const { text, check } = await generateSetupGuide({ project, tools, registryText, repoText, chat: parseJsonField(project.toolsGuideChat, []) });
     const at = new Date();
-    await db('Project').where({ id: project.id }).update({ toolsGuide: text, toolsGuideAt: at });
-    res.json({ text, at });
+    const previousCheck = project.toolsGuide ? parseJsonField(project.toolsGuideCheck, null) : null;
+    if (project.toolsGuide && needsOverwriteConfirmation(previousCheck, check)) {
+      // L'ancien guide était vérifié en ligne, pas le nouveau : il est mis de côté (remplace tout
+      // brouillon précédent) et l'humain choisit
+      await db('Project').where({ id: project.id }).update({ toolsGuideDraft: JSON.stringify({ text, check, generatedAt: at.toISOString() }) });
+      return res.status(409).json({
+        needsConfirmation: true,
+        error: 'Le nouveau guide n’a pas pu être vérifié en ligne, alors que l’actuel l’était.',
+        previous: { status: checkStatusOf(previousCheck) }, next: { status: check.status },
+      });
+    }
+    await db('Project').where({ id: project.id }).update({
+      toolsGuide: text, toolsGuideAt: at, toolsGuideCheck: JSON.stringify(check), toolsGuideDraft: null,
+    });
+    res.json({ text, at, check });
   } catch (err) {
     console.error('[projects/:id/tools/guide POST]', err.message);
     res.status(500).json({ error: 'Le guide n’a pas pu être rédigé. Réessayez dans un instant.' });
+  }
+});
+
+// DELETE /api/projects/:id/tools/guide/draft — l'humain refuse le nouveau guide : le brouillon
+// est supprimé, l'ancien guide reste intact
+router.delete('/projects/:id/tools/guide/draft', authMiddleware, async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    await db('Project').where({ id: project.id }).update({ toolsGuideDraft: null });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[projects/:id/tools/guide/draft DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
@@ -146,12 +189,12 @@ router.post('/projects/:id/tools/guide/chat', authMiddleware, async (req, res) =
     if (project.isDemo) return res.status(403).json({ demo: true, error: 'Projet exemple : pas de discussion pendant la visite guidée.' });
     const chat = parseJsonField(project.toolsGuideChat, []);
     const [tools, decisions, repoText] = await Promise.all([getProjectTools(project), listDecisions(project.id), projectRepoText(project)]);
-    const answer = await answerGuideQuestion({
+    const { text: answer, check } = await answerGuideQuestion({
       project, tools, registryText: formatRegistryForPrompt(decisions).activeText, repoText,
       guide: project.toolsGuide || '', chat, message,
     });
     const now = new Date().toISOString();
-    const next = [...chat, { role: 'user', content: message, at: now }, { role: 'assistant', content: answer, at: now }].slice(-MAX_CHAT);
+    const next = [...chat, { role: 'user', content: message, at: now }, { role: 'assistant', content: answer, at: now, check }].slice(-MAX_CHAT);
     await db('Project').where({ id: project.id }).update({ toolsGuideChat: JSON.stringify(next) });
     res.json({ chat: next });
   } catch (err) {

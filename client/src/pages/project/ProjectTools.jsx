@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, RefreshCw, MessageCircle, Send, Trash2 } from 'lucide-react';
+import { AlertTriangle, BookOpen, RefreshCw, MessageCircle, Send, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError } from '../../utils/notify';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
@@ -10,6 +10,56 @@ import Markdown from '../../components/Markdown';
 
 const fmtDate = d => new Date(d).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+// Vérification en ligne d'un guide ou d'une réponse. Pas d'étiquette (anciens guides et
+// anciens messages) = « à vérifier » : seul « verified » est présenté comme vérifié.
+const checkOf = check => check?.status || 'unverified';
+const CHECK_LABEL = {
+  verified: 'Vérifié en ligne',
+  truncated: 'Guide incomplet',
+  unverified: 'Menus non vérifiés en ligne',
+};
+const checkLabel = status => CHECK_LABEL[status] || CHECK_LABEL.unverified;
+
+function CheckBanner({ check, kind = 'guide' }) {
+  const status = checkOf(check);
+  if (status === 'verified') return null;
+  const incomplete = status === 'truncated';
+  return (
+    <div role="status" className="mt-3 rounded-xl border border-await-border bg-await-bg px-3.5 py-2.5 flex items-start gap-2">
+      <AlertTriangle size={16} className="text-await shrink-0 mt-0.5" aria-hidden="true" />
+      <p className="text-sm text-ink-soft">
+        <span className="font-bold text-await">{checkLabel(status)}.</span>{' '}
+        {incomplete
+          ? `Le texte a été coupé avant la fin : ${kind === 'guide' ? 'régénérez le guide' : 'redemandez à BlabIA'}.`
+          : `Les noms des menus et des boutons n’ont pas été contrôlés sur Internet : ils peuvent avoir changé.`}
+      </p>
+    </div>
+  );
+}
+
+function CheckNote({ check }) {
+  const status = checkOf(check);
+  return status === 'verified'
+    ? <p className="text-xs text-ink-faint mt-1.5">Vérifié en ligne{check.searches ? ` (${check.searches} recherche${check.searches > 1 ? 's' : ''})` : ''}</p>
+    : <p className="text-xs text-await font-bold mt-1.5 inline-flex items-center gap-1"><AlertTriangle size={12} aria-hidden="true" /> {checkLabel(status)}</p>;
+}
+
+function Sources({ sources }) {
+  if (!sources?.length) return null;
+  return (
+    <div className="mt-3 text-xs text-ink-muted">
+      <p className="font-bold text-ink-soft mb-1">Sources consultées</p>
+      <ul className="space-y-0.5">
+        {sources.map(s => (
+          <li key={s.url} className="break-words">
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-action hover:underline">{s.title || s.url}</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // Guide de mise en place, sur demande : comment relier pas à pas les outils retenus
 // (dépôt GitHub, hébergeur, nom de domaine…). Rédigé avec une recherche web, conservé.
 function SetupGuide({ project }) {
@@ -17,6 +67,7 @@ function SetupGuide({ project }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [chat, setChat] = useState([]);
+  const [conflict, setConflict] = useState(null); // 409 : { previous, next } à arbitrer
   useEffect(() => {
     api.get(`/projects/${project.id}/tools`).then(({ data }) => { setGuide(data.guide || null); setChat(data.guideChat || []); }).catch(() => setGuide(null));
   }, [project.id]);
@@ -26,7 +77,24 @@ function SetupGuide({ project }) {
     try {
       const { data } = await api.post(`/projects/${project.id}/tools/guide`);
       setGuide(data); setOpen(true);
-    } catch (err) { notifyError(err, 'Le guide n’a pas pu être rédigé.'); } finally { setBusy(false); }
+    } catch (err) {
+      if (err.response?.status === 409 && err.response.data?.needsConfirmation) setConflict(err.response.data);
+      else notifyError(err, 'Le guide n’a pas pu être rédigé.');
+    } finally { setBusy(false); }
+  };
+  // « Oui » : promeut le nouveau guide en attente (sans nouvel appel à l'IA) ; « Non » : l'écarte
+  const resolve = async replace => {
+    setBusy(true);
+    try {
+      if (replace) {
+        const { data } = await api.post(`/projects/${project.id}/tools/guide`, { force: true });
+        setGuide(data); setOpen(true);
+      } else await api.delete(`/projects/${project.id}/tools/guide/draft`);
+      setConflict(null);
+    } catch (err) {
+      if ([404, 410].includes(err.response?.status)) setConflict(null);
+      notifyError(err, 'Action impossible.');
+    } finally { setBusy(false); }
   };
   if (guide === undefined) return null;
 
@@ -49,7 +117,26 @@ function SetupGuide({ project }) {
           </Button>
         </div>
       </div>
-      {guide && open && <div className="mt-4 pt-4 border-t border-line"><Markdown size="synthesis">{guide.text}</Markdown></div>}
+      {conflict && (
+        <div role="alertdialog" aria-labelledby="guide-conflict" className="mt-3 rounded-xl border border-action bg-canvas px-3.5 py-3 space-y-2">
+          <p id="guide-conflict" className="text-sm font-extrabold text-ink">Remplacer quand même ?</p>
+          <p className="text-sm text-ink-soft">
+            Le guide actuel est « {checkLabel(conflict.previous?.status)} ». Le nouveau est « {checkLabel(conflict.next?.status)} ».
+            Il est mis de côté pendant 24 h : votre guide actuel reste en place tant que vous n’avez pas répondu.
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" onClick={() => resolve(true)} disabled={busy}>Oui, remplacer</Button>
+            <Button size="sm" variant="secondary" onClick={() => resolve(false)} disabled={busy}>Non, garder l’actuel</Button>
+          </div>
+        </div>
+      )}
+      {guide && <CheckBanner check={guide.check} />}
+      {guide && open && (
+        <div className="mt-4 pt-4 border-t border-line">
+          <Markdown size="synthesis">{guide.text}</Markdown>
+          <Sources sources={guide.check?.sources} />
+        </div>
+      )}
       <GuideChat projectId={project.id} chat={chat} setChat={setChat} hasGuide={!!guide} />
     </Card>
   );
@@ -107,7 +194,13 @@ function GuideChat({ projectId, chat, setChat, hasGuide }) {
           <li key={i} className={m.role === 'user' ? 'flex justify-end' : ''}>
             {m.role === 'user'
               ? <div className="max-w-[85%] rounded-xl bg-action text-white px-3 py-2 text-sm whitespace-pre-wrap break-words">{m.content}</div>
-              : <div className="rounded-xl bg-ai-bg border border-ai-border p-3"><Markdown size="synthesis">{m.content}</Markdown></div>}
+              : (
+                <div className="rounded-xl bg-ai-bg border border-ai-border p-3">
+                  <Markdown size="synthesis">{m.content}</Markdown>
+                  <CheckNote check={m.check} />
+                  <Sources sources={m.check?.sources} />
+                </div>
+              )}
           </li>
         ))}
         {sending && <li className="text-xs text-ink-muted">BlabIA cherche la solution (jusqu’à une minute)…</li>}

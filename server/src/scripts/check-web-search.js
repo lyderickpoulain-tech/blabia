@@ -8,15 +8,10 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const anthropic = require('../services/anthropic');
 
-const TOOL = {
-  type: 'web_search_20260318',
-  name: 'web_search',
-  max_uses: 3,
-  // Sans ça, le modèle route parfois la recherche via exécution de code et
-  // l'API n'attache alors jamais de citations aux blocs texte (confirmé en test).
-  allowed_callers: ['direct'],
-  user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' },
-};
+const { buildWebSearchTool } = require('../services/webSearchTool');
+
+// Même définition que l'application (réglage de référence : services/webSearchTool.js)
+const TOOL = buildWebSearchTool({ maxUses: 3 });
 
 async function main() {
   console.log('Test de la recherche web Anthropic (outil web_search_20260318)...\n');

@@ -171,6 +171,14 @@ curl https://blabia.rasia-editions.fr/api/health
 
 Voir [DEPLOY.md](DEPLOY.md) pour la liste complète des variables d'environnement et les étapes de mise en production.
 
+**Un seul service Railway** : le `Dockerfile` à la racine construit le client (`client/`) puis embarque le serveur (`server/`), qui sert aussi les pages. Dossier racine à indiquer à Railway : **la racine du dépôt (`/`)**, pas `/client` ni `/server`. Le port est lu dans `process.env.PORT` (fourni par Railway).
+
+Ordre de mise en place :
+1. Créer le service à partir du dépôt GitHub et y ajouter le plugin PostgreSQL (il fournit `DATABASE_URL`).
+2. Renseigner les variables : `JWT_SECRET`, `ANTHROPIC_API_KEY`, `FRONTEND_URL` (adresse publique du service), puis, si utilisées, `RESEND_API_KEY`, `CRON_SECRET` et `GITHUB_APP_*` (modèles dans `.env.example`).
+3. Déployer. **Les migrations de la base sont appliquées avant le démarrage du serveur** (`prisma migrate deploy` dans le `CMD` du `Dockerfile`) ; faire un `pg_dump` avant tout déploiement qui contient une migration.
+4. Vérifier `https://<votre-adresse>/api/health`.
+
 Après chaque modification :
 ```bash
 git add .
