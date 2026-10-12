@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { User, Euro, Pin, X } from 'lucide-react';
+import { ToolCategoryIcon } from '../ui/icons';
 
 // v5.0 phase 4.2 : carte des outils. Layout fixe par couches (positions dans le
 // catalogue serveur, repère 1000 × 780) : Utilisateur → Interface → Serveur → Données,
@@ -42,7 +44,7 @@ export default function ToolsMap({ catalog, items, emptyLabel = "rien ici pour l
             className="absolute flex items-center justify-center rounded-full bg-blabia-blue text-white text-xs font-semibold shadow"
             style={{ left: pct(USER_NODE.x, W), top: pct(USER_NODE.y, H), width: pct(USER_NODE.w, W), height: pct(USER_NODE.h, H) }}
           >
-            👤 Utilisateur
+            <User size={14} className="mr-1" aria-hidden="true" /> Utilisateur
           </div>
 
           {catalog.categories.map(cat => {
@@ -59,7 +61,7 @@ export default function ToolsMap({ catalog, items, emptyLabel = "rien ici pour l
                 title={cat.explanation}
               >
                 <div className="flex items-start gap-1">
-                  <span className="text-sm leading-none">{cat.icon}</span>
+                  <ToolCategoryIcon id={cat.id} size={14} className="shrink-0 text-ink-soft" />
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold text-gray-800 leading-tight">{cat.label}</p>
                     <p className="text-[9px] text-gray-400 leading-tight">{cat.technical}</p>
@@ -102,10 +104,10 @@ export default function ToolsMap({ catalog, items, emptyLabel = "rien ici pour l
               {selected.dashed && <span className="ml-2 text-[10px] font-medium text-amber-600">suggéré</span>}
             </p>
             {selected.detail?.role && <p className="text-xs text-gray-600">{selected.detail.role}</p>}
-            {selected.detail?.cost && <p className="text-xs text-gray-500">💶 {selected.detail.cost}</p>}
-            {selected.detail?.status && <p className="text-xs text-gray-500">📌 {selected.detail.status}</p>}
+            {selected.detail?.cost && <p className="text-xs text-gray-500 flex items-center gap-1"><Euro size={12} aria-hidden="true" /> {selected.detail.cost}</p>}
+            {selected.detail?.status && <p className="text-xs text-gray-500 flex items-center gap-1"><Pin size={12} aria-hidden="true" /> {selected.detail.status}</p>}
           </div>
-          <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none" aria-label="Fermer">×</button>
+          <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600" aria-label="Fermer"><X size={18} /></button>
         </div>
       )}
     </div>

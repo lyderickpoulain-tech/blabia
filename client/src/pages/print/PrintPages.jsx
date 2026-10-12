@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Printer, X } from 'lucide-react';
+import { Printer, X, Check } from 'lucide-react';
 import api from '../../utils/api';
 import Markdown from '../../components/Markdown';
 
@@ -120,7 +120,7 @@ export function PrintRegistry() {
           {done.length > 0 && (
             <>
               <h3 className="text-sm font-extrabold uppercase tracking-wider text-ink-muted mb-2">Faites</h3>
-              <ul className="pl-5">{done.map(a => <li key={a.id} className="text-ink-muted">✓ {a.title}</li>)}</ul>
+              <ul className="pl-5">{done.map(a => <li key={a.id} className="text-ink-muted"><Check size={12} className="inline -mt-0.5 mr-1" aria-hidden="true" />{a.title}</li>)}</ul>
             </>
           )}
         </>

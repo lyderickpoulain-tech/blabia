@@ -97,10 +97,10 @@ export default function MeetingHeader({
                   {deliverableTypes.map(d => (
                     <button key={d.id} type="button" disabled={isClosed || savingIntention}
                       onClick={() => handleSaveIntention(d.id)}
-                      className={`text-xs rounded-lg border px-2 py-2 font-semibold transition disabled:opacity-50 ${
+                      className={`text-xs rounded-lg border px-2 py-2 font-semibold transition disabled:opacity-50 inline-flex items-center justify-center gap-1.5 ${
                         d.id === currentIntention ? 'bg-action border-action text-white' : 'bg-white border-line text-ink-muted hover:border-action-border'
                       }`}>
-                      {d.label}
+                      <d.icon size={14} strokeWidth={1.75} aria-hidden="true" /> {d.label}
                     </button>
                   ))}
                 </div>

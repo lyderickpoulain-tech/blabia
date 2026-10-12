@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { TriangleAlert, Check, RefreshCw, Sparkles } from 'lucide-react';
 import ToolsMap from './ToolsMap';
 import ToolCostEditor from './ToolCostEditor';
 import api from '../../utils/api';
 import { useToolsCatalog, PROJECT_STATUS, costLabel, totalLabel } from '../../utils/toolsCatalog';
+import { ToolCategoryIcon } from '../ui/icons';
 
 // v5.0 phase 4.3 : outils d'un projet, organisés par type d'outil nécessaire.
 // BlabIA analyse les besoins du projet et pré-remplit avec « Mes outils » :
@@ -91,7 +93,7 @@ function ToolLine({ tool, onChange, onRemove, onReplace, needsSetup }) {
         </label>
       )}
       {tool.warning && !refused && (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">⚠️ {tool.warning}</p>
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 flex items-start gap-1.5"><TriangleAlert size={13} className="shrink-0 mt-px" aria-hidden="true" /> <span>{tool.warning}</span></p>
       )}
       {tool.why && <p className="text-xs text-gray-600"><span className="text-gray-400">Pourquoi :</span> {tool.why}</p>}
       {tool.origin === 'complementary' && (
@@ -105,7 +107,7 @@ function ToolLine({ tool, onChange, onRemove, onReplace, needsSetup }) {
       {editingCost && <ToolCostEditor cost={tool.cost} onChange={cost => onChange({ ...tool, cost })} />}
       <div className="flex gap-3 flex-wrap text-xs pt-0.5">
         {tool.status === 'suggested' && (
-          <button onClick={() => onChange({ ...tool, status: 'validated', warning: null })} className="text-green-700 hover:underline font-medium">✓ Garder</button>
+          <button onClick={() => onChange({ ...tool, status: 'validated', warning: null })} className="text-green-700 hover:underline font-medium inline-flex items-center gap-1"><Check size={12} aria-hidden="true" /> Garder</button>
         )}
         {refused
           ? <button onClick={() => onChange({ ...tool, status: 'suggested' })} className="text-gray-600 hover:underline">Rétablir</button>
@@ -138,7 +140,7 @@ function CategoryBlock({ category, need, tools, myTools, catalogTools, onSave, s
   return (
     <div className={`rounded-xl border p-3 space-y-2 ${need && !covered ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
       <div className="flex items-start gap-2">
-        <span className="text-lg leading-none">{category.icon}</span>
+        <ToolCategoryIcon id={category.id} size={20} className="shrink-0 text-ink-soft" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900">
             {category.label} <span className="text-xs font-normal text-gray-400">· {category.technical}</span>
@@ -152,7 +154,7 @@ function CategoryBlock({ category, need, tools, myTools, catalogTools, onSave, s
 
       {need && !covered && (
         <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
-          ⚠️ Aucun outil retenu pour ce besoin. {need.warning || need.need}
+          <TriangleAlert size={13} className="inline -mt-0.5 mr-1" aria-hidden="true" />Aucun outil retenu pour ce besoin. {need.warning || need.need}
           {need.examples?.length > 0 && <span className="block text-amber-700 mt-0.5">Exemples : {need.examples.join(', ')}</span>}
         </div>
       )}
@@ -273,11 +275,11 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {(missingCount > 0 || warnCount > 0) && (
-            <span className="text-xs text-amber-700">⚠️ {missingCount + warnCount} point{missingCount + warnCount > 1 ? 's' : ''} d'attention</span>
+            <span className="text-xs text-amber-700 inline-flex items-center gap-1"><TriangleAlert size={13} aria-hidden="true" /> {missingCount + warnCount} point{missingCount + warnCount > 1 ? 's' : ''} d'attention</span>
           )}
           <button onClick={analyze} disabled={analyzing}
             className="text-xs border border-gray-300 text-gray-700 hover:bg-white px-3 py-1.5 rounded-lg disabled:opacity-50">
-            {analyzing ? 'Analyse…' : needs ? '🔄 Réanalyser les besoins' : '✨ Analyser les besoins'}
+            <span className="inline-flex items-center gap-1.5">{needs ? <RefreshCw size={13} aria-hidden="true" /> : <Sparkles size={13} aria-hidden="true" />}{analyzing ? 'Analyse…' : needs ? 'Réanalyser les besoins' : 'Analyser les besoins'}</span>
           </button>
         </div>
       </div>

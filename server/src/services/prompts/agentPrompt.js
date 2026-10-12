@@ -143,7 +143,7 @@ Juste avant le bloc, donne-lui un titre court sur une ligne : [ARTIFACT_TITLE: T
 Accompagne-le d'UNE bulle courte (une phrase) qui dit ce que montre l'illustration. Le bloc ne compte pas dans la limite de mots.
 `
     : `
-ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. Si un schéma ou une maquette aiderait, propose-le en une phrase : l'humain peut le demander avec le bouton « 🎨 Illustrer ».
+ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. Si un schéma ou une maquette aiderait, propose-le en une phrase : l'humain peut le demander avec le bouton « Illustrer ».
 `;
   // v5.1 : actions entre les réunions, et point d'avancement en ouverture
   const actionsSection = actionsText

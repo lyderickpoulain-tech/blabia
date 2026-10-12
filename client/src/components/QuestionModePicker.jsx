@@ -1,9 +1,10 @@
+import { Handshake, Scale, Target } from 'lucide-react';
 // Mode de questions : combien de décisions les agents soumettent à l'humain par
 // réunion (budgets définis côté serveur : services/questionModes.js).
 export const QUESTION_MODES = [
-  { id: 'delegate', icon: '🤝', label: 'Je délègue',            hint: '≈ 4 questions — les agents tranchent l\'essentiel, vous les contredisez si besoin' },
-  { id: 'balanced', icon: '⚖️', label: 'Équilibré',             hint: '≈ 8 questions — vous tranchez les choix structurants' },
-  { id: 'control',  icon: '🎯', label: 'Je veux tout trancher', hint: '≈ 15 questions — les agents vous soumettent la plupart des choix' },
+  { id: 'delegate', icon: Handshake, label: 'Je délègue',            hint: '≈ 4 questions — les agents tranchent l\'essentiel, vous les contredisez si besoin' },
+  { id: 'balanced', icon: Scale, label: 'Équilibré',             hint: '≈ 8 questions — vous tranchez les choix structurants' },
+  { id: 'control',  icon: Target, label: 'Je veux tout trancher', hint: '≈ 15 questions — les agents vous soumettent la plupart des choix' },
 ];
 
 export default function QuestionModePicker({ value, onChange, compact = false }) {
@@ -24,7 +25,7 @@ export default function QuestionModePicker({ value, onChange, compact = false })
                 : 'bg-white border-line text-ink-muted font-semibold hover:border-action-border'
             }`}
           >
-            <span>{m.icon}</span>
+            <m.icon size={18} strokeWidth={1.75} aria-hidden="true" />
             <span className="text-center">{m.label}</span>
           </button>
         ))}

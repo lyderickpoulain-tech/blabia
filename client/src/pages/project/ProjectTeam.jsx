@@ -3,6 +3,7 @@ import { GripVertical, Plus, UserMinus, UserPlus } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
+import { AgentAvatar, AgentIconPicker } from '../../components/ui/icons';
 
 // Équipe : les agents qui travaillent sur le projet (refonte UX v5.1).
 // L'ordre de l'équipe est l'ordre proposé au démarrage des réunions.
@@ -78,7 +79,7 @@ export default function ProjectTeam() {
       className={`flex items-center gap-3 px-4 py-3 ${overId === agent.id && dragId !== agent.id ? 'bg-action-light' : ''}`}
     >
       {inTeam && <GripVertical size={16} className="text-ink-faint cursor-grab shrink-0" aria-label="Glisser pour réordonner" />}
-      <span className="w-9 h-9 rounded-full bg-muted-light flex items-center justify-center text-lg shrink-0" aria-hidden="true">{agent.emoji || '🤖'}</span>
+      <AgentAvatar agent={agent} size="md" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-ink">{agent.name}{agent.isDefault && <span className="ml-2 text-[11px] font-semibold text-ink-faint">par défaut</span>}</p>
         <p className="text-xs text-ink-muted truncate">{agent.role}</p>
@@ -106,9 +107,6 @@ export default function ProjectTeam() {
       {showCreate && (
         <Card as="form" onSubmit={create} className="p-4 mb-4 space-y-3">
           <div className="flex gap-2">
-            <label className="sr-only" htmlFor="agent-emoji">Emoji</label>
-            <input id="agent-emoji" value={form.emoji} onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))} maxLength={4}
-              className="w-14 h-11 text-center text-lg border border-line rounded-lg outline-none focus:ring-2 focus:ring-action-border" />
             <label className="sr-only" htmlFor="agent-name">Nom</label>
             <input id="agent-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nom (ex. Expert juridique)"
               className="flex-1 min-w-0 h-11 text-sm border border-line rounded-lg px-3 outline-none focus:ring-2 focus:ring-action-border" />
@@ -120,6 +118,10 @@ export default function ProjectTeam() {
           <textarea id="agent-prompt" value={form.systemPrompt} onChange={e => setForm(f => ({ ...f, systemPrompt: e.target.value }))} rows={3}
             placeholder="Consignes : comment cet agent raisonne, ce qu'il surveille, son style…"
             className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-action-border resize-none" />
+          <div>
+            <p className="text-xs font-bold text-ink-soft mb-1.5">Icône</p>
+            <AgentIconPicker value={form.emoji} onChange={emoji => setForm(f => ({ ...f, emoji }))} agent={{ name: form.name, role: form.role }} />
+          </div>
           <div className="flex gap-2">
             <Button type="submit" variant="primary" disabled={creating || !form.name.trim() || !form.role.trim() || !form.systemPrompt.trim()}>
               {creating ? 'Création…' : 'Créer et ajouter à l’équipe'}

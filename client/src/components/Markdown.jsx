@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -34,7 +35,7 @@ function CodeBlock({ inline, children }) {
         onClick={handleCopy}
         className="absolute top-2 right-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded-lg transition opacity-0 group-hover:opacity-100"
       >
-        {copied ? '✓ Copié' : 'Copier'}
+        {copied ? <span className="inline-flex items-center gap-1"><Check size={11} aria-hidden="true" /> Copié</span> : 'Copier'}
       </button>
     </div>
   );

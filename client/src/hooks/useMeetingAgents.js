@@ -49,7 +49,7 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
       setActiveAgents(prev => [...prev, data.agent]);
       setMessages(prev => [...prev, {
         id: `sys-${Date.now()}`, role: 'system', agentName: null,
-        content: `${data.agent.emoji || '🤖'} ${data.agent.name} a rejoint la réunion.`,
+        content: `${data.agent.name} a rejoint la réunion.`,
         timestamp: new Date().toISOString(), type: 'message', pinned: false,
       }]);
       setShowAgentDropdown(false);

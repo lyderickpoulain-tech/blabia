@@ -4,6 +4,7 @@ import DecisionCard from '../DecisionCard';
 import AgentScopeSelector from './AgentScopeSelector';
 import MeetingSuggestionCard from './MeetingSuggestionCard';
 import { costLabel } from '../../utils/toolsCatalog';
+import { AgentAvatar } from '../ui/icons';
 
 // Panneau latéral repliable de la réunion (refonte UX v5.1) :
 // questions en attente, tranché ici, suggestions (style unique), équipe, illustrations.
@@ -105,7 +106,7 @@ function AgentAddMenu({ loadingAvailable, availableForAdd, addingAgentId, handle
                       <li key={id}>
                         <button type="button" onClick={() => handleAddAgent(id)} disabled={addingAgentId === id}
                           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-canvas text-left disabled:opacity-50">
-                          <span className="w-6 h-6 rounded-full bg-muted-light text-xs flex items-center justify-center shrink-0">{a.emoji || a.name?.[0] || '?'}</span>
+                          <AgentAvatar agent={a} size="xs" />
                           <span className="min-w-0">
                             <span className="block text-[13px] font-semibold text-ink truncate">{a.name}</span>
                             <span className="block text-[11px] text-ink-faint truncate">{a.role}</span>
@@ -235,7 +236,7 @@ export default function MeetingSidePanel({
           const c = agentColors[i % agentColors.length];
           return (
             <div key={a.id || a.name} className="flex items-center gap-2">
-              <span className={`w-6 h-6 rounded-full ${c.avatar} text-white text-xs flex items-center justify-center shrink-0`}>{a.emoji || a.name?.[0]}</span>
+              <AgentAvatar agent={a} size="xs" className={`${c.avatar} text-white`} />
               <span className="text-[13px] min-w-0 truncate"><strong className="font-extrabold">{a.name}</strong> · {a.role}</span>
             </div>
           );

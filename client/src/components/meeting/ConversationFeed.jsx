@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Image as ImageIcon, Sparkles, ShieldAlert } from 'lucide-react';
+import { Image as ImageIcon, Sparkles, ShieldAlert, Check } from 'lucide-react';
 import DecisionCard from '../DecisionCard';
 import MissionCard from '../MissionCard';
 import Markdown from '../Markdown';
+import { AgentAvatar as AgentIconAvatar, stripLeadingEmoji } from '../ui/icons';
 
 // ── Fil de conversation compact (refonte UX v5.1) ─────────────────────────────
 // Messages façon messagerie : avatar et nom au premier message d'une série.
@@ -69,12 +70,7 @@ const timeOf = ts => {
 };
 
 function AgentAvatar({ agent, color, name, hidden }) {
-  return (
-    <span aria-hidden="true"
-      className={`w-7 h-7 rounded-full ${color.avatar} text-white text-xs font-extrabold flex items-center justify-center shrink-0 ${hidden ? 'invisible' : ''}`}>
-      {agent?.emoji || name?.[0] || '?'}
-    </span>
-  );
+  return <AgentIconAvatar agent={agent || { name }} size="sm" className={`${color.avatar} text-white`} hidden={hidden} />;
 }
 
 export default function ConversationFeed({
@@ -232,7 +228,7 @@ export default function ConversationFeed({
             </div>
           ) : v.status !== 'open' && (
             <p className={`text-xs font-bold mt-1.5 ${v.status === 'accepted' ? 'text-ok' : 'text-ink-faint'}`}>
-              {v.status === 'accepted' ? '✓ Pris en compte : les agents l’intègrent' : 'Écarté : le contradicteur n’y reviendra pas'}
+              {v.status === 'accepted' ? <><Check size={13} className="inline -mt-0.5" aria-hidden="true" /> Pris en compte : les agents l’intègrent</> : 'Écarté : le contradicteur n’y reviendra pas'}
             </p>
           )}
         </div>
@@ -311,7 +307,7 @@ export default function ConversationFeed({
     // agents, déjà visibles sur la carte de question et dans « Tranché ici »
     if (msg.role === 'system' && msg.type === 'decision_answer') return;
     if (msg.role === 'system') {
-      items.push(<p key={msg.id} className="text-center text-xs text-ink-faint py-1">{msg.content}</p>);
+      items.push(<p key={msg.id} className="text-center text-xs text-ink-faint py-1">{stripLeadingEmoji(msg.content)}</p>);
       prevAgent = null;
       return;
     }

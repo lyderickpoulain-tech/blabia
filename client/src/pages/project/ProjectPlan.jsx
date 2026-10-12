@@ -21,7 +21,7 @@ export default function ProjectPlan() {
           </Button>
         )}
       </PageHeader>
-      <ProjectTimelinePanel projectId={project.id} variant="page" refreshKey={refreshKey} />
+      <ProjectTimelinePanel projectId={project.id} refreshKey={refreshKey} />
       {showGenerate && (
         <GenerateTimelineModal
           project={project}

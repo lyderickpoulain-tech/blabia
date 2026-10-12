@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, AtSign, Shield, Bell, Send, Github } from 'lucide-react';
+import { Mail, AtSign, Shield, Bell, Send, Github, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
 import { Button, Card } from '../components/ui';
@@ -130,7 +130,7 @@ export default function ProfilePage() {
   if (val && !unchanged) {
     if (!formatOk) indicator = <span className="text-red-600">Format invalide (3 à 20 caractères : lettres, chiffres, - ou _)</span>;
     else if (checking) indicator = <span className="text-ink-faint">Vérification…</span>;
-    else if (available === true) indicator = <span className="text-ok font-bold">✓ Disponible</span>;
+    else if (available === true) indicator = <span className="text-ok font-bold inline-flex items-center gap-1"><Check size={14} aria-hidden="true" /> Disponible</span>;
     else if (available === false) indicator = <span className="text-red-600 font-bold">Déjà utilisé</span>;
   }
 

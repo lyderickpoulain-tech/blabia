@@ -54,7 +54,7 @@ router.post('/:sessionId/add-agent', async (req, res) => {
       id: randomUUID(),
       role: 'system',
       agentName: null,
-      content: `${agent.emoji || '🤖'} ${agent.name} a rejoint la réunion.`,
+      content: `${agent.name} a rejoint la réunion.`,
       timestamp: joinedAt,
       type: 'message',
       pinned: false

@@ -6,6 +6,7 @@ import ToolsMap from '../components/tools/ToolsMap';
 import ToolCostEditor from '../components/tools/ToolCostEditor';
 import api from '../utils/api';
 import { useToolsCatalog, USER_STATUS, costLabel } from '../utils/toolsCatalog';
+import { ToolCategoryIcon } from '../components/ui/icons';
 
 // v5.0 phase 4.1 : « Mes outils » — fusion de l'ancienne page Environnement
 // (User.techStack) et de la Boîte à outils (User.toolbox) dans User.tools.
@@ -199,7 +200,7 @@ export default function MyTools() {
                 return (
                   <Card key={cat.id} className="p-4 space-y-2">
                     <div className="flex items-start gap-2">
-                      <span className="text-xl leading-none">{cat.icon}</span>
+                      <ToolCategoryIcon id={cat.id} size={22} className="shrink-0 text-ink-soft" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-extrabold text-ink">
                           {cat.label} <span className="text-xs font-semibold text-ink-faint">· {cat.technical}</span>

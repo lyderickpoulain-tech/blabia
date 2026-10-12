@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { Check, MapPin, Lightbulb } from 'lucide-react';
+import { MeetingTypeIcon } from './MilestoneDrawers';
 
 const TYPE_META = {
-  decision:    { icon: '🤝', label: 'Décision' },
-  claude_code: { icon: '💻', label: 'Claude Code' },
-  stack:       { icon: '🔧', label: 'Outils' },
+  decision:    { label: 'Décision' },
+  claude_code: { label: 'Claude Code' },
+  stack:       { label: 'Outils' },
 };
 
 // Résout la référence "after" (ex. "R2") en titre lisible pour affichage.
@@ -29,12 +31,12 @@ export default function MeetingSuggestionCard({ suggestion, onKeep, onDiscard, o
     return (
       <div className="mx-4 bg-green-50 border border-green-200 rounded-xl p-3 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="text-base shrink-0">{TYPE_META[suggestion.type]?.icon || '🤝'}</span>
+          <MeetingTypeIcon type={suggestion.type} size={16} className="shrink-0 text-green-700" />
           <span className="flex-1 text-sm text-green-900 truncate">{suggestion.title}</span>
-          <span className="text-xs text-green-600 font-medium shrink-0">✓ Gardée</span>
+          <span className="text-xs text-green-600 font-medium shrink-0 inline-flex items-center gap-1"><Check size={12} aria-hidden="true" /> Gardée</span>
           <button onClick={() => setEditing(true)} className="text-xs text-green-700 hover:underline shrink-0">Modifier</button>
         </div>
-        <p className="text-[10px] text-green-700 pl-6">📍 {positionLabel(suggestion.after, meetingRefs)}</p>
+        <p className="text-[10px] text-green-700 pl-6 flex items-center gap-1"><MapPin size={11} aria-hidden="true" /> {positionLabel(suggestion.after, meetingRefs)}</p>
       </div>
     );
   }
@@ -58,7 +60,7 @@ export default function MeetingSuggestionCard({ suggestion, onKeep, onDiscard, o
               className={`flex-1 text-xs py-1.5 rounded-lg border transition flex items-center justify-center gap-1 ${
                 type === id ? 'bg-blabia-blue border-blabia-blue text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300'
               }`}>
-              {m.icon} {m.label}
+              <MeetingTypeIcon type={id} size={14} /> {m.label}
             </button>
           ))}
         </div>
@@ -91,13 +93,13 @@ export default function MeetingSuggestionCard({ suggestion, onKeep, onDiscard, o
   return (
     <div className="mx-4 bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
       <div className="flex items-start gap-2">
-        <span className="text-base shrink-0 mt-0.5">{TYPE_META[suggestion.type]?.icon || '🤝'}</span>
+        <MeetingTypeIcon type={suggestion.type} size={16} className="shrink-0 mt-0.5 text-amber-700" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-900 leading-snug">{suggestion.title}</p>
           {suggestion.reason && (
-            <p className="text-xs text-amber-700 italic mt-0.5 leading-snug">💡 {suggestion.reason}</p>
+            <p className="text-xs text-amber-700 italic mt-0.5 leading-snug flex items-start gap-1"><Lightbulb size={12} className="shrink-0 mt-0.5" aria-hidden="true" /> <span>{suggestion.reason}</span></p>
           )}
-          <p className="text-[10px] text-amber-600 mt-0.5">📍 {positionLabel(suggestion.after, meetingRefs)}</p>
+          <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1"><MapPin size={11} aria-hidden="true" /> {positionLabel(suggestion.after, meetingRefs)}</p>
           {suggestion.agentName && (
             <p className="text-[10px] text-gray-400 mt-0.5">Suggéré par {suggestion.agentName}</p>
           )}

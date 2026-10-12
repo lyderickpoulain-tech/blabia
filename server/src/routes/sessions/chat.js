@@ -225,11 +225,11 @@ router.post('/:sessionId/chat', async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const hasText        = !!humanMessage?.trim();
-  // Illustration (phase 5) : bouton « 🎨 Illustrer » (artifactRequest=true) ou demande
+  // Illustration (phase 5) : bouton « Illustrer » (artifactRequest=true) ou demande
   // explicite dans le message. Ne vaut que pour le premier agent qui répond.
   const wantsArtifact  = hasText && (artifactRequest === true || detectArtifactRequest(humanMessage));
   const artifactText   = wantsArtifact
-    ? humanMessage.trim().replace(/^\s*(\/illustrer|🎨\s*Illustration demandée\s*:)\s*/i, '').slice(0, 500) || 'une illustration utile à la réunion'
+    ? humanMessage.trim().replace(/^\s*(\/illustrer|(?:🎨\s*)?Illustration demandée\s*:)\s*/i, '').slice(0, 500) || 'une illustration utile à la réunion'
     : null;
   const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.length > 0;
   console.log(`[chat] session=${sessionId} resume=${!!resume} hasText=${hasText} hasAtt=${hasAttachments}`);
@@ -624,7 +624,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         ? await proposeMission({ projectId, sessionId, agentName: agent.name, proposal: parsed.mission })
           .catch(err => { console.error('[chat] proposition de mission :', err.message); return null; })
         : null;
-      let bubbles = parsed.bubbles.length > 0 || !artifact ? parsed.bubbles : [`🎨 ${artifact.title}`];
+      let bubbles = parsed.bubbles.length > 0 || !artifact ? parsed.bubbles : [artifact.title];
       if (bubbles.length === 0 && proposedMission) bubbles = [`Je propose une mission : ${proposedMission.title}.`];
       const agentMessages = bubbles.map((bubbleContent, i) => ({
         id:        randomUUID(),

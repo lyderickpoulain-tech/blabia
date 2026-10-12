@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import api from '../utils/api';
 
 // directContent : affiche le prompt déjà généré sans appel API
@@ -49,9 +50,9 @@ export default function ExportModal({ summary, projectId, onClose, directContent
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"
+            aria-label="Fermer" className="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 

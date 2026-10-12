@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Check, X } from 'lucide-react';
 import Markdown from './Markdown';
 import ExportButtons from './ExportButtons';
 
@@ -39,13 +40,13 @@ export default function SummaryDisplayModal({ title, date, content, onClose, exp
                 : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
-            {copied ? '✓ Copié' : 'Copier'}
+            {copied ? <span className="inline-flex items-center gap-1"><Check size={12} aria-hidden="true" /> Copié</span> : 'Copier'}
           </button>
           <button
             onClick={onClose}
-            className="shrink-0 text-gray-400 hover:text-gray-600 text-xl w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"
+            aria-label="Fermer" className="shrink-0 text-gray-400 hover:text-gray-600 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"
           >
-            ✕
+            <X size={18} />
           </button>
         </div>
 

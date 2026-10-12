@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { Button, IconButton, Badge, Card, SectionLabel } from '../components/ui';
 import api from '../utils/api';
 import { notifyError } from '../utils/notify';
+import { AgentAvatar, AgentIconPicker } from '../components/ui/icons';
 
 const inputCls = 'w-full px-3.5 py-2.5 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action focus:border-transparent transition';
 
@@ -41,11 +42,6 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex items-end gap-3">
-        <label className="block">
-          <span className="block text-sm font-bold text-ink-soft mb-1">Emoji</span>
-          <input type="text" value={emoji} onChange={e => setEmoji(e.target.value)} maxLength={2}
-            className="w-14 h-11 text-center text-2xl border border-line rounded-[10px] outline-none focus:ring-2 focus:ring-action" />
-        </label>
         <label className="block flex-1">
           <span className="block text-sm font-bold text-ink-soft mb-1">Nom</span>
           <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={100}
@@ -68,6 +64,11 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
           className={`${inputCls} resize-y`} />
         <span className="block text-[11px] text-ink-faint mt-1">Ce qui guide le comportement de l'agent en réunion. Commencez par « Tu es… ».</span>
       </label>
+
+      <div>
+        <span className="block text-sm font-bold text-ink-soft mb-1.5">Icône</span>
+        <AgentIconPicker value={emoji} onChange={setEmoji} agent={{ name, role }} />
+      </div>
 
       {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
 
@@ -103,7 +104,7 @@ function AgentCard({ agent, onEdit, onDelete }) {
   return (
     <Card className={`p-4 ${isDefault ? '' : 'hover:border-action-border transition'}`}>
       <div className="flex items-start gap-3">
-        <span className="w-10 h-10 rounded-full bg-canvas text-xl inline-flex items-center justify-center shrink-0 select-none">{agent.emoji || '🤖'}</span>
+        <AgentAvatar agent={agent} size="lg" className="bg-canvas text-ink-soft" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-extrabold text-sm text-ink">{agent.name}</h3>

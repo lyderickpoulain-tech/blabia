@@ -933,7 +933,7 @@ export default function MeetingRoom() {
                 handleInputChange={handleInputChange}
                 handleKeyDown={handleKeyDown}
                 handleSend={handleSend}
-                onIllustrate={(request) => handleSend(`🎨 Illustration demandée : ${request}`, { artifactRequest: true })}
+                onIllustrate={(request) => handleSend(`Illustration demandée : ${request}`, { artifactRequest: true })}
                 handleTextareaFocus={handleTextareaFocus}
                 inputRef={inputRef}
               />

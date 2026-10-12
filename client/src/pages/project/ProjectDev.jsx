@@ -428,7 +428,7 @@ export default function ProjectDev() {
     const todo = summarySections(task.summary).todo;
     const before = todo && /avant la mise en ligne/i.test(todo.body);
     const msg = action === 'deploy'
-      ? `${before ? '⚠ Ce développement demande des actions AVANT la mise en ligne (encadré « À faire de votre côté »). Les avez-vous toutes faites ?\n\n' : ''}Mettre en ligne « ${task.title} » ?\n\n${status?.secrets?.db ? 'La base de données sera d’abord sauvegardée (chiffrée). ' : ''}Les modifications seront fusionnées, puis publiées par l’hébergeur relié au dépôt (s’il y en a un).${todo && !before ? '\n\nPensez ensuite aux actions « À faire de votre côté ».' : ''}`
+      ? `${before ? 'Attention : ce développement demande des actions AVANT la mise en ligne (encadré « À faire de votre côté »). Les avez-vous toutes faites ?\n\n' : ''}Mettre en ligne « ${task.title} » ?\n\n${status?.secrets?.db ? 'La base de données sera d’abord sauvegardée (chiffrée). ' : ''}Les modifications seront fusionnées, puis publiées par l’hébergeur relié au dépôt (s’il y en a un).${todo && !before ? '\n\nPensez ensuite aux actions « À faire de votre côté ».' : ''}`
       : `Abandonner « ${task.title} » ? Les modifications proposées seront fermées sur GitHub.`;
     if (!confirm(msg)) return;
     setBusy(true);

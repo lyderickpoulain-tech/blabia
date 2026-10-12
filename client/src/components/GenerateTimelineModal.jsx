@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
-import { useProjectPanel } from './ProjectLayout';
 import { CalendarRange, GripVertical, Eye, EyeOff, Trash2, Plus, X, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button, IconButton } from './ui';
 import { MeetingTypePicker } from './meeting/MeetingInsertControls';
 
 export default function GenerateTimelineModal({ project, existingCount, onClose, onAdded }) {
-  const { refreshPanel } = useProjectPanel();
   const [steps, setSteps]       = useState([]);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
@@ -73,7 +71,6 @@ export default function GenerateTimelineModal({ project, existingCount, onClose,
     try {
       const { data } = await api.post(`/projects/${project.id}/plan/bulk`, payload);
       console.log('[GenerateTimeline] succès:', data);
-      refreshPanel();
       setDone(true);
       onAdded?.();
     } catch (err) {

@@ -241,6 +241,14 @@ Projet relié à un dépôt (installation GitHub du propriétaire) : `services/c
 - Missions : outils `list_code_files` et `read_code_file` (20 000 caractères par fichier), à utiliser quand la mission porte sur le site.
 Tests : `__integration__/codeOnDemand.test.js`.
 
+### D15. Iconographie unique — fait le 12/10/2026
+Plus aucun émoji comme icône dans l'interface : icônes contour lucide (trait 1,75), centralisées dans `client/src/components/ui/icons.jsx`.
+- Avatars d'agents (`AgentAvatar`) : l'émoji enregistré (`Agent.emoji`, inchangé en base) est traduit en icône ; agent à l'émoji par défaut 🤖 : icône déduite du nom et du rôle (Juriste → balance, Designer → palette…). Formulaires d'agent : sélecteur d'icône (`AgentIconPicker`) au lieu du champ émoji.
+- Catégories d'outils (`ToolCategoryIcon`, par id du catalogue serveur), types de réunion, modes de questions, curseur d'humour, bannières, fenêtres (fermer, copier, télécharger…).
+- Messages système d'anciennes réunions : émoji de tête retiré à l'affichage (`stripLeadingEmoji`).
+- Code mort retiré : `ProjectLayout` et l'ancienne colonne « Réunions » de `ProjectTimelinePanel`.
+Règle : toute nouvelle icône vient de lucide-react ; ne pas réintroduire d'émoji dans l'interface.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

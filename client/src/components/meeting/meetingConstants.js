@@ -1,3 +1,4 @@
+import { Handshake, Code2, Wrench } from 'lucide-react';
 // Constantes de la salle de réunion (extraites de pages/MeetingRoom.jsx)
 
 // Palette agent (initiale + couleur de bulle)
@@ -19,7 +20,7 @@ export const STATUS_BADGE = {
 
 // v5.0 phase 3.2 : decision | claude_code | stack
 export const DELIVERABLE_TYPES = [
-  { id: 'decision',    icon: '🤝', label: 'Décision'    },
-  { id: 'claude_code', icon: '💻', label: 'Claude Code' },
-  { id: 'stack',       icon: '🔧', label: 'Outils'      },
+  { id: 'decision',    icon: Handshake, label: 'Décision'    },
+  { id: 'claude_code', icon: Code2,     label: 'Claude Code' },
+  { id: 'stack',       icon: Wrench,    label: 'Outils'      },
 ];

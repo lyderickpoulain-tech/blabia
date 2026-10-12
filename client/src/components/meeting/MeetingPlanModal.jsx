@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
+import { CalendarRange, X, GripVertical, Lock } from 'lucide-react';
 import api from '../../utils/api';
+import { MeetingTypeIcon } from './MilestoneDrawers';
 
-const TYPE_ICON = { decision: '🤝', claude_code: '💻', stack: '🔧' };
 const STATUS_LABEL = { pending: 'À tenir', in_progress: 'En cours', done: 'Terminée', blocked: 'Bloquée' };
 
 // Fusionne les réunions réelles du projet avec les suggestions gardées de cette
@@ -83,8 +84,8 @@ export default function MeetingPlanModal({ projectId, sessionId, keptSuggestions
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-bold text-gray-900 flex-1">📅 Plan des réunions</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">✕</button>
+          <h2 className="text-base font-bold text-gray-900 flex-1 flex items-center gap-2"><CalendarRange size={18} strokeWidth={1.75} className="text-action" aria-hidden="true" /> Plan des réunions</h2>
+          <button onClick={onClose} aria-label="Fermer" className="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"><X size={18} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
@@ -113,15 +114,15 @@ export default function MeetingPlanModal({ projectId, sessionId, keptSuggestions
                     locked ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200'
                   } ${dragOverKey === item.key && dragKey !== item.key ? 'ring-2 ring-blue-300' : ''}`}
                 >
-                  <span className={`text-xs ${locked ? 'text-gray-300' : 'text-gray-300 cursor-grab'}`}>⠿</span>
-                  <span className="text-base shrink-0">{TYPE_ICON[type] || '🤝'}</span>
+                  <GripVertical size={14} aria-hidden="true" className={`shrink-0 text-gray-300 ${locked ? '' : 'cursor-grab'}`} />
+                  <MeetingTypeIcon type={type} size={16} className="shrink-0 text-ink-soft" />
                   <span className="flex-1 min-w-0 text-sm text-gray-800 truncate">{title}</span>
                   {isNew ? (
                     <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full shrink-0">Nouvelle</span>
                   ) : (
                     <span className="text-[10px] text-gray-400 shrink-0">{STATUS_LABEL[status] || status}</span>
                   )}
-                  {locked && <span className="text-xs shrink-0" title="Réunion terminée — verrouillée">🔒</span>}
+                  {locked && <span className="shrink-0 text-gray-400" title="Réunion terminée — verrouillée"><Lock size={13} aria-hidden="true" /></span>}
                 </div>
               );
             })

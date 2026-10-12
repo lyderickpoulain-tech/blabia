@@ -9,6 +9,7 @@ import ChallengerToggle from '../components/ChallengerToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
 import { notifyError } from '../utils/notify';
 import ToolsMeetingHint from '../components/project/ToolsMeetingHint';
+import { AgentAvatar } from '../components/ui/icons';
 
 // v5.0 : decision | claude_code | stack (phase 4)
 const DELIVERABLES = [
@@ -360,9 +361,7 @@ export default function StartMeeting() {
                   const active = selectedAgentIds.has(id);
                   return (
                     <ChoiceCard key={id} active={active} onClick={() => toggleAgent(id)} className="flex items-start gap-3 px-3.5 py-3">
-                      <span className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${active ? 'bg-white' : 'bg-canvas'}`}>
-                        {a.emoji || a.name?.[0] || '?'}
-                      </span>
+                      <AgentAvatar agent={a} size="md" className={active ? 'bg-white text-action' : 'bg-canvas text-ink-soft'} />
                       <span className="flex-1 min-w-0 pr-5">
                         <span className={`block text-sm font-extrabold truncate ${active ? 'text-action' : 'text-ink'}`}>{a.name}</span>
                         <span className="block text-xs text-ink-muted truncate">{a.role}</span>

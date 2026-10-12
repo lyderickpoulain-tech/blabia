@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Palette, TriangleAlert, Maximize2, Code2, Download, Check, X } from 'lucide-react';
 
 // v5.0 phase 5 : illustration produite par un agent, à la demande de l'humain.
 // artifact : { kind: 'mermaid' | 'html' | 'svg', title, code }
@@ -93,13 +94,13 @@ export default function ArtifactCard({ artifact, tall = false }) {
   return (
     <div className={`border border-line rounded-xl bg-white overflow-hidden max-w-full ${tall ? "" : "mt-2"}`}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
-        <span className="text-sm">🎨</span>
+        <Palette size={16} strokeWidth={1.75} className="text-ai shrink-0" aria-hidden="true" />
         <span className="text-sm font-medium text-gray-800 flex-1 truncate">{artifact.title}</span>
         <span className="text-[10px] text-gray-400 shrink-0">{KIND_LABEL[artifact.kind]}</span>
       </div>
 
       {error ? (
-        <p className="text-xs text-amber-800 bg-amber-50 px-3 py-2">⚠️ {error}</p>
+        <p className="text-xs text-amber-800 bg-amber-50 px-3 py-2 flex items-start gap-1.5"><TriangleAlert size={14} className="shrink-0 mt-px" aria-hidden="true" /> {error}</p>
       ) : doc ? (
         <Frame artifact={artifact} doc={doc} className={`w-full bg-white block ${tall ? "h-[calc(100vh-230px)] min-h-[300px]" : "h-72"}`} />
       ) : (
@@ -109,15 +110,15 @@ export default function ArtifactCard({ artifact, tall = false }) {
       )}
 
       <div className="flex flex-wrap gap-3 px-3 py-2 border-t border-gray-100 text-xs">
-        {doc && <button onClick={() => setFullscreen(true)} className="text-blabia-blue hover:underline">⛶ Plein écran</button>}
-        <button onClick={() => setShowCode(s => !s)} className="text-gray-600 hover:underline">{showCode ? 'Masquer le code' : '</> Voir le code'}</button>
-        <button onClick={download} className="text-gray-600 hover:underline">⬇ Télécharger</button>
+        {doc && <button onClick={() => setFullscreen(true)} className="text-blabia-blue hover:underline inline-flex items-center gap-1"><Maximize2 size={13} aria-hidden="true" /> Plein écran</button>}
+        <button onClick={() => setShowCode(s => !s)} className="text-gray-600 hover:underline"><span className="inline-flex items-center gap-1"><Code2 size={13} aria-hidden="true" /> {showCode ? 'Masquer le code' : 'Voir le code'}</span></button>
+        <button onClick={download} className="text-gray-600 hover:underline inline-flex items-center gap-1"><Download size={13} aria-hidden="true" /> Télécharger</button>
       </div>
 
       {showCode && (
         <div className="relative border-t border-gray-100">
           <button onClick={copyCode} className="absolute top-2 right-2 text-[10px] bg-white/90 border border-gray-200 rounded px-1.5 py-0.5 text-gray-600">
-            {copied ? '✓ Copié' : 'Copier'}
+            {copied ? <span className="inline-flex items-center gap-1"><Check size={11} aria-hidden="true" /> Copié</span> : 'Copier'}
           </button>
           <pre className="text-[11px] leading-relaxed bg-gray-900 text-green-200 p-3 overflow-auto max-h-64 whitespace-pre">{artifact.code}</pre>
         </div>
@@ -126,9 +127,9 @@ export default function ArtifactCard({ artifact, tall = false }) {
       {fullscreen && doc && (
         <div className="fixed inset-0 z-[70] bg-black/70 flex flex-col p-3 sm:p-6" onClick={() => setFullscreen(false)}>
           <div className="flex items-center gap-2 text-white mb-2" onClick={e => e.stopPropagation()}>
-            <span className="text-sm font-medium flex-1 truncate">🎨 {artifact.title}</span>
-            <button onClick={download} className="text-xs border border-white/40 rounded-lg px-2 py-1 hover:bg-white/10">⬇ Télécharger</button>
-            <button onClick={() => setFullscreen(false)} className="text-2xl leading-none px-2" aria-label="Fermer">×</button>
+            <span className="text-sm font-medium flex-1 truncate inline-flex items-center gap-1.5"><Palette size={15} strokeWidth={1.75} aria-hidden="true" /> {artifact.title}</span>
+            <button onClick={download} className="text-xs border border-white/40 rounded-lg px-2 py-1 hover:bg-white/10 inline-flex items-center gap-1"><Download size={13} aria-hidden="true" /> Télécharger</button>
+            <button onClick={() => setFullscreen(false)} className="px-2" aria-label="Fermer"><X size={22} /></button>
           </div>
           <div className="flex-1 bg-white rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <Frame artifact={artifact} doc={doc} className="w-full h-full block" />

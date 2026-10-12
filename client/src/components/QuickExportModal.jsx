@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X, RotateCcw, CircleCheck, CircleX } from 'lucide-react';
 import api from '../utils/api';
 import { notifyError } from '../utils/notify';
 
@@ -85,8 +86,8 @@ export default function QuickExportModal({ milestone, projectId, onClose, onRefr
             <p className="text-xs text-gray-500 mt-0.5">Mode rapide · sans réunion</p>
           </div>
           <button onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">
-            ×
+            aria-label="Fermer" className="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">
+            <X size={18} />
           </button>
         </div>
 
@@ -161,7 +162,7 @@ export default function QuickExportModal({ milestone, projectId, onClose, onRefr
                   <span className="text-xs font-mono text-gray-400">Claude Code · Prompt</span>
                   <button onClick={handleGenerate} disabled={loading}
                     className="text-xs text-gray-500 hover:text-gray-300 transition">
-                    ↺ Régénérer
+                    <RotateCcw size={12} className="inline -mt-0.5 mr-1" aria-hidden="true" />Régénérer
                   </button>
                 </div>
                 <div className="overflow-auto max-h-64">
@@ -213,20 +214,20 @@ export default function QuickExportModal({ milestone, projectId, onClose, onRefr
                       disabled={saving}
                       className="flex-1 bg-green-50 hover:bg-green-100 border border-green-300 text-green-700 font-medium py-2.5 rounded-xl transition text-sm disabled:opacity-50"
                     >
-                      ✅ Code implémenté et commité
+                      <CircleCheck size={15} className="inline -mt-0.5 mr-1" aria-hidden="true" />Code implémenté et commité
                     </button>
                     <button
                       onClick={() => handleMilestoneStatus('blocked')}
                       disabled={saving}
                       className="flex-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-medium py-2.5 rounded-xl transition text-sm disabled:opacity-50"
                     >
-                      ❌ Ce code n'a pas été généré
+                      <CircleX size={15} className="inline -mt-0.5 mr-1" aria-hidden="true" />Ce code n'a pas été généré
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-center">
-                  <p className="text-sm font-semibold text-green-700">✅ Étape marquée comme implémentée</p>
+                  <p className="text-sm font-semibold text-green-700 inline-flex items-center gap-1.5"><CircleCheck size={16} aria-hidden="true" /> Étape marquée comme implémentée</p>
                   <button onClick={onClose}
                     className="mt-2 text-xs text-green-600 hover:text-green-800 transition">
                     Fermer →

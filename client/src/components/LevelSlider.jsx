@@ -1,3 +1,4 @@
+import { Meh, Smile, Laugh, SmilePlus, PartyPopper } from 'lucide-react';
 // Curseur 1→5 réutilisé pour "maîtrise du sujet" et "humour" (création/édition
 // de projet, démarrage de réunion, MeetingHeader en cours de réunion).
 export default function LevelSlider({ label, value, onChange, labels, icons, disabled }) {
@@ -7,7 +8,7 @@ export default function LevelSlider({ label, value, onChange, labels, icons, dis
       <div className="flex items-center justify-between mb-1.5">
         <label className="text-sm font-bold text-ink-soft">{label}</label>
         <span className="text-xs font-bold text-action bg-action-light rounded-full px-2 py-0.5 flex items-center gap-1">
-          {icons && <span>{icons[idx]}</span>}
+          {icons && (() => { const Icon = icons[idx]; return <Icon size={13} strokeWidth={2} aria-hidden="true" />; })()}
           {labels[idx]}
         </span>
       </div>
@@ -30,4 +31,4 @@ export default function LevelSlider({ label, value, onChange, labels, icons, dis
 
 export const EXPERTISE_LABELS = ['Découverte', 'Initié', 'Intermédiaire', 'Avancé', 'Expert'];
 export const HUMOR_LABELS     = ['Sobre', 'Détendu', 'Complice', 'Taquin', 'Réunion de potes'];
-export const HUMOR_ICONS      = ['😐', '🙂', '😄', '😏', '🤪'];
+export const HUMOR_ICONS      = [Meh, Smile, Laugh, SmilePlus, PartyPopper];
