@@ -233,6 +233,14 @@ Avant : les agents ne recevaient que les 10 derniers messages (fenêtre glissant
 ### D13. Réunion ouverte depuis une action — fait le 12/10/2026
 « Traiter en réunion » lie la réunion à l'action (`Session.todoId`, migration `20261012000001`). Les agents reçoivent dans le bloc commun l'action et le rapport COMPLET de la dernière mission terminée qui l'a préparée (`services/actions.js` → `actionForPrompt`, plafond 15 000 caractères), avec la consigne de partir de ce travail. À la conclusion (statut `accepted`) l'action est cochée « faite » ; une réunion abandonnée la laisse ouverte. Bandeau dans la préparation de la réunion et rappel dans la fenêtre de clôture.
 
+### D14. Le code lu quand il le faut, dans toutes les réunions et les missions — fait le 12/10/2026
+Projet relié à un dépôt (installation GitHub du propriétaire) : `services/codeContext.js`.
+- Réunion Claude Code : code lu dès le début, comme avant.
+- Autres réunions : au premier tour, le modèle léger juge si le sujet touche au code ; si oui il choisit les fichiers, sinon rien n'est lu (`Session.codeContext = ''`).
+- En cours de réunion : l'orchestrateur (consulté aussi pour un agent seul quand le code est lisible) remplit `codeQuestion` quand le dernier message — de l'humain ou d'un agent — demande du code pas encore lu ; `lookupCode` ajoute alors une « LECTURE COMPLÉMENTAIRE » (4 au plus par réunion, fichiers déjà lus exclus) avant le tour. Bulle « BlabIA lit le code du site… ». Les agents ont la consigne d'écrire « Je dois vérifier dans le code … » plutôt que de demander à l'humain.
+- Missions : outils `list_code_files` et `read_code_file` (20 000 caractères par fichier), à utiliser quand la mission porte sur le site.
+Tests : `__integration__/codeOnDemand.test.js`.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

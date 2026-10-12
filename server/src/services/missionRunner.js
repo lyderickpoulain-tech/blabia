@@ -15,12 +15,14 @@ const { runWithUsage } = require('./usage');
 const { DEFAULT_MODEL } = require('./models');
 const { KIND_LABEL, LEVELS, levelOf } = require('./missions');
 const { memoryForPrompt, appendMemory, missionDigest } = require('../utils/projectMemory');
+const { codeAccess, sourcePaths, compactTree, readFile } = require('./codeContext');
 
 const MAX_STEPS = 10;
 const FINALIZE_AT = 0.75;           // part du plafond à partir de laquelle on rédige
 const STALE_MS = 20 * 60 * 1000;    // « en cours » depuis plus longtemps : redémarrage du serveur
 const MAX_ATTEMPTS = 2;
 const DOC_MAX_CHARS = 30000;
+const CODE_FILE_MAX_CHARS = 20000;
 
 const TOOLS = [
   { type: 'web_search_20260318', name: 'web_search', max_uses: 5, allowed_callers: ['direct'],
@@ -32,12 +34,21 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { name: { type: 'string', description: 'Nom exact du document' } }, required: ['name'] } },
 ];
 
+// Projet relié à un dépôt GitHub : le sous-agent lit le code quand la mission le demande
+const CODE_TOOLS = [
+  { name: 'list_code_files', description: 'Liste les fichiers source du dépôt GitHub du projet (arborescence : un dossier par ligne).',
+    input_schema: { type: 'object', properties: {} } },
+  { name: 'read_code_file', description: 'Lit un fichier source du dépôt GitHub du projet, par son chemin exact (tel que donné par list_code_files).',
+    input_schema: { type: 'object', properties: { path: { type: 'string', description: 'Chemin exact, ex. client/src/App.jsx' } }, required: ['path'] } },
+];
+
 const FINALIZE = 'Budget de la mission presque atteint : n\'utilise plus aucun outil et rédige MAINTENANT le rapport final avec ce que tu as trouvé, en signalant ce qui reste à vérifier.';
 
-function buildPrompts(mission, project) {
+function buildPrompts(mission, project, { codeReadable = false } = {}) {
   const system = `Tu es un sous-agent de BlabIA. L'agent « ${mission.agentName} » t'a confié une mission pour le projet « ${project.name} », que tu mènes SEUL : tu ne peux pas poser de question à l'humain. Si une information manque, fais une hypothèse explicite et signale-la.
 
-Outils : web_search (trouver des sources), web_fetch (lire une page trouvée), list_project_documents et read_project_document (documents fournis par l'humain : lis-les d'abord s'ils concernent la mission).
+Outils : web_search (trouver des sources), web_fetch (lire une page trouvée), list_project_documents et read_project_document (documents fournis par l'humain : lis-les d'abord s'ils concernent la mission).${codeReadable ? `
+Code du site : list_code_files et read_code_file lisent le dépôt GitHub ${project.githubRepo}. Si la mission porte sur le site lui-même (fonctionnement, écran, règle, audit, ce qui existe déjà), lis le code concerné AVANT de conclure et cite les fichiers ; sinon, ne l'ouvre pas.` : ''}
 Sois économe : budget limité, va à l'essentiel, pas de recherche redondante.
 N'invente AUCUN chiffre ni AUCUNE source. Écris en français, simplement.
 
@@ -71,7 +82,16 @@ function collectSources(content, into) {
   }
 }
 
-async function runClientTool(block, projectId) {
+async function runClientTool(block, projectId, code = null) {
+  if (code && block.name === 'list_code_files') {
+    code.paths = code.paths || await sourcePaths(code.inst, code.repo);
+    return code.paths.length ? compactTree(code.paths) : 'Aucun fichier source dans le dépôt.';
+  }
+  if (code && block.name === 'read_code_file') {
+    const content = await readFile(code.inst, code.repo, String(block.input?.path || ''));
+    if (content == null) return { error: true, text: 'Fichier introuvable : utilise list_code_files pour avoir les chemins exacts.' };
+    return content.length > CODE_FILE_MAX_CHARS ? `${content.slice(0, CODE_FILE_MAX_CHARS)}\n[… fichier tronqué]` : content;
+  }
   if (block.name === 'list_project_documents') {
     const docs = await db('ProjectDocument').where({ projectId, enabled: true }).select('name', 'charCount');
     return docs.length ? docs.map(d => `- ${d.name} (${d.charCount} caractères)`).join('\n') : 'Aucun document de référence.';
@@ -93,8 +113,12 @@ function settingsFor(mission) {
 }
 
 async function executeMission(mission, project) {
-  const { system, user } = buildPrompts(mission, project);
-  const { tools, maxSteps, model } = settingsFor(mission);
+  const inst = await codeAccess(project);
+  const code = inst ? { inst, repo: project.githubRepo } : null;
+  const { system, user } = buildPrompts(mission, project, { codeReadable: !!code });
+  const settings = settingsFor(mission);
+  const { maxSteps, model } = settings;
+  const tools = code ? [...settings.tools, ...CODE_TOOLS] : settings.tools;
   const messages = [{ role: 'user', content: user }];
   const sources = new Map();
   let spent = 0;
@@ -123,7 +147,7 @@ async function executeMission(mission, project) {
     if (!finalizing && response.stop_reason === 'tool_use') {
       const results = [];
       for (const b of response.content.filter(x => x.type === 'tool_use')) {
-        const out = await runClientTool(b, mission.projectId);
+        const out = await runClientTool(b, mission.projectId, code);
         results.push({ type: 'tool_result', tool_use_id: b.id, content: typeof out === 'string' ? out : out.text, ...(out?.error ? { is_error: true } : {}) });
       }
       messages.push({ role: 'user', content: results });

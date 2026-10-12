@@ -42,6 +42,7 @@ function buildOrchestratorPrompt({
   turnCount,
   decisionsLeft = null,
   challengeSection = '', // v5.1 : contradicteur disponible (services/challenger.js)
+  codeSection = '',      // v5.1 : code du dépôt lisible à la demande (buildOrchestratorCodeSection)
 }) {
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
   const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
@@ -69,16 +70,25 @@ ${humanPriorityNote}
 Si la dernière contribution contient beaucoup de jargon technique ou est difficile à comprendre pour un non-expert, donne la priorité à un agent qui peut reformuler ou vulgariser ce qui vient d'être dit.
 ${delegated ? `⚡ L'humain a délégué une décision aux agents. Les agents doivent débattre entre eux, argumenter leurs positions et converger vers une recommandation claire. L'agent le plus pertinent propose une conclusion en dernier.\n` : ''}Derniers échanges :
 ${recentMessagesText || '(début de réunion)'}
-${challengeSection}
+${challengeSection}${codeSection}
 Décide maintenant :
 1. Quel agent doit prendre la parole ? (numéro de 1 à ${agentsForSelection.length})
 2. Pourquoi ? (1 phrase courte)
 3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
 
 Réponds UNIQUEMENT avec ce JSON :
-${challengeSection
-    ? '{"agentIndex": 1, "reason": "...", "shouldClose": false, "challenge": false, "challengeTarget": ""}'
-    : '{"agentIndex": 1, "reason": "...", "shouldClose": false}'}`;
+{"agentIndex": 1, "reason": "...", "shouldClose": false${challengeSection ? ', "challenge": false, "challengeTarget": ""' : ''}${codeSection ? ', "codeQuestion": ""' : ''}}`;
 }
 
-module.exports = { buildOrchestratorPrompt, MAX_TURNS };
+// v5.1 : projet relié à un dépôt — l'orchestrateur repère une question qui demande de lire
+// du code pas encore lu (services/codeContext.js, lookupCode)
+function buildOrchestratorCodeSection({ readFiles = [], lastMessageText = '' }) {
+  return `
+CODE DU PROJET : BlabIA peut lire le code du dépôt GitHub avant le prochain tour.
+Fichiers déjà lus par les agents : ${readFiles.length ? readFiles.slice(0, 40).join(', ') : 'aucun'}.
+Dernier message en entier : "${String(lastMessageText).slice(0, 1200)}"
+Si ce dernier message (de l'humain ou d'un agent) pose une question, émet une hypothèse ou demande une vérification dont la réponse se trouve dans du code PAS ENCORE LU (où se trouve un écran, comment une fonction marche, ce que le site fait déjà, une règle de calcul…), écris dans "codeQuestion" ce qu'il faut chercher dans le code (une phrase précise). Sinon, laisse "codeQuestion" vide. En cas de doute sur un sujet sans lien avec le code (nom, prix, public, ton…), laisse vide.
+`;
+}
+
+module.exports = { buildOrchestratorPrompt, buildOrchestratorCodeSection, MAX_TURNS };

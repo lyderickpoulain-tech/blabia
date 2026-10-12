@@ -88,7 +88,7 @@ export const CHAPTERS = [
         body: 'À partir du brief, BlabIA propose une suite de réunions. Les réunions suggérées pendant les échanges s’y ajoutent aussi, si vous les gardez.' },
       { path: demo('/parametres'), target: 'settings-dev', placement: 'top',
         title: 'Projet informatique : sans copier-coller',
-        body: 'Pour un logiciel ou un site, reliez ici un dépôt GitHub : le prompt d’une réunion Claude Code se lance alors depuis BlabIA. Claude Code travaille avec votre abonnement Claude, puis vous mettez en ligne d’un clic (la base est sauvegardée juste avant). Un site à créer de zéro ? Cochez « Site web à créer de zéro » en créant le projet : BlabIA crée le dépôt et prévoit les réunions (définir le site, son style, ses outils, puis le construire).' },
+        body: 'Pour un logiciel ou un site, reliez ici un dépôt GitHub : le prompt d’une réunion Claude Code se lance alors depuis BlabIA. Claude Code travaille avec votre abonnement Claude, puis vous mettez en ligne d’un clic (la base est sauvegardée juste avant). Un site à créer de zéro ? Cochez « Site web à créer de zéro » en créant le projet : BlabIA crée le dépôt et prévoit les réunions (définir le site, son style, ses outils, puis le construire). Une fois le dépôt relié, les agents lisent le code quand le sujet de la réunion s’y prête ou qu’une question le demande, et les missions aussi.' },
     ],
   },
   {

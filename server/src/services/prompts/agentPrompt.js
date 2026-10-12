@@ -113,6 +113,7 @@ function buildAgentSystemPrompt({
   actionsText = '',
   documentsText = '',
   codeText = '',
+  codeReadable = false, // v5.1 : dépôt lisible par BlabIA (lecture à la demande, services/codeContext.js)
   agendaText = '',
   actionText = '',
   missionsText = '',
@@ -165,7 +166,9 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
   const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
   // v5.1 : dépôt GitHub relié (développements lancés depuis BlabIA) — ne pas en redemander l'adresse
   const repoSection     = project.githubRepo
-    ? `\nDÉPÔT DU CODE : GitHub ${project.githubRepo} (https://github.com/${project.githubRepo}). Les prompts des réunions Claude Code y sont réalisés par Claude Code, seul, dans GitHub ; ne demande pas l'adresse du dépôt.\n`
+    ? `\nDÉPÔT DU CODE : GitHub ${project.githubRepo} (https://github.com/${project.githubRepo}). Les prompts des réunions Claude Code y sont réalisés par Claude Code, seul, dans GitHub ; ne demande pas l'adresse du dépôt.\n${codeReadable
+      ? `BlabIA peut lire ce code pendant la réunion. Si tu as besoin de savoir comment le site est fait (écran, fonction, règle, ce qui existe déjà) et que ce n'est pas dans le code ci-dessous, ne le demande PAS à l'humain et n'invente pas : écris précisément ce que tu dois vérifier dans le code (« Je dois vérifier dans le code … ») ; BlabIA le lira avant le tour suivant.\n`
+      : ''}`
     : '';
   // v5.1 : réunion Claude Code — le code du dépôt (services/codeContext.js), pour ne pas
   // poser à l'humain une question dont la réponse est dans le code

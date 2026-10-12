@@ -339,7 +339,12 @@ export default function ConversationFeed({
       {showTyping && (
         <div className="flex gap-2.5 items-center pt-2.5 text-[13px] text-ink-faint">
           <AgentAvatar agent={activeAgents.find(a => a.name === streamingAgent)} color={agentColor(streamingAgent)} name={streamingAgent} />
-          <span><strong className="text-ink-soft">{streamingAgent}</strong> écrit…{streamingReason && <span className="italic"> ({streamingReason})</span>}</span>
+          {/* Lecture du code à la demande (serveur : « Je lis le code : <question> ») */}
+          {streamingAgent === 'BlabIA' && streamingReason?.startsWith('Je lis le code : ') ? (
+            <span><strong className="text-ink-soft">BlabIA</strong> lit le code du site…<span className="italic"> ({streamingReason.slice('Je lis le code : '.length)})</span></span>
+          ) : (
+            <span><strong className="text-ink-soft">{streamingAgent}</strong> écrit…{streamingReason && <span className="italic"> ({streamingReason})</span>}</span>
+          )}
         </div>
       )}
     </div>

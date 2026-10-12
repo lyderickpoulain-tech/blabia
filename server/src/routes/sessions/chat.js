@@ -15,12 +15,12 @@ const {
 } = require('./helpers');
 const { ORCHESTRATOR_MODEL, ORCHESTRATOR_PARAMS } = require('../../services/models');
 const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt');
-const { buildOrchestratorPrompt, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
+const { buildOrchestratorPrompt, buildOrchestratorCodeSection, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
 const { decisionBudgetFor } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { analyzeAndSaveNeeds, formatNeedsForPrompt } = require('../../services/tools/toolNeeds');
-const { sessionCodeContext } = require('../../services/codeContext');
+const { sessionCodeContext, lookupCode, codeAccess, readPaths } = require('../../services/codeContext');
 const { meetingHistory, withHistory } = require('../../services/prompts/meetingHistory');
 const { actionForPrompt } = require('../../services/actions');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
@@ -71,12 +71,14 @@ async function loadMessages(sessionId) {
 
 async function orchestrate({ session, project, messages, activeAgents,
   lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false,
-  artifactRequested = false, decisionBudget, preparing = false, challengerOn = false }) {
+  artifactRequested = false, decisionBudget, preparing = false, challengerOn = false,
+  codeReadable = false, codeText = '' }) {
 
   // Contradicteur : disponible seulement sur fort enjeu, 2 fois par réunion au plus
   const canChallenge = challengerAvailable({ enabled: challengerOn, messages, preparing });
 
-  if (activeAgents.length === 1 && !preparing && !canChallenge) {
+  // Code lisible : l'orchestrateur repère aussi les questions qui demandent de lire du code
+  if (activeAgents.length === 1 && !preparing && !canChallenge && !codeReadable) {
     return { agentId: activeAgents[0].id, reason: '', shouldClose: false };
   }
 
@@ -150,13 +152,16 @@ async function orchestrate({ session, project, messages, activeAgents,
     challengeSection: canChallenge
       ? buildOrchestratorChallengeSection({ left: challengesLeft(messages), priorText: priorVigilanceText(messages) })
       : '',
+    codeSection: codeReadable
+      ? buildOrchestratorCodeSection({ readFiles: [...readPaths(codeText)], lastMessageText: lastMsg?.content || lastMsg?.question || '' })
+      : '',
   });
 
   try {
     const response = await anthropic.messages.create({
       model: ORCHESTRATOR_MODEL,
       ...ORCHESTRATOR_PARAMS,
-      max_tokens: 200,
+      max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     });
     const text  = (response.content.find(b => b.type === 'text')?.text || '').trim();
@@ -171,6 +176,7 @@ async function orchestrate({ session, project, messages, activeAgents,
       // Le contradicteur ne parle que si l'orchestrateur l'estime utile ET qu'il reste disponible
       challenge:       canChallenge && dec.challenge === true && !!String(dec.challengeTarget || '').trim(),
       challengeTarget: String(dec.challengeTarget || '').trim().slice(0, 300),
+      codeQuestion:    codeReadable ? String(dec.codeQuestion || '').trim().slice(0, 300) : '',
       usage: {
         inputTokens:  response.usage?.input_tokens  || 0,
         outputTokens: response.usage?.output_tokens || 0,
@@ -344,8 +350,13 @@ router.post('/:sessionId/chat', async (req, res) => {
     const actionsText = formatActionsForPrompt(await listActions(projectId));
     const documentsText = formatDocumentsForPrompt(await listDocuments(projectId, { withContent: true }));
     const missionsText = formatMissionsForPrompt(await listMissions(projectId));
-    // Réunion Claude Code d'un projet relié à un dépôt : le code vu par les agents (calculé une fois)
-    const codeText = intention[0] === 'claude_code' ? await sessionCodeContext({ ...session, task: freshSession.task }, project) : '';
+    // Projet relié à un dépôt : le code vu par les agents (calculé une fois par réunion) —
+    // toujours en réunion Claude Code, sinon seulement si le sujet touche au code ; puis
+    // lecture à la demande quand une question le demande (orchestrateur → lookupCode)
+    const codeReadable = !!(await codeAccess(project));
+    let codeText = codeReadable
+      ? await sessionCodeContext({ ...session, task: freshSession.task }, project, { auto: intention[0] !== 'claude_code' })
+      : '';
     // Réunion ouverte depuis une action : l'action et le rapport de la mission qui l'a préparée
     const actionText = await actionForPrompt(session.todoId, projectId);
     // Ordre du jour : décisions remises en question à retraiter (réunion du plan, services/agenda.js)
@@ -453,6 +464,8 @@ router.post('/:sessionId/chat', async (req, res) => {
         decisionBudget,
         preparing:            !!prepare,
         challengerOn,
+        codeReadable,
+        codeText,
       });
       const turnArtifact = turnCount === 0 && wantsArtifact ? artifactText : null;
 
@@ -463,6 +476,13 @@ router.post('/:sessionId/chat', async (req, res) => {
         send('suggest_close', { reason: next.reason });
         conversationDone = true;
         break;
+      }
+
+      // Question qui demande de lire du code pas encore lu : BlabIA le lit avant le tour
+      if (next.codeQuestion) {
+        send('agent_typing', { agentName: 'BlabIA', agentRole: 'Lecture du code', reason: `Je lis le code : ${next.codeQuestion}` });
+        const found = await lookupCode(sessionId, project, codeText, next.codeQuestion);
+        if (found) codeText = found.text;
       }
 
       const isChallenge = next.challenge === true;
@@ -490,6 +510,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         actionsText,
         documentsText,
         codeText,
+        codeReadable,
         agendaText,
         actionText,
         missionsText,
