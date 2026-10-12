@@ -79,10 +79,10 @@ export const CHAPTERS = [
     steps: [
       { path: demo('/reunions'), target: 'plan-list', placement: 'right',
         title: 'Le plan',
-        body: 'Les réunions à tenir, dans l’ordre. Glissez pour réordonner, insérez une réunion entre deux autres.' },
+        body: 'Les réunions à tenir, numérotées dans l’ordre ; la prochaine est mise en avant. Glissez pour réordonner, insérez une réunion entre deux autres. Les réunions terminées sont repliées en dessous, avec leur compte-rendu.' },
       { target: 'plan-current', placement: 'bottom',
-        title: 'La réunion en cours',
-        body: 'Un clic sur une réunion permet de la reprendre, de la préparer ou de la démarrer.' },
+        title: 'La prochaine réunion',
+        body: 'Le bouton « Préparer » ouvre la préparation de la réunion (« Reprendre » si elle est déjà ouverte). Un clic sur la carte affiche son détail : statut, ordre du jour, suppression.' },
       { target: 'plan-generate', placement: 'bottom',
         title: 'Laisser BlabIA proposer',
         body: 'À partir du brief, BlabIA propose une suite de réunions. Les réunions suggérées pendant les échanges s’y ajoutent aussi, si vous les gardez.' },

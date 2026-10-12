@@ -14,7 +14,7 @@ export default function ProjectPlan() {
 
   return (
     <>
-      <PageHeader title="Plan" subtitle="Les réunions à venir, dans l'ordre. Glissez pour réordonner, cliquez pour préparer ou lancer une réunion.">
+      <PageHeader title="Plan" subtitle="Les réunions du projet, dans l'ordre où les tenir : la prochaine en tête, les terminées repliées en bas. Glissez une carte pour la déplacer.">
         {project.brief && (
           <Button data-tour="plan-generate" variant="secondary" onClick={() => setShowGenerate(true)} className="text-ai border-ai-border">
             <Sparkles size={16} /> Proposer un plan avec l'IA

@@ -1,25 +1,44 @@
 import { useState, useEffect } from 'react';
+import { Handshake, Code2, Wrench, X, Play, RotateCcw, FileText, Trash2, Pin, CalendarDays, ListChecks } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError } from '../../utils/notify';
+import { Button, Badge, IconButton, SectionLabel } from '../ui';
 
 export const STATUS_OPTS   = ['pending', 'in_progress', 'done', 'blocked'];
 export const STATUS_LABELS = { pending: 'À tenir', in_progress: 'En cours', done: 'Terminée', blocked: 'Bloquée' };
+export const STATUS_TONE   = { pending: 'muted', in_progress: 'action', done: 'ok', blocked: 'await' };
 
 export const TYPE_ICON = { decision: '🤝', claude_code: '💻', stack: '🔧' };
 export const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Outils' };
+// Icônes contour, les mêmes que les livrables de la préparation d'une réunion
+export const TYPE_LUCIDE = { decision: Handshake, claude_code: Code2, stack: Wrench };
+export const MEETING_TYPES = ['decision', 'claude_code', 'stack'];
+
+export function MeetingTypeIcon({ type, size = 18, className = '' }) {
+  const Icon = TYPE_LUCIDE[type] || Handshake;
+  return <Icon size={size} strokeWidth={1.75} aria-hidden="true" className={className} />;
+}
 
 export function trunc(str, n = 28) {
   return str && str.length > n ? str.slice(0, n) + '…' : (str || '');
 }
 
+export const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
 const DELIVERABLE_LABEL = {
-  decision:    '📋 Voir le compte-rendu',
-  claude_code: '💻 Voir le prompt',
-  stack:       '🔧 Voir les outils',
+  decision:    'Voir le compte-rendu',
+  claude_code: 'Voir le prompt',
+  stack:       'Voir les outils',
+};
+const SESSION_STATUS = {
+  open:      { label: 'Réunion en cours', tone: 'action' },
+  accepted:  { label: 'Réunion conclue', tone: 'ok' },
+  abandoned: { label: 'Réunion abandonnée', tone: 'await' },
 };
 
-// ── Drawer session (decision / claude_code) ────────────────────────────────────
-export function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh, onShowDeliverable, onDeleteMilestone }) {
+// ── Détail d'une réunion du plan ───────────────────────────────────────────────
+// Rendu dans un conteneur positionné (panneau latéral de la page Plan)
+export function SessionDrawer({ milestone, linkedSession, projectId, navigate, onClose, onRefresh, onShowDeliverable, onDeleteMilestone, onStart }) {
   const [status, setStatus] = useState(milestone.status);
   const [saving, setSaving] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -51,105 +70,100 @@ export function SessionDrawer({ milestone, linkedSession, projectId, navigate, o
     try {
       await api.post(`/projects/${projectId}/sessions/${sessionId}/reopen`);
       navigate(`/projects/${projectId}/meeting/${sessionId}`);
-    } catch (err) {
-      console.error('[handleReopen]', err);
-    }
+    } catch (err) { notifyError(err, 'La réunion n’a pas pu être reprise.'); }
     setReopening(false);
   };
 
-  const sessionDate = linkedSession?.createdAt
-    ? new Date(linkedSession.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
-  const openSessionPath = linkedSession ? `/projects/${projectId}/meeting/${linkedSession.id}` : null;
-
-  const SESSION_STATUS_LABEL = { open: '🔵 En cours', accepted: '✅ Acceptée', abandoned: '🚫 Abandonnée' };
+  const start = onStart || (m => navigate(`/projects/${projectId}/meeting/new`, {
+    state: { milestoneId: m.id, milestoneTitle: m.title, milestoneType: m.type },
+  }));
+  const agendaCount = Array.isArray(milestone.agenda) ? milestone.agenda.length : 0;
+  const ss = linkedSession && SESSION_STATUS[linkedSession.status];
 
   return (
-    <div className="absolute inset-0 bg-white z-10 flex flex-col rounded-r-xl">
-      <div className="flex items-center gap-2 px-3 py-3 border-b border-line shrink-0">
-        <button onClick={onClose} className="text-ink-faint hover:text-ink-soft text-base leading-none font-bold">←</button>
-        <span className="text-xs font-semibold text-ink flex-1 min-w-0 truncate">
-          {TYPE_ICON[milestone.type]} {trunc(milestone.title, 20)}
+    <div className="absolute inset-0 bg-white flex flex-col">
+      <div className="flex items-start gap-3 px-5 py-4 border-b border-line shrink-0">
+        <span className="w-10 h-10 shrink-0 rounded-xl bg-action-light text-action inline-flex items-center justify-center">
+          <MeetingTypeIcon type={milestone.type} size={20} />
         </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-extrabold uppercase tracking-wider text-ink-muted">{TYPE_LABEL[milestone.type] || 'Réunion'}</p>
+          <h2 className="text-base font-bold text-ink leading-snug mt-0.5">{milestone.title}</h2>
+        </div>
+        <IconButton label="Fermer" size="sm" onClick={onClose}><X size={18} /></IconButton>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        <span className="inline-flex items-center gap-1 text-xs font-medium bg-canvas-deep text-ink-soft px-2 py-0.5 rounded-full">
-          {TYPE_ICON[milestone.type]} {TYPE_LABEL[milestone.type]}
-        </span>
 
-        {milestone.description ? (
-          <p className="text-xs text-ink-soft leading-relaxed">{milestone.description}</p>
-        ) : (
-          <p className="text-xs text-ink-faint italic">Aucune description</p>
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        {milestone.description && <p className="text-sm text-ink-soft leading-relaxed whitespace-pre-line">{milestone.description}</p>}
+
+        {agendaCount > 0 && (
+          <p className="flex items-center gap-2 text-sm text-await bg-await-bg border border-await-border rounded-xl px-3 py-2">
+            <ListChecks size={16} aria-hidden="true" className="shrink-0" />
+            Ordre du jour : {agendaCount} décision{agendaCount > 1 ? 's' : ''} remise{agendaCount > 1 ? 's' : ''} en question à retraiter
+          </p>
         )}
 
         <div>
-          <label className="text-xs font-semibold text-ink-soft uppercase tracking-wide block mb-1.5">Statut</label>
-          <select value={status} onChange={e => changeStatus(e.target.value)} disabled={saving}
-            className="w-full text-xs border border-line rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-action bg-white">
+          <SectionLabel className="mb-2"><label htmlFor="milestone-status">Statut</label></SectionLabel>
+          <select id="milestone-status" value={status} onChange={e => changeStatus(e.target.value)} disabled={saving}
+            className="w-full text-sm text-ink border border-line rounded-[10px] px-3 h-10 outline-none focus:ring-2 focus:ring-action bg-white">
             {STATUS_OPTS.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
           </select>
         </div>
 
+        {linkedSession && (
+          <div className="flex flex-wrap items-center gap-2">
+            {ss && <Badge tone={ss.tone}>{ss.label}</Badge>}
+            {linkedSession.createdAt && (
+              <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
+                <CalendarDays size={14} aria-hidden="true" /> {fmtDate(linkedSession.createdAt)}
+              </span>
+            )}
+          </div>
+        )}
+
         {pinnedDecisions.length > 0 && (
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-ink-soft uppercase tracking-wide block">📌 Décisions</label>
+          <div className="space-y-2">
+            <SectionLabel className="flex items-center gap-1.5"><Pin size={14} aria-hidden="true" /> Messages épinglés</SectionLabel>
             {pinnedDecisions.map((msg, i) => (
-              <div key={msg.id || i} className="bg-await-bg border border-await-border rounded-lg px-2.5 py-2">
-                <p className="text-[10px] font-semibold text-await mb-0.5">{msg.agentName}</p>
-                <p className="text-xs text-await leading-relaxed">{msg.content}</p>
+              <div key={msg.id || i} className="bg-canvas border border-line rounded-xl px-3 py-2">
+                <p className="text-xs font-bold text-ink-muted mb-0.5">{msg.agentName}</p>
+                <p className="text-sm text-ink-soft leading-relaxed">{msg.content}</p>
               </div>
             ))}
           </div>
         )}
+      </div>
 
+      <div className="shrink-0 border-t border-line px-5 py-4 space-y-2">
         {linkedSession ? (
-          <div className="space-y-2 pt-1">
+          <>
             {linkedSession.status === 'abandoned' ? (
-              <button onClick={() => handleReopen(linkedSession.id)} disabled={reopening}
-                className="w-full bg-await hover:bg-await/90 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-60">
-                {reopening ? '…' : '🔄 Reprendre la réunion'}
-              </button>
+              <Button variant="primary" className="w-full" disabled={reopening} onClick={() => handleReopen(linkedSession.id)}>
+                <RotateCcw size={16} aria-hidden="true" /> {reopening ? 'Reprise…' : 'Reprendre la réunion'}
+              </Button>
             ) : (
-              <button onClick={() => navigate(openSessionPath)}
-                className="w-full bg-ok hover:bg-ok/90 text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5">
-                {linkedSession.status === 'open' ? '▶ Reprendre la réunion' : '📋 Voir la réunion'}
-              </button>
+              <Button variant={linkedSession.status === 'open' ? 'primary' : 'secondary'} className="w-full"
+                onClick={() => navigate(`/projects/${projectId}/meeting/${linkedSession.id}`)}>
+                <Play size={16} aria-hidden="true" /> {linkedSession.status === 'open' ? 'Reprendre la réunion' : 'Ouvrir la réunion'}
+              </Button>
             )}
             {linkedSession.status === 'accepted' && onShowDeliverable && (
-              <button onClick={() => { onShowDeliverable(linkedSession, milestone.type); onClose(); }}
-                className="w-full bg-ai-bg hover:bg-ai-light border border-ai-border text-ai text-xs font-semibold py-2 rounded-xl transition flex items-center justify-center gap-1.5">
-                {DELIVERABLE_LABEL[milestone.type] || '📄 Voir le livrable'}
-              </button>
+              <Button variant="secondary" className="w-full !text-ai !border-ai-border hover:!bg-ai-bg"
+                onClick={() => { onShowDeliverable(linkedSession, milestone.type); onClose(); }}>
+                <FileText size={16} aria-hidden="true" /> {DELIVERABLE_LABEL[milestone.type] || 'Voir le livrable'}
+              </Button>
             )}
-            <div className="text-xs text-ink-faint text-center">
-              {sessionDate} · <span className="font-medium text-ink-soft">{SESSION_STATUS_LABEL[linkedSession.status] || linkedSession.status}</span>
-            </div>
-            <button onClick={onClose} className="w-full border border-line text-ink-soft text-xs font-medium py-2 rounded-xl hover:bg-canvas transition">
-              Fermer
-            </button>
-          </div>
+          </>
         ) : (
-          <div className="space-y-2 pt-1">
-            <button
-              onClick={() => navigate(`/projects/${projectId}/meeting/new`, {
-                state: { milestoneId: milestone.id, milestoneTitle: milestone.title, milestoneType: milestone.type }
-              })}
-              className="w-full bg-action hover:bg-action-dark text-white text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5">
-              🚀 Démarrer une réunion
-            </button>
-            <button onClick={onClose} className="w-full border border-line text-ink-soft text-xs font-medium py-2 rounded-xl hover:bg-canvas transition">
-              Annuler
-            </button>
-          </div>
+          <Button variant="primary" className="w-full" onClick={() => { onClose(); start(milestone); }}>
+            <Play size={16} aria-hidden="true" /> Préparer la réunion
+          </Button>
         )}
         {onDeleteMilestone && (
-          <div className="pt-2 border-t border-line">
-            <button onClick={() => onDeleteMilestone(milestone.id)}
-              className="w-full text-xs text-red-400 hover:text-red-600 py-1.5 rounded-lg hover:bg-red-50 transition">
-              🗑 Supprimer cette réunion
-            </button>
-          </div>
+          <Button variant="ghost" size="sm" className="w-full !text-red-700 hover:!bg-red-50" onClick={() => onDeleteMilestone(milestone.id)}>
+            <Trash2 size={14} aria-hidden="true" /> Supprimer cette réunion du plan
+          </Button>
         )}
       </div>
     </div>
