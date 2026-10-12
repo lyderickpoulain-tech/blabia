@@ -264,6 +264,9 @@ Tests : `services/__tests__/actions.test.js`, `__integration__/actionChanges.tes
 ### D18. Réinitialiser un projet relié à un dépôt — fait le 12/10/2026
 La réinitialisation n'efface que la mémoire de BlabIA : code, site en ligne, base du site et outils restent. Fenêtre de réinitialisation (Paramètres) : encadré « Le site lui-même n'est pas réinitialisé » (nouveau projet « Site web à créer de zéro » conseillé pour repartir d'une page blanche), alerte si un développement est en cours, case « Abandonner les développements en attente » (`DELETE /memory?abandonDevs=true` : pull requests et demandes fermées sur GitHub). Après réinitialisation, note `[RÉINITIALISATION | …]` en mémoire : un site existe déjà (dépôt, développements mis en ligne), partir du code actuel et signaler ce qui contredit les nouveaux choix.
 
+### D19. Conclusion conservée tant qu'elle n'est pas validée — fait le 12/10/2026
+Fermer la fenêtre de conclusion (pour vérifier un outil, une action…) ne perd plus la conclusion. `Session.closureDraft` (migration `20261012000002`) : { generatedAt, messageCount, data (réponse de generate-deliverable), edits (état de la fenêtre : cases, textes) }. `GET/PUT /:sessionId/closure-draft` ; la fenêtre reprend le brouillon (modifications comprises, enregistrées 800 ms après chaque changement) et affiche « Conclusion préparée aujourd'hui à … » avec « Régénérer » ; bandeau ambre « La réunion a continué » quand des messages ont été ajoutés depuis. Effacé à la clôture (acceptée ou abandonnée) et à la réinitialisation de la réunion. Test : `__integration__/closureDraft.test.js`.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).
@@ -323,7 +326,7 @@ cd C:\BlabIA\client; npm run build
 ```
 
 ### Déploiement
-1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-12-18-01.dump`.
+1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-12-21-31.dump`.
 2. `git push origin main` → Railway redéploie ; les migrations s'appliquent au démarrage (`prisma migrate deploy`).
 3. Vérifier dans les logs Railway : migrations appliquées, serveur démarré, healthcheck `/api/health` en 200.
 

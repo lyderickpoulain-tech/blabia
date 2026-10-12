@@ -67,7 +67,8 @@ router.post('/:sessionId/reset', async (req, res) => {
       planSuggestions: null,
       tokensUsed: JSON.stringify({ input: 0, output: 0, total: 0 }),
       hasCode: false,
-      codeStatus: null
+      codeStatus: null,
+      closureDraft: null,
     });
 
     let followingCount = 0;

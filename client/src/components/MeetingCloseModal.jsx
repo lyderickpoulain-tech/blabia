@@ -9,6 +9,14 @@ import { Link } from 'react-router-dom';
 import { Button, IconButton, Badge, SectionLabel, AutoTextarea } from './ui';
 import { notifyError, notifySuccess } from '../utils/notify';
 
+// Date de préparation d'une conclusion : « aujourd'hui à 14 h 05 » ou « le 12 oct. à 14 h 05 »
+function fmtDraftDate(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? `aujourd’hui à ${time}` : `le ${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${time}`;
+}
+
 // Changements proposés sur les actions déjà suivies (services/actions.js, parseActionChanges)
 const ACTION_CHANGE = {
   update: { label: 'À préciser', tone: 'action', Icon: PenLine },
@@ -72,34 +80,69 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   const [abandonConfirm, setAbandonConfirm] = useState(false);
   const [abandoning,     setAbandoning]     = useState(false);
 
-  useEffect(() => { generate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Conclusion préparée non validée (brouillon conservé sur la réunion) : reprise telle quelle,
+  // avec les modifications de l'humain ; sinon génération
+  const [draftInfo, setDraftInfo] = useState(null); // { generatedAt, changedSince }
+  const draftReadyRef = useRef(false);
+  useEffect(() => {
+    api.get(`/projects/${projectId}/sessions/${session.id}/closure-draft`)
+      .then(({ data }) => {
+        if (!data.draft) return generate();
+        applyData(data.draft.edits || data.draft.data, !data.draft.edits);
+        setDraftInfo({ generatedAt: data.draft.generatedAt, changedSince: data.changedSince || 0 });
+        setStep('review');
+        draftReadyRef.current = true;
+      })
+      .catch(() => generate()); // brouillon illisible : on régénère
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // fresh : réponse brute du serveur (clés et cases à poser) ; sinon modifications déjà enregistrées
+  const applyData = (d, fresh) => {
+    setMeetingType(d.meetingType);
+    setSummary(d.summary || '');
+    setDeliverable(d.deliverable || null);
+    if (Array.isArray(d.toolSuggestions)) setToolSuggestions(d.toolSuggestions);
+    setToolDecisions(fresh ? {} : (d.toolDecisions || {}));
+    setDecisionProposals(!Array.isArray(d.decisionProposals) ? null
+      : fresh ? d.decisionProposals.map((x, i) => ({ ...x, key: i, keep: true, replaceKeep: !!x.replaces })) : d.decisionProposals);
+    setActionProposals(!Array.isArray(d.actionProposals) ? null
+      : fresh ? d.actionProposals.map((x, i) => ({ ...x, key: i, keep: true })) : d.actionProposals);
+    setActionChanges(fresh ? (d.actionChanges || []).map(c => ({ ...c, apply: true })) : (d.actionChanges || []));
+    setMeetingProposals(fresh ? (d.meetingProposals || []).map(m => ({ ...m, keep: true })) : (d.meetingProposals || []));
+    setToolSetups(d.toolSetups || []);
+    setDevMissingTools(d.devMissingTools || []);
+    if (fresh) { if ((d.devMissingTools || []).length) setLaunchDev(false); } // lancé depuis Développements une fois les outils prêts
+    else if (typeof d.launchDev === 'boolean') setLaunchDev(d.launchDev);
+  };
 
   const generate = async () => {
+    draftReadyRef.current = false;
     setStep('generating');
     setGenError('');
+    setDraftInfo(null);
     try {
       const { data } = await api.post(`/projects/${projectId}/sessions/${session.id}/generate-deliverable`, {});
-      setMeetingType(data.meetingType);
-      setSummary(data.summary || '');
-      setDeliverable(data.deliverable || null);
-      if (Array.isArray(data.toolSuggestions)) setToolSuggestions(data.toolSuggestions);
-      setDecisionProposals(Array.isArray(data.decisionProposals)
-        ? data.decisionProposals.map((d, i) => ({ ...d, key: i, keep: true, replaceKeep: !!d.replaces }))
-        : null);
-      setActionProposals(Array.isArray(data.actionProposals)
-        ? data.actionProposals.map((a, i) => ({ ...a, key: i, keep: true }))
-        : null);
-      setActionChanges((data.actionChanges || []).map(c => ({ ...c, apply: true })));
-      setMeetingProposals((data.meetingProposals || []).map(m => ({ ...m, keep: true })));
-      setToolSetups(data.toolSetups || []);
-      setDevMissingTools(data.devMissingTools || []);
-      if ((data.devMissingTools || []).length) setLaunchDev(false); // lancé depuis Développements une fois les outils prêts
+      applyData(data, true);
+      setDraftInfo({ generatedAt: new Date().toISOString(), changedSince: 0 });
       setStep('review');
+      draftReadyRef.current = true;
     } catch (err) {
       setGenError(err.response?.data?.error || 'Erreur lors de la génération du compte-rendu');
       setStep('review');
     }
   };
+
+  // Modifications de l'humain enregistrées sur le brouillon (après une courte pause)
+  useEffect(() => {
+    if (!draftReadyRef.current) return undefined;
+    const t = setTimeout(() => {
+      api.put(`/projects/${projectId}/sessions/${session.id}/closure-draft`, { edits: {
+        meetingType, summary, deliverable, toolSuggestions, toolDecisions, decisionProposals, actionProposals,
+        actionChanges, meetingProposals, toolSetups, devMissingTools, launchDev,
+      } }).catch(() => {}); // sans gravité : seule la reprise exacte des modifications serait perdue
+    }, 800);
+    return () => clearTimeout(t);
+  }, [summary, deliverable, toolDecisions, decisionProposals, actionProposals, actionChanges, meetingProposals, launchDev]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCopyDeliverable = () => {
     navigator.clipboard.writeText(deliverable || '').then(() => {
@@ -290,6 +333,20 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
 
           {step === 'review' && !genError && (
             <>
+              {draftInfo && (
+                <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border px-3.5 py-2.5 text-xs ${
+                  draftInfo.changedSince ? 'border-await-border bg-await-bg text-await' : 'border-line bg-canvas text-ink-muted'
+                }`}>
+                  <span className="flex-1 min-w-[220px]">
+                    {draftInfo.changedSince
+                      ? <><strong>La réunion a continué</strong> depuis la préparation de cette conclusion ({draftInfo.changedSince} message{draftInfo.changedSince > 1 ? 's' : ''}) : régénérez-la pour en tenir compte.</>
+                      : <>Conclusion préparée {fmtDraftDate(draftInfo.generatedAt)}. Vous pouvez fermer cette fenêtre (vérifier un outil, une action…) : vous la retrouverez telle quelle, avec vos modifications.</>}
+                  </span>
+                  <Button size="sm" variant={draftInfo.changedSince ? 'await' : 'ghost'} className="!h-8" onClick={generate}>
+                    <RotateCcw size={14} aria-hidden="true" /> Régénérer
+                  </Button>
+                </div>
+              )}
               {/* Arbitrages de la réunion */}
               {decisionMessages.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

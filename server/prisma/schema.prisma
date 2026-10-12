@@ -204,6 +204,7 @@ model Session {
   codeContext     String?   // v5.1 : réunion Claude Code — code du dépôt vu par les agents (services/codeContext.js), calculé au 1er tour
   requiredTools   Json?     // v5.1 : réunion Claude Code — types d'outils utilisés par le développement (services/devTools.js), null = pas encore repéré
   milestoneId     String?
+  closureDraft    Json?     // v5.1 : conclusion préparée non validée { generatedAt, messageCount, data, edits } — effacée à la clôture
   todoId          String?   // v5.1 : réunion ouverte depuis une action (« Traiter en réunion ») — cochée à la conclusion
   todos           TodoItem[]
   createdAt       DateTime  @default(now())

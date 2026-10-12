@@ -313,10 +313,58 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       devMissingTools = missingTools(await requiredCategories({ ...session, deliverable, requiredTools: null }, projectTools), projectTools);
     }
 
-    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals, actionProposals, actionChanges, meetingProposals, toolSetups, devMissingTools });
+    const payload = { meetingType, summary, deliverable, toolSuggestions, decisionProposals, actionProposals, actionChanges, meetingProposals, toolSetups, devMissingTools };
+    // Conclusion conservée tant qu'elle n'est pas validée : l'humain peut fermer la fenêtre
+    // (vérifier un outil, une action…) et la retrouver telle quelle, sans tout régénérer
+    await db('Session').where({ id: sessionId }).update({
+      closureDraft: JSON.stringify({ generatedAt: new Date().toISOString(), messageCount: messages.length, data: payload, edits: null }),
+    });
+    return res.json(payload);
   } catch (err) {
     console.error('[sessions/generate-deliverable]', err.message);
     res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });
+  }
+});
+
+// ── Conclusion préparée non validée (brouillon) ─────────────────────────────
+// GET : { draft: { generatedAt, data, edits } | null, changedSince } — changedSince : nombre
+// de messages ajoutés à la réunion depuis la préparation (régénérer est alors conseillé)
+router.get('/:sessionId/closure-draft', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [s] = await db('Session').where({ id: sessionId, projectId }).select('closureDraft', 'messages', 'status').limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    const draft = s.status === 'open' ? parseJsonField(s.closureDraft, null) : null;
+    if (!draft?.data) return res.json({ draft: null, changedSince: 0 });
+    const changedSince = Math.max(0, parseJsonField(s.messages, []).length - (draft.messageCount || 0));
+    res.json({ draft: { generatedAt: draft.generatedAt, data: draft.data, edits: draft.edits || null }, changedSince });
+  } catch (err) {
+    console.error('[sessions/closure-draft GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT { edits } : modifications de l'humain dans la fenêtre de conclusion (cases, textes)
+router.put('/:sessionId/closure-draft', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [s] = await db('Session').where({ id: sessionId, projectId }).select('closureDraft').limit(1);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    const draft = parseJsonField(s.closureDraft, null);
+    if (!draft?.data) return res.status(409).json({ error: 'Aucune conclusion préparée pour cette réunion.' });
+    const edits = req.body?.edits && typeof req.body.edits === 'object' ? req.body.edits : null;
+    if (edits && JSON.stringify(edits).length > 500000) return res.status(413).json({ error: 'Modifications trop volumineuses.' });
+    await db('Session').where({ id: sessionId }).update({ closureDraft: JSON.stringify({ ...draft, edits }) });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[sessions/closure-draft PUT]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 

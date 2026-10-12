@@ -298,7 +298,8 @@ router.patch('/:sessionId/status', async (req, res) => {
     if (['accepted', 'abandoned'].includes(s.status)) {
       return res.status(400).json({ error: 'Session déjà close' });
     }
-    await db('Session').where({ id: sessionId }).update({ status });
+    // Réunion close : la conclusion préparée (brouillon) n'a plus lieu d'être
+    await db('Session').where({ id: sessionId }).update({ status, closureDraft: null });
 
     if (status === 'accepted' && s.milestoneId && (s.summary || s.planSuggestions)) {
       await db('Milestone').where({ id: s.milestoneId }).update({ status: 'done' });
