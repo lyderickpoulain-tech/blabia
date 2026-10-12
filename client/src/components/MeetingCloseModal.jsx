@@ -4,10 +4,17 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
 import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
-import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft, CalendarPlus } from 'lucide-react';
+import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft, CalendarPlus, PenLine } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button, IconButton, Badge, SectionLabel } from './ui';
 import { notifyError, notifySuccess } from '../utils/notify';
+
+// Changements proposés sur les actions déjà suivies (services/actions.js, parseActionChanges)
+const ACTION_CHANGE = {
+  update: { label: 'À préciser', tone: 'action', Icon: PenLine },
+  cancel: { label: 'Devenue inutile', tone: 'await', Icon: Ban },
+  done:   { label: 'Déjà faite', tone: 'ok', Icon: Check },
+};
 
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
 // à l'ouverture, puis assistant en 3 étapes : relecture CR + livrable → revue
@@ -37,6 +44,10 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   const [actionProposals, setActionProposals] = useState([]);
   const actionsSavedRef = useRef(false);
   const updateAction = (key, patch) => setActionProposals(prev => prev.map(a => a.key === key ? { ...a, ...patch } : a));
+  // Actions déjà suivies que la réunion précise, rend inutiles ou montre faites : appliqué si coché
+  const [actionChanges, setActionChanges] = useState([]);
+  const actionChangesSavedRef = useRef(false);
+  const updateChange = (id, patch) => setActionChanges(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
   // Ce qui n'est pas une action (v5.1) : réunions proposées (décisions à prendre, code),
   // outils à mettre en place (page Outils), outils manquants pour le développement
   const [meetingProposals, setMeetingProposals] = useState([]);
@@ -78,6 +89,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       setActionProposals(Array.isArray(data.actionProposals)
         ? data.actionProposals.map((a, i) => ({ ...a, key: i, keep: true }))
         : null);
+      setActionChanges((data.actionChanges || []).map(c => ({ ...c, apply: true })));
       setMeetingProposals((data.meetingProposals || []).map(m => ({ ...m, keep: true })));
       setToolSetups(data.toolSetups || []);
       setDevMissingTools(data.devMissingTools || []);
@@ -144,6 +156,17 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
           actions: keptActions.map(({ title, description, dueDate }) => ({ title, description, dueDate })),
         });
         actionsSavedRef.current = true;
+      }
+
+      // Actions déjà suivies : précisées, annulées (récupérables dans Projet › Actions) ou cochées (une seule fois)
+      const appliedChanges = actionChanges.filter(c => c.apply);
+      if (appliedChanges.length > 0 && !actionChangesSavedRef.current) {
+        for (const c of appliedChanges) {
+          const body = c.kind === 'update' ? { title: c.title.trim() || c.currentTitle, description: c.description || null }
+            : { status: c.kind === 'cancel' ? 'cancelled' : 'done' };
+          await api.patch(`/projects/${projectId}/todos/${c.id}`, body);
+        }
+        actionChangesSavedRef.current = true;
       }
 
       // Réunions proposées (décisions à prendre, travail de code) : ajoutées au plan (une seule fois)
@@ -416,12 +439,45 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                 <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
                   <ListChecks size={16} className="text-action" aria-hidden="true" /> Actions d'ici la prochaine réunion
                 </h3>
+                {actionChanges.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-ink-soft">Actions déjà suivies, revues par la réunion · {actionChanges.length}</p>
+                    <ul className="space-y-1.5">
+                      {actionChanges.map(c => {
+                        const meta = ACTION_CHANGE[c.kind];
+                        return (
+                          <li key={c.id} className={`flex items-start gap-2.5 border rounded-xl p-2.5 transition ${c.apply ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'}`}>
+                            <input type="checkbox" checked={c.apply} aria-label="Appliquer ce changement"
+                              onChange={e => updateChange(c.id, { apply: e.target.checked })} className="mt-1 w-4 h-4 accent-action shrink-0" />
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge tone={meta.tone}><meta.Icon size={12} aria-hidden="true" /> {meta.label}</Badge>
+                                <span className={`text-sm ${c.kind === 'update' ? 'text-ink-muted line-through' : 'font-semibold text-ink'}`}>{c.currentTitle}</span>
+                              </div>
+                              {c.kind === 'update' && (
+                                <>
+                                  <input value={c.title} onChange={e => updateChange(c.id, { title: e.target.value })} disabled={!c.apply}
+                                    aria-label="Nouvel intitulé" className="w-full text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
+                                  <textarea value={c.description || ''} onChange={e => updateChange(c.id, { description: e.target.value })} disabled={!c.apply} rows={2}
+                                    aria-label="Objectif précisé" placeholder="Objectif précisé (facultatif)"
+                                    className="w-full text-xs text-ink-soft border border-line rounded-md px-1.5 py-1 outline-none bg-white resize-y" />
+                                </>
+                              )}
+                              {c.reason && <p className="text-[11px] text-ink-muted italic">{c.reason}</p>}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="text-[11px] text-ink-faint">Une action annulée reste récupérable dans Projet › Actions (« Annulées »).</p>
+                  </div>
+                )}
                 {actionProposals === null ? (
                   <p className="text-xs text-await bg-await-bg border border-await-border rounded-[10px] px-3 py-2">
                     Les actions n'ont pas pu être proposées. Vous pourrez les ajouter dans Projet › Actions.
                   </p>
                 ) : actionProposals.length === 0 ? (
-                  <p className="text-xs text-ink-faint">Aucune action concrète identifiée pour vous dans cette réunion.</p>
+                  <p className="text-xs text-ink-faint">Aucune nouvelle action concrète identifiée pour vous dans cette réunion.</p>
                 ) : (
                   <>
                     <p className="text-xs text-ink-muted">Ce que vous avez à faire avant la prochaine réunion, dans l'ordre où les mener. L'échéance est facultative. Les agents feront le point dessus en l'ouvrant. Décochez ce qui ne vous concerne pas.</p>

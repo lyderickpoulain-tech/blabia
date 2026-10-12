@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, CalendarDays, Link2, Bot, Users, FileText } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, CalendarDays, Link2, Bot, Users, FileText, Ban, Undo2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, IconButton, Card, SectionLabel } from '../../components/ui';
@@ -206,8 +206,9 @@ export default function ProjectActions() {
   const [newTitle, setNewTitle] = useState('');
   const [newDue, setNewDue] = useState('');
   const [showDone, setShowDone] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
 
-  const load = () => api.get(`/projects/${project.id}/actions`)
+  const load = () => api.get(`/projects/${project.id}/actions?withCancelled=1`)
     .then(({ data }) => { setActions(data); refreshCounts?.(); })
     .catch(() => setError('Impossible de charger les actions.'));
   useEffect(() => { load(); }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -245,7 +246,7 @@ export default function ProjectActions() {
   const move = (index, delta) => run(() => {
     const ids = open.map(a => a.id);
     [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
-    setActions(prev => [...ids.map(id => prev.find(a => a.id === id)), ...prev.filter(a => a.status === 'done')]); // affichage immédiat
+    setActions(prev => [...ids.map(id => prev.find(a => a.id === id)), ...prev.filter(a => ['done', 'cancelled'].includes(a.status))]); // affichage immédiat
     return api.patch(`/projects/${project.id}/todos/reorder`, { order: ids });
   });
   const add = () => run(async () => {
@@ -253,8 +254,11 @@ export default function ProjectActions() {
     setNewTitle(''); setNewDue(''); setAdding(false);
   });
 
-  const open = (actions || []).filter(a => a.status !== 'done');
+  const open = (actions || []).filter(a => !['done', 'cancelled'].includes(a.status));
   const done = (actions || []).filter(a => a.status === 'done');
+  // Annulées (à la conclusion d'une réunion, devenues inutiles) : récupérables
+  const cancelled = (actions || []).filter(a => a.status === 'cancelled');
+  const restore = a => run(() => api.patch(`/projects/${project.id}/todos/${a.id}`, { status: 'todo' }));
   const late = open.filter(isOverdueAction);
 
   return (
@@ -318,6 +322,32 @@ export default function ProjectActions() {
             {showDone && (
               <ul className="space-y-2">
                 {done.map(a => <ActionItem key={a.id} action={a} onToggle={toggle} onSave={save} onDelete={remove} onOpenReport={openReport} />)}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {cancelled.length > 0 && (
+          <section className="space-y-2">
+            <button type="button" onClick={() => setShowCancelled(v => !v)} aria-expanded={showCancelled}
+              className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-ink-muted hover:underline">
+              <ChevronDown size={14} className={`transition-transform ${showCancelled ? 'rotate-180' : ''}`} aria-hidden="true" />
+              Annulées · {cancelled.length}
+            </button>
+            {showCancelled && (
+              <ul className="space-y-2">
+                {cancelled.map(a => (
+                  <li key={a.id} className="flex items-start gap-3 rounded-xl border border-line bg-canvas px-3.5 py-3">
+                    <Ban size={16} className="mt-0.5 shrink-0 text-ink-faint" aria-hidden="true" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-ink-muted line-through">{a.title}</p>
+                      {a.sessionTask && <p className="text-[11px] text-ink-faint mt-0.5">Proposée en réunion « {a.sessionTask} »</p>}
+                    </div>
+                    <Button size="sm" variant="ghost" className="!h-8 shrink-0" onClick={() => restore(a)}>
+                      <Undo2 size={14} aria-hidden="true" /> Rétablir
+                    </Button>
+                  </li>
+                ))}
               </ul>
             )}
           </section>

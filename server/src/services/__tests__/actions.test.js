@@ -52,3 +52,32 @@ describe('actions entre les réunions', () => {
     expect(turn.text).not.toContain('Appeler la banque');
   });
 });
+
+describe('actions déjà suivies revues à la conclusion', () => {
+  const { parseActionChanges } = require('../actions');
+  const ACTIONS = [
+    { id: 'a1', title: 'Rédiger la page Méthode', description: null, status: 'todo' },
+    { id: 'f1', title: 'Lister les fournisseurs', status: 'done' },
+    { id: 'a2', title: 'Contacter un avocat', description: 'Droit à l’image', status: 'in_progress' },
+  ];
+  it('repères A1, A2… sur les actions à faire, avec leur précision', () => {
+    const text = formatActionsForPrompt(ACTIONS);
+    expect(text).toContain('A1. [à faire] Rédiger la page Méthode');
+    expect(text).toContain('A2. [à faire] Contacter un avocat — Droit à l’image');
+    expect(text).toContain('- [fait] Lister les fournisseurs');
+  });
+  it('repères rapprochés des actions ; changement vide, repère inconnu ou doublon écartés', () => {
+    const changes = parseActionChanges({ actionChanges: [
+      { ref: 'A1', kind: 'update', title: '', detail: 'Ton pédagogique, 600 mots', reason: 'Précisé par Léa' },
+      { ref: 'A2', kind: 'cancel', reason: 'Démo célébrités abandonnée' },
+      { ref: 'A2', kind: 'done' },                          // doublon
+      { ref: 'A7', kind: 'done' },                          // inconnue
+      { ref: 'A1', kind: 'update', title: '', detail: '' }, // rien ne change
+      { ref: 'A1', kind: 'supprimer' },                     // type inconnu
+    ] }, ACTIONS);
+    expect(changes).toEqual([
+      { id: 'a1', kind: 'update', currentTitle: 'Rédiger la page Méthode', currentDescription: null, title: 'Rédiger la page Méthode', description: 'Ton pédagogique, 600 mots', reason: 'Précisé par Léa' },
+      { id: 'a2', kind: 'cancel', currentTitle: 'Contacter un avocat', currentDescription: 'Droit à l’image', reason: 'Démo célébrités abandonnée' },
+    ]);
+  });
+});

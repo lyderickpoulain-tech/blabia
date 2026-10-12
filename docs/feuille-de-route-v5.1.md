@@ -255,6 +255,12 @@ Cas réel (Site de numérologie, dev n° 3 « Revoir la V0 avec plus de contenu 
 - `services/devTasks.js` : exécution terminée en échec (`failure`, `timed_out`) mais branche en avance → pull request ouverte par BlabIA avec un avertissement « à relire » ; un ancien échec de ce type est récupéré dès que la branche est visible.
 - Page Développements : icône « Relancer ce développement » sur la carte d'un développement échoué (le dernier de sa réunion, propriétaire, dépôt prêt) — même lancement que « Relancer » : confirmation, contrôle des outils.
 
+### D17. Actions revues par les réunions — fait le 12/10/2026
+- Agents : actions à faire repérées A1, A2… avec leur précision (description, 240 caractères), plus les 8 dernières faites ; consigne de dire explicitement quand une action devient inutile, est redéfinie ou déjà faite.
+- Conclusion : l'extraction renvoie `actionChanges` (update / cancel / done, avec la raison), rapprochés des actions par `parseActionChanges` (`services/actions.js`). Fenêtre de conclusion : « Actions déjà suivies, revues par la réunion », chaque changement coché par défaut, modifiable, appliqué seulement à la validation (routes /todos existantes).
+- Annulée = statut `cancelled` (jamais effacée) : absente pour les agents et les compteurs ; page Actions, section « Annulées » avec « Rétablir » (`GET /actions?withCancelled=1`).
+Tests : `services/__tests__/actions.test.js`, `__integration__/actionChanges.test.js`.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

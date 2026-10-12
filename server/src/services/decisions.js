@@ -69,8 +69,14 @@ ${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas, mê
 - "codeTasks" : ce qui consiste à écrire ou modifier le CODE (installer une police, créer des variables CSS, ajouter une page…) : c'est le travail de Claude Code, PAS de l'humain.
 - "actions" : seulement les vraies ACTIONS de l'humain hors de BlabIA, ni décision, ni outil, ni code (contacter, vérifier un point légal, rédiger un contenu, tester avec de vrais utilisateurs, réserver un nom…) : 5 au maximum, les plus importantes, DANS L'ORDRE où les mener. Pas d'action pour les agents, pas d'action vague (« réfléchir à… »). Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (en jours après la réunion, UNIQUEMENT si une échéance réelle ressort des échanges ; sinon null — l'ordre suffit).
 Rien de ce qui est déjà au registre ou déjà suivi ne doit réapparaître. Mieux vaut une liste vide qu'un élément inventé.
-
-Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7}],"toDecide":["Question à trancher ?"],"toolSetups":[{"tool":"Stripe","category":"paiement"}],"codeTasks":[{"title":"...","detail":"..."}]}`,
+${actionsText ? `
+Enfin, "actionChanges" : ce que la réunion change aux actions DÉJÀ suivies À FAIRE (repères A1, A2… ci-dessus), SEULEMENT quand les échanges le montrent clairement :
+- "update" : la réunion précise ou redéfinit l'action → "title" (nouvel intitulé, ou vide s'il ne change pas) et "detail" (objectif précisé, une à deux phrases, ou vide) ;
+- "cancel" : l'action est devenue inutile ou obsolète (décision contraire, sujet abandonné, remplacée par autre chose) ;
+- "done" : la réunion montre que l'action est déjà accomplie.
+Pour chacune : "ref" (ex. "A2"), "kind", "reason" (pourquoi, une phrase tirée de la réunion). Une action simplement évoquée sans changement : rien. Liste vide le plus souvent.
+` : ''}
+Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7}],"toDecide":["Question à trancher ?"],"toolSetups":[{"tool":"Stripe","category":"paiement"}],"codeTasks":[{"title":"...","detail":"..."}]${actionsText ? ',"actionChanges":[{"ref":"A1","kind":"update|cancel|done","title":"","detail":"","reason":"..."}]' : ''}}`,
   };
 }
 
@@ -130,7 +136,8 @@ async function extractMeetingDecisions({ session, messages, historyText, project
   // « replaces » : seulement un point de l'ordre du jour de CETTE réunion (texte joint pour l'affichage)
   const byId = Object.fromEntries(agenda.map(d => [d.id, d.statement]));
   const decisions = parseExtraction(raw).map(d => (byId[d.replaces] ? { ...d, replacesStatement: byId[d.replaces] } : { ...d, replaces: null }));
-  return { decisions, actions: parseActions(raw), triage: parseTriage(raw) };
+  // actionChanges : brut (repères A1…), rapproché des actions par l'appelant (parseActionChanges)
+  return { decisions, actions: parseActions(raw), triage: parseTriage(raw), actionChanges: raw?.actionChanges || [] };
 }
 
 module.exports = {

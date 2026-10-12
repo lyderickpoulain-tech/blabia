@@ -15,7 +15,8 @@ router.get('/:id/actions', async (req, res) => {
   try {
     const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
-    const actions = await listActions(req.params.id);
+    // ?withCancelled=1 : actions annulées aussi (page Actions, pour les rétablir)
+    const actions = await listActions(req.params.id, { withCancelled: req.query.withCancelled === '1' });
     // Dernière mission confiée à un agent depuis chaque action (page Actions)
     const missions = actions.length
       ? await db('AgentMission').whereIn('todoId', actions.map(a => a.id)).whereNotIn('status', ['rejected', 'cancelled'])

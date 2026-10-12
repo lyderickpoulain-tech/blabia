@@ -68,11 +68,12 @@ function parseTriage(raw) {
   };
 }
 
-async function listActions(projectId) {
+// withCancelled : actions annulées aussi (page Actions, pour les rétablir) ; jamais pour les agents
+async function listActions(projectId, { withCancelled = false } = {}) {
   return db('TodoItem as t')
     .leftJoin('Session as s', 's.id', 't.sessionId')
     .where('t.projectId', projectId)
-    .whereNot('t.status', 'cancelled')
+    .modify(q => { if (!withCancelled) q.whereNot('t.status', 'cancelled'); })
     .select('t.id', 't.title', 't.description', 't.status', 't.dueDate', 't.displayOrder', 't.source', 't.sessionId', 't.createdAt', 's.task as sessionTask')
     // À faire : dans l'ordre choisi par l'humain ; faites : les plus récentes d'abord
     .orderByRaw(`CASE WHEN t.status IN ('todo','in_progress') THEN 0 ELSE 1 END,
@@ -84,16 +85,47 @@ const fmtDay = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', mo
 const isOverdue = (a, now = new Date()) =>
   OPEN.includes(a.status) && a.dueDate && new Date(a.dueDate) < new Date(now.toISOString().slice(0, 10));
 
-// Texte des actions pour le prompt des agents (bloc commun de la réunion)
+// Texte des actions pour le prompt des agents (bloc commun de la réunion) et pour
+// l'extraction de fin de réunion. Actions à faire repérées A1, A2… (dans l'ordre de l'humain),
+// avec leur précision : la conclusion peut proposer de les préciser, annuler ou cocher.
+const DESCRIPTION_IN_PROMPT = 240;
+const openActions = actions => actions.filter(a => OPEN.includes(a.status));
 function formatActionsForPrompt(actions, now = new Date()) {
-  const open = actions.filter(a => OPEN.includes(a.status));
+  const open = openActions(actions);
   const done = actions.filter(a => a.status === 'done').slice(0, 8);
   const lines = [
-    // Numérotées : l'humain les mène dans cet ordre
-    ...open.map((a, i) => `${i + 1}. [${isOverdue(a, now) ? `EN RETARD, prévue le ${fmtDay(a.dueDate)}` : a.dueDate ? `à faire, pour le ${fmtDay(a.dueDate)}` : 'à faire'}] ${a.title}`),
+    ...open.map((a, i) => `A${i + 1}. [${isOverdue(a, now) ? `EN RETARD, prévue le ${fmtDay(a.dueDate)}` : a.dueDate ? `à faire, pour le ${fmtDay(a.dueDate)}` : 'à faire'}] ${a.title}${a.description ? ` — ${clean(a.description, DESCRIPTION_IN_PROMPT)}` : ''}`),
     ...done.map(a => `- [fait] ${a.title}`),
   ].slice(0, MAX_IN_PROMPT);
   return lines.join('\n');
+}
+
+// Changements proposés à la conclusion sur les actions DÉJÀ suivies (repère A1, A2…) :
+// update (intitulé et/ou objectif précisés), cancel (devenue inutile), done (déjà faite).
+// Rien n'est appliqué sans l'accord de l'humain (fenêtre de conclusion).
+const CHANGE_KINDS = ['update', 'cancel', 'done'];
+const MAX_ACTION_CHANGES = 6;
+function parseActionChanges(raw, actions) {
+  const open = openActions(actions);
+  const seen = new Set();
+  return (Array.isArray(raw?.actionChanges) ? raw.actionChanges : [])
+    .map(c => {
+      const m = String(c?.ref || '').match(/^A(\d+)$/i);
+      const action = m && open[Number(m[1]) - 1];
+      if (!action || !CHANGE_KINDS.includes(c.kind) || seen.has(action.id)) return null;
+      const reason = clean(c.reason, 300) || null;
+      if (c.kind !== 'update') { seen.add(action.id); return { id: action.id, kind: c.kind, currentTitle: action.title, currentDescription: action.description || null, reason }; }
+      const title = clean(c.title, 300);
+      const description = clean(c.detail ?? c.description, 1000);
+      const newTitle = title && title !== action.title ? title : null;
+      const newDescription = description && description !== (action.description || '') ? description : null;
+      if (!newTitle && !newDescription) return null;
+      seen.add(action.id);
+      return { id: action.id, kind: 'update', currentTitle: action.title, currentDescription: action.description || null,
+        title: newTitle || action.title, description: newDescription || action.description || null, reason };
+    })
+    .filter(Boolean)
+    .slice(0, MAX_ACTION_CHANGES);
 }
 
 async function createSessionActions({ projectId, sessionId, userId, actions }) {
@@ -128,4 +160,4 @@ async function actionForPrompt(todoId, projectId) {
   return `${head}\n(Une mission confiée à ${m.agentName} sur cette action est ${m.status === 'failed' ? 'en échec' : 'encore en cours'} : son rapport n'est pas disponible.)`;
 }
 
-module.exports = { actionForPrompt, OPEN, dueDateFrom, sanitizeAction, parseActions, parseTriage, dropExistingActions, sameAction, listActions, isOverdue, formatActionsForPrompt, createSessionActions };
+module.exports = { actionForPrompt, OPEN, dueDateFrom, sanitizeAction, parseActions, parseActionChanges, parseTriage, dropExistingActions, sameAction, listActions, isOverdue, formatActionsForPrompt, createSessionActions };

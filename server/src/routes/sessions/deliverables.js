@@ -5,7 +5,7 @@ const anthropic      = require('../../services/anthropic');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const { getProjectTools, formatProjectToolsForPrompt } = require('../../services/tools/toolsStore');
 const { extractMeetingDecisions, listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
-const { listActions, formatActionsForPrompt, dropExistingActions } = require('../../services/actions');
+const { listActions, formatActionsForPrompt, dropExistingActions, parseActionChanges } = require('../../services/actions');
 const { requiredCategories, missingTools } = require('../../services/devTools');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { SETUP_CATEGORIES } = require('../../services/tools/catalog');
@@ -245,6 +245,8 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     const decisionProposals = extraction ? extraction.decisions : null;
     // Actions : seulement les vraies actions de l'humain, sans reprise d'une action déjà ouverte
     const actionProposals   = extraction ? dropExistingActions(extraction.actions, existingActions) : null;
+    // Actions déjà suivies que la réunion précise, rend inutiles ou montre faites (appliqué si l'humain accepte)
+    const actionChanges     = extraction ? parseActionChanges({ actionChanges: extraction.actionChanges }, existingActions) : [];
     // Ce qui n'est pas une action (v5.1) : décisions à prendre → réunion de décision proposée ;
     // travail de code → réunion Claude Code proposée ; outils → page Outils
     const triage = extraction?.triage || { toDecide: [], toolSetups: [], codeTasks: [] };
@@ -311,7 +313,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
       devMissingTools = missingTools(await requiredCategories({ ...session, deliverable, requiredTools: null }, projectTools), projectTools);
     }
 
-    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals, actionProposals, meetingProposals, toolSetups, devMissingTools });
+    return res.json({ meetingType, summary, deliverable, toolSuggestions, decisionProposals, actionProposals, actionChanges, meetingProposals, toolSetups, devMissingTools });
   } catch (err) {
     console.error('[sessions/generate-deliverable]', err.message);
     res.status(500).json({ error: `Erreur lors de la génération : ${err.message}` });

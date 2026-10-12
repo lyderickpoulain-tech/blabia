@@ -147,9 +147,9 @@ ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. 
 `;
   // v5.1 : actions entre les réunions, et point d'avancement en ouverture
   const actionsSection = actionsText
-    ? `\nACTIONS DU PROJET (décidées aux réunions précédentes, menées par l'humain dans l'ordre numéroté, cochées quand elles sont faites${today ? ` — nous sommes le ${today}` : ''}) :
+    ? `\nACTIONS DU PROJET (décidées aux réunions précédentes, menées par l'humain dans l'ordre A1, A2…, cochées quand elles sont faites${today ? ` — nous sommes le ${today}` : ''}) :
 ${actionsText}
-POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le premier commence par UNE bulle de point d'avancement sur les actions qui concernent l'objectif (faites, en retard, et leur effet sur cette réunion), puis la réunion avance. Ne propose jamais une action déjà listée.
+POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le premier commence par UNE bulle de point d'avancement sur les actions qui concernent l'objectif (faites, en retard, et leur effet sur cette réunion), puis la réunion avance. Ne propose jamais une action déjà listée. Si la discussion rend une action inutile, la redéfinit ou montre qu'elle est déjà faite, dis-le explicitement avec son repère (« A2 n'a plus lieu d'être, car… », « A1 : il s'agit plutôt de… ») : BlabIA le proposera à l'humain à la conclusion.
 `
     : '';
   // v5.1 : missions confiées à des sous-agents (services/missions.js)
