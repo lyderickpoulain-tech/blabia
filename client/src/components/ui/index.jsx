@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react';
+
 // Composants partagés de la refonte UX v5.1 (docs/feuille-de-route-v5.1.md).
 // Une couleur, un sens : action (bleu), await (ambre : attend l'humain),
 // ok (vert : validé), ai (violet : produit par l'IA), muted (gris : secondaire).
@@ -84,4 +86,19 @@ export function SectionLabel({ className, children, ...props }) {
       {children}
     </h2>
   );
+}
+
+// Zone de texte à hauteur automatique : le texte s'affiche toujours en entier (énoncés
+// de décision, intitulés d'action), sur autant de lignes que nécessaire
+// singleLine (défaut) : Entrée ne crée pas de retour à la ligne
+export function AutoTextarea({ value, className, singleLine = true, onKeyDown, ...props }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return <textarea ref={ref} rows={1} value={value} className={cx('resize-none overflow-hidden leading-snug', className)}
+    onKeyDown={e => { if (singleLine && e.key === 'Enter') e.preventDefault(); onKeyDown?.(e); }} {...props} />;
 }

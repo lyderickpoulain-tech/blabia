@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, RotateCcw, Undo2, Replace, ChevronDown, AlertTriangle, CalendarPlus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
-import { Button, IconButton, Badge, Card, SectionLabel } from './ui';
+import { Button, IconButton, Badge, Card, SectionLabel, AutoTextarea } from './ui';
 
 // Registre des décisions du projet : ce qui est tranché (les agents ne le
 // redemandent pas) ; l'humain peut modifier, remettre en question ou supprimer.
@@ -71,8 +71,8 @@ function DecisionItem({ decision, onPatch, onDelete, projectId, onReload }) {
     }`}>
       {mode === 'edit' ? (
         <div className="space-y-2">
-          <input value={statement} onChange={e => setStatement(e.target.value)} aria-label="Décision" className={inputCls} />
-          <input value={rationale} onChange={e => setRationale(e.target.value)} placeholder="Pourquoi (optionnel)" aria-label="Pourquoi" className={`${inputCls} text-xs`} />
+          <AutoTextarea value={statement} onChange={e => setStatement(e.target.value)} aria-label="Décision" className={`${inputCls} !h-auto py-2`} />
+          <AutoTextarea value={rationale} onChange={e => setRationale(e.target.value)} placeholder="Pourquoi (optionnel)" aria-label="Pourquoi" className={`${inputCls} !h-auto py-2 text-xs`} />
           <div className="flex gap-2">
             <Button size="sm" variant="primary" disabled={busy || !statement.trim()} onClick={() => run(() => onPatch(decision.id, { statement, rationale }))}>Enregistrer</Button>
             <Button size="sm" variant="ghost" onClick={() => setMode(null)}>Annuler</Button>

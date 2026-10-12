@@ -6,7 +6,7 @@ import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
 import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft, CalendarPlus, PenLine } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Button, IconButton, Badge, SectionLabel } from './ui';
+import { Button, IconButton, Badge, SectionLabel, AutoTextarea } from './ui';
 import { notifyError, notifySuccess } from '../utils/notify';
 
 // Changements proposés sur les actions déjà suivies (services/actions.js, parseActionChanges)
@@ -398,7 +398,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                           <input type="checkbox" checked={d.keep} aria-label="Inscrire cette décision"
                             onChange={e => updateProposal(d.key, { keep: e.target.checked })} className="mt-1.5 w-4 h-4 accent-action shrink-0" />
                           <div className="flex-1 min-w-0 space-y-1">
-                            <input
+                            <AutoTextarea
                               value={d.statement}
                               onChange={e => updateProposal(d.key, { statement: e.target.value })}
                               disabled={!d.keep}
@@ -456,7 +456,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                               </div>
                               {c.kind === 'update' && (
                                 <>
-                                  <input value={c.title} onChange={e => updateChange(c.id, { title: e.target.value })} disabled={!c.apply}
+                                  <AutoTextarea value={c.title} onChange={e => updateChange(c.id, { title: e.target.value })} disabled={!c.apply}
                                     aria-label="Nouvel intitulé" className="w-full text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
                                   <textarea value={c.description || ''} onChange={e => updateChange(c.id, { description: e.target.value })} disabled={!c.apply} rows={2}
                                     aria-label="Objectif précisé" placeholder="Objectif précisé (facultatif)"
@@ -488,7 +488,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                           <input type="checkbox" checked={a.keep} aria-label="Garder cette action"
                             onChange={e => updateAction(a.key, { keep: e.target.checked })} className="mt-2 w-4 h-4 accent-action shrink-0" />
                           <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
-                            <input value={a.title} onChange={e => updateAction(a.key, { title: e.target.value })} disabled={!a.keep}
+                            <AutoTextarea value={a.title} onChange={e => updateAction(a.key, { title: e.target.value })} disabled={!a.keep}
                               aria-label="Action" className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
                             <input type="date" value={a.dueDate || ''} onChange={e => updateAction(a.key, { dueDate: e.target.value || null })} disabled={!a.keep}
                               aria-label="Échéance (facultative)" title="Échéance facultative" className="text-xs text-ink-soft border border-line rounded-md px-2 h-8 outline-none bg-white" />
