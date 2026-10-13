@@ -5,6 +5,7 @@ import api from '../../utils/api';
 import { notifyError } from '../../utils/notify';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import ProjectToolsPanel from '../../components/tools/ProjectToolsPanel';
+import RailwayConnector from '../../components/tools/RailwayConnector';
 import { Button, Card, Badge } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 
@@ -331,6 +332,7 @@ export default function ProjectTools() {
           Mes outils
         </Link>
       </PageHeader>
+      {!project.isDemo && <div className="mb-4"><RailwayConnector project={project} onDone={() => setPanelKey(k => k + 1)} /></div>}
       {!project.isDemo && <div className="mb-4"><SetupGuide project={project} tools={tools} onTools={setTools} onSetDone={setToolsDone} /></div>}
       <ProjectToolsPanel key={panelKey} projectId={project.id} onChanged={next => { if (Array.isArray(next)) setTools(next); refreshCounts?.(); }} />
     </>

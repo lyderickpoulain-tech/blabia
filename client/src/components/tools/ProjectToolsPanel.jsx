@@ -216,6 +216,7 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
         setNeeds(p.needs);
         setTotal(p.total || { min: 0, max: 0 });
         setMyTools(Array.isArray(mine) ? mine : []);
+        onChanged?.(p.tools || [], p.needs); // page Outils : le guide suit l'état « mis en place »
         // Première ouverture : BlabIA identifie les outils nécessaires automatiquement
         if (p.needs === null && !autoAnalyzed.current) {
           autoAnalyzed.current = true;

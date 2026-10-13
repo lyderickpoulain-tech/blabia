@@ -52,6 +52,7 @@ app.use('/api/projects',                     require('./routes/devTasks'));
 app.use('/api/github',                       require('./routes/github'));
 app.use('/api/reminders',                    require('./routes/reminders'));
 app.use('/api',                              require('./routes/tools'));
+app.use('/api',                              require('./routes/railway'));
 
 // ── Production : servir le build Vite ────────────────────────────────────────
 if (isProd) {

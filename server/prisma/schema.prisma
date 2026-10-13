@@ -22,6 +22,9 @@ model User {
   tourProgress     Json            @default("{}") // v5.1 : chapitres de la visite guidée terminés { chapitre: date ISO }
   githubInstallationId String?   // v5.1 : installation de l'application GitHub BlabIA (services/github.js)
   githubLogin          String?   // v5.1 : compte GitHub connecté
+  railwayRefreshToken  String?   // v5.1 : accès Railway (OAuth), jeton de renouvellement CHIFFRÉ (services/railway.js)
+  railwayConnectedAt   DateTime?
+  railwayEmail         String?
   createdAt        DateTime        @default(now())
   projects           Project[]
   invitations        Invitation[]
@@ -89,6 +92,7 @@ model Project {
   challengerEnabled Boolean   @default(true) // v5.1 : contradicteur (avocat du diable sélectif, services/challenger.js), activé par défaut
   githubRepo        String?   // v5.1 : dépôt GitHub du projet « propriétaire/nom » (développements, services/devTasks.js)
   siteUrl           String?   // v5.1 : adresse publique du site (renseignée : Railway ne la transmet pas à GitHub)
+  railwaySetup      Json?     // v5.1 : mise en ligne par le connecteur Railway { projectId, environmentId, services[], postgres, siteUrl, at }
   isDemo            Boolean   @default(false) // v5.1 : projet exemple de la visite guidée (services/demoProject.js), sans appel à l'IA, supprimé en fin de visite
   createdAt         DateTime  @default(now())
   updatedAt     DateTime        @updatedAt

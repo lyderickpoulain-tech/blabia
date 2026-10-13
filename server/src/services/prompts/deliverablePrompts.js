@@ -57,7 +57,7 @@ ${cdInstruction}
 - Préciser les fichiers ou composants concernés si identifiés dans la réunion
 - Intégrer les décisions prises (registre du projet et réunion) comme contraintes non négociables
 - Si la stack indique un hébergeur : exiger que chaque partie du code soit déployable TELLE QUELLE chez cet hébergeur (scripts de construction et de démarrage, port fourni par l'hébergeur, fichier .env.example listant chaque variable), et tenir à jour dans le README une section « Déploiement » qui dit, pour chaque partie, le dossier racine à indiquer à l'hébergeur (ex. /client, /server), les variables à renseigner et l'ordre de mise en place ; si le code est réparti en plusieurs dossiers, le dire explicitement
-${validationInstruction}
+${stackLines.some(l => /railway/i.test(l)) ? `- Hébergeur Railway : BlabIA met le site en ligne AUTOMATIQUEMENT à partir du dépôt (connecteur Railway). Exiger les conventions qu'il reconnaît : une partie par dossier (ex. client/ pour le site, server/ pour le serveur) avec son package.json et ses scripts ; dans chaque .env.example, l'adresse du serveur lue par le site dans une variable finissant par API_URL (ex. VITE_API_URL), l'adresse du site lue par le serveur dans FRONTEND_URL, la base PostgreSQL dans DATABASE_URL, les secrets dans des variables finissant par _SECRET (BlabIA les génère) ; le serveur écoute process.env.PORT\n` : ''}${validationInstruction}
 - Être rédigé en français
 
 Conversation de la réunion :
