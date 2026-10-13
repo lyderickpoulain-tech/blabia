@@ -111,7 +111,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
     setActionProposals(!Array.isArray(d.actionProposals) ? null
       : fresh ? d.actionProposals.map((x, i) => ({ ...x, key: i, keep: true })) : d.actionProposals);
     setActionChanges(fresh ? (d.actionChanges || []).map(c => ({ ...c, apply: true })) : (d.actionChanges || []));
-    setMeetingProposals(fresh ? (d.meetingProposals || []).map(m => ({ ...m, keep: true })) : (d.meetingProposals || []));
+    setMeetingProposals(fresh ? (d.meetingProposals || []).map(m => ({ ...m, keep: !m.widens })) : (d.meetingProposals || []));
     setToolSetups(d.toolSetups || []);
     setDevMissingTools(d.devMissingTools || []);
     if (fresh) { if ((d.devMissingTools || []).length) setLaunchDev(false); } // lancé depuis Développements une fois les outils prêts
@@ -656,6 +656,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge tone={m.type === 'claude_code' ? 'ai' : 'action'} className="!text-[10px] !px-2 !py-0.5">{m.type === 'claude_code' ? 'Claude Code' : 'Décision'}</Badge>
+                            {m.widens && <Badge tone="await" className="!text-[10px] !px-2 !py-0.5" title="Ces questions vont au-delà de l'objectif du projet : à ajouter seulement si vous voulez élargir le projet">Élargit le projet</Badge>}
                             <input value={m.title} onChange={e => updateMeeting(m.key, { title: e.target.value })} disabled={!m.keep} aria-label="Titre de la réunion"
                               className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
                           </div>

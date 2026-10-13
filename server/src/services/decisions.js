@@ -46,7 +46,7 @@ function decisionCardsText(messages) {
     .join('\n');
 }
 
-function buildExtractionPrompt({ task, historyText, cardsText, registryText, actionsText, agendaText = '', challenger = false, meetingsText = '' }) {
+function buildExtractionPrompt({ task, historyText, cardsText, registryText, actionsText, agendaText = '', challenger = false, meetingsText = '', projectGoal = '' }) {
   return {
     system: 'Tu extrais les décisions et les actions d\'une réunion de projet. Tu réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour.',
     user: `Objectif de la réunion : ${task}
@@ -64,7 +64,7 @@ N'inclus pas les idées simplement évoquées, ni les questions restées sans r�
 Pour chacune : "statement" (la décision en une phrase autonome, compréhensible sans la réunion), "rationale" (pourquoi, une phrase), "rejectedOptions" (options écartées, liste courte, éventuellement vide), "origin".${agendaText ? `\nORDRE DU JOUR de la réunion (décisions remises en question par l'humain, à retraiter) :\n${agendaText}\nQuand une décision prise RETRAITE l'un de ces points (elle le confirme en le précisant, le modifie ou le remplace), ajoute "replaces": "<id du point>". Un point retraité sans nouvelle décision claire : n'invente rien.` : ''}${challenger ? '\nRELECTURE DU CONTRADICTEUR : pour au plus 2 décisions FRAGILES (fort enjeu — argent engagé, difficile à défaire, légal, conditionne la suite — ET justification faible ou alternative non examinée), ajoute "vigilance" : le risque en une phrase et comment le vérifier. Pour toutes les autres, omets ce champ. Dans le doute, omets-le.' : ''}
 
 ${actionsText ? `Actions DÉJÀ suivies dans le projet (ne les répète pas, même reformulées) :\n${actionsText}\n\n` : ''}Trie ensuite ce qui reste à faire après la réunion. CHAQUE élément va dans UNE SEULE de ces listes :
-- "toDecide" : les DÉCISIONS QUI RESTENT À PRENDRE (« définir », « trancher », « choisir entre », « arbitrer »…) : ce n'est PAS une action. Une question claire par élément.
+- "toDecide" : les DÉCISIONS QUI RESTENT À PRENDRE (« définir », « trancher », « choisir entre », « arbitrer »…) : ce n'est PAS une action. Une question claire par élément, sous la forme {"question":"…","widens":false}. "widens": true si la question ÉLARGIT le projet au-delà de son objectif${projectGoal ? ` (« ${projectGoal} »)` : ''} : nouvelle étape, méthode, seuil, test, validation ou sujet voisin que l'humain n'a pas demandé.
 - "toolSetups" : ce qui consiste à créer un compte, souscrire, configurer ou brancher un OUTIL (hébergeur, nom de domaine, paiement, e-mails, mesure d'audience, base de données…) : cela relève de la page Outils, PAS des actions. "tool" = nom de l'outil, "category" = son type.
 - "codeTasks" : ce qui consiste à écrire ou modifier le CODE (installer une police, créer des variables CSS, ajouter une page…) : c'est le travail de Claude Code, PAS de l'humain.
 - "actions" : seulement les vraies ACTIONS de l'humain hors de BlabIA, ni décision, ni outil, ni code (contacter, vérifier un point légal, rédiger un contenu, tester avec de vrais utilisateurs, réserver un nom…) : 5 au maximum, les plus importantes, DANS L'ORDRE où les mener. Pas d'action pour les agents, pas d'action vague (« réfléchir à… »). Pour chacune : "title" (verbe à l'infinitif, une ligne), "detail" (précision utile, une phrase, ou vide), "dueInDays" (en jours après la réunion, UNIQUEMENT si une échéance réelle ressort des échanges ; sinon null — l'ordre suffit)${meetingsText ? `, "beforeMeeting" (repère de la réunion du plan AVANT laquelle l'action doit être faite — celle qui en a besoin pour se tenir —, ex. "R3" ; null si aucune réunion n'en dépend). Réunions à venir du plan :
@@ -78,7 +78,7 @@ Enfin, "actionChanges" : ce que la réunion change aux actions DÉJÀ suivies À
 - "done" : la réunion montre que l'action est déjà accomplie.
 Pour chacune : "ref" (ex. "A2"), "kind", "reason" (pourquoi, une phrase tirée de la réunion). Une action simplement évoquée sans changement : rien. Liste vide le plus souvent.
 ` : ''}
-Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7${meetingsText ? ',"beforeMeeting":"R3"' : ''}}],"toDecide":["Question à trancher ?"],"toolSetups":[{"tool":"Stripe","category":"paiement"}],"codeTasks":[{"title":"...","detail":"..."}]${actionsText ? ',"actionChanges":[{"ref":"A1","kind":"update|cancel|done","title":"","detail":"","reason":"..."}]' : ''}}`,
+Format : {"decisions":[{"statement":"...","rationale":"...","rejectedOptions":["..."],"origin":"human|agents"}],"actions":[{"title":"...","detail":"...","dueInDays":7${meetingsText ? ',"beforeMeeting":"R3"' : ''}}],"toDecide":[{"question":"Question à trancher ?","widens":false}],"toolSetups":[{"tool":"Stripe","category":"paiement"}],"codeTasks":[{"title":"...","detail":"..."}]${actionsText ? ',"actionChanges":[{"ref":"A1","kind":"update|cancel|done","title":"","detail":"","reason":"..."}]' : ''}}`,
   };
 }
 
@@ -116,7 +116,7 @@ function formatRegistryForPrompt(decisions) {
 // Décisions proposées au registre + actions proposées (v5.1), en un seul appel
 // systemPrefix : blocs système partagés et mis en cache (ex. la transcription, placée en tête
 // par la fin de réunion) ; historyText renvoie alors simplement à ce bloc
-async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '', challenger = false, systemPrefix = null, meetingsText = '' }) {
+async function extractMeetingDecisions({ session, messages, historyText, projectId, actionsText = '', challenger = false, systemPrefix = null, meetingsText = '', projectGoal = '' }) {
   const registry = await listDecisions(projectId);
   const agenda = await agendaDecisions(session.milestoneId);
   const prompt = buildExtractionPrompt({
@@ -128,6 +128,7 @@ async function extractMeetingDecisions({ session, messages, historyText, project
     agendaText: formatAgendaForPrompt(agenda),
     challenger,
     meetingsText,
+    projectGoal,
   });
   const response = await anthropic.messages.create({
     model: MODEL, max_tokens: 2000,

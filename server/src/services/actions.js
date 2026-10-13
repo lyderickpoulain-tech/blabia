@@ -66,6 +66,8 @@ function parseTriage(raw) {
   const list = v => (Array.isArray(v) ? v : []);
   return {
     toDecide: list(raw?.toDecide).map(q => clean(typeof q === 'string' ? q : q?.question, 300)).filter(Boolean).slice(0, 6),
+    // v5.1 : questions qui élargissent le projet au-delà de son objectif (proposées décochées)
+    widening: list(raw?.toDecide).filter(q => q?.widens === true).map(q => clean(q.question, 300)).filter(Boolean),
     toolSetups: list(raw?.toolSetups).map(t => ({ tool: clean(t?.tool, 100), category: clean(t?.category, 60) })).filter(t => t.tool).slice(0, 8),
     codeTasks: list(raw?.codeTasks).map(t => ({ title: clean(t?.title ?? t, 300), detail: clean(t?.detail, 500) || null })).filter(t => t.title).slice(0, 8),
   };

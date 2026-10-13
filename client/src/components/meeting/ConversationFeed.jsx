@@ -58,7 +58,7 @@ function WebSearchBlock({ webSearch }) {
   );
 }
 
-// Hypothèse explicite d'un agent (consigne du prompt : « Je pars sur X, sauf avis contraire »)
+// Hypothèse explicite d'un agent (consigne du prompt : bulle « Hypothèse : … » ; « sauf avis contraire » pour les anciennes réunions)
 const HYPOTHESIS_RE = /sauf avis contraire|^\s*hypoth[eè]se\s*:/i;
 const stripHypothesisPrefix = t => t.replace(/^\s*hypoth[eè]se\s*:\s*/i, '');
 const KIND_LABEL = { mermaid: 'Schéma', html: 'Maquette', svg: 'Visuel' };

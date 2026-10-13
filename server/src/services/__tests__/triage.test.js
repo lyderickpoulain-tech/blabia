@@ -27,10 +27,11 @@ describe('tri de fin de réunion', () => {
       codeTasks: [{ title: 'Installer la police Inter', detail: 'front-end' }, 'Exporter la palette en variables CSS'],
     })).toEqual({
       toDecide: ['Définir la ligne de partage gratuit / payant ?', 'Trancher la fonctionnalité signature ?'],
+      widening: [],
       toolSetups: [{ tool: 'Railway', category: 'hébergement' }],
       codeTasks: [{ title: 'Installer la police Inter', detail: 'front-end' }, { title: 'Exporter la palette en variables CSS', detail: null }],
     });
-    expect(parseTriage(null)).toEqual({ toDecide: [], toolSetups: [], codeTasks: [] });
+    expect(parseTriage(null)).toEqual({ toDecide: [], toolSetups: [], codeTasks: [], widening: [] });
   });
 
   it('écarte une action déjà ouverte, même reformulée (doublons réels du projet)', () => {

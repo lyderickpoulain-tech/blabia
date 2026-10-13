@@ -83,3 +83,12 @@ describe('actions déjà suivies revues à la conclusion', () => {
     ]);
   });
 });
+
+describe('conclusion : questions qui élargissent le projet', () => {
+  const { parseTriage } = require('../actions');
+  it('repérées à part (proposées décochées)', () => {
+    const t = parseTriage({ toDecide: [{ question: 'Quel score minimum ?', widens: false }, { question: 'Lancer un smoke test ?', widens: true }, 'Ancien format ?'] });
+    expect(t.toDecide).toEqual(['Quel score minimum ?', 'Lancer un smoke test ?', 'Ancien format ?']);
+    expect(t.widening).toEqual(['Lancer un smoke test ?']);
+  });
+});

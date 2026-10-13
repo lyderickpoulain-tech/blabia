@@ -43,6 +43,7 @@ function buildOrchestratorPrompt({
   decisionsLeft = null,
   challengeSection = '', // v5.1 : contradicteur disponible (services/challenger.js)
   codeSection = '',      // v5.1 : code du dépôt lisible à la demande (buildOrchestratorCodeSection)
+  projectGoal = '',      // v5.1 : objectif du projet (utils/projectObjective.js), pour repérer la dérive
 }) {
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
   const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
@@ -56,7 +57,8 @@ function buildOrchestratorPrompt({
 
   return `Tu es l'orchestrateur d'une réunion IA.
 
-Objectif de la réunion : "${session.task}"
+Objectif de la réunion : "${session.task}"${projectGoal ? `
+Objectif du projet : "${projectGoal}"` : ''}
 Livrable attendu : ${intentionKey || 'compte-rendu'}
 Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${decisionsLeft === 0
     ? "\n⚠️ Le budget de questions à l'humain est épuisé : privilégie les agents qui concluent, et propose shouldClose=true dès que l'essentiel est couvert."
@@ -67,7 +69,9 @@ ${agentList}
 
 ${blockedAgentName ? `⚠️ ${blockedAgentName} a déjà parlé ${blockedAgentCount} fois de suite. Ne le sélectionne PAS.` : ''}
 ${humanPriorityNote}
-Si la dernière contribution contient beaucoup de jargon technique ou est difficile à comprendre pour un non-expert, donne la priorité à un agent qui peut reformuler ou vulgariser ce qui vient d'être dit.
+Pertinence d'abord : choisis l'agent dont le rôle répond le mieux au DERNIER message, surtout s'il vient de l'humain. Une question simple ou non technique ne va pas à un agent technique. Préfère des échanges courts qui alternent entre agents à un long exposé.
+La raison (« reason ») est transmise à l'agent choisi : écris le point précis auquel il doit réagir (ex. « répondre à la question de l'humain sur le prix »), pas un thème large.
+DÉRIVE : les derniers échanges servent-ils encore l'objectif de la réunion ? Ils dérivent s'ils partent vers un sujet voisin, ou s'ils ajoutent des étapes, méthodes, seuils, tests ou validations que l'humain n'a pas demandés. Si oui, "offTrack": true, choisis l'agent le mieux placé pour recentrer et écris dans "reason" sur quoi revenir. Si l'objectif est atteint, propose shouldClose=true plutôt que de laisser la réunion s'étirer.
 ${delegated ? `⚡ L'humain a délégué une décision aux agents. Les agents doivent débattre entre eux, argumenter leurs positions et converger vers une recommandation claire. L'agent le plus pertinent propose une conclusion en dernier.\n` : ''}Derniers échanges :
 ${recentMessagesText || '(début de réunion)'}
 ${challengeSection}${codeSection}
@@ -77,7 +81,7 @@ Décide maintenant :
 3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
 
 Réponds UNIQUEMENT avec ce JSON :
-{"agentIndex": 1, "reason": "...", "shouldClose": false${challengeSection ? ', "challenge": false, "challengeTarget": ""' : ''}${codeSection ? ', "codeQuestion": ""' : ''}}`;
+{"agentIndex": 1, "reason": "...", "shouldClose": false, "offTrack": false${challengeSection ? ', "challenge": false, "challengeTarget": ""' : ''}${codeSection ? ', "codeQuestion": ""' : ''}}`;
 }
 
 // v5.1 : projet relié à un dépôt — l'orchestrateur repère une question qui demande de lire

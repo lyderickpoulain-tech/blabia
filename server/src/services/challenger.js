@@ -44,7 +44,7 @@ function buildOrchestratorChallengeSection({ left, priorText }) {
 CONTRADICTEUR DISPONIBLE (encore ${left} intervention${left > 1 ? 's' : ''} possible${left > 1 ? 's' : ''} dans cette réunion).
 Mets "challenge": true UNIQUEMENT si les DEUX conditions sont réunies :
 1. un sujet STRUCTURANT est en train d'être tranché : il engage de l'argent, est difficile à défaire, touche au légal ou à la sécurité, ou conditionne la suite du projet ;
-2. personne ne l'a vraiment challengé : consensus rapide entre agents, hypothèse « sauf avis contraire » posée sur un point lourd, ou recommandation présentée comme évidente sans alternative sérieuse.
+2. personne ne l'a vraiment challengé : consensus rapide entre agents, hypothèse posée sans discussion sur un point lourd, ou recommandation présentée comme évidente sans alternative sérieuse.
 Jamais sur un choix mineur ou facile à changer, ni sur ce que l'humain a tranché explicitement, ni sur ce qu'un agent vient déjà de critiquer.${priorText ? `\nDéjà soulevé dans cette réunion (ne pas y revenir) :\n${priorText}` : ''}
 Dans le doute : "challenge": false. Si true, "challengeTarget" = le choix visé, en une phrase.
 `;

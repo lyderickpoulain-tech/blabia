@@ -28,7 +28,7 @@ export const CHAPTERS = [
         body: 'Objectif, contexte, contraintes : les agents le lisent avant chaque réunion. Plus il est précis, moins ils vous poseront de questions.' },
       { target: 'np-work',
         title: 'Votre façon de travailler',
-        body: 'Votre maîtrise du sujet (les agents adaptent leur vocabulaire), le ton, combien de questions vous voulez trancher par réunion, et le contradicteur.' },
+        body: 'Votre maîtrise du sujet (les agents adaptent leur vocabulaire, le niveau de détail et la longueur de leurs réponses), la place de l’humour, combien de questions vous voulez trancher par réunion, et le contradicteur.' },
       { target: 'np-submit', interactive: true, waitAction: true, placement: 'top',
         title: 'Créez le projet',
         body: 'Cliquez sur « Créer le projet ».' },

@@ -61,7 +61,7 @@ function messages1(agents, t0) {
     msg(c, 'Attention à l’été : les boissons chaudes chutent de 40 %. Il faudra une carte de thés glacés dès l’ouverture.', 3),
     { id: decisionId, role: 'system', type: 'decision', question: 'Quel public viser en priorité ?', choices: ['Actifs du quartier (midi, goûter)', 'Étudiants', 'Touristes', 'Autre (précise)'], context: 'Le public visé fixe les horaires, la carte et les prix.', status: 'answered', answer: 'Actifs du quartier (midi, goûter)', answeredAt: at(4), agentName: s.name, timestamp: at(4) },
     { id: randomUUID(), role: 'system', type: 'decision_answer', content: '📌 Décision : Quel public viser en priorité ? → Actifs du quartier (midi, goûter)', timestamp: at(5) },
-    msg(s, 'Noté. Je retiens une ouverture au printemps 2027, sauf avis contraire : cela laisse le temps de trouver le local et les fournisseurs.', 6),
+    msg(s, 'Hypothèse : on ouvre au printemps 2027, ça laisse le temps de trouver le local et les fournisseurs.', 6),
     { id: randomUUID(), role: 'agent', agentName: 'Contradicteur', turnId: randomUUID(), type: 'message', pinned: false, timestamp: at(7),
       content: '**Point de vigilance** : ouvrir au printemps suppose de signer le bail avant fin janvier. Si le local exige des travaux d’accessibilité (ERP), comptez 3 à 4 mois de plus : l’ouverture glisserait à l’été, saison creuse pour le thé chaud. À vérifier : faire venir un architecte dès la première visite.',
       vigilance: { status: 'accepted', target: 'Ouverture au printemps 2027', answeredAt: at(8) } },

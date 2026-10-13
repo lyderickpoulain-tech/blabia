@@ -33,15 +33,23 @@ const {
   buildClaudeCodePrompt,
 } = require('../../services/prompts/deliverablePrompts');
 const { parseJsonField } = require('../../utils/parseJsonField');
+const { projectObjective } = require('../../utils/projectObjective');
 
 // Réunions proposées à la conclusion à partir de ce qui n'est pas une action
 const cut = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trim()}…` : s);
 function buildMeetingProposals(triage, meetingType) {
   const out = [];
-  if (triage.toDecide.length) {
-    out.push({ key: 'decide', type: 'decision',
-      title: cut(`Trancher : ${triage.toDecide[0].replace(/\?$/, '')}${triage.toDecide.length > 1 ? ` (+${triage.toDecide.length - 1})` : ''}`, 120),
-      description: `Questions restées ouvertes :\n${triage.toDecide.map(q => `- ${q}`).join('\n')}` });
+  // v5.1 : ce qui élargit le projet au-delà de son objectif est proposé à part, décoché
+  const widening = new Set(triage.widening || []);
+  const groups = [
+    { key: 'decide', list: triage.toDecide.filter(q => !widening.has(q)) },
+    { key: 'widen', list: triage.toDecide.filter(q => widening.has(q)), widens: true },
+  ];
+  for (const g of groups) {
+    if (!g.list.length) continue;
+    out.push({ key: g.key, type: 'decision', ...(g.widens ? { widens: true } : {}),
+      title: cut(`Trancher : ${g.list[0].replace(/\?$/, '')}${g.list.length > 1 ? ` (+${g.list.length - 1})` : ''}`, 120),
+      description: `Questions restées ouvertes :\n${g.list.map(q => `- ${q}`).join('\n')}` });
   }
   // Réunion Claude Code : le travail de code est déjà dans son prompt
   if (triage.codeTasks.length && meetingType !== 'claude_code') {
@@ -241,7 +249,7 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
         system: withTranscript(summaryPrompt.system),
         messages: [{ role: 'user', content: summaryPrompt.user }]
       }),
-      extractMeetingDecisions({ session, messages, historyText: TRANSCRIPT_REF, systemPrefix: [transcriptBlock], projectId, actionsText, meetingsText,
+      extractMeetingDecisions({ session, messages, historyText: TRANSCRIPT_REF, systemPrefix: [transcriptBlock], projectId, actionsText, meetingsText, projectGoal: projectObjective(project),
         challenger: (session.challengerEnabled ?? project.challengerEnabled) !== false })
         .catch(err => { console.error('[generate-deliverable] extraction décisions :', err.message); return null; }),
     ]);

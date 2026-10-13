@@ -65,3 +65,78 @@ describe('prompt agent : mise en cache', () => {
     expect(shared.text.length / 4).toBeGreaterThan(1024);
   });
 });
+
+
+// Audit du 13/10/2026 : profils de niveau et d'humour nettement distincts ; règles fixes
+// pour la réunion dans le bloc commun (cache), court rappel en fin de bloc du tour
+describe('prompt agent : comment tu parles', () => {
+  const build = (expertiseLevel, humorLevel, humorRoll = 0.5) => buildAgentSystemPrompt({ ...base, agent: agents[0], expertiseLevel, humorLevel, humorRoll });
+  const sharedFor = (e, h) => build(e, h)[0].text;
+
+  it('règles de style dans le bloc commun ; le tour se termine par un court rappel', () => {
+    const [shared, turn] = build(1, 1);
+    expect(shared.text).toContain('COMMENT TU PARLES (le plus important');
+    expect(shared.text).toContain('Réponds d\'abord à ce qui vient d\'être dit');
+    expect(turn.text).not.toContain('COMMENT TU PARLES (le plus important');
+    expect(turn.text.trimEnd().endsWith('ton de collègue, pas de mémo.')).toBe(true);
+    expect(turn.text).toContain('RAPPEL AVANT DE PARLER');
+    expect(turn.text.length).toBeLessThan(900); // le bloc du tour, au plein tarif, reste court
+  });
+
+  it('bloc commun identique d\'un tour à l\'autre malgré le tirage de l\'humour', () => {
+    expect(build(3, 5, 0.1)[0].text).toBe(build(3, 5, 0.9)[0].text);
+    expect(build(3, 5, 0.1)[1].text).not.toBe(build(3, 5, 0.9)[1].text);
+  });
+
+  it('niveaux distincts : pas de fichier ni de repère seul jusqu’au niveau 3, références exactes au niveau 5', () => {
+    expect(sharedFor(1, 2)).toContain('Environ 30 mots');
+    expect(sharedFor(1, 2)).toContain('ni repère interne seul');
+    expect(sharedFor(3, 2)).toContain('ni repère interne seul');
+    expect(sharedFor(5, 2)).not.toContain('ni repère interne seul');
+    expect(sharedFor(5, 2)).toContain('références exactes');
+    expect(sharedFor(5, 2)).toContain('40 mots au plus');
+    expect(build(1, 2)[1].text).toContain('niveau Découverte : environ 30 mots par bulle');
+  });
+
+  it('humour tiré au sort à chaque tour selon sa fréquence ; niveau inconnu → valeurs par défaut', () => {
+    expect(build(3, 5, 0.8)[1].text).toContain("CE TOUR-CI : glisse UNE vraie touche d'humour");
+    expect(build(3, 3, 0.8)[1].text).toContain("pas d'humour, ton naturel suffit");
+    expect(build(3, 1, 0)[1].text).not.toContain('CE TOUR-CI');
+    expect(sharedFor(9, 9)).toContain('Intermédiaire');
+    expect(sharedFor(9, 9)).toContain('Détendu');
+  });
+
+  it('hypothèse en bulle « Hypothèse : » (reconnue par l’interface), plus de formule imposée', () => {
+    const [shared] = buildAgentSystemPrompt({ ...base, agent: agents[0] });
+    expect(shared.text).toContain('commence par « Hypothèse : »');
+    expect(shared.text).not.toContain('sauf avis contraire');
+    expect(shared.text).not.toContain('Pour expliquer simplement');
+  });
+});
+
+// Audit du 13/10/2026 (suite) : le cap, contre la dérive des réunions longues
+describe('prompt agent : le cap', () => {
+  const { projectObjective } = require('../../utils/projectObjective');
+  const brief = "OBJECTIF : Identifier une shortlist de projets de niche.\n\nNOTES : Pas d'outil de devis.";
+
+  it('objectif du projet tiré du brief, sinon de la description', () => {
+    expect(projectObjective({ brief })).toBe('Identifier une shortlist de projets de niche.');
+    expect(projectObjective({ brief: '', description: 'Ouvrir un salon' })).toBe('Ouvrir un salon');
+    expect(projectObjective({})).toBe('');
+  });
+
+  it('cap dans le bloc commun, avec la règle anti-surenchère ; objectif rappelé en fin de tour', () => {
+    const [shared, turn] = buildAgentSystemPrompt({ ...base, project: { brief }, agent: agents[0] });
+    expect(shared.text).toContain('Objectif de CETTE réunion : Choisir l’emplacement');
+    expect(shared.text).toContain('Objectif du projet : Identifier une shortlist de projets de niche.');
+    expect(shared.text).toContain('PAS DE SURENCHÈRE');
+    expect(turn.text).toContain('rapproche de l\'objectif « Choisir l’emplacement », sans surenchère');
+  });
+
+  it('orchestrateur : objectif du projet et repérage de la dérive dans le même appel', () => {
+    const { buildOrchestratorPrompt } = require('../prompts/orchestratorPrompt');
+    const p = buildOrchestratorPrompt({ session: { task: 'Scorer', intention: ['decision'] }, agentsForSelection: agents, turnCount: 3, projectGoal: 'Shortlist de niches' });
+    expect(p).toContain('Objectif du projet : "Shortlist de niches"');
+    expect(p).toContain('"offTrack": false');
+  });
+});

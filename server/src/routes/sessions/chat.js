@@ -22,6 +22,7 @@ const { listDecisions, formatRegistryForPrompt } = require('../../services/decis
 const { analyzeAndSaveNeeds, formatNeedsForPrompt } = require('../../services/tools/toolNeeds');
 const { sessionCodeContext, lookupCode, codeAccess, readPaths } = require('../../services/codeContext');
 const { meetingHistory, withHistory } = require('../../services/prompts/meetingHistory');
+const { projectObjective } = require('../../utils/projectObjective');
 const { actionForPrompt } = require('../../services/actions');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
@@ -155,6 +156,7 @@ async function orchestrate({ session, project, messages, activeAgents,
     codeSection: codeReadable
       ? buildOrchestratorCodeSection({ readFiles: [...readPaths(codeText)], lastMessageText: lastMsg?.content || lastMsg?.question || '' })
       : '',
+    projectGoal: projectObjective(project),
   });
 
   try {
@@ -169,9 +171,12 @@ async function orchestrate({ session, project, messages, activeAgents,
     const match = clean.match(/\{[\s\S]*\}/);
     const dec   = JSON.parse(match?.[0] || clean);
     const idx   = Math.max(0, Math.min((dec.agentIndex ?? 1) - 1, agentsForSelection.length - 1));
+    // Dérive repérée : l'agent reçoit la consigne de recentrer (même appel, aucun coût en plus)
+    const offTrack = dec.offTrack === true;
     return {
       agentId:     agentsForSelection[idx].id,
-      reason:      dec.reason      || '',
+      reason:      offTrack ? `RECENTRER la réunion sur son objectif — ${dec.reason || 'reviens à ce que la réunion doit produire'}` : (dec.reason || ''),
+      offTrack,
       shouldClose: dec.shouldClose === true,
       // Le contradicteur ne parle que si l'orchestrateur l'estime utile ET qu'il reste disponible
       challenge:       canChallenge && dec.challenge === true && !!String(dec.challengeTarget || '').trim(),
