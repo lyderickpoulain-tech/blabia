@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Handshake, Code2, Wrench, Sparkles, Check, Plus, X, Lightbulb, ChevronDown, Globe, Play, Coffee } from 'lucide-react';
 import { useProject, PageHeader } from '../components/project/ProjectShell';
 import { Button, Card } from '../components/ui';
@@ -134,6 +134,8 @@ export default function StartMeeting() {
   const [challenger,        setChallenger]        = useState(project?.challengerEnabled !== false);
   const [starting,          setStarting]          = useState(false);
   const [error,             setError]             = useState('');
+  // Réunion du plan précédée d'actions encore ouvertes : elle ne peut pas se tenir (v5.1)
+  const [blockingActions,   setBlockingActions]   = useState([]);
 
   // Chargement initial des agents du projet
   useEffect(() => {
@@ -162,6 +164,7 @@ export default function StartMeeting() {
   useEffect(() => {
     if (!milestoneId) return;
     api.get(`/projects/${projectId}/milestones/${milestoneId}`).then(({ data }) => {
+      setBlockingActions(Array.isArray(data.blockingActions) ? data.blockingActions : []);
       if (Array.isArray(data.agenda) && data.agenda.length && data.description) {
         setTask(t => (t === milestoneTitle ? data.description : t));
       }
@@ -282,12 +285,13 @@ export default function StartMeeting() {
       // La salle de réunion lance la préparation dès l'ouverture (si au moins 2 agents)
       navigate(`/projects/${projectId}/meeting/${data.session.id}`, { state: { autoPrepare: autoPrepare && activeAgents.length >= 2 } });
     } catch (err) {
-      setError(err.response?.data?.error || 'Erreur lors du démarrage de la réunion');
+      if (err.response?.data?.kind === 'blocked') setBlockingActions(err.response.data.blockingActions || []);
+      else setError(err.response?.data?.error || 'Erreur lors du démarrage de la réunion');
       setStarting(false);
     }
   };
 
-  const canStart = task.trim().length > 0 && selectedAgentIds.size >= 1 && !starting;
+  const canStart = task.trim().length > 0 && selectedAgentIds.size >= 1 && !starting && blockingActions.length === 0;
   const prepPossible = selectedAgentIds.size >= 2;
   const modelLabel = models.find(m => m.id === model)?.label || 'Modèle par défaut';
 
@@ -509,6 +513,14 @@ export default function StartMeeting() {
           )}
         </Card>
 
+        {blockingActions.length > 0 && (
+          <div role="alert" className="bg-await-bg border border-await-border rounded-xl px-4 py-3 text-sm space-y-1.5">
+            <p className="font-bold text-await">Cette réunion ne peut pas encore se tenir : {blockingActions.length === 1 ? 'une action doit' : `${blockingActions.length} actions doivent`} être menées avant.</p>
+            <ul className="text-ink-soft space-y-0.5">{blockingActions.map(a => <li key={a.id}>• {a.title}</li>)}</ul>
+            <Link to={`/projects/${projectId}/actions`} className="inline-block font-bold text-action hover:underline">Aller aux actions</Link>
+            <p className="text-xs text-ink-muted">Cochez-les une fois faites (ou supprimez-les si elles ne sont plus utiles), puis revenez.</p>
+          </div>
+        )}
         {error && (
           <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
         )}
@@ -517,7 +529,7 @@ export default function StartMeeting() {
         <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
           {!canStart && !starting && (
             <p className="text-xs text-ink-faint">
-              {!task.trim() ? 'Renseignez l’objectif pour lancer.' : 'Invitez au moins un agent.'}
+              {blockingActions.length ? 'Menez d’abord les actions prévues avant cette réunion.' : !task.trim() ? 'Renseignez l’objectif pour lancer.' : 'Invitez au moins un agent.'}
             </p>
           )}
           <Button variant="primary" onClick={handleStart} disabled={!canStart} className="min-w-[220px]">

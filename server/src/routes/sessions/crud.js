@@ -51,6 +51,14 @@ router.post('/', async (req, res) => {
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    // Réunion du plan précédée d'actions encore ouvertes : elle ne se tient pas (v5.1)
+    if (milestoneId) {
+      const blocking = await require('../../services/actions').blockingActions(String(milestoneId), projectId);
+      if (blocking.length) {
+        return res.status(409).json({ kind: 'blocked', blockingActions: blocking,
+          error: `Cette réunion ne peut pas se tenir : ${blocking.length === 1 ? 'une action doit' : `${blocking.length} actions doivent`} être menées avant (Projet › Actions).` });
+      }
+    }
     if (project.status === 'archived') return res.status(400).json({ error: 'Ce projet est archivé' });
 
     const now = new Date();

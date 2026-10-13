@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const { computeMilestoneStatus } = require('../utils/milestones');
 const { findProject } = require('../utils/projectHelpers');
 const { addWebsitePlan, addRecommendedPack } = require('../services/websiteStarter');
+const { validBeforeMilestone } = require('../services/actions');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -49,6 +50,11 @@ router.get('/:id/plan', async (req, res) => {
         if (!milestoneSessions[s.milestoneId]) milestoneSessions[s.milestoneId] = s;
       }
     }
+
+    // Actions à mener avant chaque réunion (ouvertes) : la réunion ne se tient pas sans elles
+    const blocking = milestones.length ? await db('TodoItem').whereIn('beforeMilestoneId', milestones.map(m => m.id))
+      .whereIn('status', ['todo', 'in_progress']).orderBy('displayOrder', 'asc').select('id', 'title', 'beforeMilestoneId') : [];
+    for (const m of milestones) m.blockingActions = blocking.filter(b => b.beforeMilestoneId === m.id).map(({ id, title }) => ({ id, title }));
 
     res.json({ milestones, todos, milestoneSessions, devDirectory: project.devDirectory || null });
   } catch (err) {
@@ -168,6 +174,8 @@ router.get('/:id/milestones/:mid', async (req, res) => {
 
     res.json({
       ...milestone,
+      // Actions à mener avant cette réunion, encore ouvertes (elle ne peut pas se tenir)
+      blockingActions: await require('../services/actions').blockingActions(milestone.id, req.params.id),
     });
   } catch (err) {
     console.error('[milestones/:mid GET]', err.message);
@@ -203,7 +211,7 @@ router.delete('/:id/milestones/:mid', async (req, res) => {
 
 // POST /api/projects/:id/todos
 router.post('/:id/todos', async (req, res) => {
-  const { title, description, milestoneId, priority = 'medium', dueDate, source = 'manual', sessionId } = req.body;
+  const { title, description, milestoneId, priority = 'medium', dueDate, source = 'manual', sessionId, beforeMilestoneId } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Le titre est requis' });
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
@@ -219,11 +227,14 @@ router.post('/:id/todos', async (req, res) => {
         else this.whereNull('milestoneId');
       });
 
+    const before = await validBeforeMilestone(req.params.id, beforeMilestoneId);
+    if (before === undefined) return res.status(400).json({ error: 'Réunion inconnue ou déjà tenue.' });
     const [todo] = await db('TodoItem')
       .insert({
         id:          randomUUID(),
         projectId:   req.params.id,
         milestoneId: milestoneId || null,
+        beforeMilestoneId: before,
         title:       title.trim(),
         description: description?.trim() || null,
         status:      'todo',
@@ -237,7 +248,7 @@ router.post('/:id/todos', async (req, res) => {
       })
       .returning([
         'id', 'milestoneId', 'title', 'description', 'status', 'priority',
-        'dueDate', 'displayOrder', 'source', 'sessionId', 'createdAt', 'createdBy'
+        'dueDate', 'displayOrder', 'source', 'sessionId', 'createdAt', 'createdBy', 'beforeMilestoneId'
       ]);
 
     // Auto-statut du jalon si la tâche lui est rattachée
@@ -278,7 +289,7 @@ router.patch('/:id/todos/reorder', async (req, res) => {
 
 // PATCH /api/projects/:id/todos/:tid
 router.patch('/:id/todos/:tid', async (req, res) => {
-  const { title, description, status, priority, dueDate, milestoneId, displayOrder } = req.body;
+  const { title, description, status, priority, dueDate, milestoneId, displayOrder, beforeMilestoneId } = req.body;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
@@ -295,6 +306,11 @@ router.patch('/:id/todos/:tid', async (req, res) => {
     if (dueDate          !== undefined) updates.dueDate      = dueDate || null;
     if (milestoneId      !== undefined) updates.milestoneId  = milestoneId || null;
     if (displayOrder     !== undefined) updates.displayOrder = displayOrder;
+    if (beforeMilestoneId !== undefined) {
+      const before = await validBeforeMilestone(req.params.id, beforeMilestoneId);
+      if (before === undefined) return res.status(400).json({ error: 'Réunion inconnue ou déjà tenue.' });
+      updates.beforeMilestoneId = before;
+    }
 
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Aucune modification' });
 
@@ -303,7 +319,7 @@ router.patch('/:id/todos/:tid', async (req, res) => {
       .update(updates)
       .returning([
         'id', 'milestoneId', 'title', 'description', 'status', 'priority',
-        'dueDate', 'displayOrder', 'source', 'sessionId', 'createdAt', 'createdBy'
+        'dueDate', 'displayOrder', 'source', 'sessionId', 'createdAt', 'createdBy', 'beforeMilestoneId'
       ]);
 
     // Auto-calcul du statut du jalon si le statut de la tâche a changé

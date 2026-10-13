@@ -230,13 +230,18 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     const summaryPrompt = buildSummaryPrompt(sessionContext, expertiseLevel, meetingType);
     const existingActions = await listActions(projectId);
     const actionsText = formatActionsForPrompt(existingActions);
+    // Réunions à venir du plan (repères R1, R2… comme sur la page Plan) : une action proposée
+    // peut être « à faire avant » l'une d'elles, qui ne se tiendra pas sans elle
+    const planMilestones = await db('Milestone').where({ projectId }).orderBy('displayOrder', 'asc').select('id', 'title', 'status');
+    const refToMilestone = Object.fromEntries(planMilestones.map((m, i) => [`R${i + 1}`, m]));
+    const meetingsText = planMilestones.map((m, i) => (m.status === 'done' || m.id === session.milestoneId ? null : `R${i + 1} « ${m.title} »`)).filter(Boolean).join('\n');
     const [summaryResponse, extraction] = await Promise.all([
       anthropic.messages.create({
         model: MODEL, max_tokens: 4000,
         system: withTranscript(summaryPrompt.system),
         messages: [{ role: 'user', content: summaryPrompt.user }]
       }),
-      extractMeetingDecisions({ session, messages, historyText: TRANSCRIPT_REF, systemPrefix: [transcriptBlock], projectId, actionsText,
+      extractMeetingDecisions({ session, messages, historyText: TRANSCRIPT_REF, systemPrefix: [transcriptBlock], projectId, actionsText, meetingsText,
         challenger: (session.challengerEnabled ?? project.challengerEnabled) !== false })
         .catch(err => { console.error('[generate-deliverable] extraction décisions :', err.message); return null; }),
     ]);
@@ -244,7 +249,10 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     // null = extraction indisponible (la fenêtre de clôture le signale)
     const decisionProposals = extraction ? extraction.decisions : null;
     // Actions : seulement les vraies actions de l'humain, sans reprise d'une action déjà ouverte
-    const actionProposals   = extraction ? dropExistingActions(extraction.actions, existingActions) : null;
+    const actionProposals   = extraction ? dropExistingActions(extraction.actions, existingActions).map(a => {
+      const m = a.beforeRef && refToMilestone[a.beforeRef];
+      return { ...a, beforeMilestoneId: m && m.status !== 'done' ? m.id : null, beforeMilestoneTitle: m && m.status !== 'done' ? m.title : null };
+    }) : null;
     // Actions déjà suivies que la réunion précise, rend inutiles ou montre faites (appliqué si l'humain accepte)
     const actionChanges     = extraction ? parseActionChanges({ actionChanges: extraction.actionChanges }, existingActions) : [];
     // Ce qui n'est pas une action (v5.1) : décisions à prendre → réunion de décision proposée ;

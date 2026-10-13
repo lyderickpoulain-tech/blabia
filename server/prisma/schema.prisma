@@ -143,6 +143,7 @@ model Milestone {
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator      User?      @relation("MilestoneCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   todos              TodoItem[]
+  actionsBefore      TodoItem[] @relation("ActionBeforeMeeting")
   sessions           Session[]  @relation("SessionMilestone")
   createdFromSession Session?   @relation("MilestoneSource", fields: [createdFromSessionId], references: [id], onDelete: SetNull)
 }
@@ -163,6 +164,9 @@ model TodoItem {
   createdBy    String?
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestone    Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  // v5.1 : à mener AVANT cette réunion du plan, qui ne peut pas se tenir tant que l'action est ouverte
+  beforeMilestoneId String?
+  beforeMilestone   Milestone? @relation("ActionBeforeMeeting", fields: [beforeMilestoneId], references: [id], onDelete: SetNull)
   session      Session?   @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   creator      User?      @relation("TodoCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   missions     AgentMission[]

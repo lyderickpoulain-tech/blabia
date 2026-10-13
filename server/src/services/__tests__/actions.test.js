@@ -17,13 +17,15 @@ describe('actions entre les réunions', () => {
 
   it('actions proposées : nettoyées, sans doublon, limitées à 5 (les plus importantes)', () => {
     const raw = { actions: [
-      { title: 'Visiter trois locaux', detail: 'Croix-Rousse', dueInDays: 14 },
+      { title: 'Visiter trois locaux', detail: 'Croix-Rousse', dueInDays: 14, beforeMeeting: 'r3' },
       { title: 'visiter trois locaux', dueInDays: 3 },
       { title: '   ' },
       ...Array.from({ length: 10 }, (_, i) => ({ title: `Action ${i}` })),
     ] };
     const out = parseActions(raw, FROM);
-    expect(out[0]).toEqual({ title: 'Visiter trois locaux', description: 'Croix-Rousse', dueDate: '2026-10-24' });
+    // beforeRef : réunion du plan avant laquelle l'action doit être faite (repère R…)
+    expect(out[0]).toEqual({ title: 'Visiter trois locaux', description: 'Croix-Rousse', dueDate: '2026-10-24', beforeRef: 'R3', beforeMilestoneId: null });
+    expect(out[1].beforeRef).toBeNull();
     expect(out).toHaveLength(5);
     expect(parseActions(null)).toEqual([]);
   });

@@ -30,6 +30,9 @@ function sanitizeAction(a, from) {
     title: clean(a.title, 300),
     description: clean(a.detail ?? a.description, 1000) || null,
     dueDate: a.dueDate ? clean(a.dueDate, 10) : dueDateFrom(a.dueInDays, from),
+    // v5.1 : à mener avant une réunion du plan — repère « R3 » (extraction) ou id (choix de l'humain)
+    beforeRef: /^R\d{1,3}$/i.test(String(a.beforeMeeting ?? a.beforeRef ?? '')) ? String(a.beforeMeeting ?? a.beforeRef).toUpperCase() : null,
+    beforeMilestoneId: typeof a.beforeMilestoneId === 'string' && a.beforeMilestoneId ? a.beforeMilestoneId : null,
   };
 }
 
@@ -72,9 +75,11 @@ function parseTriage(raw) {
 async function listActions(projectId, { withCancelled = false } = {}) {
   return db('TodoItem as t')
     .leftJoin('Session as s', 's.id', 't.sessionId')
+    .leftJoin('Milestone as bm', 'bm.id', 't.beforeMilestoneId')
     .where('t.projectId', projectId)
     .modify(q => { if (!withCancelled) q.whereNot('t.status', 'cancelled'); })
-    .select('t.id', 't.title', 't.description', 't.status', 't.dueDate', 't.displayOrder', 't.source', 't.sessionId', 't.createdAt', 's.task as sessionTask')
+    .select('t.id', 't.title', 't.description', 't.status', 't.dueDate', 't.displayOrder', 't.source', 't.sessionId', 't.createdAt', 's.task as sessionTask',
+      't.beforeMilestoneId', 'bm.title as beforeMilestoneTitle', 'bm.status as beforeMilestoneStatus')
     // À faire : dans l'ordre choisi par l'humain ; faites : les plus récentes d'abord
     .orderByRaw(`CASE WHEN t.status IN ('todo','in_progress') THEN 0 ELSE 1 END,
       CASE WHEN t.status IN ('todo','in_progress') THEN t."displayOrder" END ASC,
@@ -94,7 +99,7 @@ function formatActionsForPrompt(actions, now = new Date()) {
   const open = openActions(actions);
   const done = actions.filter(a => a.status === 'done').slice(0, 8);
   const lines = [
-    ...open.map((a, i) => `A${i + 1}. [${isOverdue(a, now) ? `EN RETARD, prévue le ${fmtDay(a.dueDate)}` : a.dueDate ? `à faire, pour le ${fmtDay(a.dueDate)}` : 'à faire'}] ${a.title}${a.description ? ` — ${clean(a.description, DESCRIPTION_IN_PROMPT)}` : ''}`),
+    ...open.map((a, i) => `A${i + 1}. [${isOverdue(a, now) ? `EN RETARD, prévue le ${fmtDay(a.dueDate)}` : a.dueDate ? `à faire, pour le ${fmtDay(a.dueDate)}` : 'à faire'}${a.beforeMilestoneTitle ? `, AVANT la réunion « ${a.beforeMilestoneTitle} » (qui ne peut pas se tenir sans elle)` : ''}] ${a.title}${a.description ? ` — ${clean(a.description, DESCRIPTION_IN_PROMPT)}` : ''}`),
     ...done.map(a => `- [fait] ${a.title}`),
   ].slice(0, MAX_IN_PROMPT);
   return lines.join('\n');
@@ -132,10 +137,13 @@ async function createSessionActions({ projectId, sessionId, userId, actions }) {
   const rows = actions.map(a => sanitizeAction(a)).filter(Boolean).slice(0, MAX_PROPOSALS);
   if (rows.length === 0) return [];
   const [{ maxOrder }] = await db('TodoItem').max('displayOrder as maxOrder').where({ projectId }).whereNull('milestoneId');
+  // « À faire avant » : seulement une réunion à venir de ce projet
+  const beforeIds = new Set((await db('Milestone').where({ projectId }).whereNot('status', 'done').select('id')).map(m => m.id));
   const now = new Date();
   return db('TodoItem').insert(rows.map((a, i) => ({
     id: require('crypto').randomUUID(), projectId, milestoneId: null,
     title: a.title, description: a.description, dueDate: a.dueDate || null,
+    beforeMilestoneId: a.beforeMilestoneId && beforeIds.has(a.beforeMilestoneId) ? a.beforeMilestoneId : null,
     status: 'todo', priority: 'medium', displayOrder: (maxOrder ?? -1) + 1 + i,
     source: 'session', sessionId: sessionId || null, createdAt: now, createdBy: userId,
   }))).returning(['id', 'title', 'description', 'status', 'dueDate', 'sessionId']);
@@ -160,4 +168,16 @@ async function actionForPrompt(todoId, projectId) {
   return `${head}\n(Une mission confiée à ${m.agentName} sur cette action est ${m.status === 'failed' ? 'en échec' : 'encore en cours'} : son rapport n'est pas disponible.)`;
 }
 
-module.exports = { actionForPrompt, OPEN, dueDateFrom, sanitizeAction, parseActions, parseActionChanges, parseTriage, dropExistingActions, sameAction, listActions, isOverdue, formatActionsForPrompt, createSessionActions };
+// Actions ouvertes à mener avant une réunion du plan : tant qu'il en reste, elle ne se tient pas
+async function blockingActions(milestoneId, projectId) {
+  if (!milestoneId) return [];
+  return db('TodoItem').where({ beforeMilestoneId: milestoneId, ...(projectId ? { projectId } : {}) }).whereIn('status', OPEN).orderBy('displayOrder', 'asc').select('id', 'title');
+}
+// Réunion « avant » valable : une réunion à venir de ce projet (ou null pour retirer le lien)
+async function validBeforeMilestone(projectId, id) {
+  if (!id) return null;
+  const m = await db('Milestone').where({ id: String(id), projectId }).whereNot('status', 'done').first('id');
+  return m ? m.id : undefined; // undefined : refusé
+}
+
+module.exports = { actionForPrompt, blockingActions, validBeforeMilestone, OPEN, dueDateFrom, sanitizeAction, parseActions, parseActionChanges, parseTriage, dropExistingActions, sameAction, listActions, isOverdue, formatActionsForPrompt, createSessionActions };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, CalendarDays, Link2, Bot, Users, FileText, Ban, Undo2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, CalendarDays, Link2, Bot, Users, FileText, Ban, Undo2, Lock } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, IconButton, Card, SectionLabel } from '../../components/ui';
@@ -13,6 +13,7 @@ import useMissions from '../../hooks/useMissions';
 import { formatUSD } from '../../utils/cost';
 import { notifySuccess } from '../../utils/notify';
 import { MISSION_LEVELS } from '../../utils/missionLevels';
+import BeforeMeetingSelect, { usePlanMeetings } from '../../components/project/BeforeMeetingSelect';
 
 // Actions entre les réunions (v5.1) : proposées à la conclusion des réunions,
 // cochées et ordonnées ici par l'humain (l'ordre prime, l'échéance est facultative) ;
@@ -96,13 +97,14 @@ const MISSION_STATE = {
   proposed: { text: 'Mission proposée', cls: 'text-ai' },
 };
 
-function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove, agents, budget, onDelegate, onMeeting, onOpenReport }) {
+function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove, agents, budget, onDelegate, onMeeting, onOpenReport, meetings }) {
   const [delegating, setDelegating] = useState(false);
   const mission = action.mission;
   const missionActive = mission && ['queued', 'running'].includes(mission.status);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(action.title);
   const [due, setDue] = useState(action.dueDate ? String(action.dueDate).slice(0, 10) : '');
+  const [before, setBefore] = useState(action.beforeMilestoneId || null);
   const done = action.status === 'done';
   const late = isOverdueAction(action);
 
@@ -126,8 +128,9 @@ function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove, agents, 
         <div className="flex-1 flex flex-wrap gap-2">
           <input value={title} onChange={e => setTitle(e.target.value)} aria-label="Action" className={`${inputCls} flex-1 min-w-[200px]`} autoFocus />
           <input type="date" value={due} onChange={e => setDue(e.target.value)} aria-label="Échéance" className={inputCls} />
+          <BeforeMeetingSelect meetings={meetings} value={before} onChange={setBefore} className="!h-10 !text-sm" />
           <Button size="sm" variant="primary" disabled={!title.trim()}
-            onClick={async () => { await onSave(action, { title: title.trim(), dueDate: due || null }); setEditing(false); }}>Enregistrer</Button>
+            onClick={async () => { await onSave(action, { title: title.trim(), dueDate: due || null, beforeMilestoneId: before }); setEditing(false); }}>Enregistrer</Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Annuler</Button>
         </div>
       ) : (
@@ -138,6 +141,11 @@ function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove, agents, 
             {action.dueDate && (
               <span className={`inline-flex items-center gap-1 font-bold ${late ? 'text-await' : 'text-ink-faint'}`}>
                 <CalendarDays size={12} aria-hidden="true" /> {late ? 'En retard · ' : ''}{fmtDue(action.dueDate)}
+              </span>
+            )}
+            {action.beforeMilestoneTitle && !done && (
+              <span className="inline-flex items-center gap-1 font-bold text-await" title="Cette réunion ne pourra pas se tenir tant que l’action n’est pas faite (ou supprimée)">
+                <Lock size={12} aria-hidden="true" /> Avant la réunion « {action.beforeMilestoneTitle} »
               </span>
             )}
             {action.sessionTask && (
@@ -205,6 +213,8 @@ export default function ProjectActions() {
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDue, setNewDue] = useState('');
+  const [newBefore, setNewBefore] = useState(null);
+  const planMeetings = usePlanMeetings(project.id);
   const [showDone, setShowDone] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
 
@@ -250,8 +260,8 @@ export default function ProjectActions() {
     return api.patch(`/projects/${project.id}/todos/reorder`, { order: ids });
   });
   const add = () => run(async () => {
-    await api.post(`/projects/${project.id}/todos`, { title: newTitle.trim(), dueDate: newDue || null });
-    setNewTitle(''); setNewDue(''); setAdding(false);
+    await api.post(`/projects/${project.id}/todos`, { title: newTitle.trim(), dueDate: newDue || null, beforeMilestoneId: newBefore });
+    setNewTitle(''); setNewDue(''); setNewBefore(null); setAdding(false);
   });
 
   const open = (actions || []).filter(a => !['done', 'cancelled'].includes(a.status));
@@ -280,6 +290,7 @@ export default function ProjectActions() {
               <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Ex : Visiter trois locaux à la Croix-Rousse (ajoutée en fin de liste)"
                 aria-label="Nouvelle action" className={`${inputCls} flex-1 min-w-[220px]`} autoFocus />
               <input type="date" value={newDue} onChange={e => setNewDue(e.target.value)} aria-label="Échéance (facultative)" title="Échéance facultative" className={inputCls} />
+              <BeforeMeetingSelect meetings={planMeetings} value={newBefore} onChange={setNewBefore} className="!h-10 !text-sm" />
               <Button type="submit" size="sm" variant="primary" className="!h-10" disabled={!newTitle.trim()}>Ajouter</Button>
               <Button size="sm" variant="ghost" className="!h-10" onClick={() => setAdding(false)}>Annuler</Button>
             </form>
@@ -304,7 +315,7 @@ export default function ProjectActions() {
             </SectionLabel>
             <ul className="space-y-2">
               {open.map((a, i) => (
-                <ActionItem key={a.id} action={a} rank={i + 1} onToggle={toggle} onSave={save} onDelete={remove}
+                <ActionItem key={a.id} action={a} rank={i + 1} onToggle={toggle} onSave={save} onDelete={remove} meetings={planMeetings}
                   agents={agents} budget={missionsApi.budget} onDelegate={project.isDemo ? null : delegate} onMeeting={toMeeting} onOpenReport={openReport}
                   onMove={open.length > 1 ? { up: i > 0 ? () => move(i, -1) : null, down: i < open.length - 1 ? () => move(i, 1) : null } : null} />
               ))}

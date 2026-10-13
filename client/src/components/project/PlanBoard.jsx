@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { GripVertical, Check, Play, ChevronRight, ChevronDown, ListChecks, FileText, Plus, CalendarDays, CircleDot } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { GripVertical, Check, Play, ChevronRight, ChevronDown, ListChecks, FileText, Plus, CalendarDays, CircleDot, Lock } from 'lucide-react';
 import { Button, Badge, Card, SectionLabel } from '../ui';
 import { STATUS_LABELS, STATUS_TONE, TYPE_LABEL, MeetingTypeIcon, fmtDate } from '../meeting/MilestoneDrawers';
 import { InsertButton, InsertForm } from '../meeting/MeetingInsertControls';
@@ -39,6 +40,9 @@ function MeetingMeta({ m, linked }) {
 function UpcomingCard({ m, rank, linked, isNext, tourAnchor, ordering, onOpen, onStart }) {
   const { dragId, dragOverId, startDrag, overDrag, endDrag, drop } = ordering;
   const dropTarget = dragOverId === m.id && dragId !== m.id;
+  const { id: projectId } = useParams();
+  // Actions à mener avant cette réunion, encore ouvertes : elle ne peut pas se tenir
+  const blocked = (m.blockingActions || []).length > 0;
   return (
     <div
       onDragOver={e => overDrag(e, m)}
@@ -70,10 +74,23 @@ function UpcomingCard({ m, rank, linked, isNext, tourAnchor, ordering, onOpen, o
         <h3 className="text-[15px] font-bold text-ink leading-snug">{m.title}</h3>
         {m.description && <p className="text-sm text-ink-soft leading-relaxed mt-1 line-clamp-2">{m.description}</p>}
         <MeetingMeta m={m} linked={linked} />
+        {blocked && (
+          <div className="mt-2 rounded-lg border border-await-border bg-await-bg px-3 py-2 text-xs" onClick={e => e.stopPropagation()}>
+            <p className="font-bold text-await flex items-center gap-1.5">
+              <Lock size={13} aria-hidden="true" /> Bloquée : {m.blockingActions.length === 1 ? 'une action à mener' : `${m.blockingActions.length} actions à mener`} avant
+            </p>
+            <ul className="mt-1 space-y-0.5 text-ink-soft">
+              {m.blockingActions.slice(0, 4).map(a => <li key={a.id}>• {a.title}</li>)}
+              {m.blockingActions.length > 4 && <li className="text-ink-faint">… et {m.blockingActions.length - 4} autre{m.blockingActions.length - 4 > 1 ? 's' : ''}</li>}
+            </ul>
+            <Link to={`/projects/${projectId}/actions`} className="inline-block mt-1 font-bold text-action hover:underline">Voir les actions</Link>
+          </div>
+        )}
       </div>
 
       <div className="shrink-0 flex items-center gap-1 self-center" onClick={e => e.stopPropagation()}>
-        <Button size="sm" variant={isNext || linked?.status === 'open' ? 'primary' : 'secondary'}
+        <Button size="sm" variant={(isNext && !blocked) || linked?.status === 'open' ? 'primary' : 'secondary'}
+          disabled={blocked && !linked} title={blocked && !linked ? 'Menez d’abord les actions prévues avant cette réunion' : undefined}
           onClick={() => onStart(m, linked)}>
           <Play size={14} aria-hidden="true" /> <span className="hidden sm:inline">{primaryLabel(linked)}</span>
         </Button>

@@ -8,6 +8,7 @@ import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText
 import { Link } from 'react-router-dom';
 import { Button, IconButton, Badge, SectionLabel, AutoTextarea } from './ui';
 import { notifyError, notifySuccess } from '../utils/notify';
+import BeforeMeetingSelect, { usePlanMeetings } from './project/BeforeMeetingSelect';
 
 // Date de préparation d'une conclusion : « aujourd'hui à 14 h 05 » ou « le 12 oct. à 14 h 05 »
 function fmtDraftDate(iso) {
@@ -52,6 +53,8 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   const [actionProposals, setActionProposals] = useState([]);
   const actionsSavedRef = useRef(false);
   const updateAction = (key, patch) => setActionProposals(prev => prev.map(a => a.key === key ? { ...a, ...patch } : a));
+  // Réunions à venir du plan : une action peut devoir être faite avant l'une d'elles
+  const planMeetings = usePlanMeetings(projectId);
   // Actions déjà suivies que la réunion précise, rend inutiles ou montre faites : appliqué si coché
   const [actionChanges, setActionChanges] = useState([]);
   const actionChangesSavedRef = useRef(false);
@@ -196,7 +199,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       if (keptActions.length > 0 && !actionsSavedRef.current) {
         await api.post(`/projects/${projectId}/actions/from-session`, {
           sessionId: session.id,
-          actions: keptActions.map(({ title, description, dueDate }) => ({ title, description, dueDate })),
+          actions: keptActions.map(({ title, description, dueDate, beforeMilestoneId }) => ({ title, description, dueDate, beforeMilestoneId })),
         });
         actionsSavedRef.current = true;
       }
@@ -549,6 +552,8 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                               aria-label="Action" className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />
                             <input type="date" value={a.dueDate || ''} onChange={e => updateAction(a.key, { dueDate: e.target.value || null })} disabled={!a.keep}
                               aria-label="Échéance (facultative)" title="Échéance facultative" className="text-xs text-ink-soft border border-line rounded-md px-2 h-8 outline-none bg-white" />
+                            <BeforeMeetingSelect meetings={planMeetings.filter(m => m.id !== session.milestoneId)} value={a.beforeMilestoneId} disabled={!a.keep}
+                              onChange={v => updateAction(a.key, { beforeMilestoneId: v })} />
                             {a.description && <p className="basis-full text-[11px] text-ink-muted px-1.5">{a.description}</p>}
                           </div>
                         </li>
