@@ -16,6 +16,7 @@ export const STATUS_BADGE = {
   open:      { label: 'En cours',   cls: 'bg-action-light text-action'  },
   accepted:  { label: 'Acceptée',   cls: 'bg-ok-light text-ok'          },
   abandoned: { label: 'Abandonnée', cls: 'bg-muted-light text-muted'    },
+  postponed: { label: 'Reportée',   cls: 'bg-await-light text-await'    }, // v5.1 : en attente d'une mission
 };
 
 // v5.0 phase 3.2 : decision | claude_code | stack

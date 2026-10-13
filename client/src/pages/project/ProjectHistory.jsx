@@ -40,6 +40,7 @@ function StatusBadge({ status }) {
   if (status === 'accepted' || status === 'complete') return <Badge tone="ok">Conclue</Badge>;
   if (status === 'open')      return <Badge tone="action">En cours</Badge>;
   if (status === 'abandoned') return <Badge tone="muted">Abandonnée</Badge>;
+  if (status === 'postponed') return <Badge tone="await">Reportée</Badge>;
   return <Badge tone="await">Interrompue</Badge>;
 }
 
@@ -48,6 +49,7 @@ function SessionItem({ session, projectId, cost, onViewDeliverable, tour, canDel
   const [reopening, setReopening] = useState(false);
   const type = intentionOf(session);
   const finished = session.status === 'accepted' || session.status === 'abandoned';
+  const postponed = session.status === 'postponed'; // en attente d'une mission : reprise prévue au plan
   const path = `/projects/${projectId}/meeting/${session.id}`;
 
   // Suppression (propriétaire) : la réunion et ce que les agents en retiennent
@@ -96,6 +98,8 @@ function SessionItem({ session, projectId, cost, onViewDeliverable, tour, canDel
         )}
         {finished ? (
           <Button size="sm" variant="ghost" onClick={reopen} disabled={reopening}><RotateCcw size={15} /> {reopening ? '…' : 'Reprendre'}</Button>
+        ) : postponed ? (
+          <Link to={`/projects/${projectId}/reunions`} className="h-9 px-3 inline-flex items-center rounded-[10px] text-[13px] font-bold text-await hover:bg-await-bg">Voir la reprise au plan</Link>
         ) : session.status === 'open' && (
           <Link to={path} className="h-9 px-3 inline-flex items-center rounded-[10px] text-[13px] font-bold text-action hover:bg-action-light">Rejoindre</Link>
         )}

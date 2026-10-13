@@ -43,8 +43,10 @@ export default function MeetingInputBar({
     return (
       <div className="shrink-0 bg-white border-t border-line px-4 py-2">
         <div className="max-w-[820px] mx-auto flex flex-wrap items-center gap-2">
-          <p className={`text-sm font-bold flex-1 ${session.status === 'accepted' ? 'text-ok' : 'text-ink-faint'}`}>
-            {session.status === 'accepted' ? 'Réunion conclue' : 'Réunion abandonnée'}
+          <p className={`text-sm font-bold flex-1 ${session.status === 'accepted' ? 'text-ok' : session.status === 'postponed' ? 'text-await' : 'text-ink-faint'}`}>
+            {session.status === 'accepted' ? 'Réunion conclue'
+              : session.status === 'postponed' ? 'Réunion reportée : elle reprendra dans le plan (« Reprendre : … ») une fois le rapport de la mission prêt.'
+              : 'Réunion abandonnée'}
           </p>
           {session.status === 'accepted' && session.summary && (
             <Button size="sm" variant="secondary" onClick={() => setShowDeliverable('summary')}><FileText size={15} /> Compte-rendu</Button>
@@ -52,7 +54,7 @@ export default function MeetingInputBar({
           {session.status === 'accepted' && currentIntention === 'claude_code' && session.deliverable && (
             <Button size="sm" variant="secondary" onClick={() => setShowDeliverable('deliverable')}><Code2 size={15} /> Prompt</Button>
           )}
-          <Button size="sm" variant="ghost" onClick={handleReopen}><RotateCcw size={15} /> Reprendre</Button>
+          {session.status !== 'postponed' && <Button size="sm" variant="ghost" onClick={handleReopen}><RotateCcw size={15} /> Reprendre</Button>}
         </div>
       </div>
     );

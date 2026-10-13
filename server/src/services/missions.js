@@ -20,7 +20,7 @@ const LEVELS = {
 };
 const LEVEL_IDS = Object.keys(LEVELS);
 const levelOf = id => (LEVELS[id] ? id : 'standard');
-const MAX_PER_MEETING = 2;
+const MAX_PER_MEETING = 1; // v5.1 : une mission reporte la réunion — une seule par réunion
 const ACTIVE = ['queued', 'running'];
 
 const monthStart = (now = new Date()) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -64,4 +64,61 @@ function formatMissionsForPrompt(missions) {
     .join('\n');
 }
 
-module.exports = { KINDS, KIND_LABEL, DEFAULT_BUDGET, MAX_BUDGET, LEVELS, LEVEL_IDS, levelOf, MAX_PER_MEETING, ACTIVE, monthStart, monthlyCommitted, proposeMission, listMissions, formatMissionsForPrompt };
+// ── Mission validée pendant une réunion : la réunion est REPORTÉE (v5.1) ─────
+// Pas de mission qui tourne pendant qu'on continue à débattre : la réunion passe en
+// « postponed » ; une réunion « Reprendre : … » est insérée juste après dans le plan
+// (après la réunion du plan d'origine, sinon en tête des réunions à venir) ; une action
+// « Mission … » (source « mission ») doit être faite avant elle — elle est cochée seule
+// quand le rapport est prêt (services/missionRunner.js), ce qui débloque la reprise.
+const shortTask = t => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length > 80 ? `${s.slice(0, 80).replace(/\s+\S*$/, '')}…` : s; };
+async function postponeMeetingForMission({ mission, userId }) {
+  const [session] = await db('Session').where({ id: mission.sessionId, projectId: mission.projectId }).limit(1);
+  if (!session || session.status !== 'open') return null;
+  const projectId = mission.projectId;
+  const milestones = await db('Milestone').where({ projectId }).orderBy('displayOrder', 'asc').select('id', 'status', 'displayOrder');
+  const origin = session.milestoneId ? milestones.find(m => m.id === session.milestoneId) : null;
+  // Position : juste après la réunion d'origine, sinon avant la première réunion à venir
+  const firstUpcoming = milestones.find(m => m.status !== 'done' && m.id !== origin?.id);
+  const at = origin ? origin.displayOrder + 1 : (firstUpcoming ? firstUpcoming.displayOrder : (milestones.at(-1)?.displayOrder ?? -1) + 1);
+  await db('Milestone').where({ projectId }).where('displayOrder', '>=', at).increment('displayOrder', 1);
+  const date = new Date().toLocaleDateString('fr-FR');
+  const intention = (() => { try { return JSON.parse(session.intention || '[]'); } catch { return Array.isArray(session.intention) ? session.intention : []; } })();
+  const [milestone] = await db('Milestone').insert({
+    id: require('crypto').randomUUID(), projectId, type: ['decision', 'claude_code', 'stack'].includes(intention[0]) ? intention[0] : 'decision',
+    title: `Reprendre : ${shortTask(session.task)}`,
+    description: `Réunion reportée le ${date} en attendant la mission « ${mission.title} » (${mission.agentName}). À trancher avec son rapport : ${session.task}`,
+    status: 'pending', displayOrder: at, createdFromSessionId: session.id, createdAt: new Date(), createdBy: userId,
+  }).returning(['id', 'title']);
+  const [{ maxOrder }] = await db('TodoItem').max('displayOrder as maxOrder').where({ projectId }).whereNull('milestoneId');
+  const [todo] = await db('TodoItem').insert({
+    id: require('crypto').randomUUID(), projectId, milestoneId: null, beforeMilestoneId: milestone.id,
+    title: `Mission « ${mission.title} » (${mission.agentName})`,
+    description: 'Menée par un agent ; cochée automatiquement quand le rapport est prêt.',
+    status: 'in_progress', priority: 'medium', displayOrder: (maxOrder ?? -1) + 1,
+    source: 'mission', sessionId: session.id, createdAt: new Date(), createdBy: userId,
+  }).returning(['id']);
+  await db('AgentMission').where({ id: mission.id }).update({ todoId: todo.id });
+  await db('Session').where({ id: session.id }).update({ status: 'postponed' });
+  if (origin) await db('Milestone').where({ id: origin.id }).update({ status: 'done' }); // tenue, suite au plan
+  return { milestoneId: milestone.id, milestoneTitle: milestone.title, todoId: todo.id };
+}
+
+// Réunion qui REPREND une réunion reportée : objectif, décisions et fin des échanges de la
+// réunion d'origine, pour les agents (le rapport de mission arrive par l'action liée)
+const RESUME_CHARS = 6000;
+async function resumeTextFor(milestoneId) {
+  if (!milestoneId) return '';
+  const [m] = await db('Milestone').where({ id: milestoneId }).select('createdFromSessionId').limit(1);
+  if (!m?.createdFromSessionId) return '';
+  const [origin] = await db('Session').where({ id: m.createdFromSessionId, status: 'postponed' }).select('task', 'messages', 'createdAt').limit(1);
+  if (!origin) return '';
+  const msgs = (() => { try { return typeof origin.messages === 'string' ? JSON.parse(origin.messages) : (origin.messages || []); } catch { return []; } })();
+  const decided = msgs.filter(x => x.type === 'decision' && x.status === 'answered').map(x => `- ${x.question} → ${x.answer}`).join('\n');
+  const talk = msgs.filter(x => x.role === 'human' || x.role === 'agent')
+    .map(x => `${x.role === 'human' ? 'Participant' : x.agentName} : ${x.content}`).join('\n\n');
+  return `Réunion d'origine (${new Date(origin.createdAt).toLocaleDateString('fr-FR')}) : « ${origin.task} »
+${decided ? `Décisions déjà prises dans cette réunion :\n${decided}\n` : ''}Fin des échanges de la réunion d'origine :
+${talk.length > RESUME_CHARS ? `…${talk.slice(-RESUME_CHARS)}` : talk || '(aucun échange)'}`;
+}
+
+module.exports = { KINDS, KIND_LABEL, DEFAULT_BUDGET, MAX_BUDGET, LEVELS, LEVEL_IDS, levelOf, MAX_PER_MEETING, ACTIVE, monthStart, monthlyCommitted, proposeMission, listMissions, formatMissionsForPrompt, postponeMeetingForMission, resumeTextFor };

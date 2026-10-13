@@ -37,9 +37,10 @@ export default function useMissions(projectId, { sessionId } = {}) {
     try {
       const { data } = await api.post(`/projects/${projectId}/missions/${mission.id}/${action}`, body || {});
       setMissions(prev => prev.map(m => m.id === mission.id ? { ...m, ...data } : m));
-      if (okMessage) notifySuccess(okMessage);
+      if (okMessage && !data?.postponed) notifySuccess(okMessage);
       load();
-    } catch (err) { notifyError(err, 'L’action sur la mission a échoué.'); }
+      return data;
+    } catch (err) { notifyError(err, 'L’action sur la mission a échoué.'); return null; }
   }, [projectId, load]);
 
   return {

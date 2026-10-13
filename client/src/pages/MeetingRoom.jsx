@@ -358,7 +358,7 @@ export default function MeetingRoom() {
     .sort((a, b) => a.displayOrder - b.displayOrder)
     .map((m, i) => ({ ref: `R${i + 1}`, title: m.title }));
 
-  const isClosed       = session?.status === 'accepted' || session?.status === 'abandoned';
+  const isClosed       = ['accepted', 'abandoned', 'postponed'].includes(session?.status);
   const badge          = STATUS_BADGE[session?.status] || STATUS_BADGE.open;
   const decisions            = messages.filter(m => m.type === 'decision');
   const pendingDecisionCount = decisions.filter(m => ['pending', 'deferred', 'awaiting_human'].includes(m.status)).length;
@@ -773,6 +773,17 @@ export default function MeetingRoom() {
   // Contradicteur : « J'en tiens compte » / « Écarter »
   // Missions des agents proposées dans cette réunion
   const missionsApi = useMissions(projectId, { sessionId });
+  // Mission proposée en réunion : la lancer REPORTE la réunion (reprise au plan une fois le
+  // rapport prêt) — pas de mission qui tourne pendant qu'on continue à débattre (v5.1)
+  const handleApproveMission = async (mission, level) => {
+    if (!confirm(`Lancer la mission « ${mission.title} » et reporter la réunion ?\n\nLa réunion s’arrête ici. Une réunion « Reprendre : … » est ajoutée au plan, juste après ; elle pourra se tenir dès que le rapport de la mission sera prêt, pour trancher avec lui.`)) return;
+    const data = await missionsApi.approve(mission, level);
+    if (data?.postponed) {
+      abortControllerRef.current?.abort();
+      setSession(s => ({ ...s, status: 'postponed' }));
+      notifySuccess(`Réunion reportée : « ${data.postponed.milestoneTitle} » est ajoutée au plan.`);
+    }
+  };
   const { addMission } = missionsApi;
   const [missionReport, setMissionReport] = useState(null);
 
@@ -931,7 +942,7 @@ export default function MeetingRoom() {
                   onContradict={handleContradict}
                   onVigilance={handleVigilance}
                   missions={missionsApi.missions}
-                  onApproveMission={missionsApi.approve}
+                  onApproveMission={handleApproveMission}
                   onRejectMission={missionsApi.reject}
                   onOpenMissionReport={setMissionReport}
                   prepExpanded={prepExpanded}

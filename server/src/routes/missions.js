@@ -2,7 +2,7 @@ const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const db = require('../utils/db');
 const { findProject } = require('../utils/projectHelpers');
-const { listMissions, monthlyCommitted, KINDS, ACTIVE, LEVELS, LEVEL_IDS } = require('../services/missions');
+const { listMissions, monthlyCommitted, KINDS, ACTIVE, LEVELS, LEVEL_IDS, postponeMeetingForMission } = require('../services/missions');
 const { kickMissions } = require('../services/missionRunner');
 
 // Missions des agents (v5.1) : liste, validation (plafond), refus, annulation, relance.
@@ -57,8 +57,10 @@ router.post('/:id/missions/:mid/approve', async (req, res) => {
     const [m] = await db('AgentMission').where({ id: mission.id }).update({
       status: 'queued', level, budgetUSD, approvedAt: new Date(), approvedBy: req.user.id, error: null,
     }).returning('*');
+    // Proposée en réunion (réunion encore ouverte) : la réunion est reportée jusqu'au rapport
+    const postponed = mission.sessionId && !mission.todoId ? await postponeMeetingForMission({ mission: m, userId: req.user.id }) : null;
     kickMissions();
-    res.json(m);
+    res.json({ ...m, ...(postponed ? { todoId: postponed.todoId, postponed } : {}) });
   } catch (err) {
     console.error('[missions approve]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

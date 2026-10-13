@@ -212,6 +212,8 @@ async function runOne(mission) {
       status: 'done', report: content, sources: JSON.stringify(sources), costUSD: cost,
       documentId: doc.id ?? doc, finishedAt: new Date(), error: null,
     });
+    // Mission d'une réunion reportée : son action est cochée, la réunion de reprise est débloquée
+    if (mission.todoId) await db('TodoItem').where({ id: mission.todoId, source: 'mission' }).whereIn('status', ['todo', 'in_progress']).update({ status: 'done' });
     // Mémoire du projet : ce que la mission a établi, relu par les agents à chaque réunion
     // (le rapport complet reste dans les documents). Un échec ici n'annule pas la mission.
     try {

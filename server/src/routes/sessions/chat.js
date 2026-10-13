@@ -244,7 +244,7 @@ router.post('/:sessionId/chat', async (req, res) => {
 
     const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
-    if (['accepted', 'abandoned'].includes(s.status)) {
+    if (['accepted', 'abandoned', 'postponed'].includes(s.status)) {
       return res.status(400).json({ error: 'Session déjà close' });
     }
     session = s;
@@ -359,6 +359,8 @@ router.post('/:sessionId/chat', async (req, res) => {
       : '';
     // Réunion ouverte depuis une action : l'action et le rapport de la mission qui l'a préparée
     const actionText = await actionForPrompt(session.todoId, projectId);
+    // Reprise d'une réunion reportée pour une mission : objectif, décisions et fin des échanges
+    const resumeText = await require('../../services/missions').resumeTextFor(session.milestoneId);
     // Ordre du jour : décisions remises en question à retraiter (réunion du plan, services/agenda.js)
     const agendaText = formatAgendaForPrompt(await agendaDecisions(session.milestoneId));
     // Mémoire à deux étages : projet existant sans synthèse → première synthèse en arrière-plan
@@ -513,6 +515,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         codeReadable,
         agendaText,
         actionText,
+        resumeText,
         missionsText,
         today,
         challengerSection: isChallenge

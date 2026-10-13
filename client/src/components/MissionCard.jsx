@@ -24,7 +24,7 @@ const STATUS = {
   cancelled: { label: 'Annulée',                         tone: 'muted' },
 };
 
-export default function MissionCard({ mission, onApprove, onReject, onCancel, onOpenReport, compact = false, disabled = false }) {
+export default function MissionCard({ mission, onApprove, onReject, onCancel, onOpenReport, compact = false, disabled = false, approveLabel = 'Lancer' }) {
   const [level, setLevel] = useState(mission.level || 'standard');
   const [busy, setBusy] = useState(false);
   const kind = KIND[mission.kind] || KIND.research;
@@ -66,7 +66,7 @@ export default function MissionCard({ mission, onApprove, onReject, onCancel, on
                 </select>
               </label>
               <Button size="sm" variant="primary" className="!h-8" disabled={busy} onClick={() => act(() => onApprove?.(mission, level))}>
-                <Play size={13} aria-hidden="true" /> Lancer
+                <Play size={13} aria-hidden="true" /> {approveLabel}
               </Button>
               <Button size="sm" variant="ghost" className="!h-8" disabled={busy} onClick={() => act(() => onReject?.(mission))}>
                 Écarter

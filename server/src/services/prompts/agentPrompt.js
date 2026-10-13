@@ -120,6 +120,7 @@ function buildAgentSystemPrompt({
   codeReadable = false, // v5.1 : dépôt lisible par BlabIA (lecture à la demande, services/codeContext.js)
   agendaText = '',
   actionText = '',
+  resumeText = '', // v5.1 : réunion qui reprend une réunion reportée pour une mission
   missionsText = '',
   today = '',
   challengerSection = '', // v5.1 : tour du contradicteur (services/challenger.js)
@@ -187,6 +188,13 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
   const actionSection = actionText
     ? `\nACTION À TRAITER DANS CETTE RÉUNION (ouverte depuis la liste des actions ; elle sera cochée « faite » à la conclusion) :\n${actionText}\n`
     : '';
+  // v5.1 : reprise d'une réunion reportée le temps d'une mission (services/missions.js)
+  const resumeSection = resumeText
+    ? `
+RÉUNION DE REPRISE : cette réunion reprend une réunion reportée le temps d'une mission confiée à un agent. Son but : TRANCHER l'issue de la réunion d'origine à l'aide du rapport de mission (section « ACTION À TRAITER »). Ne recommence pas le débat : pars de ce qui avait été dit et décidé, intègre le rapport, conclus.
+${resumeText}
+`
+    : '';
   // v5.1 : documents de référence fournis par l'humain (texte extrait au dépôt)
   const documentsSection = documentsText
     ? `\nDOCUMENTS DE RÉFÉRENCE DU PROJET (fournis par l'humain : appuie-toi dessus, cite le document entre « » quand tu t'en sers, signale toute contradiction entre un document et ce qui se dit) :\n${documentsText}\n`
@@ -226,7 +234,7 @@ POINT D'AVANCEMENT : si aucun agent n'a encore parlé dans cette réunion, le pr
 
   // ── 1. Bloc commun à la réunion (mis en cache) ─────────────────────────────
   const shared = `Tu participes à une réunion collaborative entre agents IA spécialisés, animée pour un humain qui initie le projet et tranche les décisions. Ton rôle précis t'est donné à la fin de ce prompt.
-${briefSection}${repoSection}${codeSection}${agendaSection}${actionSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${missionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
+${briefSection}${repoSection}${codeSection}${agendaSection}${resumeSection}${actionSection}${documentsSection}${meetingsSection}${toolsSection}${registrySection}${actionsSection}${missionsSection}${memorySection}${pastCodeSection}${toolReviewSection}
 Objectif de cette réunion : ${session.task}
 Livrable attendu : ${intentionText}
 
@@ -259,7 +267,7 @@ Si un sujet mérite une réunion séparée (étape manquante, décision à trait
 Utilise les références des réunions du projet listées plus haut pour positionner ta suggestion et vérifier qu'elle ne fait pas doublon avec une réunion déjà prévue.
 Si un point demande un travail approfondi qui dépasse la réunion (recherche documentaire, comparatif chiffré, analyse détaillée d'un document, premier jet d'un texte), propose UNE mission à un sous-agent plutôt que de survoler le sujet, avec EXACTEMENT ce format (JSON valide, une seule ligne) :
 [MISSION:{"title":"Titre court","objective":"Ce qu'il faut trouver ou produire, précisément","deliverable":"Forme du résultat (tableau, liste, texte…)","kind":"research|analysis|writing"}]
-L'humain la valide ; le rapport arrivera dans les documents du projet. 2 missions par réunion au plus ; jamais pour du code (propose plutôt une réunion Claude Code), ni pour ce qu'une hypothèse ou une carte de décision suffit à régler, ni pour une mission déjà listée.
+Une mission met la réunion en PAUSE : si l'humain la valide, la réunion est REPORTÉE et reprendra, dans une nouvelle réunion du plan, une fois le rapport prêt. Ne la propose donc QUE si la réunion ne peut pas conclure sans ce travail ; sinon avance par hypothèse explicite ou par une carte de décision. 1 mission par réunion au plus ; jamais pour du code (propose plutôt une réunion Claude Code), ni pour ce qu'une hypothèse ou une carte de décision suffit à régler, ni pour une mission déjà listée.
 Maximum un marqueur de chaque type par réponse (sauf [DECISION] : jusqu'à 3 cartes regroupées).
 
 NIVEAU DE MAÎTRISE DU SUJET DE TON INTERLOCUTEUR (adapte TOUT ton langage à ce niveau) :

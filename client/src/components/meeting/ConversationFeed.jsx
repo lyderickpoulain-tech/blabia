@@ -194,7 +194,7 @@ export default function ConversationFeed({
             const mission = missions.find(m => m.id === msg.missionId);
             return mission ? (
               <div className="mt-1.5 max-w-[640px]">
-                <MissionCard mission={mission} disabled={isClosed}
+                <MissionCard mission={mission} disabled={isClosed} approveLabel="Lancer et reporter la réunion"
                   onApprove={onApproveMission} onReject={onRejectMission} onOpenReport={onOpenMissionReport} />
               </div>
             ) : null;

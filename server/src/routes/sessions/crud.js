@@ -32,8 +32,14 @@ router.post('/', async (req, res) => {
 
   const selectedModel = isMeetingModel(modelParam) ? modelParam : MODEL;
   // Action d'origine : seulement une action ouverte de ce projet
-  const todoId = todoIdParam && (await db('TodoItem').where({ id: String(todoIdParam), projectId: req.params.projectId })
+  let todoId = todoIdParam && (await db('TodoItem').where({ id: String(todoIdParam), projectId: req.params.projectId })
     .whereIn('status', ['todo', 'in_progress']).first('id'))?.id || null;
+  // Reprise d'une réunion reportée pour une mission : la réunion est liée à l'action de la
+  // mission (son rapport complet est transmis aux agents, services/actions.js actionForPrompt)
+  if (!todoId && milestoneId) {
+    todoId = (await db('TodoItem').where({ beforeMilestoneId: String(milestoneId), projectId: req.params.projectId, source: 'mission' })
+      .orderBy('createdAt', 'desc').first('id'))?.id || null;
+  }
   const fullContextEnabled = !!fullContextParam;
   const clampLevel = (v) => {
     const n = Number(v);
@@ -303,7 +309,7 @@ router.patch('/:sessionId/status', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     const [s] = await db('Session').where({ id: sessionId, projectId }).limit(1);
     if (!s) return res.status(404).json({ error: 'Session introuvable' });
-    if (['accepted', 'abandoned'].includes(s.status)) {
+    if (['accepted', 'abandoned', 'postponed'].includes(s.status)) {
       return res.status(400).json({ error: 'Session déjà close' });
     }
     // Réunion close : la conclusion préparée (brouillon) n'a plus lieu d'être
