@@ -20,6 +20,9 @@ import useClickOutside from '../hooks/useClickOutside';
 import api from '../utils/api';
 import { notifyError } from '../utils/notify';
 import usePresence from '../hooks/usePresence';
+import { DecisionPeopleContext } from '../components/meeting/decisionPeople';
+import { useAuth } from '../contexts/AuthContext';
+import { notifySuccess } from '../utils/notify';
 
 // ── MeetingRoom ───────────────────────────────────────────────────────────────
 
@@ -233,6 +236,55 @@ export default function MeetingRoom() {
     }
   }, [projectId, sessionId]);
 
+  // ── Question confiée à un autre humain (v5.1) ──────────────────────────────
+  // « Laisser répondre quelqu'un » / « Laisser répondre @… » : la réunion attend sa réponse ;
+  // la personne reçoit un e-mail et répond depuis la réunion (sa réponse relance les agents).
+  const { user: authUser } = useAuth();
+  const [participants, setParticipants] = useState([]);
+  useEffect(() => {
+    api.get(`/projects/${projectId}/sessions/${sessionId}/participants`).then(({ data }) => setParticipants(data)).catch(() => setParticipants([]));
+  }, [projectId, sessionId]);
+  const handleAssignDecision = useCallback(async (messageId, userId) => {
+    try {
+      const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/assign-decision`, { messageId, userId });
+      setMessages(prev => prev.map(m => (m.id === messageId ? { ...m, ...data.message } : m)));
+      notifySuccess(data.message.assignedToName
+        ? `Question confiée à ${data.message.assignedToName} : un e-mail lui a été envoyé.`
+        : 'Question confiée aux autres participants : un e-mail leur a été envoyé.');
+    } catch (err) { notifyError(err, 'La question n’a pas pu être confiée.'); return; }
+    const queue = decisionQueueRef.current;
+    if (queue.length > 0) { setPendingDecisionId(queue[0].messageId); setDecisionQueue(queue.slice(1)); }
+    else setPendingDecisionId(null);
+  }, [projectId, sessionId]);
+  const handleReclaimDecision = useCallback(async (messageId) => {
+    try {
+      const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/assign-decision`, { messageId, cancel: true });
+      setMessages(prev => prev.map(m => (m.id === messageId ? data.message : m)));
+    } catch (err) { notifyError(err, 'Opération impossible.'); }
+  }, [projectId, sessionId]);
+  const decisionPeople = {
+    others: participants.filter(p => !p.isYou),
+    currentUserId: authUser?.id,
+    onAssign: handleAssignDecision,
+    onReclaim: handleReclaimDecision,
+  };
+  // Une question attend un autre humain : la réunion se met à jour seule (sa réponse, puis
+  // les agents qui reprennent chez lui) ; suivi prolongé 3 minutes après la réponse
+  const watchUntilRef = useRef(0);
+  const awaitingHuman = messages.some(m => m.type === 'decision' && m.status === 'awaiting_human');
+  if (awaitingHuman) watchUntilRef.current = Date.now() + 3 * 60 * 1000;
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (isStreamingRef.current || Date.now() > watchUntilRef.current || document.visibilityState !== 'visible') return;
+      api.get(`/projects/${projectId}/sessions/${sessionId}`).then(({ data }) => {
+        if (isStreamingRef.current || !Array.isArray(data.messages)) return;
+        const sig = list => list.map(m => `${m.id}:${m.status || ''}`).join(',');
+        setMessages(prev => (sig(prev) === sig(data.messages) ? prev : data.messages));
+      }).catch(() => {});
+    }, 8000);
+    return () => clearInterval(t);
+  }, [projectId, sessionId]);
+
   // Déléguer une décision aux agents
   const handleDelegateDecision = useCallback(async (messageId) => {
     try {
@@ -309,8 +361,8 @@ export default function MeetingRoom() {
   const isClosed       = session?.status === 'accepted' || session?.status === 'abandoned';
   const badge          = STATUS_BADGE[session?.status] || STATUS_BADGE.open;
   const decisions            = messages.filter(m => m.type === 'decision');
-  const pendingDecisionCount = decisions.filter(m => m.status === 'pending' || m.status === 'deferred').length;
-  const pendingDecisions     = decisions.filter(m => m.status === 'pending' || m.status === 'deferred');
+  const pendingDecisionCount = decisions.filter(m => ['pending', 'deferred', 'awaiting_human'].includes(m.status)).length;
+  const pendingDecisions     = decisions.filter(m => ['pending', 'deferred', 'awaiting_human'].includes(m.status));
   const answeredDecisions    = decisions.filter(m => m.status === 'answered');
   const delegatedDecisions   = decisions.filter(m => m.status === 'delegated');
 
@@ -781,7 +833,7 @@ export default function MeetingRoom() {
   const showBriefing = phase === 'briefing' && !showDebate;
 
   return (
-    <>
+    <DecisionPeopleContext.Provider value={decisionPeople}>
     <div className="h-screen flex flex-col bg-canvas text-ink overflow-hidden">
       <MeetingHeader
         projectId={projectId}
@@ -1023,6 +1075,6 @@ export default function MeetingRoom() {
         onClose={() => setShowDeliverable(false)}
       />
     )}
-    </>
+    </DecisionPeopleContext.Provider>
   );
 }

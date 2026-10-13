@@ -161,4 +161,28 @@ async function sendActionsDigest(toEmail, subject, contentHtml) {
   if (error) throw new Error(error.message);
 }
 
-module.exports = { sendInvitation, sendTestEmail, sendActionsDigest };
+// Question d'un agent confiée à un autre participant de la réunion (v5.1)
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function sendQuestionRequest(toEmail, { askerName, agentName, question, meetingTitle, link }) {
+  const client = getClient();
+  if (!client) {
+    console.log(`[email] Question confiée (RESEND_API_KEY absent) — ${toEmail} : ${link}`);
+    return;
+  }
+  const content = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">On attend votre réponse</h2>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;"><strong>${escapeHtml(askerName)}</strong> vous demande de répondre à une question de l’agent ${escapeHtml(agentName)}, dans la réunion « ${escapeHtml(meetingTitle)} ».</p>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin-bottom:24px;">
+      <p style="margin:0;color:#92400e;font-size:14px;">${escapeHtml(question)}</p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
+      <tr><td align="center">
+        <a href="${link}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;padding:14px 32px;border-radius:10px;text-decoration:none;">
+          Répondre dans la réunion →
+        </a>
+      </td></tr>
+    </table>`;
+  await client.emails.send({ from: FROM_ADDRESS, to: toEmail, subject: `Votre avis est attendu : ${String(question).slice(0, 80)}`, html: baseLayout(content) });
+}
+
+module.exports = { sendInvitation, sendTestEmail, sendActionsDigest, sendQuestionRequest };

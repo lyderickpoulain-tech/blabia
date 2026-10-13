@@ -113,6 +113,83 @@ router.post('/:sessionId/vigilance', async (req, res) => {
   }
 });
 
+// ── Participants humains de la réunion : propriétaire et membres du projet ───
+// (invitation acceptée ; les invitations en attente ne comptent pas)
+const displayName = u => u?.username || String(u?.email || '').split('@')[0] || 'quelqu’un';
+async function participantsOf(project) {
+  const [owner] = await db('User').where({ id: project.userId }).select('id', 'username', 'email').limit(1);
+  const members = await db('ProjectMember as m').join('User as u', 'u.id', 'm.userId')
+    .where('m.projectId', project.id).select('u.id', 'u.username', 'u.email').orderBy('m.invitedAt', 'asc');
+  return [owner, ...members.filter(m => m.id !== owner?.id)].filter(Boolean)
+    .map(u => ({ userId: u.id, name: displayName(u), email: u.email }));
+}
+
+// GET /:sessionId/participants — personnes à qui confier une question (sans l'e-mail)
+router.get('/:sessionId/participants', async (req, res) => {
+  const { projectId } = req.params;
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    res.json((await participantsOf(project)).map(({ userId, name }) => ({ userId, name, isYou: userId === req.user.id })));
+  } catch (err) {
+    console.error('[sessions/participants]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── POST /:sessionId/assign-decision — Question confiée à un autre humain ────
+// { messageId, userId } : « Laisser répondre @… » ; { messageId, userId: null } : « Laisser
+// répondre quelqu'un » (un autre participant, au choix) ; { messageId, cancel: true } : la
+// personne qui l'avait confiée la reprend. La réunion attend sa réponse ; e-mail envoyé.
+router.post('/:sessionId/assign-decision', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const { messageId, userId = null, cancel = false } = req.body || {};
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  if (!messageId) return res.status(400).json({ error: 'messageId requis' });
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+    const messages = parseJsonField(session.messages, []);
+    const idx = messages.findIndex(m => m.id === messageId && m.type === 'decision');
+    if (idx < 0) return res.status(404).json({ error: 'Question introuvable' });
+    const msg = messages[idx];
+    if (!['pending', 'deferred', 'awaiting_human', undefined].includes(msg.status)) return res.status(409).json({ error: 'Cette question a déjà reçu une réponse.' });
+
+    if (cancel) {
+      if (msg.status !== 'awaiting_human') return res.status(409).json({ error: 'Cette question n’est confiée à personne.' });
+      const { assignedTo: _a, assignedToName: _b, assignedBy: _c, assignedByName: _d, assignedAt: _e, ...rest } = msg;
+      messages[idx] = { ...rest, status: 'pending' };
+    } else {
+      const people = await participantsOf(project);
+      const others = people.filter(p => p.userId !== req.user.id);
+      if (!others.length) return res.status(409).json({ error: 'Personne d’autre ne participe à ce projet.' });
+      const target = userId ? others.find(p => p.userId === userId) : null;
+      if (userId && !target) return res.status(400).json({ error: 'Cette personne ne participe pas au projet.' });
+      const me = people.find(p => p.userId === req.user.id);
+      const askerName = me?.name || displayName(await db('User').where({ id: req.user.id }).first('username', 'email'));
+      messages[idx] = {
+        ...msg, status: 'awaiting_human',
+        assignedTo: target?.userId || null, assignedToName: target?.name || null,
+        assignedBy: req.user.id, assignedByName: askerName, assignedAt: new Date().toISOString(),
+      };
+      const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/projects/${projectId}/meeting/${sessionId}`;
+      const { sendQuestionRequest } = require('../../services/email');
+      for (const p of (target ? [target] : others)) {
+        sendQuestionRequest(p.email, { askerName, agentName: msg.agentName, question: msg.question, meetingTitle: session.task, link })
+          .catch(err => console.error('[assign-decision] e-mail :', err.message)); // l'envoi ne bloque pas la réunion
+      }
+    }
+    await db('Session').where({ id: sessionId }).update({ messages: JSON.stringify(messages) });
+    res.json({ message: messages[idx] });
+  } catch (err) {
+    console.error('[sessions/assign-decision]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── POST /:sessionId/answer-decision — Réponse à une décision ─────────────────
 
 router.post('/:sessionId/answer-decision', async (req, res) => {
@@ -141,12 +218,22 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
     const idx = messages.findIndex(m => m.id === messageId && m.type === 'decision');
     if (idx < 0) return res.status(404).json({ error: 'Décision introuvable' });
 
+    // Question confiée à une personne précise : elle seule répond (ou celle qui la lui a confiée)
+    const asked = messages[idx];
+    if (asked.status === 'awaiting_human' && asked.assignedTo && ![asked.assignedTo, asked.assignedBy].includes(req.user.id)) {
+      return res.status(403).json({ error: `Cette question attend la réponse de ${asked.assignedToName || 'quelqu’un d’autre'}.` });
+    }
+    const people = await participantsOf(project);
+    const answeredByName = people.find(p => p.userId === req.user.id)?.name || null;
+
     const now = new Date().toISOString();
     messages[idx] = {
       ...messages[idx],
       status,
       answer:     status === 'answered' ? answer.trim() : (status === 'delegated' ? 'delegated' : null),
       answeredAt: (status === 'answered' || status === 'delegated') ? now : null,
+      // Projet à plusieurs : qui a répondu (affiché sur la question, transmis aux agents)
+      ...(people.length > 1 && (status === 'answered' || status === 'delegated') ? { answeredBy: req.user.id, answeredByName } : {}),
     };
 
     let systemMessage = null;
@@ -155,7 +242,7 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
         id:        randomUUID(),
         role:      'system',
         type:      'decision_answer',
-        content:   `📌 Décision : ${messages[idx].question} → ${answer.trim()}`,
+        content:   `📌 Décision${messages[idx].answeredByName ? ` (réponse de ${messages[idx].answeredByName})` : ''} : ${messages[idx].question} → ${answer.trim()}`,
         timestamp: now,
       };
       messages.push(systemMessage);
