@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TriangleAlert, Check, RefreshCw, Sparkles } from 'lucide-react';
-import ToolsMap from './ToolsMap';
+import ToolsFlow from './ToolsFlow';
 import ToolCostEditor from './ToolCostEditor';
 import api from '../../utils/api';
 import { useToolsCatalog, PROJECT_STATUS, costLabel, totalLabel } from '../../utils/toolsCatalog';
@@ -239,7 +239,6 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
     setSaving(false);
   };
 
-  const roleById = useMemo(() => Object.fromEntries((catalog?.tools || []).map(t => [t.id, t.role])), [catalog]);
 
   if (!catalog || tools === null) {
     return (
@@ -257,10 +256,6 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
   const missingCount = neededCats.filter(c => !tools.some(t => t.category === c.id && ACTIVE.includes(t.status))).length;
   const warnCount = tools.filter(t => t.warning && t.status !== 'refused').length;
 
-  const mapItems = tools.filter(t => t.status !== 'refused').map(t => ({
-    key: t.id, name: t.name, category: t.category, dashed: t.status === 'suggested',
-    detail: { role: t.why || roleById[t.catalogId], cost: costLabel(t.cost), status: PROJECT_STATUS[t.status]?.label },
-  }));
 
   const blockProps = { tools, myTools, catalogTools: catalog.tools, onSave: save, setupCategories: catalog.setupCategories || [] };
 
@@ -292,7 +287,7 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
       )}
       {notice && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{notice}</p>}
 
-      <ToolsMap catalog={catalog} items={mapItems} />
+      <ToolsFlow catalog={catalog} tools={tools} needByCat={needByCat} />
 
       {neededCats.length > 0 && (
         <section className="space-y-2">

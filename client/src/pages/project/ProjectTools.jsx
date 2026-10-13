@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, BookOpen, RefreshCw, MessageCircle, Send, Trash2 } from 'lucide-react';
+import { AlertTriangle, BookOpen, RefreshCw, MessageCircle, Send, Trash2, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError } from '../../utils/notify';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import ProjectToolsPanel from '../../components/tools/ProjectToolsPanel';
-import { Button, Card } from '../../components/ui';
+import { Button, Card, Badge } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 
 const fmtDate = d => new Date(d).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -60,16 +60,85 @@ function Sources({ sources }) {
   );
 }
 
+// ── Guide découpé par outil ──────────────────────────────────────────────────
+// Sections « ## … » du guide ; chacune est rattachée aux outils retenus dont le nom figure
+// dans son titre (consigne du guide : « ## Étape N — <outil> : <action> »). Outils tous
+// cochés « Mis en place » (ou section « Déjà en place. ») : repliée, mention « Déjà en place ».
+function splitGuide(text) {
+  const intro = [];
+  const sections = [];
+  let cur = null;
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = line.match(/^##\s+(.+)$/);
+    if (m) { cur = { title: m[1].trim(), body: [] }; sections.push(cur); }
+    else (cur ? cur.body : intro).push(line);
+  }
+  return { intro: intro.join('\n').trim(), sections: sections.map(x => ({ ...x, body: x.body.join('\n').trim() })) };
+}
+const norm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Noms reconnaissables d'un outil : « API Claude (Anthropic) » → api claude ; « Node.js / Express » → node.js, express
+const tokensOf = name => String(name || '').replace(/\(.*?\)/g, ' ').split('/').map(x => norm(x).trim()).filter(x => x.length >= 3);
+
+function GuideSections({ text, tools }) {
+  const kept = (tools || []).filter(t => t.status === 'validated');
+  const { intro, sections } = useMemo(() => splitGuide(text), [text]);
+  const items = sections.map((sec, i) => {
+    const title = norm(sec.title);
+    const matched = kept.filter(t => tokensOf(t.name).some(tok => title.includes(tok)));
+    const saysDone = /^d[ée]j[àa] en place/i.test(sec.body);
+    const state = matched.length ? (matched.every(t => t.setupDone) || saysDone ? 'done' : 'todo') : saysDone ? 'done' : 'general';
+    return { ...sec, key: `${i}-${sec.title}`, state };
+  });
+  const firstTodo = items.find(x => x.state === 'todo')?.key;
+  const [open, setOpen] = useState(() => new Set(firstTodo ? [firstTodo] : []));
+  const toggle = key => setOpen(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const todo = items.filter(x => x.state === 'todo').length;
+  const done = items.filter(x => x.state === 'done').length;
+
+  if (!items.length) return <Markdown size="synthesis">{text}</Markdown>; // guide sans sections
+  return (
+    <div className="space-y-2">
+      {intro && <Markdown size="synthesis">{intro}</Markdown>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-ink-muted">
+          {todo > 0 ? `${todo} étape${todo > 1 ? 's' : ''} à faire` : 'Plus rien à mettre en place'}{done > 0 ? ` · ${done} déjà en place` : ''}
+        </p>
+        <div className="flex gap-3 text-xs font-bold">
+          <button type="button" className="text-action hover:underline" onClick={() => setOpen(new Set(items.map(x => x.key)))}>Tout déplier</button>
+          <button type="button" className="text-ink-muted hover:underline" onClick={() => setOpen(new Set())}>Tout replier</button>
+        </div>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map(sec => {
+          const isOpen = open.has(sec.key);
+          return (
+            <li key={sec.key} className={`rounded-xl border ${sec.state === 'done' ? 'border-line bg-canvas' : sec.state === 'todo' ? 'border-line bg-white' : 'border-line bg-white'}`}>
+              <button type="button" onClick={() => toggle(sec.key)} aria-expanded={isOpen}
+                className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left min-h-[44px]">
+                {isOpen ? <ChevronDown size={16} className="shrink-0 text-ink-muted" aria-hidden="true" /> : <ChevronRight size={16} className="shrink-0 text-ink-muted" aria-hidden="true" />}
+                <span className={`flex-1 min-w-0 text-sm font-extrabold ${sec.state === 'done' ? 'text-ink-muted' : 'text-ink'}`}>{sec.title}</span>
+                {sec.state === 'done' && <Badge tone="ok"><CheckCircle2 size={12} aria-hidden="true" /> Déjà en place</Badge>}
+                {sec.state === 'todo' && <Badge tone="await">À faire</Badge>}
+              </button>
+              {isOpen && <div className="px-3.5 pb-3.5 pt-1 border-t border-line"><Markdown size="synthesis">{sec.body}</Markdown></div>}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 // Guide de mise en place, sur demande : comment relier pas à pas les outils retenus
 // (dépôt GitHub, hébergeur, nom de domaine…). Rédigé avec une recherche web, conservé.
-function SetupGuide({ project }) {
+function SetupGuide({ project, tools, onTools }) {
   const [guide, setGuide] = useState(undefined); // undefined = chargement, null = jamais demandé
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [chat, setChat] = useState([]);
   const [conflict, setConflict] = useState(null); // 409 : { previous, next } à arbitrer
   useEffect(() => {
-    api.get(`/projects/${project.id}/tools`).then(({ data }) => { setGuide(data.guide || null); setChat(data.guideChat || []); }).catch(() => setGuide(null));
+    api.get(`/projects/${project.id}/tools`).then(({ data }) => { setGuide(data.guide || null); setChat(data.guideChat || []); onTools?.(data.tools || []); }).catch(() => setGuide(null));
   }, [project.id]);
 
   const generate = async () => {
@@ -133,7 +202,7 @@ function SetupGuide({ project }) {
       {guide && <CheckBanner check={guide.check} />}
       {guide && open && (
         <div className="mt-4 pt-4 border-t border-line">
-          <Markdown size="synthesis">{guide.text}</Markdown>
+          <GuideSections key={guide.at} text={guide.text} tools={tools} />
           <Sources sources={guide.check?.sources} />
         </div>
       )}
@@ -221,6 +290,7 @@ function GuideChat({ projectId, chat, setChat, hasGuide }) {
 // Outils : les outils du projet, organisés par besoin
 export default function ProjectTools() {
   const { project, refreshCounts } = useProject();
+  const [tools, setTools] = useState(null);
   return (
     <>
       <PageHeader title="Outils" subtitle="Les outils nécessaires au projet, pré-remplis avec vos outils et modifiables.">
@@ -228,8 +298,8 @@ export default function ProjectTools() {
           Mes outils
         </Link>
       </PageHeader>
-      {!project.isDemo && <div className="mb-4"><SetupGuide project={project} /></div>}
-      <ProjectToolsPanel projectId={project.id} onChanged={refreshCounts} />
+      {!project.isDemo && <div className="mb-4"><SetupGuide project={project} tools={tools} onTools={setTools} /></div>}
+      <ProjectToolsPanel projectId={project.id} onChanged={next => { if (Array.isArray(next)) setTools(next); refreshCounts?.(); }} />
     </>
   );
 }

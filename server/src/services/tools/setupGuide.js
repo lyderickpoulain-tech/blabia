@@ -15,9 +15,11 @@ const SIMPLE = level => (level ?? 3) <= 2;
 const MAX_CHAT = 40;          // messages conservés
 const CHAT_IN_PROMPT = 12;    // derniers messages relus
 
+// « (déjà en place) » : case « Mis en place » cochée sur la page Outils — le guide n'en
+// redétaille pas la création (sections repliées côté page)
 function toolsTextOf(tools) {
   const kept = tools.filter(t => t.status === 'validated');
-  return CATEGORIES.map(c => ({ c, names: kept.filter(t => t.category === c.id).map(t => t.name) }))
+  return CATEGORIES.map(c => ({ c, names: kept.filter(t => t.category === c.id).map(t => `${t.name}${t.setupDone ? ' (déjà en place)' : ''}`) }))
     .filter(x => x.names.length).map(({ c, names }) => `- ${c.label} (${c.technical}) : ${names.join(', ')}`).join('\n');
 }
 const chatTextOf = chat => (chat || []).slice(-CHAT_IN_PROMPT)
@@ -42,7 +44,8 @@ function buildGuidePrompt({ project, tools, registryText = '', repoText = '', ch
     system: 'Tu rédiges des guides pas à pas pour des personnes qui ne sont PAS informaticiennes. Français simple, phrases courtes, aucune supposition de connaissance technique. Réponds uniquement par le guide, en Markdown.',
     user: `${context({ project, tools, registryText, repoText })}${chatText ? `\nPROBLÈMES DÉJÀ RENCONTRÉS ET SOLUTIONS (discussion sous le guide précédent — le nouveau guide doit les éviter) :\n${chatText}\n` : ''}
 Rédige le GUIDE DE MISE EN PLACE qui relie ces outils entre eux, dans l'ordre où il faut le faire.
-- Une section « ## Étape N — <action> » par branchement (ex. créer le compte chez l'hébergeur et y relier le dépôt GitHub pour que chaque mise en ligne publie le site ; acheter le nom de domaine ; faire pointer le domaine vers l'hébergeur ; adresse e-mail ; mesure d'audience…). Seulement ce que les outils retenus demandent.
+- Une section par outil à mettre en place, titrée EXACTEMENT « ## Étape N — <nom de l'outil tel qu'écrit ci-dessus> : <action> » (ex. « ## Étape 2 — Railway : créer le service et le relier au dépôt »). Le nom de l'outil dans le titre est OBLIGATOIRE : la page plie et déplie le guide outil par outil. Un branchement entre deux outils va dans la section de l'outil où l'on clique (ex. faire pointer le domaine vers l'hébergeur : section du fournisseur du nom de domaine). Seulement ce que les outils retenus demandent.
+- Outil marqué « (déjà en place) » : PAS de procédure de création. Une section très courte, titrée de la même façon, qui commence par « Déjà en place. » puis ne liste que ce qui reste éventuellement à relier aux autres outils ; s'il ne reste rien, cette seule phrase.
 - Dans chaque étape : étapes numérotées très détaillées — quel site ouvrir (adresse complète), où cliquer (nom exact des menus et boutons, en anglais si l'interface l'est), quoi copier et où le coller, combien ça coûte, combien de temps ça prend (ex. propagation d'un nom de domaine), et comment vérifier que c'est bon.
 - Vérifie les menus et les adresses par une recherche web : les interfaces changent. Si un détail reste incertain, dis-le simplement (« le bouton peut s'appeler… »).
 - Les secrets (mots de passe, clés) : dis où les ranger, jamais de les envoyer à quelqu'un ni de les écrire dans BlabIA. Une clé secrète (service, API) ne va JAMAIS dans la partie « site » (frontend) : seulement côté serveur.

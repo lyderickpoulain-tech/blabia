@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Pencil, Trash2, Plus, Check, StickyNote } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Button, IconButton, Card } from '../components/ui';
-import ToolsMap from '../components/tools/ToolsMap';
+import ToolsFlow from '../components/tools/ToolsFlow';
 import ToolCostEditor from '../components/tools/ToolCostEditor';
 import api from '../utils/api';
 import { useToolsCatalog, USER_STATUS, costLabel } from '../utils/toolsCatalog';
@@ -140,14 +140,8 @@ export default function MyTools() {
   const removeTool = (id) => setTools(prev => prev.filter(t => t.id !== id));
   const addTool    = (tool) => { setTools(prev => [...prev, tool]); setAddingCat(null); };
 
-  const mapItems = (tools || []).map(t => ({
-    key: t.id, name: t.name, category: t.category, dashed: t.status === 'to_try',
-    detail: {
-      role: catalogById[t.catalogId]?.role,
-      cost: costLabel(t.cost),
-      status: USER_STATUS[t.status]?.label,
-    },
-  }));
+  // Parcours des outils : « à essayer » affiché comme une proposition (pointillés)
+  const flowTools = (tools || []).map(t => ({ ...t, status: t.status === 'to_try' ? 'suggested' : 'validated' }));
 
   const ready = catalog && tools;
 
@@ -180,8 +174,8 @@ export default function MyTools() {
           <>
             <Card as="section" className="p-4">
               <h2 className="text-base font-extrabold text-ink mb-0.5">Comment vos outils s'articulent</h2>
-              <p className="text-xs text-ink-muted mb-3">Cliquez sur un outil pour sa fiche. En pointillé : outils « à essayer » ou catégories vides.</p>
-              <ToolsMap catalog={catalog} items={mapItems} />
+              <p className="text-xs text-ink-muted mb-3">Le chemin d’une visite et celui d’une mise en ligne, avec vos outils. En pointillé : outils « à essayer ».</p>
+              <ToolsFlow catalog={catalog} tools={flowTools} />
             </Card>
 
             <section className="space-y-3">
