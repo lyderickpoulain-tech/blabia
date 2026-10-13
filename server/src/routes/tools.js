@@ -35,7 +35,10 @@ async function toolsMeetingStatus(project, tools, needs) {
   const meeting = await db('Session').where({ projectId: project.id, status: 'accepted' })
     .whereRaw(`"intention"::text LIKE '%stack%'`).first('id');
   const missing = missingBuildTools(tools, needs);
-  if (meeting || (missing && !missing.length)) return { done: true, planned: null, missing: [] };
+  // Pack recommandé (mise en ligne automatique par Railway) : pas de réunion « outils » à exiger
+  // avant de développer ; les choix techniques du code reviennent à Claude Code
+  const autoHosting = tools.some(t => t.status === 'validated' && t.category === 'hosting' && /railway/i.test(t.name));
+  if (meeting || autoHosting || (missing && !missing.length)) return { done: true, planned: null, missing: [] };
   const planned = await db('Milestone').where({ projectId: project.id, type: 'stack' }).whereNot({ status: 'done' })
     .orderBy('displayOrder', 'asc').first('id', 'title');
   return { done: false, planned: planned || null, missing: missing || [] };

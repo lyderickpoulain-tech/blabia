@@ -328,12 +328,19 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     expect((await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: collaborator.token })).status).toBe(404);
     const r = await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: owner.token });
     expect(r.status).toBe(201);
-    expect(r.body.created.map(m => m.type)).toEqual(['decision', 'decision', 'stack', 'claude_code']);
-    expect((await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: owner.token })).body.created).toEqual([]);
-    // Réunion « outils » suggérée avant de développer : celle du plan, tant qu'aucune n'a été tenue
+    // Plus de réunion « outils » au départ : pack recommandé posé d'office (mise en ligne automatique)
+    expect(r.body.created.map(m => m.type)).toEqual(['decision', 'decision', 'claude_code']);
+    expect(r.body.pack).toEqual(['Railway', 'GitHub', 'Claude Code']);
+    const again = (await h.request('POST', `/api/projects/${site.id}/plan/website`, { token: owner.token })).body;
+    expect(again).toMatchObject({ created: [], pack: [] }); // pas de doublon
     let tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
-    expect(tools.toolsMeeting).toMatchObject({ done: false, planned: { title: 'Choisir les outils : hébergement, nom de domaine…' }, missing: [] });
+    expect(tools.tools.find(t => t.category === 'hosting')).toMatchObject({ name: 'Railway', status: 'validated', catalogId: 'railway' });
+    expect(tools.toolsMeeting).toMatchObject({ done: true });
     expect(tools.guide).toBeNull();
+    // Sans le pack : réunion « outils » suggérée tant que les outils pour construire manquent
+    await h.request('PUT', `/api/projects/${site.id}/tools`, { token: owner.token, body: { tools: [] } });
+    tools = (await h.request('GET', `/api/projects/${site.id}/tools`, { token: owner.token })).body;
+    expect(tools.toolsMeeting).toMatchObject({ done: false, missing: [] });
 
     // Outils renseignés sur la page Outils, sans réunion (cas du projet BlabIA) : reconnus.
     // Seules les catégories pour construire et publier comptent (pas la surveillance, etc.).

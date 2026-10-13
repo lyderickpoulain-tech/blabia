@@ -22,5 +22,5 @@ export const STATUS_BADGE = {
 export const DELIVERABLE_TYPES = [
   { id: 'decision',    icon: Handshake, label: 'Décision'    },
   { id: 'claude_code', icon: Code2,     label: 'Claude Code' },
-  { id: 'stack',       icon: Wrench,    label: 'Outils'      },
+  { id: 'stack',       icon: Wrench,    label: 'Services'    },
 ];

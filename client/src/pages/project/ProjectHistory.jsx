@@ -12,7 +12,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 // Historique : les réunions tenues (refonte UX v5.1 — remplace la liste
 // « Réunions » de l'ancienne page projet).
 
-const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Outils' };
+const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Services' };
 
 function intentionOf(session) {
   const i = session?.intention;

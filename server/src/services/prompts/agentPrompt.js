@@ -27,13 +27,17 @@ function buildToolReviewSection({ toolCategories, userToolsText, needsText = '',
     ? 'Les prix DOIVENT venir d\'une recherche web : renseigne "priceSource" avec l\'URL de la page de tarifs consultée.'
     : 'Recherche web indisponible : donne une estimation prudente, mets "priceSource": null — elle sera affichée comme « indicatif, à vérifier ».';
   // Besoins analysés pour ce projet : c'est l'humain qui renseigne l'outil de chaque catégorie
+  // v5.1 : réunion « Ajouter un service » — elle part d'un BESOIN du site, pas d'une revue d'outils
+  const methodBlock = `
+MÉTHODE DE CETTE RÉUNION (« Ajouter un service ») : elle part d'un BESOIN du site, exprimé dans l'objectif (recevoir les messages du formulaire, encaisser, mesurer l'audience…). Identifie la ou les catégories qui y répondent et traite SEULEMENT celles-là : service adapté (2 à 3 options en carte si l'humain n'a pas d'outil, recommandation en premier), coût, données personnelles en jeu, et ce que l'humain aura à fournir (en général une clé, collée dans BlabIA). Ne passe toutes les catégories en revue que si l'objectif le demande explicitement (« revoir les outils »). La mise en ligne est automatique (connecteur Railway, page Outils) : ne remets pas l'hébergement en question sauf demande de l'humain.
+`;
   const needsBlock = needsText
-    ? `
-CATÉGORIES NÉCESSAIRES À CE PROJET (analyse de BlabIA) — parcours-les dans cet ordre :
+    ? `${methodBlock}
+CATÉGORIES NÉCESSAIRES À CE PROJET (analyse de BlabIA) — n'aborde que celles qui servent l'objectif, dans cet ordre :
 ${needsText}
 Pour chaque catégorie marquée « À DEMANDER À L'HUMAIN » : demande-lui d'abord ce qu'il utilise déjà ou préfère, par une carte [DECISION] (2 à 3 outils adaptés avec leur coût en quelques mots, recommandation en premier, « J'en utilise déjà un autre (précise) », « Je ne sais pas, conseillez-moi »). Ne propose un outil [NEED_TOOL] qu'après sa réponse, en suivant son choix. Une catégorie à la fois.
 `
-    : '';
+    : methodBlock;
   return `${needsBlock}
 GRILLE DES CATÉGORIES D'OUTILS :
 ${grid}

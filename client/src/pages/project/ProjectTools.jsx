@@ -327,9 +327,9 @@ export default function ProjectTools() {
   };
   return (
     <>
-      <PageHeader title="Outils" subtitle="Les outils nécessaires au projet, pré-remplis avec vos outils et modifiables.">
+      <PageHeader title="Outils" subtitle="La mise en ligne du site et les services qu’il utilise. BlabIA s’occupe du branchement ; le détail reste modifiable.">
         <Link to="/outils" className="h-11 px-4 inline-flex items-center rounded-[10px] border border-line bg-white text-sm font-bold text-ink-soft hover:bg-canvas">
-          Mes outils
+          Mes outils habituels
         </Link>
       </PageHeader>
       {!project.isDemo && <div className="mb-4"><RailwayConnector project={project} onDone={() => setPanelKey(k => k + 1)} /></div>}

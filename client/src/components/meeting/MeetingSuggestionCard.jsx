@@ -5,7 +5,7 @@ import { MeetingTypeIcon } from './MilestoneDrawers';
 const TYPE_META = {
   decision:    { label: 'Décision' },
   claude_code: { label: 'Claude Code' },
-  stack:       { label: 'Outils' },
+  stack:       { label: 'Services' },
 };
 
 // Résout la référence "after" (ex. "R2") en titre lisible pour affichage.

@@ -32,6 +32,7 @@ function fakeRailway() {
       if (body.get('grant_type') === 'refresh_token') rw.refreshCount++;
       return json(200, { access_token: `acces-${rw.refreshCount}`, refresh_token: `renouv-${rw.refreshCount}`, expires_in: 3600 });
     }
+    if (url === 'https://www.monsite.fr') return json(200, {}); // le site répond sur son domaine
     const { query, variables = {} } = JSON.parse(opts.body);
     rw.calls.push(query);
     const v = variables;
@@ -53,6 +54,9 @@ function fakeRailway() {
     if (query.includes('variableCollectionUpsert')) {
       rw.vars[v.input.serviceId] = { ...(rw.vars[v.input.serviceId] || {}), ...v.input.variables };
       return json(200, { data: { variableCollectionUpsert: true } });
+    }
+    if (query.includes('customDomainCreate')) {
+      return json(200, { data: { customDomainCreate: { id: 'cd1', domain: v.input.domain, status: { verificationToken: 'railway-verify=jeton', dnsRecords: [{ hostlabel: 'www', requiredValue: 'abc123.up.railway.app' }] } } } });
     }
     if (query.includes('serviceInstanceDeployV2')) return json(200, { data: { serviceInstanceDeployV2: 'd' } });
     if (query.includes('deployments(')) return json(200, { data: { deployments: { edges: [{ node: { id: `dep-${v.input.serviceId}`, status: rw.deployStatus, createdAt: new Date().toISOString() } }] } } });
@@ -156,6 +160,29 @@ describe.skipIf(!harness.enabled)('connecteur Railway (simulé)', () => {
     const p = await h.db('Project').where({ id: pid }).first();
     expect(JSON.stringify(p.railwaySetup)).not.toContain('re_cle_tres_secrete');
     expect(p.railwaySetup.services.find(s => s.id === 's-server').provided).toEqual(['RESEND_API_KEY']);
+  });
+
+  it('nom de domaine : lignes DNS à poser chez OVH, vérification par les DNS publics, adresse du site mise à jour', async () => {
+    expect((await h.request('POST', `/api/projects/${pid}/railway/domain`, { token: owner.token, body: { domain: 'pas un domaine' } })).status).toBe(400);
+    const r = await h.request('POST', `/api/projects/${pid}/railway/domain`, { token: owner.token, body: { domain: 'https://www.MonSite.fr/' } });
+    expect(r.status).toBe(200);
+    const cd = r.body.setup.customDomain;
+    expect(cd).toMatchObject({ domain: 'www.monsite.fr', zone: 'monsite.fr', apex: false, serviceId: 's-client' });
+    expect(cd.records).toEqual([
+      { type: 'CNAME', name: 'www', value: 'abc123.up.railway.app' },
+      { type: 'TXT', name: '_railway-verify.www', value: 'railway-verify=jeton' },
+    ]);
+    // DNS pas encore posés
+    railway.dnsApi.resolveCname = async () => { throw Object.assign(new Error('ENODATA'), { code: 'ENODATA' }); };
+    railway.dnsApi.resolveTxt = async () => { throw Object.assign(new Error('ENODATA'), { code: 'ENODATA' }); };
+    let c = (await h.request('POST', `/api/projects/${pid}/railway/domain/check`, { token: owner.token })).body.setup.customDomain.check;
+    expect(c).toMatchObject({ cname: false, txt: false, live: false });
+    // Posés : CNAME (point final toléré) et TXT trouvés, le site répond
+    railway.dnsApi.resolveCname = async d => (d === 'www.monsite.fr' ? ['ABC123.up.railway.app.'] : []);
+    railway.dnsApi.resolveTxt = async d => (d === '_railway-verify.www.monsite.fr' ? [['railway-verify=', 'jeton']] : []);
+    c = (await h.request('POST', `/api/projects/${pid}/railway/domain/check`, { token: owner.token })).body.setup.customDomain.check;
+    expect(c).toMatchObject({ cname: true, txt: true, live: true });
+    expect((await h.db('Project').where({ id: pid }).first()).siteUrl).toBe('https://www.monsite.fr');
   });
 
   it('état : déploiement en échec avec la fin du journal ; déconnexion', async () => {

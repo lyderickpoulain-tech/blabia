@@ -8,7 +8,7 @@ import Markdown from '../../components/Markdown';
 // Ouvertes dans un nouvel onglet ; l'impression se lance dès que le contenu est prêt.
 
 const fmtDate = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-const TYPE_LABEL = { decision: 'Relevé de décisions', claude_code: 'Prompt Claude Code', stack: 'Revue des outils' };
+const TYPE_LABEL = { decision: 'Relevé de décisions', claude_code: 'Prompt Claude Code', stack: 'Ajout d’un service' };
 const intentionOf = s => { const i = s?.intention; if (Array.isArray(i)) return i[0]; try { return JSON.parse(i || '[]')[0]; } catch { return null; } };
 
 function PrintFrame({ ready, error, children }) {

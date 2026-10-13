@@ -71,7 +71,7 @@ const title = (text, sub) => [
   ...(sub ? [new Paragraph({ children: [new TextRun({ text: sub, font: FONT, color: MUTED, size: 20 })], spacing: { after: 280 } })] : []),
 ];
 const fmtDate = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-const TYPE_LABEL = { decision: 'Relevé de décisions', claude_code: 'Prompt Claude Code', stack: 'Revue des outils' };
+const TYPE_LABEL = { decision: 'Relevé de décisions', claude_code: 'Prompt Claude Code', stack: 'Ajout d’un service' };
 
 async function sessionDocx({ project, session }) {
   const intention = Array.isArray(session.intention) ? session.intention[0] : (() => { try { return JSON.parse(session.intention || '[]')[0]; } catch { return null; } })();

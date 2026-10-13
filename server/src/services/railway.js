@@ -334,7 +334,58 @@ async function status({ userId, setupState }) {
   return out;
 }
 
+// ── Nom de domaine personnalisé ──────────────────────────────────────────────
+// Le site de test garde son adresse Railway ; l'utilisateur ajoute ensuite son domaine. Railway
+// donne l'enregistrement CNAME (dnsRecords) et le jeton de vérification, à poser en TXT sur
+// « _railway-verify.<domaine> ». Noms relatifs à la zone, tels qu'on les saisit chez OVH.
+const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const MULTI_SUFFIX = ['co.uk', 'org.uk', 'com.au', 'co.nz', 'com.br', 'co.jp'];
+const cleanDomain = d => String(d || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/\.$/, '');
+function zoneOf(domain) {
+  const labels = domain.split('.');
+  const n = MULTI_SUFFIX.some(s => domain.endsWith(`.${s}`)) ? 3 : 2;
+  return { zone: labels.slice(-n).join('.'), sub: labels.slice(0, -n).join('.') };
+}
+
+async function addCustomDomain({ userId, setupState, domain: raw }) {
+  const domain = cleanDomain(raw);
+  if (!DOMAIN_RE.test(domain)) throw new RailwayError('Adresse invalide : écrivez-la sous la forme www.monsite.fr.', 'domain');
+  const site = (setupState.services || []).find(s => s.kind === 'site') || setupState.services?.[0];
+  if (!site) throw new RailwayError('Mettez d’abord le site en ligne.', 'empty');
+  const token = await accessToken(userId);
+  const r = await gql(token, 'mutation ($input: CustomDomainCreateInput!) { customDomainCreate(input: $input) { id domain status { verificationToken dnsRecords { hostlabel requiredValue } } } }',
+    { input: { projectId: setupState.projectId, environmentId: setupState.environmentId, serviceId: site.id, domain } });
+  const cd = r.customDomainCreate || {};
+  const { zone, sub } = zoneOf(domain);
+  const cname = cd.status?.dnsRecords?.find(x => x.requiredValue) || null;
+  const records = [];
+  if (cname) records.push({ type: 'CNAME', name: cname.hostlabel && cname.hostlabel !== '@' ? cname.hostlabel : (sub || '@'), value: cname.requiredValue });
+  if (cd.status?.verificationToken) records.push({ type: 'TXT', name: sub ? `_railway-verify.${sub}` : '_railway-verify', value: cd.status.verificationToken });
+  return { id: cd.id || null, domain, zone, apex: !sub, serviceId: site.id, records, at: new Date().toISOString(), check: null };
+}
+
+// Vérification par les DNS publics (indépendante de l'API Railway), puis le site répond-il ?
+const dnsApi = { resolveCname: (...a) => require('dns').promises.resolveCname(...a), resolveTxt: (...a) => require('dns').promises.resolveTxt(...a) };
+const bare = v => String(v || '').toLowerCase().replace(/\.$/, '');
+async function checkCustomDomain(cd) {
+  const want = t => cd.records.find(r => r.type === t);
+  const result = { cname: null, txt: null, live: false, at: new Date().toISOString() };
+  if (want('CNAME')) {
+    try { result.cname = (await dnsApi.resolveCname(cd.domain)).map(bare).includes(bare(want('CNAME').value)); } catch { result.cname = false; }
+  }
+  if (want('TXT')) {
+    try { result.txt = (await dnsApi.resolveTxt(`_railway-verify.${cd.domain}`)).map(parts => parts.join('')).includes(want('TXT').value); } catch { result.txt = false; }
+  }
+  if (result.cname !== false && result.txt !== false) {
+    try {
+      const res = await transport.fetch(`https://${cd.domain}`, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(8000) });
+      result.live = res.status < 500 && res.status !== 404;
+    } catch { result.live = false; } // certificat pas encore émis (jusqu'à une heure)
+  }
+  return result;
+}
+
 module.exports = {
-  transport, isConfigured, signState, verifyState, authorizeUrl, connect, disconnect, accessToken,
-  buildPlan, setup, setVariable, status, encrypt, decrypt, RailwayError, POLL_MS: 3000,
+  transport, dnsApi, isConfigured, signState, verifyState, authorizeUrl, connect, disconnect, accessToken,
+  buildPlan, setup, setVariable, status, addCustomDomain, checkCustomDomain, zoneOf, encrypt, decrypt, RailwayError, POLL_MS: 3000,
 };

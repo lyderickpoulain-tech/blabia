@@ -12,9 +12,9 @@ const { buildGuidePrompt } = require('../tools/setupGuide');
 const { CATEGORIES } = require('../tools/catalog');
 
 describe('plan type d’un site web', () => {
-  it('décider d’abord, puis choisir les outils, enfin construire', () => {
-    expect(WEBSITE_PLAN.map(m => m.type)).toEqual(['decision', 'decision', 'stack', 'claude_code']);
-    expect(WEBSITE_PLAN[2].title).toMatch(/hébergement, nom de domaine/);
+  it('décider d’abord, puis construire (pas de réunion « outils » : pack recommandé et mise en ligne automatique)', () => {
+    expect(WEBSITE_PLAN.map(m => m.type)).toEqual(['decision', 'decision', 'claude_code']);
+    expect(WEBSITE_PLAN.some(m => m.type === 'stack')).toBe(false);
   });
 });
 

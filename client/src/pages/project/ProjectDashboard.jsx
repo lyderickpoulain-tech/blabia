@@ -15,7 +15,7 @@ import { notifyError } from '../../utils/notify';
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
 
-const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Outils' };
+const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Services' };
 
 const QUICK_COMMANDS = [
   { cmd: '/résumerProjet',     label: 'Résumer le projet' },

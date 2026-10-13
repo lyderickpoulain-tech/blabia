@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Rocket, Link2, RefreshCw, Globe, Database, KeyRound, CheckCircle2, AlertTriangle, ExternalLink, Loader2, Github, Unplug } from 'lucide-react';
+import { Rocket, Link2, RefreshCw, Globe, Database, KeyRound, CheckCircle2, AlertTriangle, ExternalLink, Loader2, Github, Unplug, Copy, Check, AtSign } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button, Card, Badge } from '../ui';
@@ -44,6 +44,113 @@ function MissingVariable({ service, name, onSaved }) {
         placeholder="Collez la clé ici" className="flex-1 min-w-[180px] h-9 text-sm border border-line rounded-[10px] px-3 bg-white outline-none focus:ring-2 focus:ring-action" />
       <Button size="sm" variant="primary" type="submit" disabled={busy || !value.trim()}>{busy ? '…' : 'Envoyer à Railway'}</Button>
     </form>
+  );
+}
+
+function CopyValue({ value }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button type="button" title="Copier" aria-label="Copier" onClick={() => navigator.clipboard.writeText(value).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}
+      className="shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-md text-ink-muted hover:bg-muted-light hover:text-ink">
+      {done ? <Check size={14} className="text-ok" /> : <Copy size={14} />}
+    </button>
+  );
+}
+
+// Nom de domaine du site : le site de test garde son adresse Railway ; ici, l'utilisateur
+// ajoute son propre domaine (acheté chez OVH, Gandi…) et recopie 2 lignes dans la zone DNS
+function CustomDomain({ project, setup, onSetup }) {
+  const cd = setup.customDomain;
+  const [domain, setDomain] = useState('');
+  const [busy, setBusy] = useState(false);
+  const typed = domain.trim().toLowerCase().replace(/^https?:\/\//, '');
+  const apexTyped = typed && !typed.startsWith('www.') && typed.split('.').length === 2;
+  const add = async e => {
+    e.preventDefault();
+    setBusy(true);
+    try { onSetup((await api.post(`/projects/${project.id}/railway/domain`, { domain })).data.setup); setDomain(''); }
+    catch (err) { notifyError(err, 'Le nom de domaine n’a pas pu être ajouté.'); }
+    finally { setBusy(false); }
+  };
+  const check = useCallback(async () => {
+    setBusy(true);
+    try { onSetup((await api.post(`/projects/${project.id}/railway/domain/check`)).data.setup); }
+    catch (err) { notifyError(err, 'Vérification impossible.'); }
+    finally { setBusy(false); }
+  }, [project.id, onSetup]);
+  // Vérification automatique chaque minute tant que le domaine n'est pas en ligne
+  const pending = !!cd && !cd.check?.live;
+  const checkRef = useRef(check);
+  checkRef.current = check;
+  useEffect(() => {
+    if (!pending) return undefined;
+    const t = setInterval(() => checkRef.current(), 60000);
+    return () => clearInterval(t);
+  }, [pending]);
+
+  if (!cd) {
+    return (
+      <form onSubmit={add} className="rounded-xl border border-line bg-white p-3.5 space-y-2">
+        <p className="text-sm font-bold text-ink flex items-center gap-1.5"><AtSign size={15} aria-hidden="true" /> Votre nom de domaine (quand vous serez prêt)</p>
+        <p className="text-xs text-ink-muted">Le site fonctionne déjà à l’adresse ci-dessus, pour vos essais. Pour une adresse à vous, achetez d’abord le nom chez un registraire (OVH, Gandi… environ 10 € par an), puis indiquez-le ici.</p>
+        <div className="flex flex-wrap gap-2">
+          <input value={domain} onChange={e => setDomain(e.target.value)} placeholder="www.monsite.fr" aria-label="Nom de domaine"
+            className="flex-1 min-w-[200px] h-9 text-sm border border-line rounded-[10px] px-3 bg-white outline-none focus:ring-2 focus:ring-action" />
+          <Button size="sm" variant="primary" type="submit" disabled={busy || !domain.trim()}>Utiliser ce nom de domaine</Button>
+        </div>
+        {apexTyped && <p className="text-xs text-await">Conseil : chez OVH, indiquez plutôt <strong>www.{typed}</strong> ; BlabIA vous expliquera ensuite comment faire mener {typed} au même site.</p>}
+      </form>
+    );
+  }
+  const ck = cd.check;
+  return (
+    <div className="rounded-xl border border-line bg-white p-3.5 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-bold text-ink flex items-center gap-1.5"><AtSign size={15} aria-hidden="true" /> {cd.domain}</p>
+        {ck?.live ? <Badge tone="ok">En ligne</Badge> : <Badge tone="await">En attente des réglages DNS</Badge>}
+      </div>
+      {ck?.live ? (
+        <p className="text-sm text-ok font-bold">Votre site répond à <a className="underline" href={`https://${cd.domain}`} target="_blank" rel="noopener noreferrer">https://{cd.domain}</a>. C’est désormais l’adresse du site dans BlabIA.</p>
+      ) : (
+        <>
+          <p className="text-sm text-ink-soft">Ajoutez ces {cd.records.length} lignes dans la <strong>zone DNS</strong> de {cd.zone}, chez votre registraire :</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-left text-ink-muted"><th className="py-1 pr-3">Type</th><th className="py-1 pr-3">Sous-domaine (nom)</th><th className="py-1">Cible (valeur)</th></tr></thead>
+              <tbody>
+                {cd.records.map(r => {
+                  const ok = r.type === 'CNAME' ? ck?.cname : ck?.txt;
+                  return (
+                    <tr key={r.type} className="border-t border-line align-middle">
+                      <td className="py-1.5 pr-3 font-bold text-ink whitespace-nowrap">{r.type} {ok === true && <CheckCircle2 size={12} className="inline text-ok" aria-label="trouvé" />}</td>
+                      <td className="py-1.5 pr-3"><span className="inline-flex items-center gap-1 font-mono text-ink-soft">{r.name}<CopyValue value={r.name} /></span></td>
+                      <td className="py-1.5"><span className="inline-flex items-center gap-1 font-mono text-ink-soft break-all">{r.value}<CopyValue value={r.value} /></span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <details className="text-xs text-ink-soft">
+            <summary className="cursor-pointer font-bold text-action">Comment faire chez OVH</summary>
+            <ol className="list-decimal pl-5 mt-2 space-y-1">
+              <li>Ouvrez votre espace client OVHcloud › <strong>Noms de domaine</strong> › {cd.zone} › onglet <strong>Zone DNS</strong>.</li>
+              <li>Si une ligne existe déjà pour le sous-domaine <strong>{cd.records[0]?.name}</strong> (type A ou CNAME), supprimez-la d’abord.</li>
+              <li>Cliquez sur <strong>Ajouter une entrée</strong>, choisissez <strong>CNAME</strong>, collez le sous-domaine et la cible ci-dessus (OVH ajoute parfois un point à la fin de la cible : c’est normal), puis validez.</li>
+              <li>Recommencez avec <strong>TXT</strong> pour la seconde ligne.</li>
+              {cd.apex
+                ? <li>Pour un domaine sans « www », OVH n’accepte pas ce type de ligne : indiquez plutôt www.{cd.zone} dans BlabIA.</li>
+                : <li>Pour que {cd.zone} (sans « www ») mène aussi au site : onglet <strong>Redirection</strong> › ajoutez une redirection de {cd.zone} vers https://{cd.domain} (permanente).</li>}
+              <li>Comptez de quelques minutes à quelques heures. BlabIA vérifie tout seul chaque minute tant que cette page est ouverte.</li>
+            </ol>
+          </details>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary" onClick={check} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />} Vérifier maintenant</Button>
+            {ck && <span className="text-xs text-ink-muted">{ck.cname && ck.txt ? 'Réglages trouvés : le certificat de sécurité est en cours d’émission (jusqu’à une heure).' : 'Réglages pas encore visibles sur Internet.'}</span>}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -254,6 +361,7 @@ export default function RailwayConnector({ project, onDone }) {
               );
             })}
           </ul>
+          {info.isOwner && <CustomDomain project={project} setup={setup} onSetup={next => setInfo(i => ({ ...i, setup: next }))} />}
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" onClick={loadStatus}><RefreshCw size={14} aria-hidden="true" /> Actualiser l’état</Button>
             {info.isOwner && info.connected && (

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { FolderKanban, Bot, Wrench, Shield, LogOut, LifeBuoy } from 'lucide-react';
+import { FolderKanban, Bot, Shield, LogOut, LifeBuoy } from 'lucide-react';
 import Tutorial from './Tutorial';
 import ThemeToggle from './ThemeToggle';
 import { useTour } from '../tour/TourContext';
@@ -33,7 +33,6 @@ export default function Layout({ children, wide = false }) {
   const links = [
     { to: '/dashboard', label: 'Projets',   icon: FolderKanban },
     { to: '/agents',    label: 'Agents',    icon: Bot },
-    { to: '/outils',    label: 'Mes outils', icon: Wrench },
     ...(isAdmin ? [{ to: '/admin/users', label: 'Administration', icon: Shield }] : []),
   ];
 

@@ -15,7 +15,7 @@ import { AgentAvatar } from '../components/ui/icons';
 const DELIVERABLES = [
   { id: 'decision',    icon: Handshake, label: 'Prise de décision', desc: 'Relevé de décisions structuré, mémorisé dans le projet' },
   { id: 'claude_code', icon: Code2,     label: 'Claude Code',       desc: 'Prompt prêt pour le développement' },
-  { id: 'stack',       icon: Wrench,    label: 'Outils',            desc: 'Revue des outils du projet, catégorie par catégorie, avec coûts' },
+  { id: 'stack',       icon: Wrench,    label: 'Ajouter un service', desc: 'Un besoin du site (e-mails, paiement, audience…) : le service adapté, son coût et son branchement' },
 ];
 
 // Rétrocompat : anciennes valeurs de Milestone.type encore rencontrées (avant migration)

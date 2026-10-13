@@ -134,7 +134,8 @@ export default function NewProject() {
               <input type="checkbox" className="mt-1 w-5 h-5 accent-action shrink-0" checked={website} onChange={e => setWebsite(e.target.checked)} />
               <span className="text-sm text-ink-soft">
                 <strong className="text-ink">BlabIA prépare tout pour construire le site.</strong> Il crée le dépôt GitHub du code (vous passez un instant par GitHub)
-                et prévoit les réunions dans l’ordre : définir le site, choisir son style, choisir les outils (hébergement, nom de domaine…), puis le construire avec Claude Code.
+                et prévoit les réunions dans l’ordre : définir le site, choisir son style, puis le construire avec Claude Code. La mise en ligne est automatique
+                (Railway, recommandé), avec une adresse de test gratuite ; vous pourrez choisir d’autres outils dans Projet › Outils.
               </span>
             </label>
           </Block>}

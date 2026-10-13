@@ -8,7 +8,7 @@ export const STATUS_OPTS   = ['pending', 'in_progress', 'done', 'blocked'];
 export const STATUS_LABELS = { pending: 'À tenir', in_progress: 'En cours', done: 'Terminée', blocked: 'Bloquée' };
 export const STATUS_TONE   = { pending: 'muted', in_progress: 'action', done: 'ok', blocked: 'await' };
 
-export const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Outils' };
+export const TYPE_LABEL = { decision: 'Décision', claude_code: 'Claude Code', stack: 'Services' };
 // Icônes contour, les mêmes que les livrables de la préparation d'une réunion
 export const TYPE_LUCIDE = { decision: Handshake, claude_code: Code2, stack: Wrench };
 export const MEETING_TYPES = ['decision', 'claude_code', 'stack'];

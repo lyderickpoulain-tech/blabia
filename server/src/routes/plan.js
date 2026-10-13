@@ -4,7 +4,7 @@ const db         = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
 const { computeMilestoneStatus } = require('../utils/milestones');
 const { findProject } = require('../utils/projectHelpers');
-const { addWebsitePlan } = require('../services/websiteStarter');
+const { addWebsitePlan, addRecommendedPack } = require('../services/websiteStarter');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -364,7 +364,8 @@ router.post('/:id/plan/website', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     if (project.userId !== req.user.id) return res.status(403).json({ error: 'Action réservée au propriétaire' });
     const created = await addWebsitePlan(project.id, req.user.id);
-    res.status(201).json({ created });
+    const pack = await addRecommendedPack(project);
+    res.status(201).json({ created, pack });
   } catch (err) {
     console.error('[plan/website POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });

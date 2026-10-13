@@ -51,7 +51,7 @@ async function overviewOf(project) {
 const failure = (res, err, where) => {
   if (err instanceof railway.RailwayError) {
     // Jamais 401 : le client BlabIA déconnecterait l'utilisateur (accès Railway ≠ session BlabIA)
-    const status = { auth: 409, github: 409, empty: 409 }[err.kind] || 502;
+    const status = { auth: 409, github: 409, empty: 409, domain: 400 }[err.kind] || 502;
     return res.status(status).json({ error: err.message, kind: err.kind });
   }
   console.error(`[railway ${where}]`, err.message);
@@ -136,6 +136,35 @@ router.post('/projects/:id/railway/variables', async (req, res) => {
     await db('Project').where({ id: project.id }).update({ railwaySetup: JSON.stringify(setup) });
     res.json({ setup });
   } catch (err) { failure(res, err, 'variables'); }
+});
+
+// POST /api/projects/:id/railway/domain { domain } — nom de domaine du site (le site de test
+// garde son adresse Railway) : enregistrements DNS à poser chez le registraire (OVH…)
+router.post('/projects/:id/railway/domain', async (req, res) => {
+  try {
+    const project = await loadOwned(req, res);
+    if (!project) return;
+    const setup = parseJsonField(project.railwaySetup, null);
+    if (!setup?.services?.length) return res.status(409).json({ error: 'Mettez d’abord le site en ligne.' });
+    setup.customDomain = await railway.addCustomDomain({ userId: req.user.id, setupState: setup, domain: req.body?.domain });
+    await db('Project').where({ id: project.id }).update({ railwaySetup: JSON.stringify(setup) });
+    res.json({ setup });
+  } catch (err) { failure(res, err, 'domain'); }
+});
+
+// POST /api/projects/:id/railway/domain/check — DNS posés ? site joignable ? (adresse du site mise à jour)
+router.post('/projects/:id/railway/domain/check', async (req, res) => {
+  try {
+    const project = await loadOwned(req, res);
+    if (!project) return;
+    const setup = parseJsonField(project.railwaySetup, null);
+    if (!setup?.customDomain) return res.status(409).json({ error: 'Aucun nom de domaine en cours.' });
+    setup.customDomain.check = await railway.checkCustomDomain(setup.customDomain);
+    const update = { railwaySetup: JSON.stringify(setup) };
+    if (setup.customDomain.check.live) update.siteUrl = `https://${setup.customDomain.domain}`;
+    await db('Project').where({ id: project.id }).update(update);
+    res.json({ setup });
+  } catch (err) { failure(res, err, 'domain/check'); }
 });
 
 // DELETE /api/projects/:id/railway/connection — retire l'accès de BlabIA au compte Railway
