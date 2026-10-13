@@ -7,6 +7,7 @@ import { Badge } from '../ui';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { attentionCount } from '../../utils/toolsCatalog';
+import usePresence from '../../hooks/usePresence';
 
 // Cadre commun des pages d'un projet (refonte UX v5.1) : en-tête du projet,
 // barre latérale (Tableau de bord, Plan, Historique, Décisions, Outils,
@@ -32,6 +33,7 @@ export default function ProjectShell() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  usePresence(id); // présence sur le projet (carte du projet : voyant, dernière venue)
   const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
 
   const [project, setProject] = useState(null);

@@ -89,6 +89,8 @@ router.get('/', async (req, res) => {
     }
 
     const rows = await query;
+    // Participants (projet à plusieurs) ou créateur (projet solo) : carte du projet
+    const presence = await require('../services/presence').peopleOf(rows.filter(p => !p.isDemo), req.user.id);
 
     const projects = rows.map(p => {
       const totalTokens = parseInt(p.totalTokens) || 0;
@@ -100,6 +102,7 @@ router.get('/', async (req, res) => {
         ...p, totalTokens, totalInputTokens: inp, totalOutputTokens: out,
         realCostUSD, legacyCostUSD,
         estimatedCostUSD: realCostUSD + legacyCostUSD, // DEPRECATED v5.1 — remplacé par realCostUSD + legacyCostUSD
+        ...(presence[p.id] || {}),
       };
     });
 
@@ -621,6 +624,23 @@ router.post('/:id/members', async (req, res) => {
     res.status(201).json({ type: 'invited', email: normalizedEmail });
   } catch (err) {
     console.error('[projects/:id/members POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/presence — signal d'activité (chaque minute, pages du projet et salle
+// de réunion) : propriétaire et membres seulement (un administrateur qui consulte n'apparaît pas)
+router.post('/:id/presence', async (req, res) => {
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const isMember = project.userId === req.user.id
+      || !!(await db('ProjectMember').where({ projectId: project.id, userId: req.user.id }).first('id'));
+    if (isMember) await require('../services/presence').touch(project.id, req.user.id);
+    res.status(204).end();
+  } catch (err) {
+    console.error('[projects/:id/presence POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

@@ -30,6 +30,7 @@ model User {
   invitations        Invitation[]
   agents             Agent[]
   projectMemberships ProjectMember[]
+  projectPresences   ProjectPresence[]
   createdMilestones  Milestone[] @relation("MilestoneCreator")
   createdTodos       TodoItem[]  @relation("TodoCreator")
   usageLogs          UsageLog[]
@@ -100,6 +101,7 @@ model Project {
   user          User            @relation(fields: [userId], references: [id])
   sessions      Session[]
   members       ProjectMember[]
+  presences     ProjectPresence[]
   invitations   Invitation[]
   projectAgents ProjectAgent[]
   milestones    Milestone[]
@@ -165,6 +167,17 @@ model TodoItem {
   creator      User?      @relation("TodoCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   missions     AgentMission[]
   meetings     Session[] @relation("SessionFromAction")
+}
+
+// v5.1 : dernière activité d'un participant sur un projet (carte du projet : voyant et « il y a … »)
+model ProjectPresence {
+  projectId  String
+  userId     String
+  lastSeenAt DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
 }
 
 model ProjectMember {

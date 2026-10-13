@@ -19,12 +19,14 @@ import useMeetingAgents from '../hooks/useMeetingAgents';
 import useClickOutside from '../hooks/useClickOutside';
 import api from '../utils/api';
 import { notifyError } from '../utils/notify';
+import usePresence from '../hooks/usePresence';
 
 // ── MeetingRoom ───────────────────────────────────────────────────────────────
 
 export default function MeetingRoom() {
   const { id: projectId, sid: sessionId } = useParams();
   const navigate = useNavigate();
+  usePresence(projectId); // présence sur le projet (carte du projet)
   const location = useLocation();
   const autoPrepareDone = useRef(false);
 

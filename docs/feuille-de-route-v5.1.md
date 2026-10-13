@@ -293,6 +293,9 @@ Page Outils, carte « Mise en ligne automatique » (projet relié à un dépôt)
 - Garde-fou « site déjà en ligne » : avant toute mise en ligne, BlabIA lit les déploiements du dépôt sur GitHub ; s'il est déjà publié (Railway, Vercel, Netlify, Render reconnus), la carte l'annonce avec l'adresse du site et propose « C'est bien mon site : le marquer en place » (`POST /railway/already-hosted` : hébergeur ajouté ou coché « mis en place », adresse du site reprise) ; « Créer quand même un second site » exige une confirmation (`confirmExisting`), sinon `POST /railway/setup` répond 409 `existing`. Cas réel : le projet BlabIA, recréé sur son dépôt existant.
 - Nom de domaine (carte « Mise en ligne automatique ») : `customDomainCreate` sur le service du site → lignes CNAME et TXT (`_railway-verify.<sous-domaine>`) en noms relatifs à la zone, marche à suivre OVH (Zone DNS, redirection du domaine sans www), vérification par les DNS publics puis réponse HTTPS (`checkCustomDomain`, chaque minute tant que la page est ouverte) ; une fois en ligne, `Project.siteUrl` = https://<domaine>. Domaine sans « www » chez OVH : déconseillé (pas d'aplatissement CNAME), www conseillé.
 
+### D23. Présence des participants sur la carte du projet — fait le 13/10/2026
+Liste des projets : projet à plusieurs (au moins un membre ayant accepté, `ProjectMember`) → chaque participant, propriétaire compris, avec voyant vert « sur le projet » (signal de moins de 2 min 30) ou gris + « il y a N min / h / j » (« pas encore venu » sinon) ; projet solo → « Créé par … » (« vous », pseudo ou début de l'e-mail). Invitations en attente (`Invitation`) jamais montrées. Signal : `POST /api/projects/:id/presence` chaque minute tant que l'onglet est visible (`hooks/usePresence.js`, pages du projet et salle de réunion) ; un administrateur qui consulte n'est pas compté. Table `ProjectPresence` (migration `20261013000002`), `services/presence.js` ; liste des projets rafraîchie chaque minute. Test : `__integration__/presence.test.js`.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).
@@ -352,7 +355,7 @@ cd C:\BlabIA\client; npm run build
 ```
 
 ### Déploiement
-1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-13-04-55.dump`.
+1. Sauvegarde de la prod (lecture seule, PostgreSQL 18 en prod → conteneur jetable `postgres:18`), fichier hors du dépôt dans `C:\BlabIA-backups\`. Dernière sauvegarde : `blabia-prod-2026-10-13-20-28.dump`.
 2. `git push origin main` → Railway redéploie ; les migrations s'appliquent au démarrage (`prisma migrate deploy`).
 3. Vérifier dans les logs Railway : migrations appliquées, serveur démarré, healthcheck `/api/health` en 200.
 
