@@ -82,7 +82,11 @@ describe.skipIf(!harness.enabled)('connecteur Railway (simulé)', () => {
     realGh = github.gh; realConfigured = github.isConfigured;
     github.isConfigured = () => true;
     github.gh = async (_inst, _m, path) => {
-      const m = path.match(/^\/repos\/moi\/numero\/contents\/?(.*)$/);
+      // Dépôt « moi/deja » : déjà publié par Railway (site hébergé à la main, cas du projet BlabIA)
+      if (path.startsWith('/repos/moi/deja/deployments?')) return [{ id: 9, environment: 'blabia / production', creator: { login: 'railway-app[bot]' }, created_at: '2026-10-12T10:00:00Z' }];
+      if (path.startsWith('/repos/moi/deja/deployments/9/statuses')) return [{ state: 'success', environment_url: 'https://blabia-production.up.railway.app' }];
+      if (path.startsWith('/repos/moi/numero/deployments')) return [];
+      const m = path.match(/^\/repos\/moi\/(?:numero|deja)\/contents\/?(.*)$/);
       if (!m) throw Object.assign(new Error('Not Found'), { status: 404 });
       const p = decodeURIComponent(m[1]);
       if (REPO[p]) return REPO[p];
@@ -183,6 +187,23 @@ describe.skipIf(!harness.enabled)('connecteur Railway (simulé)', () => {
     c = (await h.request('POST', `/api/projects/${pid}/railway/domain/check`, { token: owner.token })).body.setup.customDomain.check;
     expect(c).toMatchObject({ cname: true, txt: true, live: true });
     expect((await h.db('Project').where({ id: pid }).first()).siteUrl).toBe('https://www.monsite.fr');
+  });
+
+  it('dépôt déjà publié (site hébergé à la main) : rien n’est créé sans confirmation ; « c’est bien mon site »', async () => {
+    const pid2 = (await h.request('POST', '/api/projects', { token: owner.token, body: { name: 'BlabIA' } })).body.id;
+    await h.db('Project').where({ id: pid2 }).update({ githubRepo: 'moi/deja', tools: JSON.stringify([]) });
+    const g = (await h.request('GET', `/api/projects/${pid2}/railway`, { token: owner.token })).body;
+    expect(g.existingHost).toMatchObject({ provider: 'Railway', url: 'https://blabia-production.up.railway.app' });
+    const before = rw.projects;
+    const r = await h.request('POST', `/api/projects/${pid2}/railway/setup`, { token: owner.token });
+    expect(r.status).toBe(409);
+    expect(r.body).toMatchObject({ kind: 'existing', existingHost: { provider: 'Railway' } });
+    expect(rw.projects).toBe(before); // aucun projet Railway créé
+    const a = (await h.request('POST', `/api/projects/${pid2}/railway/already-hosted`, { token: owner.token })).body;
+    expect(a.siteUrl).toBe('https://blabia-production.up.railway.app');
+    const p2 = await h.db('Project').where({ id: pid2 }).first();
+    expect(p2.siteUrl).toBe('https://blabia-production.up.railway.app');
+    expect(p2.tools).toEqual([expect.objectContaining({ name: 'Railway', category: 'hosting', status: 'validated', setupDone: true })]);
   });
 
   it('état : déploiement en échec avec la fin du journal ; déconnexion', async () => {

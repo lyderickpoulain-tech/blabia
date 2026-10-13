@@ -161,6 +161,7 @@ export default function RailwayConnector({ project, onDone }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null); // { message, kind }
+  const [forceNew, setForceNew] = useState(false); // dépôt déjà publié : second site demandé explicitement
 
   const load = useCallback(() => api.get(`/projects/${project.id}/railway`).then(({ data }) => setInfo(data)).catch(() => setInfo(null)), [project.id]);
   const loadStatus = useCallback(() => api.get(`/projects/${project.id}/railway/status`).then(({ data }) => setStatus(data.services)).catch(() => {}), [project.id]);
@@ -200,12 +201,13 @@ export default function RailwayConnector({ project, onDone }) {
     setBusy(true);
     setError(null);
     try {
-      const { data } = await api.post(`/projects/${project.id}/railway/setup`);
+      const { data } = await api.post(`/projects/${project.id}/railway/setup`, forceNew ? { confirmExisting: true } : {});
       setInfo(i => ({ ...i, setup: data.setup }));
       notifySuccess('Site envoyé sur Railway : la construction commence.');
       loadStatus();
       onDone?.();
     } catch (err) {
+      if (err.response?.data?.kind === 'existing') { setInfo(i => ({ ...i, existingHost: err.response.data.existingHost })); return; }
       setError({ message: err.response?.data?.error || 'La mise en ligne a échoué.', kind: err.response?.data?.kind });
       if (err.response?.data?.kind === 'auth') load();
       else load(); // la progression a pu être enregistrée (projet Railway créé)
@@ -221,8 +223,21 @@ export default function RailwayConnector({ project, onDone }) {
     } catch (err) { notifyError(err, 'La clé n’a pas pu être envoyée.'); return {}; }
   };
 
+  // Site déjà en ligne (hébergé à la main) : rien à créer, l'hébergeur est marqué en place
+  const markHosted = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/projects/${project.id}/railway/already-hosted`);
+      notifySuccess(data.siteUrl ? `Hébergeur marqué « mis en place » ; adresse du site : ${data.siteUrl}` : 'Hébergeur marqué « mis en place ».');
+      setInfo(i => ({ ...i, hostedConfirmed: true }));
+      onDone?.();
+    } catch (err) { notifyError(err, 'Opération impossible.'); }
+    finally { setBusy(false); }
+  };
+
   const setup = info.setup;
   const siteUrl = setup?.siteUrl;
+  const existing = !hasSetup && !forceNew ? info.existingHost : null;
   const statusOf = id => (status || []).find(s => s.id === id);
 
   return (
@@ -250,8 +265,30 @@ export default function RailwayConnector({ project, onDone }) {
 
       {info.configured && !info.isOwner && <p className="text-sm text-ink-muted">Seul le propriétaire du projet peut mettre le site en ligne.</p>}
 
+      {existing && info.isOwner && (
+        <div className="rounded-xl border border-ok-border bg-ok-light/40 p-4 space-y-2">
+          <p className="text-sm font-bold text-ink flex items-center gap-1.5">
+            <CheckCircle2 size={16} className="text-ok" aria-hidden="true" /> Ce site est déjà en ligne{existing.provider ? ` chez ${existing.provider}` : ''}
+          </p>
+          {existing.url && <a href={existing.url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-ok hover:underline break-all inline-flex items-center gap-1">{existing.url} <ExternalLink size={12} aria-hidden="true" /></a>}
+          <p className="text-sm text-ink-soft">
+            {info.hostedConfirmed
+              ? 'C’est noté : l’hébergeur est marqué « mis en place ». Chaque « Mettre en ligne » de la page Développements continue de publier le site comme aujourd’hui.'
+              : 'Inutile de le remettre en ligne : chaque « Mettre en ligne » de la page Développements le publie déjà. « Mettre le site en ligne » créerait un second site, avec une base de données vide.'}
+          </p>
+          {!info.hostedConfirmed && (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="primary" onClick={markHosted} disabled={busy}><Check size={14} aria-hidden="true" /> C’est bien mon site : le marquer en place</Button>
+              <Button size="sm" variant="ghost" onClick={() => { if (confirm('Créer un SECOND site chez Railway, avec une nouvelle base de données vide ? Votre site actuel n’est pas modifié.')) setForceNew(true); }}>
+                Créer quand même un second site
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 1. Autoriser BlabIA */}
-      {info.configured && info.isOwner && !info.connected && (
+      {info.configured && info.isOwner && !info.connected && !existing && (
         <div className="rounded-xl border border-line bg-white p-4 space-y-2">
           <p className="text-sm font-bold text-ink">1. Autorisez BlabIA sur votre compte Railway</p>
           <p className="text-sm text-ink-soft">
@@ -262,7 +299,7 @@ export default function RailwayConnector({ project, onDone }) {
       )}
 
       {/* 2. Plan puis mise en ligne */}
-      {info.configured && info.isOwner && info.connected && !hasSetup && (
+      {info.configured && info.isOwner && info.connected && !hasSetup && !existing && (
         <div className="rounded-xl border border-line bg-white p-4 space-y-3">
           <p className="text-sm font-bold text-ink">2. Mettez le site en ligne</p>
           {!info.plan?.services?.length ? (
