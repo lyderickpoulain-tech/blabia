@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, BookOpen, RefreshCw, MessageCircle, Send, Trash2, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, BookOpen, RefreshCw, MessageCircle, Send, Trash2, ChevronDown, ChevronRight, CheckCircle2, Check, Undo2 } from 'lucide-react';
 import api from '../../utils/api';
 import { notifyError } from '../../utils/notify';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
@@ -79,15 +79,19 @@ const norm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u030
 // Noms reconnaissables d'un outil : « API Claude (Anthropic) » → api claude ; « Node.js / Express » → node.js, express
 const tokensOf = name => String(name || '').replace(/\(.*?\)/g, ' ').split('/').map(x => norm(x).trim()).filter(x => x.length >= 3);
 
-function GuideSections({ text, tools }) {
+function GuideSections({ text, tools, onSetDone }) {
   const kept = (tools || []).filter(t => t.status === 'validated');
   const { intro, sections } = useMemo(() => splitGuide(text), [text]);
   const items = sections.map((sec, i) => {
+    // « Étape N — <outil> : <action> » : l'outil nommé avant « : » d'abord (« OVH : faire pointer
+    // le domaine vers Railway » ne concerne qu'OVH), sinon tout le titre
+    const head = norm(sec.title.match(/[—–-]\s*([^:]+):/)?.[1] || '');
     const title = norm(sec.title);
-    const matched = kept.filter(t => tokensOf(t.name).some(tok => title.includes(tok)));
+    const byHead = head ? kept.filter(t => tokensOf(t.name).some(tok => head.includes(tok))) : [];
+    const matched = byHead.length ? byHead : kept.filter(t => tokensOf(t.name).some(tok => title.includes(tok)));
     const saysDone = /^d[ée]j[àa] en place/i.test(sec.body);
     const state = matched.length ? (matched.every(t => t.setupDone) || saysDone ? 'done' : 'todo') : saysDone ? 'done' : 'general';
-    return { ...sec, key: `${i}-${sec.title}`, state };
+    return { ...sec, key: `${i}-${sec.title}`, state, matched };
   });
   const firstTodo = items.find(x => x.state === 'todo')?.key;
   const [open, setOpen] = useState(() => new Set(firstTodo ? [firstTodo] : []));
@@ -113,13 +117,27 @@ function GuideSections({ text, tools }) {
           const isOpen = open.has(sec.key);
           return (
             <li key={sec.key} className={`rounded-xl border ${sec.state === 'done' ? 'border-line bg-canvas' : sec.state === 'todo' ? 'border-line bg-white' : 'border-line bg-white'}`}>
-              <button type="button" onClick={() => toggle(sec.key)} aria-expanded={isOpen}
-                className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left min-h-[44px]">
-                {isOpen ? <ChevronDown size={16} className="shrink-0 text-ink-muted" aria-hidden="true" /> : <ChevronRight size={16} className="shrink-0 text-ink-muted" aria-hidden="true" />}
-                <span className={`flex-1 min-w-0 text-sm font-extrabold ${sec.state === 'done' ? 'text-ink-muted' : 'text-ink'}`}>{sec.title}</span>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-2.5">
+                <button type="button" onClick={() => toggle(sec.key)} aria-expanded={isOpen}
+                  className="flex-1 min-w-[200px] flex items-center gap-2 pl-3.5 py-2.5 text-left min-h-[44px]">
+                  {isOpen ? <ChevronDown size={16} className="shrink-0 text-ink-muted" aria-hidden="true" /> : <ChevronRight size={16} className="shrink-0 text-ink-muted" aria-hidden="true" />}
+                  <span className={`flex-1 min-w-0 text-sm font-extrabold ${sec.state === 'done' ? 'text-ink-muted' : 'text-ink'}`}>{sec.title}</span>
+                </button>
                 {sec.state === 'done' && <Badge tone="ok"><CheckCircle2 size={12} aria-hidden="true" /> Déjà en place</Badge>}
                 {sec.state === 'todo' && <Badge tone="await">À faire</Badge>}
-              </button>
+                {/* Valider l'étape depuis le guide : marque les outils de la section « mis en place »
+                    (y compris ceux sans case sur la page Outils : React, Node.js, GitHub…) */}
+                {onSetDone && sec.matched.length > 0 && sec.state === 'todo' && (
+                  <Button size="sm" variant="secondary" className="!h-8" onClick={() => { onSetDone(sec.matched.map(t => t.id), true); setOpen(prev => { const n = new Set(prev); n.delete(sec.key); return n; }); }}>
+                    <Check size={14} aria-hidden="true" /> C’est fait
+                  </Button>
+                )}
+                {onSetDone && sec.state === 'done' && sec.matched.some(t => t.setupDone) && (
+                  <Button size="sm" variant="ghost" className="!h-8" onClick={() => onSetDone(sec.matched.map(t => t.id), false)}>
+                    <Undo2 size={14} aria-hidden="true" /> Remettre à faire
+                  </Button>
+                )}
+              </div>
               {isOpen && <div className="px-3.5 pb-3.5 pt-1 border-t border-line"><Markdown size="synthesis">{sec.body}</Markdown></div>}
             </li>
           );
@@ -131,7 +149,7 @@ function GuideSections({ text, tools }) {
 
 // Guide de mise en place, sur demande : comment relier pas à pas les outils retenus
 // (dépôt GitHub, hébergeur, nom de domaine…). Rédigé avec une recherche web, conservé.
-function SetupGuide({ project, tools, onTools }) {
+function SetupGuide({ project, tools, onTools, onSetDone }) {
   const [guide, setGuide] = useState(undefined); // undefined = chargement, null = jamais demandé
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -202,7 +220,7 @@ function SetupGuide({ project, tools, onTools }) {
       {guide && <CheckBanner check={guide.check} />}
       {guide && open && (
         <div className="mt-4 pt-4 border-t border-line">
-          <GuideSections key={guide.at} text={guide.text} tools={tools} />
+          <GuideSections key={guide.at} text={guide.text} tools={tools} onSetDone={onSetDone} />
           <Sources sources={guide.check?.sources} />
         </div>
       )}
@@ -291,6 +309,21 @@ function GuideChat({ projectId, chat, setChat, hasGuide }) {
 export default function ProjectTools() {
   const { project, refreshCounts } = useProject();
   const [tools, setTools] = useState(null);
+  const [panelKey, setPanelKey] = useState(0); // recharge le panneau après une validation depuis le guide
+  // « C'est fait » / « Remettre à faire » dans le guide : outils marqués mis en place (ou non)
+  const setToolsDone = async (ids, done) => {
+    if (!tools) return;
+    const next = tools.map(t => (ids.includes(t.id) ? { ...t, setupDone: done } : t));
+    setTools(next);
+    try {
+      await api.put(`/projects/${project.id}/tools`, { tools: next });
+      setPanelKey(k => k + 1);
+      refreshCounts?.();
+    } catch (err) {
+      setTools(tools);
+      notifyError(err, 'L’étape n’a pas pu être enregistrée.');
+    }
+  };
   return (
     <>
       <PageHeader title="Outils" subtitle="Les outils nécessaires au projet, pré-remplis avec vos outils et modifiables.">
@@ -298,8 +331,8 @@ export default function ProjectTools() {
           Mes outils
         </Link>
       </PageHeader>
-      {!project.isDemo && <div className="mb-4"><SetupGuide project={project} tools={tools} onTools={setTools} /></div>}
-      <ProjectToolsPanel projectId={project.id} onChanged={next => { if (Array.isArray(next)) setTools(next); refreshCounts?.(); }} />
+      {!project.isDemo && <div className="mb-4"><SetupGuide project={project} tools={tools} onTools={setTools} onSetDone={setToolsDone} /></div>}
+      <ProjectToolsPanel key={panelKey} projectId={project.id} onChanged={next => { if (Array.isArray(next)) setTools(next); refreshCounts?.(); }} />
     </>
   );
 }

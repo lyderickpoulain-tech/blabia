@@ -13,13 +13,18 @@ function ExternalLink({ href, children }) {
   );
 }
 
-function CodeBlock({ inline, children }) {
-  const [copied, setCopied] = useState(false);
-  const text = String(children).replace(/\n$/, '');
+// react-markdown 10 ne fournit plus « inline » : tout `code` est rendu ici en ligne, et les
+// blocs (```…```) passent par `pre` (CodeBlock) — sinon chaque `NOM_DE_VARIABLE` cité dans une
+// phrase devenait un gros bloc noir
+function InlineCode({ children }) {
+  return <code className="bg-muted-light text-ink px-1 py-0.5 rounded text-[0.9em] font-mono break-words">{children}</code>;
+}
 
-  if (inline) {
-    return <code className="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-xs font-mono">{children}</code>;
-  }
+function CodeBlock({ children }) {
+  const [copied, setCopied] = useState(false);
+  // <pre><code>…</code></pre> : le texte est celui de l'élément code enfant
+  const inner = children?.props?.children ?? children;
+  const text = String(Array.isArray(inner) ? inner.join('') : inner ?? '').replace(/\n$/, '');
 
   const handleCopy = () => {
     navigator.clipboard.writeText(text).then(() => {
@@ -30,7 +35,7 @@ function CodeBlock({ inline, children }) {
 
   return (
     <div className="relative group mb-3">
-      <pre className="bg-gray-900 text-gray-100 p-4 pr-16 rounded-xl overflow-x-auto text-xs font-mono"><code>{children}</code></pre>
+      <pre className="bg-gray-900 text-gray-100 p-4 pr-16 rounded-xl overflow-x-auto text-xs font-mono"><code>{text}</code></pre>
       <button
         onClick={handleCopy}
         className="absolute top-2 right-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded-lg transition opacity-0 group-hover:opacity-100"
@@ -62,7 +67,8 @@ const TableTd = ({ children }) => (
 
 const SHARED = {
   a: ExternalLink,
-  code: CodeBlock,
+  code: InlineCode,
+  pre: CodeBlock,
   table: Table,
   thead: TableHead,
   tr: TableRow,
