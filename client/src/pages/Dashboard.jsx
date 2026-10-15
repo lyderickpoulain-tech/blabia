@@ -67,6 +67,7 @@ function ProjectCard({ project, archiving, onArchive, onOpen }) {
           : archived
           ? <Badge tone="muted">Archivé</Badge>
           : prepReady ? <Badge tone="ok"><Coffee size={12} aria-hidden="true" /> {project.prepReadyCount > 1 ? `${project.prepReadyCount} réunions préparées` : 'Réunion préparée'}</Badge>
+          : project.delegateRunning ? <Badge tone="ai"><Coffee size={12} aria-hidden="true" /> Le bras droit tient une réunion</Badge>
           : project.prepRunning ? <Badge tone="ai"><Coffee size={12} aria-hidden="true" /> Préparation en cours</Badge>
           : open && <Badge tone="await"><Radio size={12} aria-hidden="true" /> Réunion en cours</Badge>}
       </div>

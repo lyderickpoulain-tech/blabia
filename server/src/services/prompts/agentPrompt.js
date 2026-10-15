@@ -226,6 +226,7 @@ function buildAgentSystemPrompt({
   humorRoll = Math.random(), // tirage de l'humour pour ce tour (fixé dans les tests)
   questionMode = 'balanced', // services/questionModes.js : ce qui revient à l'humain
   preferencesText = '', // v5.1 : avis de l'humain sur des bulles d'agents (services/feedback.js)
+  delegationText = '',  // v5.1 : réunion tenue par le bras droit (services/delegation.js)
 }) {
   // Registre des décisions du projet : ce qui est tranché ne se redemande pas ;
   // ce que l'humain a remis en question est à retraiter en priorité.
@@ -373,7 +374,7 @@ ${buildCapSection({ task: session.task, intention, project })}
 ${POSTURE}
 ${preferencesText ? `
 ${preferencesText}
-` : ''}${buildStyleSection(expertiseLevel, humorLevel)}`;
+` : ''}${delegationText}${buildStyleSection(expertiseLevel, humorLevel)}`;
 
   // ── 2. Bloc du tour (non mis en cache) ─────────────────────────────────────
   const turn = `TON RÔLE DANS CETTE RÉUNION : tu es ${agent.name}, ${agent.role}.

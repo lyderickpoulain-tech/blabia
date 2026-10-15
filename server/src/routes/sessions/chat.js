@@ -24,6 +24,7 @@ const { sessionCodeContext, lookupCode, codeAccess, readPaths } = require('../..
 const { meetingHistory, withHistory } = require('../../services/prompts/meetingHistory');
 const { projectObjective } = require('../../utils/projectObjective');
 const preparation = require('../../services/preparation');
+const delegation = require('../../services/delegation');
 const { preferencesForPrompt } = require('../../services/feedback');
 const { actionForPrompt } = require('../../services/actions');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
@@ -232,6 +233,9 @@ router.post('/:sessionId/extract-file', upload.single('file'), async (req, res) 
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
   const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated, artifactRequest, prepare } = req.body;
+  // v5.1 : réunion tenue par le bras droit à la place de l'humain (services/delegation.js)
+  const delegate = req.body.delegate === true && !prepare;
+  const background = prepare || delegate; // continue sans l'humain, même s'il quitte la page
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
 
   const hasText        = !!humanMessage?.trim();
@@ -278,6 +282,14 @@ router.post('/:sessionId/chat', async (req, res) => {
       return res.status(409).json({ error: 'Les agents préparent encore cette réunion : revenez quand les conclusions sont prêtes.', preparing: true });
     }
 
+    // Réunion confiée au bras droit : cadre fixé à la création, une seule exécution, réunion vide
+    if (delegate) {
+      const d = parseJsonField(s.delegation, null);
+      if (!d) return res.status(400).json({ error: 'Cette réunion n’a pas été confiée au bras droit.' });
+      if (!['pending', 'failed'].includes(d.status)) return res.status(409).json({ error: 'Le bras droit a déjà tenu cette réunion.' });
+      if (parseJsonField(s.messages, []).length > 0) return res.status(400).json({ error: 'Le bras droit tient une réunion depuis son début.' });
+    }
+
     // Préparation sans l'humain : seulement au début de la réunion, à plusieurs agents
     if (prepare) {
       if (activeAgents.length < 2) {
@@ -314,10 +326,12 @@ router.post('/:sessionId/chat', async (req, res) => {
   const abortController = new AbortController();
   // v5.1 : une préparation continue sans l'humain quand il quitte la page (retour au tableau
   // de bord) ; les autres échanges s'arrêtent avec la connexion.
-  if (prepare) preparation.start(sessionId, projectId, abortController);
+  if (background) preparation.start(sessionId, projectId, abortController, delegate ? 'delegate' : 'prepare');
+  const delegationRules = delegate ? parseJsonField(session.delegation, null) : null;
+  if (delegate) await delegation.setStatus(sessionId, { status: 'running', startedAt: new Date().toISOString() });
   req.on('close', () => {
     clearInterval(heartbeatInterval);
-    if (!prepare) abortController.abort();
+    if (!background) abortController.abort();
   });
 
   send('connected', { sessionId });
@@ -436,6 +450,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     let consecutiveCount = 0;
     let conversationDone = false;
     let decisionEmitted  = false;
+    let delegationStoppedOnBlock = false;
     let turnInputTokens  = 0;
     let turnOutputTokens = 0;
 
@@ -455,6 +470,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         timestamp:  new Date().toISOString(),
       };
       await appendMessageEntry(sessionId, decisionMsg);
+      if (delegate) return decisionMsg; // le bras droit y répond (boucle des tours)
       send('decision', {
         messageId: decisionMsg.id,
         question:  decisionMsg.question,
@@ -498,7 +514,7 @@ router.post('/:sessionId/chat', async (req, res) => {
 
       // v5.1 : l'animateur prend la parole aux transitions — avant une éventuelle proposition de clôture (phrase donnée par l'orchestrateur)
       if (next.animation && !prepare) {
-        const animatorMsg = { id: randomUUID(), role: 'system', type: 'animator', agentName: 'Animation', content: next.animation, timestamp: new Date().toISOString() };
+        const animatorMsg = { id: randomUUID(), role: 'system', type: 'animator', agentName: delegate ? delegation.BRAS_DROIT : 'Animation', content: next.animation, timestamp: new Date().toISOString() };
         await appendMessageEntry(sessionId, animatorMsg);
         currentMessages = [...currentMessages, animatorMsg]; // l'agent qui parle ensuite l'entend
         send('animator', { message: animatorMsg });
@@ -557,6 +573,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         humorLevel,
         questionMode,
         preferencesText,
+        delegationText: delegation.delegationSection(delegationRules),
         webSearchEnabled: session.webSearchEnabled === true,
         projectToolsText,
         artifactRequest: turnArtifact,
@@ -686,11 +703,25 @@ router.post('/:sessionId/chat', async (req, res) => {
       }
       if (proposedMission) send('mission', { mission: proposedMission });
 
+      let blockedForHuman = false;
       for (const decision of decisions) {
-        await emitDecision(decision, agent.name, Math.max(0, budgetLeft - decisions.length));
+        const card = await emitDecision(decision, agent.name, Math.max(0, budgetLeft - decisions.length));
+        // v5.1 : réunion confiée au bras droit — il tranche dans son cadre ou garde la question
+        if (delegate && card) {
+          let outcome;
+          try {
+            outcome = await delegation.resolveCard({ project, session, delegation: delegationRules, card, messages: await loadMessages(sessionId), registryText: decisionRegistry.activeText });
+          } catch (err) {
+            console.error('[delegation] carte :', err.message);
+            outcome = { reserved: true, reason: 'Le bras droit n’a pas pu en juger : question gardée pour vous.' };
+          }
+          await delegation.applyCardOutcome(sessionId, card.id, outcome);
+          if (outcome.reserved && outcome.blocking && delegationRules.stopOnBlock) blockedForHuman = true;
+        }
       }
 
-      if (decisionEmitted) { conversationDone = true; break; }
+      if (blockedForHuman) { delegationStoppedOnBlock = true; conversationDone = true; break; }
+      if (decisionEmitted && !delegate) { conversationDone = true; break; }
 
       if (parsed.suggestedAgent) {
         send('suggest_agent', { ...parsed.suggestedAgent, reason: `Suggéré par ${agent.name}` });
@@ -733,6 +764,12 @@ router.post('/:sessionId/chat', async (req, res) => {
       // (sans orchestrateur, rien ne l'arrêtait avant MAX_TURNS). Après le contradicteur, il répond.
       if (!prepare && activeAgents.length === 1 && !isChallenge) conversationDone = true;
       currentMessages  = await loadMessages(sessionId);
+    }
+
+    // v5.1 : fin d'une réunion confiée au bras droit — note de retour (et e-mail si demandé)
+    if (delegate) {
+      await delegation.finishDelegation({ project, sessionId, stoppedOnBlock: delegationStoppedOnBlock || abortController.signal.aborted })
+        .catch(err => console.error('[delegation] fin :', err.message));
     }
 
     // Fin de préparation : synthèse pour l'humain + décisions qui lui reviennent
@@ -791,15 +828,18 @@ router.post('/:sessionId/chat', async (req, res) => {
 
   } catch (err) {
     if (abortController.signal.aborted || err.name === 'AbortError') {
+      // Réunion confiée arrêtée par l'humain : note de ce qui a été fait
+      if (delegate) await delegation.finishDelegation({ project, sessionId, stoppedOnBlock: true }).catch(e => console.error('[delegation] fin :', e.message));
       res.end();
       return;
     }
     console.error('[sessions/chat]', err.message, err.stack);
+    if (delegate) await delegation.setStatus(sessionId, { status: 'failed', error: String(err.message).slice(0, 300) }).catch(() => {});
     try { send('error', { message: `Erreur : ${err.message}` }); } catch {} // navigateur déjà déconnecté
     res.end();
   } finally {
     clearInterval(heartbeatInterval);
-    if (prepare) preparation.finish(sessionId);
+    if (background) preparation.finish(sessionId);
   }
 });
 

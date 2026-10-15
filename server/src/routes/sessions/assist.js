@@ -81,6 +81,45 @@ router.post('/:sessionId/where', async (req, res) => {
   }
 });
 
+// ── Réunion confiée au bras droit (v5.1, étape 2) ─────────────────────────────
+// POST /:sessionId/contest-decision { messageId } — l'humain conteste une réponse du bras droit :
+// la question lui revient (carte à nouveau en attente), les agents le savent
+router.post('/:sessionId/contest-decision', async (req, res) => {
+  try {
+    const { session, messages } = await load(req, res);
+    if (!session) return;
+    if (['accepted', 'abandoned', 'postponed'].includes(session.status)) return res.status(409).json({ error: 'La réunion est close : remettez plutôt la décision en question dans le registre.' });
+    const idx = messages.findIndex(m => m.id === req.body?.messageId && m.type === 'decision');
+    if (idx < 0) return res.status(404).json({ error: 'Question introuvable.' });
+    const card = messages[idx];
+    if (!card.decidedByDelegate || card.status !== 'answered') return res.status(409).json({ error: 'Seule une réponse du bras droit peut être contestée ici.' });
+    const now = new Date().toISOString();
+    messages[idx] = { ...card, status: 'pending', answer: null, answeredAt: null, answeredByName: null, decidedByDelegate: false, contestedAt: now, contestedAnswer: card.answer };
+    messages.push({ id: crypto.randomUUID(), role: 'system', type: 'decision_answer', timestamp: now,
+      content: `L'humain conteste la réponse du bras droit (« ${card.answer} ») à : ${card.question} — il tranchera lui-même.` });
+    await db('Session').where({ id: session.id }).update({ messages: JSON.stringify(messages) });
+    res.json({ message: messages[idx] });
+  } catch (err) {
+    console.error('[sessions contest-decision]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /:sessionId/delegation/ack — note de retour lue : plus signalée
+router.post('/:sessionId/delegation/ack', async (req, res) => {
+  try {
+    const { session } = await load(req, res, ['id', 'delegation']);
+    if (!session) return;
+    const d = parseJsonField(session.delegation, null);
+    if (!d) return res.status(404).json({ error: 'Cette réunion n’a pas été confiée au bras droit.' });
+    await db('Session').where({ id: session.id }).update({ delegation: JSON.stringify({ ...d, reviewed: true, reviewedAt: new Date().toISOString() }) });
+    res.json({ reviewed: true });
+  } catch (err) {
+    console.error('[sessions delegation ack]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── Comptes rendus déclinés ───────────────────────────────────────────────────
 const FORMATS = {
   decisions: {

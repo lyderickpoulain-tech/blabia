@@ -283,6 +283,7 @@ model Session {
   devTasks          DevTask[]
   todo            TodoItem? @relation("SessionFromAction", fields: [todoId], references: [id], onDelete: SetNull)
   summaryFormats Json?    // v5.1 : CR décliné (relevé de décisions, synthèse exécutive, procès-verbal)
+  delegation     Json?    // v5.1 : réunion tenue par le bras droit — { by, canDecide, reserved, status, note… }
   agentFeedbacks AgentFeedback[]
 }
 

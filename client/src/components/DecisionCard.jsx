@@ -44,10 +44,14 @@ export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, d
       deferred:  { icon: <Clock size={14} />,          cls: 'text-await',  text: 'reportée' },
     }[message.status];
     return (
-      <div className="ml-[38px] flex items-center gap-2 py-1 text-[13px] min-w-0">
+      <div className="ml-[38px] flex items-center gap-2 py-1 text-[13px] min-w-0" title={message.delegateReason || undefined}>
         <span className={`shrink-0 ${meta.cls}`}>{meta.icon}</span>
         <span className="text-ink-faint truncate">{message.question}</span>
         <span className={`font-bold shrink-0 max-w-[45%] truncate ${meta.cls}`}>→ {meta.text}</span>
+        {/* v5.1 : réponse du bras droit, en votre absence — contestable tant que la réunion est ouverte */}
+        {message.decidedByDelegate && people?.onContestDelegate && !disabled && (
+          <button type="button" onClick={() => people.onContestDelegate(message.id)} className="shrink-0 font-bold text-await hover:underline">Contester</button>
+        )}
       </div>
     );
   }
@@ -96,6 +100,8 @@ export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, d
         <span className="text-[11px] font-extrabold uppercase tracking-wider text-await mr-1.5">
           {/* Numéro seul : le budget de questions (« Questions 3/4 » dans l'en-tête) n'est pas le nombre de cartes affichées */}
           <span title={budget ? `Budget de la réunion : ${budget} questions` : undefined}>Question{number ? ` ${number}` : ''}</span> · {message.agentName}
+          {message.reservedForHuman && <span className="normal-case tracking-normal font-bold text-ai"> · gardée pour vous par le bras droit</span>}
+          {message.contestedAnswer && <span className="normal-case tracking-normal font-bold text-ink-muted"> · le bras droit avait répondu « {message.contestedAnswer} »</span>}
         </span>
         {message.question}
       </legend>

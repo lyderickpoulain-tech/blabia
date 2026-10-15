@@ -288,11 +288,19 @@ export default function MeetingRoom() {
       setMessages(prev => prev.map(m => (m.id === messageId ? data.message : m)));
     } catch (err) { notifyError(err, 'Opération impossible.'); }
   }, [projectId, sessionId]);
+  // v5.1 : contester une réponse donnée par le bras droit en votre absence
+  const handleContestDelegate = useCallback(async (messageId) => {
+    try {
+      const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/contest-decision`, { messageId });
+      setMessages(prev => prev.map(m => (m.id === messageId ? data.message : m)));
+    } catch (err) { notifyError(err, 'La contestation n’a pas abouti.'); }
+  }, [projectId, sessionId]);
   const decisionPeople = {
     others: participants.filter(p => !p.isYou),
     currentUserId: authUser?.id,
     onAssign: handleAssignDecision,
     onReclaim: handleReclaimDecision,
+    onContestDelegate: handleContestDelegate,
   };
   // Une question attend un autre humain : la réunion se met à jour seule (sa réponse, puis
   // les agents qui reprennent chez lui) ; suivi prolongé 3 minutes après la réponse
@@ -305,7 +313,7 @@ export default function MeetingRoom() {
       if (isStreamingRef.current || Date.now() > watchUntilRef.current || document.visibilityState !== 'visible') return;
       api.get(`/projects/${projectId}/sessions/${sessionId}`).then(({ data }) => {
         if (isStreamingRef.current || !Array.isArray(data.messages)) return;
-        setSession(prev => (prev && prev.prepRunning !== data.prepRunning ? { ...prev, prepRunning: data.prepRunning } : prev));
+        setSession(prev => (prev && prev.prepRunning !== data.prepRunning ? { ...prev, prepRunning: data.prepRunning, runKind: data.runKind, delegation: data.delegation } : prev));
         const sig = list => list.map(m => `${m.id}:${m.status || ''}`).join(',');
         setMessages(prev => (sig(prev) === sig(data.messages) ? prev : data.messages));
       }).catch(() => {});
@@ -705,6 +713,15 @@ export default function MeetingRoom() {
     } catch (err) { notifyError(err, err.message); setPrepRequested(false); }
   }, [projectId, sessionId, navigate]);
 
+  // v5.1 : depuis la note de retour du bras droit, « Valider et conclure » ouvre la conclusion
+  const openClosureDone = useRef(false);
+  useEffect(() => {
+    if (openClosureDone.current || loading || !session || !location.state?.openClosure) return;
+    openClosureDone.current = true;
+    if (!isClosed) setShowCloseModal(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [loading, session, isClosed, location, navigate]);
+
   // « Préparer avant mon arrivée » choisi au démarrage : une seule fois, réunion vide
   useEffect(() => {
     if (autoPrepareDone.current || loading || !session || !location.state?.autoPrepare) return;
@@ -1009,11 +1026,13 @@ export default function MeetingRoom() {
                 <div className="shrink-0 bg-white border-t border-line px-4 py-2">
                   <div className="max-w-[820px] mx-auto flex flex-wrap items-center gap-3">
                     <span className="w-4 h-4 border-2 border-ai border-t-transparent rounded-full animate-spin shrink-0" aria-hidden="true" />
-                    <p className="flex-1 text-sm font-semibold text-ai">Les agents préparent la réunion. Le briefing s'affichera dès qu'ils auront fini ; vous pouvez revenir plus tard.</p>
+                    <p className="flex-1 text-sm font-semibold text-ai">{session?.runKind === 'delegate'
+                      ? 'Votre bras droit tient la réunion : vous suivez en retrait. Sa note de retour arrivera dans votre conversation avec lui.'
+                      : 'Les agents préparent la réunion. Le briefing s’affichera dès qu’ils auront fini ; vous pouvez revenir plus tard.'}</p>
                     <button type="button" onClick={() => (session?.prepRunning
                       ? stopPreparation(projectId, sessionId).then(() => setSession(s => ({ ...s, prepRunning: false }))).catch(err => notifyError(err, 'La préparation n’a pas pu être arrêtée.'))
                       : abortControllerRef.current?.abort())}
-                      className="min-h-[36px] text-[13px] font-bold text-ink-muted hover:text-ink">Arrêter la préparation</button>
+                      className="min-h-[36px] text-[13px] font-bold text-ink-muted hover:text-ink">{session?.runKind === 'delegate' ? 'Arrêter la réunion' : 'Arrêter la préparation'}</button>
                   </div>
                 </div>
               ) : (

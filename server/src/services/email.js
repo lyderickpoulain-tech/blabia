@@ -185,4 +185,26 @@ async function sendQuestionRequest(toEmail, { askerName, agentName, question, me
   await client.emails.send({ from: FROM_ADDRESS, to: toEmail, subject: `Votre avis est attendu : ${String(question).slice(0, 80)}`, html: baseLayout(content) });
 }
 
-module.exports = { sendInvitation, sendTestEmail, sendActionsDigest, sendQuestionRequest };
+// v5.1 : réunion tenue par le bras droit — sa note de retour est prête
+async function sendDelegationReport(toEmail, { meetingTitle, headline, decidedCount, waitingCount, link }) {
+  const client = getClient();
+  if (!client) {
+    console.log(`[email] Note du bras droit (RESEND_API_KEY absent) — ${toEmail} : ${link}`);
+    return;
+  }
+  const content = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;font-weight:700;">Votre bras droit a tenu la réunion</h2>
+    <p style="margin:0 0 12px;color:#374151;font-size:15px;">« ${escapeHtml(meetingTitle)} »</p>
+    <p style="margin:0 0 16px;color:#374151;font-size:15px;">${escapeHtml(headline)}</p>
+    <p style="margin:0 0 24px;color:#374151;font-size:14px;">${decidedCount} décision${decidedCount > 1 ? 's' : ''} prise${decidedCount > 1 ? 's' : ''} dans votre cadre · ${waitingCount} question${waitingCount > 1 ? 's' : ''} vous attend${waitingCount > 1 ? 'ent' : ''}.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
+      <tr><td align="center">
+        <a href="${link}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;padding:14px 32px;border-radius:10px;text-decoration:none;">
+          Lire la note de retour →
+        </a>
+      </td></tr>
+    </table>`;
+  await client.emails.send({ from: FROM_ADDRESS, to: toEmail, subject: `Réunion tenue par votre bras droit : ${String(meetingTitle).slice(0, 80)}`, html: baseLayout(content) });
+}
+
+module.exports = { sendInvitation, sendTestEmail, sendActionsDigest, sendQuestionRequest, sendDelegationReport };

@@ -7,15 +7,17 @@
 // - « prête » : la synthèse de préparation existe et personne n'est encore venu (aucun
 //   message humain ni réponse à une carte après elle).
 
-const running = new Map(); // sessionId → { projectId, startedAt, controller }
+const running = new Map(); // sessionId → { projectId, startedAt, controller, kind }
+// kind : 'prepare' (les agents préparent) | 'delegate' (le bras droit tient la réunion, v5.1)
 
-const start = (sessionId, projectId, controller = null) => running.set(sessionId, { projectId, startedAt: new Date(), controller });
+const start = (sessionId, projectId, controller = null, kind = 'prepare') => running.set(sessionId, { projectId, startedAt: new Date(), controller, kind });
+const kindOf = sessionId => running.get(sessionId)?.kind || null;
 // Arrêt demandé par l'humain (« Arrêter la préparation ») : les échanges déjà faits restent
 const stop = sessionId => { const r = running.get(sessionId); if (!r) return false; r.controller?.abort(); running.delete(sessionId); return true; };
 const finish = sessionId => running.delete(sessionId);
 const isRunning = sessionId => running.has(sessionId);
 const runningInProject = projectId => [...running.entries()].filter(([, r]) => r.projectId === projectId).map(([id]) => id);
-const runningProjects = () => new Set([...running.values()].map(r => r.projectId));
+const runningProjects = (kind = null) => new Set([...running.values()].filter(r => !kind || r.kind === kind).map(r => r.projectId));
 
 // SQL : réunion ouverte dont la préparation est prête et pas encore consultée par l'humain.
 // `alias` : la table Session dans la requête appelante.
@@ -36,4 +38,4 @@ function prepReady(session, messages) {
   return summaryAt >= 0 && humanAt < summaryAt;
 }
 
-module.exports = { start, stop, finish, isRunning, runningInProject, runningProjects, PREP_READY_SQL, prepReady };
+module.exports = { start, stop, finish, kindOf, isRunning, runningInProject, runningProjects, PREP_READY_SQL, prepReady };

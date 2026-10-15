@@ -1,5 +1,5 @@
 const express        = require('express');
-const { PREP_READY_SQL, isRunning, stop: stopPreparation } = require('../../services/preparation');
+const { PREP_READY_SQL, isRunning, kindOf, stop: stopPreparation } = require('../../services/preparation');
 const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const { findProject: getProject } = require('../../utils/projectHelpers');
@@ -27,6 +27,7 @@ router.post('/', async (req, res) => {
     humorLevel: humorLevelParam,
     questionMode: questionModeParam,
     challengerEnabled: challengerParam,
+    delegation: delegationParam = null, // v5.1 : réunion confiée au bras droit (cadre)
   } = req.body;
   const { projectId } = req.params;
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
@@ -89,6 +90,7 @@ router.post('/', async (req, res) => {
         questionMode,
         // Contradicteur : false = désactivé pour cette réunion, sinon hérite du projet
         challengerEnabled: challengerParam === false ? false : null,
+        delegation: delegationParam ? JSON.stringify(require('../../services/delegation').sanitizeDelegation(delegationParam, req.user.id)) : null,
         projectId,
         milestoneId: milestoneId || null,
         todoId: todoId || null,
@@ -125,12 +127,12 @@ router.get('/', async (req, res) => {
         db.raw('jsonb_array_length(agents) as "agentCount"')
       )
       .where({ projectId })
-      .select(db.raw(`${PREP_READY_SQL('"Session"')} AS "prepReady"`))
+      .select(db.raw(`${PREP_READY_SQL('"Session"')} AS "prepReady"`), 'delegation')
       .whereIn('status', ['open', 'accepted', 'abandoned', 'postponed'])
       .orderBy('createdAt', 'desc');
 
     // v5.1 : préparation par les agents en cours (mémoire du serveur) ou prête à livrer ses conclusions
-    res.json(sessions.map(s => ({ ...s, prepRunning: isRunning(s.id) })));
+    res.json(sessions.map(s => ({ ...s, prepRunning: isRunning(s.id), runKind: kindOf(s.id), delegation: s.delegation ? { status: s.delegation.status, reviewed: !!s.delegation.reviewed } : null })));
   } catch (err) {
     console.error('[sessions GET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -182,6 +184,8 @@ router.get('/:sessionId', async (req, res) => {
       pendingToolSuggestions: parseJsonField(session.pendingToolSuggestions, []).filter(t => t && t.name),
       decisionBudget: decisionBudgetFor(session, project),
       prepRunning: isRunning(session.id), // v5.1 : les agents préparent la réunion sans l'humain
+      runKind: kindOf(session.id),         // 'prepare' | 'delegate' (le bras droit tient la réunion)
+      delegation: parseJsonField(session.delegation, null),
       projectQuestionMode: project.questionMode,
       planAlreadyAdded: parseInt(planCount || 0) > 0,
     });

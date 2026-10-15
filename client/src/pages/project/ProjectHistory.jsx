@@ -38,7 +38,8 @@ function buildThreads(sessions) {
 
 function StatusBadge({ status, session }) {
   if (status === 'accepted' || status === 'complete') return <Badge tone="ok">Conclue</Badge>;
-  if (status === 'open' && session?.prepRunning) return <Badge tone="ai">Préparation en cours</Badge>;
+  if (status === 'open' && session?.prepRunning) return <Badge tone="ai">{session.runKind === 'delegate' ? 'Tenue par le bras droit' : 'Préparation en cours'}</Badge>;
+  if (status === 'open' && session?.delegation && ['done', 'stopped'].includes(session.delegation.status)) return <Badge tone="ok">Tenue par le bras droit, à conclure</Badge>;
   if (status === 'open' && session?.prepReady)   return <Badge tone="ok">Préparée, à consulter</Badge>;
   if (status === 'open')      return <Badge tone="action">En cours</Badge>;
   if (status === 'abandoned') return <Badge tone="muted">Abandonnée</Badge>;

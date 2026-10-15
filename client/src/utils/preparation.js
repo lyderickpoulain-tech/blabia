@@ -3,11 +3,12 @@
 // déconnecte — l'humain retourne à ses projets et revient quand les conclusions sont prêtes.
 import api from './api';
 
-export async function launchPreparation(projectId, sessionId) {
+// { delegate: true } : réunion confiée au bras droit (v5.1, étape 2), même fonctionnement
+export async function launchPreparation(projectId, sessionId, { delegate = false } = {}) {
   const res = await fetch(`/api/projects/${projectId}/sessions/${sessionId}/chat`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: '', resume: true, prepare: true }),
+    body: JSON.stringify({ message: '', resume: true, ...(delegate ? { delegate: true } : { prepare: true }) }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

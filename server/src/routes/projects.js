@@ -95,7 +95,8 @@ router.get('/', async (req, res) => {
     // Participants (projet à plusieurs) ou créateur (projet solo) : carte du projet
     const presence = await require('../services/presence').peopleOf(rows.filter(p => !p.isDemo), req.user.id);
 
-    const preparing = runningProjects(); // v5.1 : agents en train de préparer une réunion
+    const preparing = runningProjects('prepare'); // v5.1 : agents en train de préparer une réunion
+    const delegating = runningProjects('delegate');
     const projects = rows.map(p => {
       const totalTokens = parseInt(p.totalTokens) || 0;
       const inp = parseInt(p.totalInputTokens) || 0;
@@ -108,6 +109,7 @@ router.get('/', async (req, res) => {
         estimatedCostUSD: realCostUSD + legacyCostUSD, // DEPRECATED v5.1 — remplacé par realCostUSD + legacyCostUSD
         ...(presence[p.id] || {}),
         prepRunning: preparing.has(p.id),
+        delegateRunning: delegating.has(p.id), // v5.1 : le bras droit tient une réunion
       };
     });
 

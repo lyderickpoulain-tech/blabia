@@ -162,9 +162,12 @@ export default function ProjectDashboard() {
   const next = nextIdx >= 0 ? milestones[nextIdx] : null;
   const nextSession = next ? plan?.milestoneSessions?.[next.id] : null;
   const upcoming = milestones.filter(m => m.status !== 'done').slice(0, 3);
-  const openSessions = sessions.filter(s => s.status === 'open' && !s.prepReady && !s.prepRunning && (!nextSession || s.id !== nextSession.id));
+  // v5.1 : réunions confiées au bras droit — en cours, ou note de retour à lire
+  const delegatedRunning = sessions.filter(s => s.status === 'open' && s.prepRunning && s.runKind === 'delegate');
+  const delegatedDone = sessions.filter(s => s.status === 'open' && s.delegation && ['done', 'stopped'].includes(s.delegation.status) && !s.delegation.reviewed);
+  const openSessions = sessions.filter(s => s.status === 'open' && !s.prepReady && !s.prepRunning && !s.delegation && (!nextSession || s.id !== nextSession.id));
   const preparedSessions = sessions.filter(s => s.status === 'open' && s.prepReady);   // v5.1 : conclusions prêtes
-  const preparingSessions = sessions.filter(s => s.status === 'open' && s.prepRunning); // v5.1 : agents au travail
+  const preparingSessions = sessions.filter(s => s.status === 'open' && s.prepRunning && s.runKind !== 'delegate'); // v5.1 : agents au travail
   const activeDecisions = decisions.filter(d => d.status === 'active');
   const validatedTools = (tools?.tools || []).filter(t => t.status === 'validated');
   const pastSessions = sessions.filter(s => s.status === 'accepted').slice(0, 2);
@@ -181,6 +184,8 @@ export default function ProjectDashboard() {
   });
 
   const attention = [
+    ...delegatedDone.map(s => ({ text: `Votre bras droit a tenu « ${s.task} » : sa note de retour vous attend (décisions prises dans votre cadre, questions gardées pour vous).`, to: 'bras-droit', cta: 'Lire la note' })),
+    ...delegatedRunning.map(s => ({ text: `Votre bras droit tient « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Suivre' })),
     ...preparedSessions.map(s => ({ text: `Réunion préparée par les agents : « ${s.task} ». Leurs conclusions et les décisions qui vous reviennent sont prêtes.`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Voir les conclusions' })),
     ...preparingSessions.map(s => ({ text: `Les agents préparent « ${s.task} » : vous serez prévenu ici quand les conclusions seront prêtes.`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Suivre' })),
     counts.decisionsReopened > 0 && { text: `${counts.decisionsReopened} décision${counts.decisionsReopened > 1 ? 's remises' : ' remise'} en question, à retraiter en réunion.`, to: 'decisions', cta: 'Voir' },
