@@ -366,6 +366,12 @@ Maquette validée (canvas « Bras droit BlabIA » : tête-à-tête, délégation
 - Tests : `__integration__/delegation.test.js`.
 - **Étape suivante (3)** : suivi en retrait en vue visio (vignettes, relevé en direct, « Reprendre la main », glisser un mot au bras droit).
 
+### D33. Bras droit, étape 3 : suivre en retrait, vue « salle » — fait le 16/10/2026
+- **Vue salle** (`components/meeting/VisioStrip.jsx`) : une vignette par participant — l'animation (ou « Bras droit, anime à votre place »), chaque agent avec son avatar, et « Vous » (en retrait ou participant) ; celui qui parle est entouré avec un voyant « parle » (agent en train d'écrire, ou auteur du dernier message de moins de 45 s pendant le suivi). Automatique quand le bras droit tient la réunion ; bouton « Vue salle » dans l'en-tête de toute réunion.
+- **Suivre en retrait** (salle de réunion, réunion tenue par le bras droit) : bandeau du bas « Glisser un mot au bras droit, sans reprendre la main » (`POST /sessions/:id/whisper`, refusé hors délégation en cours ; message `role: human, type: whisper`, lu en priorité par l'agent suivant et marqué « Mot glissé au bras droit ») et « Reprendre la main » (arrêt de la réunion confiée : la note de retour le précise, `takenOver`, statut `stopped` ; l'humain continue la réunion lui-même).
+- Tests : `__integration__/delegation.test.js` (mot glissé lu par l'agent suivant, reprise en main et note).
+- **Pistes** : avatars animés et voix (synthèse vocale) pour une réunion réaliste ; cadre de délégation par défaut au niveau du projet.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

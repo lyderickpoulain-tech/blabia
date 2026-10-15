@@ -62,7 +62,8 @@ function DelegationReport({ projectId, report, onOpen }) {
   const waitingCount = report.waiting.length + contested.size;
   return (
     <div className="space-y-2.5">
-      {report.stoppedOnBlock && <p className="text-xs font-bold text-await">La réunion s’est arrêtée sur une question qui vous est réservée.</p>}
+      {report.takenOver ? <p className="text-xs font-bold text-await">Vous avez repris la main en cours de réunion.</p>
+        : report.stoppedOnBlock && <p className="text-xs font-bold text-await">La réunion s’est arrêtée sur une question qui vous est réservée.</p>}
       {report.decided.length > 0 && (
         <div className="border border-ok-border bg-white rounded-xl px-3.5 py-3 space-y-2">
           <p className="text-[13px] font-extrabold text-ok">Décidé à votre place, dans votre cadre · {report.decided.length}</p>

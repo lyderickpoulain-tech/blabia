@@ -130,7 +130,7 @@ async function setStatus(sessionId, patch) {
 
 // Fin de réunion déléguée : note de retour (une phrase de résultat + cartes), dans le fil du
 // bras droit de la personne qui a confié la réunion ; e-mail si demandé
-async function finishDelegation({ project, sessionId, stoppedOnBlock = false }) {
+async function finishDelegation({ project, sessionId, stoppedOnBlock = false, takenOver = false }) {
   const [s] = await db('Session').where({ id: sessionId }).select('task', 'messages', 'delegation').limit(1);
   const delegation = parseJsonField(s?.delegation, null);
   if (!delegation) return null;
@@ -144,15 +144,15 @@ async function finishDelegation({ project, sessionId, stoppedOnBlock = false }) 
     const r = await anthropic.messages.create({
       model: DEFAULT_MODEL, max_tokens: 300,
       system: 'Tu es le bras droit de l\'humain. Tu viens de tenir une réunion à sa place et tu lui rends compte, en français, en le vouvoyant.',
-      messages: [{ role: 'user', content: `Réunion : « ${s.task} »\nÉchanges :\n${transcript}\n\nEn deux phrases au plus, sans titre ni liste : le résultat concret de la réunion, puis ce qui reste à faire.${stoppedOnBlock ? ' Précise que la réunion s\'est arrêtée sur une question qui lui est réservée.' : ''}` }],
+      messages: [{ role: 'user', content: `Réunion : « ${s.task} »\nÉchanges :\n${transcript}\n\nEn deux phrases au plus, sans titre ni liste : le résultat concret de la réunion, puis ce qui reste à faire.${takenOver ? ' Précise que l\'humain a repris la main en cours de réunion.' : stoppedOnBlock ? ' Précise que la réunion s\'est arrêtée sur une question qui lui est réservée.' : ''}` }],
     });
     headline = r.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
   } catch (err) { console.error('[delegation] note :', err.message); }
   if (!headline) headline = 'La réunion est tenue ; voici ce que j’ai tranché et ce qui vous attend.';
 
-  const note = { headline, decided, waiting, stoppedOnBlock, finishedAt: new Date().toISOString() };
-  await setStatus(sessionId, { status: stoppedOnBlock ? 'stopped' : 'done', note });
-  const report = { kind: 'delegation_report', sessionId, meetingTitle: s.task, decided, waiting, stoppedOnBlock };
+  const note = { headline, decided, waiting, stoppedOnBlock, takenOver, finishedAt: new Date().toISOString() };
+  await setStatus(sessionId, { status: stoppedOnBlock || takenOver ? 'stopped' : 'done', note });
+  const report = { kind: 'delegation_report', sessionId, meetingTitle: s.task, decided, waiting, stoppedOnBlock, takenOver };
   await db('AssistantMessage').insert({
     id: randomUUID(), projectId: project.id, userId: delegation.by, role: 'assistant',
     content: headline, sources: JSON.stringify([]), proposal: JSON.stringify(report), createdAt: new Date(),

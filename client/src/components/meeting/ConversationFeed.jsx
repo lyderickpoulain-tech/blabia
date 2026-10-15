@@ -273,7 +273,8 @@ export default function ConversationFeed({
             ))}
           </div>
         )}
-        <p className="bg-action text-white rounded-[14px] rounded-tr-[4px] px-3 py-1.5 text-sm leading-[1.45] whitespace-pre-wrap">
+        {msg.type === 'whisper' && <p className="text-[11px] font-bold text-ai text-right">Mot glissé au bras droit</p>}
+        <p className={`rounded-[14px] rounded-tr-[4px] px-3 py-1.5 text-sm leading-[1.45] whitespace-pre-wrap ${msg.type === 'whisper' ? 'bg-ai-bg border border-ai-border text-ink-soft' : 'bg-action text-white'}`}>
           {msg.content || <span className="opacity-70 italic">fichier joint</span>}
         </p>
       </div>

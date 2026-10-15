@@ -12,6 +12,7 @@ import BriefingView from '../components/meeting/BriefingView';
 import { DELEGATE } from '../components/DecisionCard';
 import ArtifactCard from '../components/meeting/ArtifactCard';
 import ConversationFeed, { HYPOTHESIS_RE } from '../components/meeting/ConversationFeed';
+import VisioStrip from '../components/meeting/VisioStrip';
 import ResetMeetingModal from '../components/meeting/ResetMeetingModal';
 import { AGENT_COLORS, STATUS_BADGE, DELIVERABLE_TYPES } from '../components/meeting/meetingConstants';
 import useAttachments from '../hooks/useAttachments';
@@ -141,6 +142,29 @@ export default function MeetingRoom() {
     catch (err) { notifyError(err, 'Votre avis n’a pas pu être enregistré.'); }
   }, [projectId, sessionId]);
   const [whereBusy, setWhereBusy] = useState(false);
+  // v5.1 (étape 3) : vue « salle » (vignettes) — automatique quand le bras droit tient la réunion
+  const [visio, setVisio] = useState(false);
+  const delegateRunning = !!(session?.prepRunning && session?.runKind === 'delegate');
+  const [whisper, setWhisper] = useState('');
+  const [whisperBusy, setWhisperBusy] = useState(false);
+  const sendWhisper = async () => {
+    const text = whisper.trim();
+    if (!text || whisperBusy) return;
+    setWhisperBusy(true);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/whisper`, { text });
+      setMessages(prev => [...prev, data.message]);
+      setWhisper('');
+    } catch (err) { notifyError(err, 'Votre mot n’a pas pu être transmis.'); }
+    setWhisperBusy(false);
+  };
+  const takeOver = async () => {
+    try {
+      await stopPreparation(projectId, sessionId);
+      setSession(s => ({ ...s, prepRunning: false }));
+      notifySuccess('Vous reprenez la main : le bras droit s’arrête et vous laisse sa note de retour.');
+    } catch (err) { notifyError(err, 'La reprise en main a échoué.'); }
+  };
   const handleWhere = useCallback(async () => {
     setWhereBusy(true);
     try {
@@ -935,6 +959,8 @@ export default function MeetingRoom() {
         onShowQuestions={showQuestionsInPanel}
         onWhere={messages.filter(m => m.role === 'agent').length >= 2 && !isStreaming ? handleWhere : null}
         whereBusy={whereBusy}
+        visio={visio || delegateRunning}
+        onToggleVisio={delegateRunning ? null : () => setVisio(v => !v)}
         onConclude={handleConclude}
         onReset={() => setShowResetModal(true)}
       />
@@ -976,6 +1002,10 @@ export default function MeetingRoom() {
                 currentIntention={currentIntention}
                 setShowCloseModal={setShowCloseModal}
               />
+
+              {(visio || delegateRunning) && (
+                <VisioStrip agents={activeAgents} agentColors={AGENT_COLORS} messages={messages} streamingAgent={streamingAgent} delegateRunning={delegateRunning} />
+              )}
 
               <div ref={feedRef} role="log" aria-label="Fil de la réunion" className="flex-1 min-h-0 overflow-y-auto" onScroll={handleFeedScroll}>
                 <ConversationFeed
@@ -1021,7 +1051,20 @@ export default function MeetingRoom() {
                 </div>
               )}
 
-              {phase === 'preparation' && (isStreaming || session?.prepRunning) ? (
+              {delegateRunning ? (
+                // Le bras droit tient la réunion : vous suivez en retrait, un mot glissé ou la reprise en main
+                <div className="shrink-0 bg-white border-t border-line px-4 py-2">
+                  <form className="max-w-[820px] mx-auto flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); sendWhisper(); }}>
+                    <span className="w-2.5 h-2.5 rounded-full bg-ai animate-pulse shrink-0" aria-hidden="true" />
+                    <label htmlFor="whisper" className="sr-only">Glisser un mot au bras droit</label>
+                    <input id="whisper" value={whisper} onChange={e => setWhisper(e.target.value)} maxLength={1000} disabled={whisperBusy}
+                      placeholder="Glisser un mot au bras droit, sans reprendre la main…"
+                      className="flex-1 min-w-[220px] h-11 border border-line rounded-[10px] px-3 text-sm outline-none focus:ring-2 focus:ring-action-border" />
+                    <button type="submit" disabled={!whisper.trim() || whisperBusy} className="h-11 px-3 rounded-[10px] bg-muted-light text-ink-soft text-sm font-bold disabled:opacity-50">Glisser</button>
+                    <button type="button" onClick={takeOver} className="h-11 px-4 rounded-[10px] bg-action text-white text-sm font-bold hover:bg-action-dark">Reprendre la main</button>
+                  </form>
+                </div>
+              ) : phase === 'preparation' && (isStreaming || session?.prepRunning) ? (
                 // Préparation en cours : pas de saisie (le focus interromprait le débat)
                 <div className="shrink-0 bg-white border-t border-line px-4 py-2">
                   <div className="max-w-[820px] mx-auto flex flex-wrap items-center gap-3">

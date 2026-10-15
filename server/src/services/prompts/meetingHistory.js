@@ -11,6 +11,7 @@ const HISTORY_STEP = 20;
 const visibleMessages = messages => messages.filter(m => m.role !== 'system' || m.type === 'decision_answer' || m.type === 'prep_summary' || m.type === 'animator');
 
 function lineOf(m) {
+  if (m.role === 'human' && m.type === 'whisper') return `Participant (en retrait, mot glissé au bras droit — tenez-en compte) : ${m.content}`;
   if (m.role === 'human') return `Participant : ${m.content}`;
   if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
   if (m.role === 'system' && m.type === 'prep_summary') return `[Synthèse de la préparation entre agents]\n${m.content}`;

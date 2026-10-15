@@ -87,6 +87,41 @@ describe.skipIf(!harness.enabled)('réunion tenue par le bras droit', () => {
     expect(list.find(x => x.id === sid).delegation).toEqual({ status: 'done', reviewed: true });
   });
 
+  it('suivi en retrait : un mot glissé au bras droit, puis « Reprendre la main »', async () => {
+    const sid2 = (await h.request('POST', `/api/projects/${pid}/sessions`, { token: owner.token, body: {
+      task: 'Choisir le fournisseur', intention: ['decision'], activeAgents: AGENTS, challengerEnabled: false, delegation: {},
+    } })).body.session.id;
+    // Pas de mot glissé hors d'une réunion tenue par le bras droit
+    expect((await h.request('POST', `/api/projects/${pid}/sessions/${sid2}/whisper`, { token: owner.token, body: { text: 'x' } })).status).toBe(409);
+    const seen = [];
+    h.ai.responder = async p => {
+      if (p.model === ORCHESTRATOR_MODEL) return { text: JSON.stringify({ agentIndex: 1, reason: 'Avancer', shouldClose: false }) };
+      if (sysText(p).includes('tu lui rends compte')) return { text: 'Vous avez repris la main ; le fournisseur reste à choisir.' };
+      seen.push(sysText(p));
+      await new Promise(r => setTimeout(r, 150));
+      return { text: 'Je compare les fournisseurs.' };
+    };
+    const ac = new AbortController();
+    const res = await fetch(`${h.base}/api/projects/${pid}/sessions/${sid2}/chat`, { method: 'POST', signal: ac.signal, headers: { Authorization: `Bearer ${owner.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '', resume: true, delegate: true }) });
+    await res.body.getReader().read();
+    ac.abort(); // l'humain suit en retrait (ou ferme la page) : la réunion continue
+    const w = await h.request('POST', `/api/projects/${pid}/sessions/${sid2}/whisper`, { token: owner.token, body: { text: 'Privilégiez un fournisseur local.' } });
+    expect(w.status).toBe(200);
+    expect(w.body.message).toMatchObject({ role: 'human', type: 'whisper' });
+    // L'agent suivant lit le mot glissé
+    const end = Date.now() + 8000;
+    while (!seen.some(t => t.includes('mot glissé au bras droit — tenez-en compte) : Privilégiez un fournisseur local.')) && Date.now() < end) await new Promise(r => setTimeout(r, 100));
+    expect(seen.some(t => t.includes('Privilégiez un fournisseur local.'))).toBe(true);
+    // Reprendre la main : la réunion s'arrête, note de retour « reprise en main »
+    expect((await h.request('POST', `/api/projects/${pid}/sessions/${sid2}/prepare/stop`, { token: owner.token })).body.stopped).toBe(true);
+    let s;
+    for (let i = 0; i < 80; i++) { s = (await h.request('GET', `/api/projects/${pid}/sessions/${sid2}`, { token: owner.token })).body; if (s.delegation.status === 'stopped') break; await new Promise(r => setTimeout(r, 100)); }
+    expect(s.delegation).toMatchObject({ status: 'stopped', note: { takenOver: true } });
+    expect(s.prepRunning).toBe(false);
+    const thread = (await h.request('GET', `/api/projects/${pid}/assistant`, { token: owner.token })).body.messages;
+    expect(thread.at(-1).proposal).toMatchObject({ kind: 'delegation_report', sessionId: sid2, takenOver: true });
+  });
+
   it('une réunion non confiée ne peut pas être tenue par le bras droit', async () => {
     const other = (await h.request('POST', `/api/projects/${pid}/sessions`, { token: owner.token, body: { task: 'Autre', intention: ['decision'], activeAgents: AGENTS } })).body.session.id;
     expect((await h.request('POST', `/api/projects/${pid}/sessions/${other}/chat`, { token: owner.token, body: { message: '', resume: true, delegate: true } })).status).toBe(400);

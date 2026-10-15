@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, SlidersHorizontal, PanelRight, Globe, RotateCcw, Compass } from 'lucide-react';
+import { ArrowLeft, SlidersHorizontal, PanelRight, Globe, RotateCcw, Compass, Video } from 'lucide-react';
 import { Badge, Button, IconButton } from '../ui';
 import PhaseStepper from './PhaseStepper';
 import QuestionModePicker from '../QuestionModePicker';
@@ -20,6 +20,7 @@ export default function MeetingHeader({
   panelOpen, onTogglePanel, onShowQuestions,
   onConclude, onReset,
   onWhere, whereBusy = false, // v5.1 : point de situation par l'animation
+  visio = false, onToggleVisio = null, // v5.1 : vue « salle » (vignettes des participants)
 }) {
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef(null);
@@ -128,6 +129,11 @@ export default function MeetingHeader({
           )}
         </div>
 
+        {onToggleVisio && (
+          <IconButton label={visio ? 'Masquer la vue salle' : 'Vue salle : les participants en vignettes'} active={visio} onClick={onToggleVisio} aria-pressed={visio}>
+            <Video size={18} />
+          </IconButton>
+        )}
         <IconButton label={panelOpen ? 'Masquer le panneau' : 'Afficher le panneau'} active={panelOpen} onClick={onTogglePanel} aria-pressed={panelOpen}>
           <PanelRight size={18} />
         </IconButton>

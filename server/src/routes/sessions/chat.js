@@ -768,7 +768,7 @@ router.post('/:sessionId/chat', async (req, res) => {
 
     // v5.1 : fin d'une réunion confiée au bras droit — note de retour (et e-mail si demandé)
     if (delegate) {
-      await delegation.finishDelegation({ project, sessionId, stoppedOnBlock: delegationStoppedOnBlock || abortController.signal.aborted })
+      await delegation.finishDelegation({ project, sessionId, stoppedOnBlock: delegationStoppedOnBlock, takenOver: abortController.signal.aborted })
         .catch(err => console.error('[delegation] fin :', err.message));
     }
 
@@ -829,7 +829,7 @@ router.post('/:sessionId/chat', async (req, res) => {
   } catch (err) {
     if (abortController.signal.aborted || err.name === 'AbortError') {
       // Réunion confiée arrêtée par l'humain : note de ce qui a été fait
-      if (delegate) await delegation.finishDelegation({ project, sessionId, stoppedOnBlock: true }).catch(e => console.error('[delegation] fin :', e.message));
+      if (delegate) await delegation.finishDelegation({ project, sessionId, takenOver: true }).catch(e => console.error('[delegation] fin :', e.message));
       res.end();
       return;
     }

@@ -105,6 +105,24 @@ router.post('/:sessionId/contest-decision', async (req, res) => {
   }
 });
 
+// POST /:sessionId/whisper { text } — v5.1 (étape 3) : pendant que le bras droit tient la réunion,
+// l'humain en retrait lui glisse un mot, sans reprendre la main ; l'agent suivant en tient compte
+router.post('/:sessionId/whisper', async (req, res) => {
+  try {
+    const { session } = await load(req, res, ['id']);
+    if (!session) return;
+    const text = String(req.body?.text || '').trim().slice(0, 1000);
+    if (!text) return res.status(400).json({ error: 'Message vide.' });
+    if (require('../../services/preparation').kindOf(session.id) !== 'delegate') return res.status(409).json({ error: 'Le bras droit ne tient pas cette réunion en ce moment.' });
+    const message = { id: crypto.randomUUID(), role: 'human', type: 'whisper', agentName: null, content: text, timestamp: new Date().toISOString() };
+    await appendMessageEntry(session.id, message);
+    res.json({ message });
+  } catch (err) {
+    console.error('[sessions whisper]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // POST /:sessionId/delegation/ack — note de retour lue : plus signalée
 router.post('/:sessionId/delegation/ack', async (req, res) => {
   try {
