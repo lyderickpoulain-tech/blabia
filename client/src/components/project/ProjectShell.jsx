@@ -1,6 +1,6 @@
 import { Suspense, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, FileText, Wrench, Users, Settings, GitPullRequest } from 'lucide-react';
+import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, FileText, Wrench, Users, Settings, GitPullRequest, MessageCircleMore } from 'lucide-react';
 import Layout from '../Layout';
 import PageLoader from '../PageLoader';
 import { Badge } from '../ui';
@@ -18,6 +18,7 @@ export const useProject = () => useContext(ProjectContext);
 
 const NAV = [
   { to: '',           end: true, label: 'Tableau de bord', icon: LayoutDashboard },
+  { to: 'bras-droit', label: 'Bras droit',  icon: MessageCircleMore }, // v5.1 : interlocuteur principal en tête-à-tête
   { to: 'reunions',   label: 'Plan',        icon: ListOrdered },
   { to: 'historique', label: 'Historique',  icon: History },
   { to: 'decisions',  label: 'Décisions',   icon: ScrollText, badge: 'decisions' },

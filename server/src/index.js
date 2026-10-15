@@ -48,6 +48,7 @@ app.use('/api/projects',                     require('./routes/actions'));
 app.use('/api/projects',                     require('./routes/documents'));
 app.use('/api/projects',                     require('./routes/missions'));
 app.use('/api/projects',                     require('./routes/recap'));
+app.use('/api/projects',                     require('./routes/assistant')); // v5.1 : bras droit
 app.use('/api/projects',                     require('./routes/exports'));
 app.use('/api/projects',                     require('./routes/devTasks'));
 app.use('/api/github',                       require('./routes/github'));

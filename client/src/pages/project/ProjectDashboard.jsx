@@ -62,7 +62,11 @@ function AskBlabIA({ projectId, onDone }) {
 
   return (
     <Card as="section" data-tour="pd-ask" className="p-5 space-y-3">
-      <h2 className="text-base font-extrabold text-ink flex items-center gap-2"><Sparkles size={17} className="text-ai" aria-hidden="true" />Demander à BlabIA</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-extrabold text-ink flex items-center gap-2"><Sparkles size={17} className="text-ai" aria-hidden="true" />Demander à BlabIA</h2>
+        {/* v5.1 : une question ponctuelle ici ; une vraie conversation avec le bras droit */}
+        <Link to="bras-droit" className="text-[13px] font-bold">Discuter avec votre bras droit</Link>
+      </div>
       <form onSubmit={submit} className="flex gap-2">
         <label htmlFor="ask" className="sr-only">Votre question ou commande</label>
         <input id="ask" value={input} onChange={e => setInput(e.target.value)} disabled={loading}

@@ -32,6 +32,7 @@ model User {
   projectMemberships ProjectMember[]
   projectPresences   ProjectPresence[]
   agentFeedbacks     AgentFeedback[]
+  assistantMessages  AssistantMessage[]
   createdMilestones  Milestone[] @relation("MilestoneCreator")
   createdTodos       TodoItem[]  @relation("TodoCreator")
   usageLogs          UsageLog[]
@@ -104,6 +105,7 @@ model Project {
   members       ProjectMember[]
   presences     ProjectPresence[]
   agentFeedbacks AgentFeedback[]
+  assistantMessages AssistantMessage[]
   invitations   Invitation[]
   projectAgents ProjectAgent[]
   milestones    Milestone[]
@@ -203,6 +205,22 @@ model AgentFeedback {
 
   @@unique([userId, messageId])
   @@index([userId, createdAt])
+}
+
+// v5.1 : bras droit — conversation en tête-à-tête (routes/assistant.js)
+model AssistantMessage {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String   // human | assistant
+  content   String
+  sources   Json?    // étiquettes de sources citées
+  proposal  Json?    // réunion proposée { ref, milestoneId, title }
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, userId, createdAt])
 }
 
 model ProjectMember {

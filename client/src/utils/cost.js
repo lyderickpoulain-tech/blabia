@@ -23,6 +23,7 @@ const KIND_LABELS = {
   recap:                   'Récapitulatif du projet',
   where:                   'Points de situation',
   'summary-format':        'Formats de compte rendu',
+  assistant:               'Bras droit',
 };
 
 export function kindLabel(kind = '') {

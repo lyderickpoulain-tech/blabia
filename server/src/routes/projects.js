@@ -942,44 +942,14 @@ router.post('/:id/quick-command', async (req, res) => {
       }
     }
 
-    const milestones = await db('Milestone').where({ projectId: req.params.id }).orderBy('displayOrder');
-    const sessions   = await db('Session')
-      .where({ projectId: req.params.id, status: 'accepted' })
-      .orderBy('createdAt', 'asc')
-      .select('id', 'task', 'summary', 'intention', 'createdAt', 'milestoneId');
-
     // v5.1 (16/10/2026) : « qu'avait-on décidé sur… ? » — la zone d'interrogation ne recevait ni
     // le registre des décisions, ni le contenu des comptes rendus (seulement leurs titres), ni
-    // les actions : elle répondait de mémoire. Elle reçoit maintenant tout, et cite ses sources.
-    const { listDecisions, formatRegistryForPrompt } = require('../services/decisions');
-    const { listActions } = require('../services/actions');
+    // les actions : elle répondait de mémoire. Elle reçoit tout (services/projectKnowledge.js).
     const { POSTURE } = require('../services/prompts/posture');
-    const registry = formatRegistryForPrompt(await listDecisions(project.id));
-    const actions = await listActions(project.id);
-    const fmtDate = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    let left = 40000; // comptes rendus : les plus récents en entier, les plus anciens tronqués
-    const reports = [...sessions].reverse().map(s => {
-      const text = String(s.summary || '').trim().slice(0, Math.min(4000, Math.max(0, left)));
-      left -= text.length;
-      return `### Réunion « ${s.task} » — ${fmtDate(s.createdAt)}\n${text || '(pas de compte rendu)'}`;
-    }).reverse().join('\n\n');
-    const documentsText = formatDocumentsForPrompt(await listDocuments(project.id, { withContent: true }));
+    const { projectKnowledge } = require('../services/projectKnowledge');
+    const { text: knowledgeText } = await projectKnowledge(project);
     const systemPrompt = `Tu es le bras droit de l'humain sur le projet "${project.name}" : tu connais tout le projet et tu réponds à ses questions entre les réunions.
-Brief : ${project.brief || 'non défini'}
-Réunions du plan : ${milestones.length > 0 ? milestones.map((m, i) => `\nR${i + 1}. ${m.title} (${m.status === 'done' ? 'tenue' : 'à venir'})`).join('') : 'aucune'}
-
-DÉCISIONS EN VIGUEUR (registre) :
-${registry.activeText || '(aucune)'}
-${registry.reopenedText ? `\nDÉCISIONS REMISES EN QUESTION :\n${registry.reopenedText}\n` : ''}
-ACTIONS :
-${actions.length ? actions.slice(0, 30).map(a => `- [${a.status === 'done' ? 'faite' : a.status === 'cancelled' ? 'annulée' : 'à faire'}] ${a.title}`).join('\n') : '(aucune)'}
-
-COMPTES RENDUS DES RÉUNIONS TENUES (dans l'ordre) :
-${reports || '(aucune réunion tenue)'}
-
-Mémoire du projet :
-${memoryForPrompt(project) || 'aucune'}
-${documentsText ? `\nDocuments de référence du projet (cite-les entre « » quand tu t'en sers) :\n${documentsText}\n` : ''}
+${knowledgeText}
 ${POSTURE}
 SOURCES : appuie chaque affirmation sur le projet en citant d'où elle vient — la réunion et sa date (« réunion « Choisir le prix », 12 octobre »), le registre des décisions ou le document. Si l'information n'est nulle part, dis-le clairement plutôt que de supposer.
 Ta réponse est ponctuelle : elle n'est pas enregistrée dans la mémoire du projet.`;
