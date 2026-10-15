@@ -89,13 +89,13 @@ describe('prompt agent : comment tu parles', () => {
   });
 
   it('niveaux distincts : pas de fichier ni de repère seul jusqu’au niveau 3, références exactes au niveau 5', () => {
-    expect(sharedFor(1, 2)).toContain('Environ 30 mots');
+    expect(sharedFor(1, 2)).toContain('Environ 20 mots');
     expect(sharedFor(1, 2)).toContain('ni repère interne seul');
     expect(sharedFor(3, 2)).toContain('ni repère interne seul');
     expect(sharedFor(5, 2)).not.toContain('ni repère interne seul');
     expect(sharedFor(5, 2)).toContain('références exactes');
-    expect(sharedFor(5, 2)).toContain('40 mots au plus');
-    expect(build(1, 2)[1].text).toContain('niveau Découverte : environ 30 mots par bulle');
+    expect(sharedFor(5, 2)).toContain('35 mots au plus');
+    expect(build(1, 2)[1].text).toContain('niveau Découverte : environ 20 mots');
   });
 
   it('humour tiré au sort à chaque tour selon sa fréquence ; niveau inconnu → valeurs par défaut', () => {

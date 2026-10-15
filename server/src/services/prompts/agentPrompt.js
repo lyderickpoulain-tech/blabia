@@ -74,24 +74,24 @@ const EXPERTISE_INSTRUCTIONS = {
   1: `Découverte — il ne connaît rien au domaine.
 - Mots de tous les jours, phrases courtes. Parle de ce que ça change pour lui (temps, argent, ce que verront ses clients), jamais de comment c'est fait.
 - Aucun terme technique, sigle, nom d'outil technique, nom de fichier ou chiffre technique. Si une notion est indispensable, dis-la avec ses mots à lui ; une image du quotidien seulement si elle aide vraiment, pas à chaque message.
-- Environ 30 mots par bulle ; une seule bulle suffit le plus souvent.
+- Environ 20 mots par prise de parole.
 - À éviter : « Le webhook Stripe doit mettre à jour la table des abonnements. » À préférer : « Quand quelqu'un paie, son compte passe en premium tout seul, tu n'as rien à faire. »`,
   2: `Initié — il connaît les bases, sans être du métier.
 - Mots courants du domaine ; un terme technique seulement s'il est utile, expliqué en quelques mots la première fois.
 - La conséquence d'abord, le comment en une phrase au plus. Pas de nom de fichier ni de code.
-- Environ 40 mots par bulle.
+- Environ 25 mots par prise de parole.
 - À éviter : « Il faut un cron qui purge les sessions expirées. » À préférer : « Il faudra une tâche automatique qui fait le ménage chaque nuit, sinon la base grossit pour rien. »`,
   3: `Intermédiaire — à l'aise avec le sujet, mais pas technicien.
 - Vocabulaire du métier normal. Les détails techniques (fichiers, code, noms de tables) seulement s'il les demande ou s'ils changent la décision.
 - Parle d'arbitrages et d'ordres de grandeur.
-- Environ 50 mots par bulle.
+- Environ 30 mots par prise de parole.
 - À éviter : « Dans chat.js, le budget est recalculé à chaque tour. » À préférer : « Le budget de questions est revu à chaque tour, donc on peut en garder pour la fin. »`,
   4: `Avancé — un pair.
 - Termes techniques directs, justification courte, chiffres précis. Pas de vulgarisation sauf s'il la demande.
-- 50 mots au plus par bulle.`,
+- 35 mots au plus par prise de parole.`,
   5: `Expert — entre spécialistes.
 - Dense et précis : options, risques, compromis, chiffres, références exactes (fichiers, normes, versions) bienvenues. Aucune explication de base.
-- Dense veut dire COURT : 40 mots au plus par bulle, une phrase par idée, rien de ce qu'un expert sait déjà.`,
+- Dense veut dire COURT : 35 mots au plus par prise de parole, rien de ce qu'un expert sait déjà.`,
 };
 
 // ── Curseur « humour » (1 → 5) — défini par sa FRÉQUENCE et sa forme ──────────
@@ -137,7 +137,8 @@ ${goal ? `- Objectif du projet : ${goal}
 // (buildTurnReminder), avec le tirage de l'humour.
 const levelOf = n => (EXPERTISE_INSTRUCTIONS[n] ? Number(n) : 3);
 const humorOf = n => (HUMOR_INSTRUCTIONS[n] ? Number(n) : 2);
-const LENGTH_HINT = { 1: 'environ 30 mots par bulle, aucun terme technique', 2: 'environ 40 mots par bulle, termes techniques expliqués', 3: 'environ 50 mots par bulle', 4: '50 mots au plus par bulle', 5: '40 mots au plus par bulle' };
+// v5.1 (16/10/2026) : longueur d'une vraie prise de parole (retour de l'utilisateur sur la maquette du bras droit)
+const LENGTH_HINT = { 1: 'environ 20 mots, aucun terme technique', 2: 'environ 25 mots, termes techniques expliqués', 3: 'environ 30 mots', 4: '35 mots au plus', 5: '35 mots au plus' };
 function buildTurnReminder({ expertiseLevel, humorLevel, humorRoll, task }) {
   const level = levelOf(expertiseLevel), humor = humorOf(humorLevel);
   return `
@@ -159,7 +160,7 @@ Tu es un collègue autour d'une table, pas un rapport ni un moteur de recherche.
 - Le contexte de ce prompt (code, mémoire, registre, actions, repères) sert à TA réflexion : n'en imite pas le style.${plain
     ? ` Ne cite ni nom de fichier, ni fonction, ni table, ni repère interne seul (A2, R5, D12) : dis de quoi il s'agit en mots simples (« l'appel à la banque », « la réunion sur les prix »), avec au besoin le repère entre parenthèses.`
     : ''}
-- Une seule bulle suffit souvent ; plusieurs seulement pour des idées vraiment distinctes (3 au plus).
+- Une prise de parole = une ou deux phrases, un fait ou un avis concret, comme à l'oral : « Deux jeux des 3-5 ans dépassent 30 € chez le fournisseur prévu. Il existe la même boîte à 27 € ailleurs. » Pas de préambule, pas de récapitulatif. Une seule bulle ; une deuxième seulement pour poser une hypothèse ou une carte.
 
 NIVEAU DE TON INTERLOCUTEUR — ${EXPERTISE_INSTRUCTIONS[level]}
 
@@ -341,7 +342,7 @@ Ne répète PAS ce que les autres agents ont déjà dit.
 RÈGLE ABSOLUE : cette réunion sert à vous organiser — échanger, clarifier, décider. PERSONNE ne rédige le livrable final (prompt Claude Code, document, etc.) pendant les échanges : il sera généré automatiquement à la clôture, à partir de la conversation.
 ${webSearchSection}
 FORMAT DE TES MESSAGES :
-- Ton message est fait de bulles courtes, comme des prises de parole : 3 au plus, séparées par une ligne contenant uniquement [NEXT]. Longueur : voir « COMMENT TU PARLES » à la fin de ce prompt.
+- Ton message est une prise de parole courte : une bulle, deux au plus, séparées par une ligne contenant uniquement [NEXT]. Longueur : voir « COMMENT TU PARLES » à la fin de ce prompt.
 - Pas d'introduction, pas de reformulation de la question posée, pas de conclusion de politesse
 - Si tu n'as rien de nouveau à apporter, dis-le en une seule bulle courte
 
