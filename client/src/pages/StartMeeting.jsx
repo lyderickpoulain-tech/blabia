@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Handshake, Code2, Wrench, Sparkles, Check, Plus, X, Lightbulb, ChevronDown, Globe, Play, Coffee } from 'lucide-react';
 import { useProject, PageHeader } from '../components/project/ProjectShell';
-import { Button, Card } from '../components/ui';
+import { Button, Card, Badge } from '../components/ui';
 import api from '../utils/api';
 import QuestionModePicker from '../components/QuestionModePicker';
 import ChallengerToggle from '../components/ChallengerToggle';
@@ -127,6 +127,12 @@ export default function StartMeeting() {
   const [models,            setModels]            = useState([]);
   const [model,             setModel]             = useState(null); // null = défaut du serveur
   const [webSearchEnabled,  setWebSearchEnabled]  = useState(false);
+  // v5.1 (15/10/2026) : modèle et recherche web recommandés selon l'objectif ; appliqués tant
+  // que l'humain ne les a pas changés lui-même
+  const [recommended,       setRecommended]       = useState(null); // { model, modelReason, webSearch, webReason }
+  const touched = useRef({ model: false, web: false });
+  const chooseModel = id => { touched.current.model = true; setModel(id); };
+  const chooseWeb = v => { touched.current.web = true; setWebSearchEnabled(v); };
   const [autoPrepare,       setAutoPrepare]       = useState(!!location.state?.autoPrepare);
   const [expertiseLevel,    setExpertiseLevel]    = useState(project?.expertiseLevel || 3);
   const [humorLevel,        setHumorLevel]        = useState(project?.humorLevel || 2);
@@ -201,6 +207,11 @@ export default function StartMeeting() {
       if (data.newAgentSuggestion) {
         setNewAgentSuggestion(data.newAgentSuggestion);
         setSuggestedScope('project');
+      }
+      if (data.recommended) {
+        setRecommended(data.recommended);
+        if (!touched.current.model) setModel(data.recommended.model);
+        if (!touched.current.web) setWebSearchEnabled(data.recommended.webSearch);
       }
     } catch (err) { notifyError(err, 'La suggestion d’agents a échoué.'); }
     setSuggestingAgents(false);
@@ -480,7 +491,7 @@ export default function StartMeeting() {
               <span className="block text-sm font-extrabold text-ink">Réglages avancés</span>
               {!showAdvanced && (
                 <span className="block text-xs text-ink-faint truncate">
-                  {modelLabel} · {EXPERTISE_LABELS[expertiseLevel - 1]} · humour {HUMOR_LABELS[humorLevel - 1].toLowerCase()} · recherche web {webSearchEnabled ? 'activée' : 'désactivée'}
+                  {modelLabel}{recommended?.model === model ? ' (recommandé)' : ''} · {EXPERTISE_LABELS[expertiseLevel - 1]} · humour {HUMOR_LABELS[humorLevel - 1].toLowerCase()} · recherche web {webSearchEnabled ? 'activée' : 'désactivée'}{recommended && recommended.webSearch === webSearchEnabled ? ' (recommandé)' : ''}
                 </span>
               )}
             </span>
@@ -493,9 +504,13 @@ export default function StartMeeting() {
                 <p className="text-sm font-bold text-ink-soft mb-2">Modèle IA</p>
                 <div className="grid grid-cols-2 gap-2">
                   {models.map(m => (
-                    <ChoiceCard key={m.id} active={model === m.id} onClick={() => setModel(m.id)} className="px-4 py-3">
-                      <p className={`text-sm font-extrabold ${model === m.id ? 'text-action' : 'text-ink'}`}>{m.label}</p>
+                    <ChoiceCard key={m.id} active={model === m.id} onClick={() => chooseModel(m.id)} className="px-4 py-3">
+                      <p className={`flex flex-wrap items-center gap-2 text-sm font-extrabold ${model === m.id ? 'text-action' : 'text-ink'}`}>
+                        {m.label}
+                        {recommended?.model === m.id && <Badge tone="ok" className="!text-[10px] !px-2 !py-0.5">Recommandé</Badge>}
+                      </p>
                       <p className="text-xs text-ink-muted mt-0.5">{m.desc}</p>
+                      {recommended?.model === m.id && recommended.modelReason && <p className="text-xs text-ok mt-1">{recommended.modelReason}</p>}
                     </ChoiceCard>
                   ))}
                 </div>
@@ -511,11 +526,14 @@ export default function StartMeeting() {
                   <div className="flex items-start gap-2.5">
                     <Globe size={18} className="text-ink-muted shrink-0 mt-0.5" aria-hidden="true" />
                     <div>
-                      <p className="text-sm font-bold text-ink-soft">Recherche web</p>
-                      <p className="text-xs text-ink-faint mt-0.5">Les agents pourront chercher des informations en temps réel.</p>
+                      <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink-soft">
+                        Recherche web
+                        {recommended && <Badge tone="ok" className="!text-[10px] !px-2 !py-0.5">{recommended.webSearch ? 'Recommandée' : 'Non recommandée'}</Badge>}
+                      </p>
+                      <p className="text-xs text-ink-faint mt-0.5">{recommended?.webReason || 'Les agents pourront chercher des informations en temps réel.'}</p>
                     </div>
                   </div>
-                  <Toggle checked={webSearchEnabled} onChange={setWebSearchEnabled} label="Recherche web" />
+                  <Toggle checked={webSearchEnabled} onChange={chooseWeb} label="Recherche web" />
                 </div>
                 {webSearchEnabled && (
                   <p className="text-xs text-await bg-await-bg border border-await-border rounded-[10px] px-3 py-2 mt-3">

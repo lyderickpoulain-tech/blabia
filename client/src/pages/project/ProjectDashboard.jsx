@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check, GitPullRequest } from 'lucide-react';
+import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check, GitPullRequest, Flag, RotateCcw } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
@@ -11,6 +11,7 @@ import { formatUSD } from '../../utils/cost';
 import { isOverdueAction } from './ProjectActions';
 import useMissions from '../../hooks/useMissions';
 import { notifyError } from '../../utils/notify';
+import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
@@ -104,6 +105,21 @@ export default function ProjectDashboard() {
   const { project, counts } = useProject();
   const navigate = useNavigate();
   const [plan, setPlan] = useState(null);         // { milestones, milestoneSessions }
+  // v5.1 (15/10/2026) : récapitulatif du projet, une fois le plan terminé
+  const [recap, setRecap] = useState(null);       // { content, createdAt } | null
+  const [recapBusy, setRecapBusy] = useState(false);
+  const [showRecap, setShowRecap] = useState(false);
+  useEffect(() => { api.get(`/projects/${project.id}/recap`).then(({ data }) => setRecap(data)).catch(() => {}); }, [project.id]);
+  const makeRecap = async () => {
+    if (recapBusy) return;
+    setRecapBusy(true);
+    try {
+      const { data } = await api.post(`/projects/${project.id}/recap`);
+      setRecap(data);
+      setShowRecap(true);
+    } catch (err) { notifyError(err, 'Le récapitulatif n’a pas pu être rédigé.'); }
+    setRecapBusy(false);
+  };
   const [sessions, setSessions] = useState([]);
   const [decisions, setDecisions] = useState([]);
   const [tools, setTools] = useState(null);       // { tools, total }
@@ -208,6 +224,32 @@ export default function ProjectDashboard() {
               )}
             </div>
           </>
+        ) : milestones.length > 0 && !project.isDemo ? (
+          // Plan terminé : récapitulatif de tout le projet, qui répond aux objectifs de départ
+          <>
+            <div className="flex-1 min-w-[260px] space-y-1">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-ok">Plan terminé · {milestones.length} réunion{milestones.length > 1 ? 's tenues' : ' tenue'}</p>
+              <h2 id="next-title" className="text-xl font-extrabold text-ink">{recap ? 'Le récapitulatif du projet est prêt' : 'Faites le récapitulatif du projet'}</h2>
+              <p className="text-sm text-ink-muted">
+                {recap
+                  ? `Rédigé le ${new Date(recap.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} : résultat, réponse aux objectifs de départ, décisions clés et ce qui reste à faire. Il est aussi dans les documents du projet.`
+                  : 'Un bilan bref de tout le projet : le résultat obtenu et, point par point, la réponse aux objectifs de départ.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {recap ? (
+                <>
+                  <Button variant="primary" onClick={() => setShowRecap(true)}><Flag size={16} aria-hidden="true" /> Voir le récapitulatif</Button>
+                  <Button variant="ghost" onClick={makeRecap} disabled={recapBusy} title="Rédiger à nouveau, avec les dernières réunions">
+                    <RotateCcw size={16} aria-hidden="true" /> {recapBusy ? 'Rédaction…' : 'Régénérer'}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" onClick={makeRecap} disabled={recapBusy}><Flag size={16} aria-hidden="true" /> {recapBusy ? 'Rédaction en cours…' : 'Faire le récapitulatif'}</Button>
+              )}
+              {project.brief && <Button variant="secondary" onClick={() => setShowGenerate(true)}><Sparkles size={16} aria-hidden="true" /> Prévoir une suite</Button>}
+            </div>
+          </>
         ) : (
           <>
             <div className="flex-1 min-w-[260px] space-y-1">
@@ -226,6 +268,11 @@ export default function ProjectDashboard() {
           </>
         )}
       </Card>
+
+      {showRecap && recap && (
+        <SummaryDisplayModal title={`Récapitulatif — ${project.name}`} date={new Date(recap.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+          content={recap.content} onClose={() => setShowRecap(false)} />
+      )}
 
       {/* Points d'attention */}
       {attention.length > 0 && (

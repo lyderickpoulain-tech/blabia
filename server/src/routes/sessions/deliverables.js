@@ -122,9 +122,13 @@ ${agentsList}
 
 1. Sélectionne 2 à ${agenda.length ? 5 : 4} agents parmi la liste ci-dessus qui sont DIRECTEMENT utiles. Ne sélectionne pas un agent simplement parce qu'il existe.
 2. Si une compétence importante manque pour cet objectif et qu'aucun agent existant ne la couvre, suggère la création d'UN SEUL nouvel agent spécialisé avec un nom et un rôle précis. Sinon, mets null.
+3. Recommande les réglages de la réunion :
+   - "model" : "opus" seulement si la réunion est complexe ET à fort enjeu (arbitrage structurant entre options interdépendantes, architecture technique, analyse fine d'un document juridique ou financier, stratégie d'ensemble) ; "sonnet" pour tout le reste (la plupart des réunions : organiser, choisir, lister, rédiger, avancer une étape).
+   - "webSearch" : true seulement si la réunion a besoin d'informations EXTERNES ou récentes (prix, offres, concurrents, produits existants, fournisseurs, réglementation, actualité, avis) ; false pour ce qui se décide avec ce que l'humain et le projet savent déjà (préférences, organisation, rédaction, code).
+   Pour chacun, une raison de 8 mots au plus.
 
 Retourne UNIQUEMENT ce JSON :
-{"existingSelected":[{"name":"NomExact","reason":"Courte raison (10 mots max)"}],"newAgentSuggestion":{"name":"NomAgent","role":"Rôle précis en une phrase","reason":"Pourquoi ce profil est nécessaire pour cet objectif"} ou null}`
+{"existingSelected":[{"name":"NomExact","reason":"Courte raison (10 mots max)"}],"newAgentSuggestion":{"name":"NomAgent","role":"Rôle précis en une phrase","reason":"Pourquoi ce profil est nécessaire pour cet objectif"} ou null,"settings":{"model":"sonnet|opus","modelReason":"…","webSearch":false,"webReason":"…"}}`
       }]
     });
 
@@ -139,13 +143,22 @@ Retourne UNIQUEMENT ce JSON :
       return a ? { agentId: a.id, agentName: a.name, emoji: a.emoji, reason: s.reason } : null;
     }).filter(Boolean);
 
-    res.json({ existingSelected, newAgentSuggestion: parsed.newAgentSuggestion || null });
+    // v5.1 (15/10/2026) : modèle et recherche web recommandés pour cet objectif (même appel)
+    const st = parsed.settings || {};
+    const recommended = {
+      model: st.model === 'opus' ? 'claude-opus-5-5' : 'claude-sonnet-5-5',
+      modelReason: String(st.modelReason || '').slice(0, 120),
+      webSearch: st.webSearch === true,
+      webReason: String(st.webReason || '').slice(0, 120),
+    };
+    res.json({ existingSelected, newAgentSuggestion: parsed.newAgentSuggestion || null, recommended });
   } catch {
     try {
       const fallback = await db('Agent').select('id', 'name', 'emoji').where({ isDefault: true }).limit(2);
       res.json({
         existingSelected: fallback.map(a => ({ agentId: a.id, agentName: a.name, emoji: a.emoji, reason: 'Agent par défaut' })),
-        newAgentSuggestion: null
+        newAgentSuggestion: null,
+        recommended: null
       });
     } catch (e) {
       res.status(500).json({ error: 'Erreur serveur' });

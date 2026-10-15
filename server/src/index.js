@@ -47,6 +47,7 @@ app.use('/api/projects',                     require('./routes/decisionRegistry'
 app.use('/api/projects',                     require('./routes/actions'));
 app.use('/api/projects',                     require('./routes/documents'));
 app.use('/api/projects',                     require('./routes/missions'));
+app.use('/api/projects',                     require('./routes/recap'));
 app.use('/api/projects',                     require('./routes/exports'));
 app.use('/api/projects',                     require('./routes/devTasks'));
 app.use('/api/github',                       require('./routes/github'));

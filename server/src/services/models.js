@@ -8,7 +8,7 @@
 
 // Modèles proposés à l'humain au démarrage d'une réunion (StartMeeting, via GET /api/models)
 const MEETING_MODELS = [
-  { id: 'claude-sonnet-5-5', label: 'Sonnet', desc: 'Rapide et économique (recommandé)' },
+  { id: 'claude-sonnet-5-5', label: 'Sonnet', desc: 'Rapide et économique' }, // « Recommandé » : selon l'objectif (suggest-agents)
   { id: 'claude-opus-5-5',   label: 'Opus',   desc: 'Plus puissant, plus coûteux' },
 ];
 

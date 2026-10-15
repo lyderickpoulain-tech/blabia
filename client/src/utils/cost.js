@@ -20,6 +20,7 @@ const KIND_LABELS = {
   'extract-file':          'Lecture de fichiers joints',
   'generate-memory':       'Mémoire du projet',
   mission:                 'Missions des agents',
+  recap:                   'Récapitulatif du projet',
 };
 
 export function kindLabel(kind = '') {
