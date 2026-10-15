@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image as ImageIcon, Sparkles, ShieldAlert, Check } from 'lucide-react';
+import { Image as ImageIcon, Sparkles, ShieldAlert, Check, ThumbsUp, Crosshair, GraduationCap, Scissors, Megaphone } from 'lucide-react';
 import DecisionCard from '../DecisionCard';
 import MissionCard from '../MissionCard';
 import Markdown from '../Markdown';
@@ -59,7 +59,14 @@ function WebSearchBlock({ webSearch }) {
 }
 
 // Hypothèse explicite d'un agent (consigne du prompt : bulle « Hypothèse : … » ; « sauf avis contraire » pour les anciennes réunions)
-const HYPOTHESIS_RE = /sauf avis contraire|^\s*hypoth[eè]se\s*:/i;
+export const HYPOTHESIS_RE = /sauf avis contraire|^\s*hypoth[eè]se\s*:/i;
+// v5.1 (16/10/2026) : avis de l'humain sur une bulle → préférences apprises par les agents
+const FEEDBACK = [
+  { kind: 'good',          label: 'Bien vu',             icon: ThumbsUp },
+  { kind: 'off_topic',     label: 'À côté de la plaque', icon: Crosshair },
+  { kind: 'too_technical', label: 'Trop technique',      icon: GraduationCap },
+  { kind: 'too_long',      label: 'Trop long',           icon: Scissors },
+];
 const stripHypothesisPrefix = t => t.replace(/^\s*hypoth[eè]se\s*:\s*/i, '');
 const KIND_LABEL = { mermaid: 'Schéma', html: 'Maquette', svg: 'Visuel' };
 const TURN_SEPARATOR = 'mt-2 pt-2.5 border-t border-line [&:first-child]:mt-0 [&:first-child]:border-t-0';
@@ -81,6 +88,7 @@ export default function ConversationFeed({
   onOpenArtifact, openArtifactId, onContradict,
   prepExpanded, onTogglePrep, onVigilance,
   missions = [], onApproveMission, onRejectMission, onOpenMissionReport,
+  feedback = {}, onFeedback,
 }) {
   const [acknowledged, setAcknowledged] = useState(() => new Set()); // hypothèses approuvées
 
@@ -147,7 +155,7 @@ export default function ConversationFeed({
     const isHypothesis = HYPOTHESIS_RE.test(msg.content || '');
     const text = isHypothesis ? stripHypothesisPrefix(msg.content) : msg.content;
     return (
-      <div key={msg.id} className={`flex gap-2.5 items-start ${grouped ? 'pt-0.5' : TURN_SEPARATOR}`}>
+      <div key={msg.id} className={`group flex gap-2.5 items-start ${grouped ? 'pt-0.5' : TURN_SEPARATOR}`}>
         <AgentAvatar agent={agent} color={color} name={msg.agentName} hidden={grouped} />
         <div className="flex-1 min-w-0">
           {!grouped && (
@@ -172,6 +180,21 @@ export default function ConversationFeed({
                 className="min-h-[32px] font-bold text-ok hover:underline">D'accord</button>
               <button type="button" onClick={() => onContradict?.(msg.agentName)}
                 className="min-h-[32px] font-bold text-await hover:underline">Je contredis</button>
+            </div>
+          )}
+          {onFeedback && !msg.prep && (
+            <div className={`flex flex-wrap gap-1 mt-0.5 ${feedback[msg.id] ? '' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'} transition-opacity`}>
+              {FEEDBACK.map(f => {
+                const on = feedback[msg.id] === f.kind;
+                if (feedback[msg.id] && !on) return null;
+                return (
+                  <button key={f.kind} type="button" onClick={() => onFeedback(msg.id, on ? null : f.kind)} aria-pressed={on}
+                    title={on ? 'Retirer mon avis' : `${f.label} : les agents en tiendront compte`}
+                    className={`h-7 px-2 inline-flex items-center gap-1 rounded-md text-[11px] font-bold ${on ? (f.kind === 'good' ? 'bg-ok-light text-ok' : 'bg-await-light text-await') : 'text-ink-faint hover:bg-muted-light hover:text-ink-soft'}`}>
+                    <f.icon size={12} aria-hidden="true" /> {f.label}
+                  </button>
+                );
+              })}
             </div>
           )}
           {msg.webSearch && <WebSearchBlock webSearch={msg.webSearch} />}
@@ -306,6 +329,20 @@ export default function ConversationFeed({
     // Réponses aux questions (decision_answer) : messages techniques pour les
     // agents, déjà visibles sur la carte de question et dans « Tranché ici »
     if (msg.role === 'system' && msg.type === 'decision_answer') return;
+    // v5.1 : la voix de l'animation (transitions, « Où en est-on ? »)
+    if (msg.type === 'animator') {
+      items.push(
+        <div key={msg.id} className={`flex gap-2.5 items-start ${TURN_SEPARATOR}`}>
+          <span className="w-8 h-8 rounded-full bg-ai-light text-ai inline-flex items-center justify-center shrink-0" aria-hidden="true"><Megaphone size={15} /></span>
+          <div className="flex-1 min-w-0 max-w-[640px]">
+            <p className="text-xs text-ink-faint"><strong className="font-extrabold text-ai">Animation</strong>{msg.kind === 'where' && ' · point de situation'}{timeOf(msg.timestamp) && <> · {timeOf(msg.timestamp)}</>}</p>
+            <p className={`mt-0.5 text-sm leading-[1.45] text-ink-soft ${msg.kind === 'where' ? 'whitespace-pre-line bg-ai-bg border border-ai-border rounded-xl px-3 py-2' : 'italic'}`}>{msg.content}</p>
+          </div>
+        </div>
+      );
+      prevAgent = null;
+      return;
+    }
     if (msg.role === 'system') {
       items.push(<p key={msg.id} className="text-center text-xs text-ink-faint py-1">{stripLeadingEmoji(msg.content)}</p>);
       prevAgent = null;

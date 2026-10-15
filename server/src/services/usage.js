@@ -69,7 +69,7 @@ async function recordUsage(model, usage) {
 // Routes qui sollicitent l'IA (UsageLog.kind) : refusées sur un projet exemple
 const AI_KINDS = [
   'chat', 'extract-file', 'generate-deliverable', 'generate-memory', 'sessions/suggest-agents',
-  'quick-command', 'generate-timeline', 'tools/analyze', 'export/claude-code', 'recap',
+  'quick-command', 'generate-timeline', 'tools/analyze', 'export/claude-code', 'recap', 'where', 'summary-format',
 ];
 
 // Monté après usageMiddleware. Projet exemple (visite guidée) : jeu de données

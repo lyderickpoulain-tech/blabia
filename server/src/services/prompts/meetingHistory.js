@@ -8,12 +8,13 @@
 const HISTORY_WINDOW = 60;
 const HISTORY_STEP = 20;
 
-const visibleMessages = messages => messages.filter(m => m.role !== 'system' || m.type === 'decision_answer' || m.type === 'prep_summary');
+const visibleMessages = messages => messages.filter(m => m.role !== 'system' || m.type === 'decision_answer' || m.type === 'prep_summary' || m.type === 'animator');
 
 function lineOf(m) {
   if (m.role === 'human') return `Participant : ${m.content}`;
   if (m.role === 'system' && m.type === 'decision_answer') return `[${m.content}]`;
   if (m.role === 'system' && m.type === 'prep_summary') return `[Synthèse de la préparation entre agents]\n${m.content}`;
+  if (m.type === 'animator') return `Animation : ${m.content}`; // v5.1 : la voix de l'animateur
   return `${m.agentName} : ${m.content}${m.artifact ? ` [Illustration produite : « ${m.artifact.title} »]` : ''}`;
 }
 

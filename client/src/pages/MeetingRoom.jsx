@@ -11,7 +11,7 @@ import MeetingSidePanel, { IllustrationPanel } from '../components/meeting/Meeti
 import BriefingView from '../components/meeting/BriefingView';
 import { DELEGATE } from '../components/DecisionCard';
 import ArtifactCard from '../components/meeting/ArtifactCard';
-import ConversationFeed from '../components/meeting/ConversationFeed';
+import ConversationFeed, { HYPOTHESIS_RE } from '../components/meeting/ConversationFeed';
 import ResetMeetingModal from '../components/meeting/ResetMeetingModal';
 import { AGENT_COLORS, STATUS_BADGE, DELIVERABLE_TYPES } from '../components/meeting/meetingConstants';
 import useAttachments from '../hooks/useAttachments';
@@ -130,6 +130,27 @@ export default function MeetingRoom() {
 
   // Réunion conclue (ou abandonnée) : retour au tableau de bord du projet, où se lit la suite
   // (actions, prochaine réunion, développement lancé) — v5.1, 15/10/2026
+  // v5.1 (16/10/2026) : avis sur les bulles (préférences apprises) et « Où en est-on ? »
+  const [feedback, setFeedback] = useState({});
+  useEffect(() => {
+    api.get(`/projects/${projectId}/sessions/${sessionId}/feedback`).then(({ data }) => setFeedback(data || {})).catch(() => {});
+  }, [projectId, sessionId]);
+  const handleFeedback = useCallback(async (messageId, kind) => {
+    setFeedback(prev => { const next = { ...prev }; if (kind) next[messageId] = kind; else delete next[messageId]; return next; });
+    try { await api.post(`/projects/${projectId}/sessions/${sessionId}/feedback`, { messageId, kind }); }
+    catch (err) { notifyError(err, 'Votre avis n’a pas pu être enregistré.'); }
+  }, [projectId, sessionId]);
+  const [whereBusy, setWhereBusy] = useState(false);
+  const handleWhere = useCallback(async () => {
+    setWhereBusy(true);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/where`);
+      setMessages(prev => [...prev, data.message]);
+      setTimeout(() => feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' }), 50);
+    } catch (err) { notifyError(err, 'Le point de situation n’a pas pu être fait.'); }
+    setWhereBusy(false);
+  }, [projectId, sessionId]);
+
   const handleSessionClosed = useCallback((newStatus) => {
     setSession(prev => prev ? { ...prev, status: newStatus } : prev);
     setShowCloseModal(false);
@@ -559,7 +580,7 @@ export default function MeetingRoom() {
             } else if (ev.type === 'suggest_meeting') {
               setStepSuggestions(prev => [...prev, ev.suggestion]);
 
-            } else if (ev.type === 'prep_summary') {
+            } else if (ev.type === 'prep_summary' || ev.type === 'animator') {
               setMessages(prev => [...prev, ev.message]);
 
             } else if (ev.type === 'suggest_tool') {
@@ -744,6 +765,13 @@ export default function MeetingRoom() {
   else if (prepSummaryMsg && pendingPrepDecisions.length > 0)      phase = 'briefing';
   const skippedPhases = prepStarted ? [] : ['preparation', 'briefing'];
 
+  // v5.1 : relevé en direct (panneau) — hypothèses posées et points de vigilance traités
+  const shortText = t => { const x = String(t || '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim(); const y = x.charAt(0).toUpperCase() + x.slice(1); return y.length > 180 ? `${y.slice(0, 180).replace(/\s+\S*$/, '')}…` : y; };
+  const liveHypotheses = messages.filter(m => m.role === 'agent' && !m.prep && HYPOTHESIS_RE.test(m.content || ''))
+    .map(m => ({ id: m.id, agentName: m.agentName, text: shortText((m.content || '').replace(/^\s*hypoth[eè]se\s*:\s*/i, '')) }));
+  const liveVigilances = messages.filter(m => m.vigilance && m.vigilance.status !== 'open')
+    .map(m => ({ id: m.id, status: m.vigilance.status, text: shortText((m.content || '').replace(/^\s*\*\*Point de vigilance\*\*\s*:\s*/i, '')) }));
+
   const artifactMessages = messages.filter(m => m.artifact);
   const openArtifact     = artifactMessages.find(m => m.id === openArtifactId) || null;
   const questionsUsed    = decisions.length;
@@ -888,6 +916,8 @@ export default function MeetingRoom() {
         panelOpen={panelOpen && !openArtifact}
         onTogglePanel={() => { setOpenArtifactId(null); setPanelOpen(o => !(o && !openArtifact)); }}
         onShowQuestions={showQuestionsInPanel}
+        onWhere={messages.filter(m => m.role === 'agent').length >= 2 && !isStreaming ? handleWhere : null}
+        whereBusy={whereBusy}
         onConclude={handleConclude}
         onReset={() => setShowResetModal(true)}
       />
@@ -957,6 +987,8 @@ export default function MeetingRoom() {
                   onApproveMission={handleApproveMission}
                   onRejectMission={missionsApi.reject}
                   onOpenMissionReport={setMissionReport}
+                  feedback={feedback}
+                  onFeedback={handleFeedback}
                   prepExpanded={prepExpanded}
                   onTogglePrep={() => setPrepExpanded(v => !v)}
                 />
@@ -1028,6 +1060,8 @@ export default function MeetingRoom() {
         ) : panelOpen && (
           <MeetingSidePanel
             isClosed={isClosed}
+            hypotheses={liveHypotheses}
+            vigilances={liveVigilances}
             decisions={decisions}
             decisionBudget={session?.decisionBudget}
             onAnswerDecision={handleAnswerDecision}
@@ -1090,6 +1124,7 @@ export default function MeetingRoom() {
           ? new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
           : ''}
         content={session.summary}
+        formatsPath={project?.isDemo ? null : `/projects/${projectId}/sessions/${sessionId}/summary-format`}
         onClose={() => setShowDeliverable(false)}
       />
     )}

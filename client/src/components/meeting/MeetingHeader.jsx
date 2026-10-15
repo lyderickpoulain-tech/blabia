@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, SlidersHorizontal, PanelRight, Globe, RotateCcw } from 'lucide-react';
+import { ArrowLeft, SlidersHorizontal, PanelRight, Globe, RotateCcw, Compass } from 'lucide-react';
 import { Badge, Button, IconButton } from '../ui';
 import PhaseStepper from './PhaseStepper';
 import QuestionModePicker from '../QuestionModePicker';
@@ -19,6 +19,7 @@ export default function MeetingHeader({
   tokensUsed, activeAgents,
   panelOpen, onTogglePanel, onShowQuestions,
   onConclude, onReset,
+  onWhere, whereBusy = false, // v5.1 : point de situation par l'animation
 }) {
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef(null);
@@ -131,6 +132,11 @@ export default function MeetingHeader({
           <PanelRight size={18} />
         </IconButton>
 
+        {!isClosed && onWhere && (
+          <Button size="md" variant="ghost" onClick={onWhere} disabled={whereBusy} title="L'animation fait le point en trois lignes : où on en est, ce qui est acquis, ce qui reste à trancher">
+            <Compass size={16} aria-hidden="true" /> <span className="hidden md:inline">{whereBusy ? 'Point en cours…' : 'Où en est-on ?'}</span>
+          </Button>
+        )}
         {isClosed
           ? <Badge tone={session.status === 'accepted' ? 'ok' : 'muted'}>{statusLabel}</Badge>
           : <Button data-tour="mr-conclude" size="md" variant="secondary" onClick={onConclude}>Conclure</Button>}

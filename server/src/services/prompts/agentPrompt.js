@@ -11,6 +11,7 @@
 
 const { memoryForPrompt } = require('../../utils/projectMemory');
 const { projectObjective } = require('../../utils/projectObjective');
+const { POSTURE } = require('./posture');
 
 // v5.0 phase 3.2 : decision | claude_code | stack. Nuance spécifique par type —
 // la règle générale "pas de livrable pendant les échanges" (3.3) est universelle,
@@ -223,6 +224,7 @@ function buildAgentSystemPrompt({
   challengerSection = '', // v5.1 : tour du contradicteur (services/challenger.js)
   humorRoll = Math.random(), // tirage de l'humour pour ce tour (fixé dans les tests)
   questionMode = 'balanced', // services/questionModes.js : ce qui revient à l'humain
+  preferencesText = '', // v5.1 : avis de l'humain sur des bulles d'agents (services/feedback.js)
 }) {
   // Registre des décisions du projet : ce qui est tranché ne se redemande pas ;
   // ce que l'humain a remis en question est à retraiter en priorité.
@@ -366,7 +368,11 @@ RÈGLES SUR LES DÉCISIONS :
 - Une question soumise à l'humain par une carte lui appartient : ne la tranche jamais à sa place et n'avance pas sur ce point avant sa réponse.
 - Tout le reste avance par hypothèses explicites que l'humain peut contredire. S'il te contredit, prends-le en compte sans le rediscuter, sauf risque réel que tu signales en une phrase.
 - Ne pose JAMAIS une question déjà tranchée dans la mémoire du projet ou plus haut dans la réunion.${intentionInstruction}
-${buildCapSection({ task: session.task, intention, project })}${buildStyleSection(expertiseLevel, humorLevel)}`;
+${buildCapSection({ task: session.task, intention, project })}
+${POSTURE}
+${preferencesText ? `
+${preferencesText}
+` : ''}${buildStyleSection(expertiseLevel, humorLevel)}`;
 
   // ── 2. Bloc du tour (non mis en cache) ─────────────────────────────────────
   const turn = `TON RÔLE DANS CETTE RÉUNION : tu es ${agent.name}, ${agent.role}.

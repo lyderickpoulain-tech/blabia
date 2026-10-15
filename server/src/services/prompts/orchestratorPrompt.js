@@ -87,8 +87,10 @@ Décide maintenant :
 2. Pourquoi ? (1 phrase courte)
 3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
 
+ANIMATION : tu es aussi l'animateur VISIBLE de la réunion. Dans "animation", écris UNE phrase courte, dite à voix haute aux participants, SEULEMENT à une transition : ouverture de la réunion (ce qu'on doit produire), recentrage après une digression, point épuisé qu'il faut faire trancher, objectif atteint (proposer de conclure). Ton d'animateur bienveillant et ferme, sans jargon (ex. « On a fait le tour des prix ; Léa, tu proposes une fourchette à valider ? »). Le reste du temps, laisse "animation" vide : la plupart des tours.
+
 Réponds UNIQUEMENT avec ce JSON :
-{"agentIndex": 1, "reason": "...", "shouldClose": false, "offTrack": false${challengeSection ? ', "challenge": false, "challengeTarget": ""' : ''}${codeSection ? ', "codeQuestion": ""' : ''}}`;
+{"agentIndex": 1, "reason": "...", "shouldClose": false, "offTrack": false, "animation": ""${challengeSection ? ', "challenge": false, "challengeTarget": ""' : ''}${codeSection ? ', "codeQuestion": ""' : ''}}`;
 }
 
 // v5.1 : projet relié à un dépôt — l'orchestrateur repère une question qui demande de lire

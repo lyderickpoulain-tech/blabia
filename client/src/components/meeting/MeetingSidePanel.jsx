@@ -160,6 +160,7 @@ export default function MeetingSidePanel({
   activeAgents, agentColors, agentAddProps, onOpenAgentAdd,
   artifacts, onOpenArtifact,
   questionsRef,
+  hypotheses = [], vigilances = [], // v5.1 : relevé en direct
 }) {
   const waiting  = decisions.filter(d => d.status === 'deferred');
   const settled  = decisions.filter(d => d.status === 'answered' || d.status === 'delegated');
@@ -182,8 +183,9 @@ export default function MeetingSidePanel({
         </PanelSection>
       )}
 
-      <PanelSection sectionRef={waiting.length ? undefined : questionsRef} icon={CheckCheck} tone="ok" title="Tranché ici" count={settled.length}>
-        {settled.length === 0 && <p className="text-xs text-ink-faint">Rien pour l'instant. Proposé au registre à la conclusion.</p>}
+      <PanelSection sectionRef={waiting.length ? undefined : questionsRef} icon={CheckCheck} tone="ok" title="Relevé en direct" count={settled.length + hypotheses.length + vigilances.length}>
+        {settled.length + hypotheses.length + vigilances.length === 0 && <p className="text-xs text-ink-faint">Il se remplit au fil de la réunion : décisions, hypothèses retenues, points de vigilance. Proposé au registre à la conclusion.</p>}
+        {settled.length > 0 && <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-faint">Décisions</p>}
         <ul className="space-y-2">
           {settled.map(d => (
             <li key={d.id} className="text-[13px] leading-snug">
@@ -196,6 +198,28 @@ export default function MeetingSidePanel({
             </li>
           ))}
         </ul>
+        {hypotheses.length > 0 && (
+          <>
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-faint pt-1">Hypothèses retenues</p>
+            <ul className="space-y-1.5">
+              {hypotheses.map(h => (
+                <li key={h.id} className="text-[13px] leading-snug text-ink-soft">
+                  {h.text}<span className="text-ink-faint"> · {h.agentName}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {vigilances.length > 0 && (
+          <>
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-faint pt-1">Points de vigilance</p>
+            <ul className="space-y-1.5">
+              {vigilances.map(v => (
+                <li key={v.id} className={`text-[13px] leading-snug ${v.status === 'accepted' ? 'text-ink-soft' : 'text-ink-faint line-through'}`}>{v.text}</li>
+              ))}
+            </ul>
+          </>
+        )}
       </PanelSection>
 
       <PanelSection icon={Lightbulb} tone="await" title="Suggestions" count={suggestionCount}>

@@ -21,6 +21,8 @@ const KIND_LABELS = {
   'generate-memory':       'Mémoire du projet',
   mission:                 'Missions des agents',
   recap:                   'Récapitulatif du projet',
+  where:                   'Points de situation',
+  'summary-format':        'Formats de compte rendu',
 };
 
 export function kindLabel(kind = '') {

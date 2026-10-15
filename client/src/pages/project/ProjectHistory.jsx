@@ -160,6 +160,13 @@ export default function ProjectHistory() {
   };
   const [stats, setStats] = useState(null);
   const [deliverableSession, setDeliverableSession] = useState(null);
+  // La liste ne porte pas le texte des comptes rendus : il est lu à l'ouverture (la fenêtre restait vide)
+  const openDeliverable = async session => {
+    try {
+      const { data } = await api.get(`/projects/${project.id}/sessions/${session.id}`);
+      setDeliverableSession({ ...session, summary: data.summary, deliverable: data.deliverable });
+    } catch (err) { notifyError(err, 'Le compte rendu n’a pas pu être chargé.'); }
+  };
 
   useEffect(() => {
     api.get(`/projects/${project.id}/sessions`).then(({ data }) => setSessions(data)).catch(() => setSessions([]));
@@ -190,7 +197,7 @@ export default function ProjectHistory() {
               const threads = buildThreads(sessions);
               const firstDone = threads.find(s => s.status === 'accepted')?.id; // ancre de la visite guidée
               return threads.map(s => (
-              <SessionItem key={s.id} tour={s.id === firstDone ? 'hist-first' : undefined} session={s} projectId={project.id} cost={stats?.bySession?.[s.id] || 0} onViewDeliverable={setDeliverableSession}
+              <SessionItem key={s.id} tour={s.id === firstDone ? 'hist-first' : undefined} session={s} projectId={project.id} cost={stats?.bySession?.[s.id] || 0} onViewDeliverable={openDeliverable}
                 canDelete={isOwner && !project.isDemo} onDeleted={onDeleted} />
             ));
             })()}
@@ -205,6 +212,7 @@ export default function ProjectHistory() {
       )}
       {dlg && intentionOf(dlg) !== 'claude_code' && (
         <SummaryDisplayModal title={dlg.task} date={dlgDate} content={dlg.summary} onClose={() => setDeliverableSession(null)}
+          formatsPath={project.isDemo ? null : `/projects/${project.id}/sessions/${dlg.id}/summary-format`}
           exports={{ pdfPath: `/projects/${project.id}/imprimer/reunion/${dlg.id}`, wordPath: `/projects/${project.id}/export/sessions/${dlg.id}/word` }} />
       )}
     </>

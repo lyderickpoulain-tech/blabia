@@ -31,6 +31,7 @@ model User {
   agents             Agent[]
   projectMemberships ProjectMember[]
   projectPresences   ProjectPresence[]
+  agentFeedbacks     AgentFeedback[]
   createdMilestones  Milestone[] @relation("MilestoneCreator")
   createdTodos       TodoItem[]  @relation("TodoCreator")
   usageLogs          UsageLog[]
@@ -102,6 +103,7 @@ model Project {
   sessions      Session[]
   members       ProjectMember[]
   presences     ProjectPresence[]
+  agentFeedbacks AgentFeedback[]
   invitations   Invitation[]
   projectAgents ProjectAgent[]
   milestones    Milestone[]
@@ -184,6 +186,25 @@ model ProjectPresence {
   @@id([projectId, userId])
 }
 
+// v5.1 : avis de l'humain sur une bulle d'agent → préférences apprises (services/feedback.js)
+model AgentFeedback {
+  id        String   @id @default(uuid())
+  userId    String
+  projectId String
+  sessionId String?
+  messageId String
+  agentName String?
+  kind      String   // off_topic | too_technical | too_long | good
+  excerpt   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session   Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId, createdAt])
+}
+
 model ProjectMember {
   id        String   @id @default(uuid())
   projectId String
@@ -243,6 +264,8 @@ model Session {
   missions          AgentMission[]
   devTasks          DevTask[]
   todo            TodoItem? @relation("SessionFromAction", fields: [todoId], references: [id], onDelete: SetNull)
+  summaryFormats Json?    // v5.1 : CR décliné (relevé de décisions, synthèse exécutive, procès-verbal)
+  agentFeedbacks AgentFeedback[]
 }
 
 // v5.0 : registre des décisions du projet — alimenté à la clôture des réunions

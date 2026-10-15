@@ -2,13 +2,38 @@ import { useState } from 'react';
 import { Check, X } from 'lucide-react';
 import Markdown from './Markdown';
 import ExportButtons from './ExportButtons';
+import api from '../utils/api';
+import { notifyError } from '../utils/notify';
+
+// v5.1 (16/10/2026) : un même compte rendu, selon le lecteur (POST /sessions/:id/summary-format)
+const FORMAT_TABS = [
+  { id: 'full',      label: 'Compte rendu' },
+  { id: 'decisions', label: 'Relevé de décisions' },
+  { id: 'executive', label: 'Synthèse exécutive' },
+  { id: 'pv',        label: 'Procès-verbal' },
+];
 
 // exports (v5.1) : { pdfPath, wordPath } pour exporter le compte-rendu en PDF / Word
-export default function SummaryDisplayModal({ title, date, content, onClose, exports, actions = null }) {
+// formatsPath : réunion conclue → onglets de formats, générés à la demande puis conservés
+export default function SummaryDisplayModal({ title, date, content, onClose, exports, actions = null, formatsPath = null }) {
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState('full');
+  const [variants, setVariants] = useState({});
+  const [loadingFormat, setLoadingFormat] = useState(null);
+  const shown = tab === 'full' ? content : variants[tab];
+  const pickFormat = async id => {
+    setTab(id);
+    if (id === 'full' || variants[id] || !formatsPath) return;
+    setLoadingFormat(id);
+    try {
+      const { data } = await api.post(formatsPath, { format: id });
+      setVariants(v => ({ ...v, [id]: data.content }));
+    } catch (err) { notifyError(err, 'La mise en forme a échoué.'); setTab('full'); }
+    setLoadingFormat(null);
+  };
 
   const handleCopy = () => {
-    const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    const text = typeof shown === 'string' ? shown : JSON.stringify(shown, null, 2);
     navigator.clipboard.writeText(text).catch(() => {
       const el = document.createElement('textarea');
       el.value = text;
@@ -31,7 +56,7 @@ export default function SummaryDisplayModal({ title, date, content, onClose, exp
             <h2 className="text-sm font-bold text-gray-900 leading-snug">{title || 'Compte-rendu'}</h2>
             {date && <p className="text-xs text-gray-400 mt-0.5">{date}</p>}
           </div>
-          {exports && <ExportButtons size="sm" pdfPath={exports.pdfPath} wordPath={exports.wordPath} className="shrink-0" />}
+          {exports && tab === 'full' && <ExportButtons size="sm" pdfPath={exports.pdfPath} wordPath={exports.wordPath} className="shrink-0" />}
           <button
             onClick={handleCopy}
             className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border transition ${
@@ -50,15 +75,30 @@ export default function SummaryDisplayModal({ title, date, content, onClose, exp
           </button>
         </div>
 
+        {formatsPath && (
+          <div role="tablist" aria-label="Format du compte rendu" className="shrink-0 flex flex-wrap gap-1 px-5 pt-3">
+            {FORMAT_TABS.map(f => (
+              <button key={f.id} type="button" role="tab" aria-selected={tab === f.id} onClick={() => pickFormat(f.id)}
+                className={`h-8 px-3 rounded-full text-xs font-bold border transition ${tab === f.id ? 'bg-action text-white border-action' : 'bg-white text-ink-muted border-line hover:border-action-border'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Corps scrollable */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {typeof content === 'string' ? (
+          {loadingFormat ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-ink-muted">
+              <span className="w-4 h-4 border-2 border-action border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Mise en forme…
+            </div>
+          ) : typeof shown === 'string' ? (
             <article>
-              <Markdown>{content}</Markdown>
+              <Markdown>{shown}</Markdown>
             </article>
           ) : (
             <pre className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
-              {JSON.stringify(content, null, 2)}
+              {JSON.stringify(shown, null, 2)}
             </pre>
           )}
         </div>

@@ -24,6 +24,7 @@ const { sessionCodeContext, lookupCode, codeAccess, readPaths } = require('../..
 const { meetingHistory, withHistory } = require('../../services/prompts/meetingHistory');
 const { projectObjective } = require('../../utils/projectObjective');
 const preparation = require('../../services/preparation');
+const { preferencesForPrompt } = require('../../services/feedback');
 const { actionForPrompt } = require('../../services/actions');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
@@ -180,6 +181,7 @@ async function orchestrate({ session, project, messages, activeAgents,
       agentId:     agentsForSelection[idx].id,
       reason:      offTrack ? `RECENTRER la réunion sur son objectif — ${dec.reason || 'reviens à ce que la réunion doit produire'}` : (dec.reason || ''),
       offTrack,
+      animation:   String(dec.animation || '').trim().slice(0, 300),
       shouldClose: dec.shouldClose === true,
       // Le contradicteur ne parle que si l'orchestrateur l'estime utile ET qu'il reste disponible
       challenge:       canChallenge && dec.challenge === true && !!String(dec.challengeTarget || '').trim(),
@@ -362,6 +364,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     // Mode de questions (réunion > projet) : budget de cartes de décision
     const decisionBudget = decisionBudgetFor(session, project);
     const questionMode   = effectiveQuestionMode(session, project);
+    // v5.1 : préférences apprises de l'humain qui lance l'échange (avis sur des bulles)
+    const preferencesText = await preferencesForPrompt(req.user.id).catch(() => '');
     // Registre des décisions du projet (chargé une fois par requête)
     const decisionRegistry = formatRegistryForPrompt(await listDecisions(projectId));
     const actionsText = formatActionsForPrompt(await listActions(projectId));
@@ -492,6 +496,14 @@ router.post('/:sessionId/chat', async (req, res) => {
       turnInputTokens  += next.usage?.inputTokens  || 0;
       turnOutputTokens += next.usage?.outputTokens || 0;
 
+      // v5.1 : l'animateur prend la parole aux transitions — avant une éventuelle proposition de clôture (phrase donnée par l'orchestrateur)
+      if (next.animation && !prepare) {
+        const animatorMsg = { id: randomUUID(), role: 'system', type: 'animator', agentName: 'Animation', content: next.animation, timestamp: new Date().toISOString() };
+        await appendMessageEntry(sessionId, animatorMsg);
+        currentMessages = [...currentMessages, animatorMsg]; // l'agent qui parle ensuite l'entend
+        send('animator', { message: animatorMsg });
+      }
+
       if (next.shouldClose && !turnArtifact && !prepare) {
         send('suggest_close', { reason: next.reason });
         conversationDone = true;
@@ -544,6 +556,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         expertiseLevel,
         humorLevel,
         questionMode,
+        preferencesText,
         webSearchEnabled: session.webSearchEnabled === true,
         projectToolsText,
         artifactRequest: turnArtifact,

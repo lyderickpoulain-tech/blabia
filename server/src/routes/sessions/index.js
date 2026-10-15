@@ -13,5 +13,6 @@ router.use(require('./decisions'));
 router.use(require('./meetingPlan'));
 router.use(require('./toolSuggestions'));
 router.use(require('./chat'));
+router.use(require('./assist')); // v5.1 : avis sur les bulles, « Où en est-on ? », formats de CR
 
 module.exports = router;
