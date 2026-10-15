@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
+import SubTabs from '../../components/project/SubTabs';
 import ProjectTimelinePanel from '../../components/ProjectTimelinePanel';
 import GenerateTimelineModal from '../../components/GenerateTimelineModal';
 import { Button } from '../../components/ui';
@@ -14,6 +15,7 @@ export default function ProjectPlan() {
 
   return (
     <>
+      <SubTabs group="meetings" />
       <PageHeader title="Plan" subtitle="Les réunions du projet, dans l'ordre où les tenir : la prochaine en tête, les terminées repliées en bas. Glissez une carte pour la déplacer.">
         {project.brief && (
           <Button data-tour="plan-generate" variant="secondary" onClick={() => setShowGenerate(true)} className="text-ai border-ai-border">

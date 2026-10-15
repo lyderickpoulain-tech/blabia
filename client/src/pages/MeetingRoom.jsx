@@ -13,6 +13,8 @@ import { DELEGATE } from '../components/DecisionCard';
 import ArtifactCard from '../components/meeting/ArtifactCard';
 import ConversationFeed, { HYPOTHESIS_RE } from '../components/meeting/ConversationFeed';
 import VisioStrip from '../components/meeting/VisioStrip';
+import BrasDroitDock from '../components/assistant/BrasDroitDock';
+import useInbox from '../hooks/useInbox';
 import ResetMeetingModal from '../components/meeting/ResetMeetingModal';
 import { AGENT_COLORS, STATUS_BADGE, DELIVERABLE_TYPES } from '../components/meeting/meetingConstants';
 import useAttachments from '../hooks/useAttachments';
@@ -142,6 +144,8 @@ export default function MeetingRoom() {
     catch (err) { notifyError(err, 'Votre avis n’a pas pu être enregistré.'); }
   }, [projectId, sessionId]);
   const [whereBusy, setWhereBusy] = useState(false);
+  // v5.1 : le bras droit reste à portée de main pendant la réunion (et revient vers vous)
+  const { inbox, refresh: refreshInbox } = useInbox(projectId);
   // v5.1 (étape 3) : vue « salle » (vignettes) — automatique quand le bras droit tient la réunion
   const [visio, setVisio] = useState(false);
   const delegateRunning = !!(session?.prepRunning && session?.runKind === 'delegate');
@@ -1197,6 +1201,7 @@ export default function MeetingRoom() {
         onClose={() => setShowDeliverable(false)}
       />
     )}
+      {project && <BrasDroitDock project={project} inbox={inbox} onChanged={refreshInbox} liftForInput />}
     </DecisionPeopleContext.Provider>
   );
 }

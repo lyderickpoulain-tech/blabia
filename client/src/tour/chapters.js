@@ -53,7 +53,7 @@ export const CHAPTERS = [
     steps: [
       { path: demo(''), target: 'shell-nav', placement: 'right',
         title: 'Tout le projet, à gauche',
-        body: 'Plan, historique, décisions, outils, équipe d’agents, paramètres : une page par sujet.' },
+        body: '« À trancher » rassemble tout ce qui attend votre réponse, de toutes les réunions. « Réunions » regroupe le plan et l’historique, « Décisions et actions » le registre, les actions et les missions. Votre bras droit est toujours là, en bas à droite : interrogez-le à tout moment, il revient vers vous quand il a du nouveau.' },
       { target: 'pd-next',
         title: 'La prochaine étape',
         body: 'La réunion à tenir maintenant. Deux façons de la lancer : préparée par les agents avant votre arrivée (ils travaillent sans vous ; « Réunion préparée » s’affiche sur le projet quand leurs conclusions sont prêtes), ou directement avec vous.' },

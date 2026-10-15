@@ -1,6 +1,6 @@
 import { Suspense, createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { LayoutDashboard, ListOrdered, History, ScrollText, ListChecks, FileText, Wrench, Users, Settings, GitPullRequest, MessageCircleMore } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { LayoutDashboard, ListOrdered, ScrollText, FileText, Wrench, Users, Settings, GitPullRequest, Inbox } from 'lucide-react';
 import Layout from '../Layout';
 import PageLoader from '../PageLoader';
 import { Badge } from '../ui';
@@ -8,21 +8,24 @@ import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { attentionCount } from '../../utils/toolsCatalog';
 import usePresence from '../../hooks/usePresence';
+import useInbox from '../../hooks/useInbox';
+import BrasDroitDock from '../assistant/BrasDroitDock';
 
 // Cadre commun des pages d'un projet (refonte UX v5.1) : en-tête du projet,
-// barre latérale (Tableau de bord, Plan, Historique, Décisions, Outils,
-// Équipe, Paramètres) et contexte partagé (projet, droits, points d'attention).
+// barre latérale et contexte partagé (projet, droits, points d'attention).
+// 16/10/2026 : menu allégé — « À trancher » (tout ce qui attend l'humain), « Réunions » (Plan +
+// Historique), « Décisions et actions » (Registre + Actions et missions) ; le bras droit n'est
+// plus une entrée du menu mais un panneau toujours disponible (BrasDroitDock), qui revient
+// vers l'humain quand il a du nouveau.
 
 const ProjectContext = createContext(null);
 export const useProject = () => useContext(ProjectContext);
 
 const NAV = [
   { to: '',           end: true, label: 'Tableau de bord', icon: LayoutDashboard },
-  { to: 'bras-droit', label: 'Bras droit',  icon: MessageCircleMore }, // v5.1 : interlocuteur principal en tête-à-tête
-  { to: 'reunions',   label: 'Plan',        icon: ListOrdered },
-  { to: 'historique', label: 'Historique',  icon: History },
-  { to: 'decisions',  label: 'Décisions',   icon: ScrollText, badge: 'decisions' },
-  { to: 'actions',    label: 'Actions',     icon: ListChecks, badge: 'actions' },
+  { to: 'a-trancher', label: 'À trancher',  icon: Inbox,      badge: 'inbox' },
+  { to: 'reunions',   label: 'Réunions',    icon: ListOrdered, also: ['historique'] },
+  { to: 'decisions',  label: 'Décisions et actions', icon: ScrollText, also: ['actions'] },
   { to: 'documents',  label: 'Documents',   icon: FileText },
   { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools' },
   { to: 'developpements', label: 'Développements', icon: GitPullRequest, show: p => !!p.githubRepo, badge: 'dev' }, // dépôt GitHub choisi (Paramètres)
@@ -35,6 +38,8 @@ export default function ProjectShell() {
   const navigate = useNavigate();
   const { user } = useAuth();
   usePresence(id); // présence sur le projet (carte du projet : voyant, dernière venue)
+  const location = useLocation();
+  const { inbox, refresh: refreshInbox } = useInbox(id); // « À trancher » et retour du bras droit
   const isAdmin = user?.role === 'admin' || user?.role === 'supervisor';
 
   const [project, setProject] = useState(null);
@@ -103,10 +108,12 @@ export default function ProjectShell() {
 
   const isOwner   = project.userId === user?.id;
   const canManage = isOwner || isAdmin;
-  const badgeOf   = key => key === 'decisions' ? counts.decisionsReopened : key === 'tools' ? counts.toolsAttention : key === 'actions' ? counts.actionsOverdue : key === 'dev' ? counts.devAwaiting : 0;
+  const badgeOf   = key => key === 'inbox' ? (inbox?.count || 0) : key === 'tools' ? counts.toolsAttention : key === 'dev' ? counts.devAwaiting : 0;
+  // Rubrique regroupant plusieurs pages : active sur chacune
+  const groupActive = item => (item.also || []).some(p => location.pathname.endsWith(`/${p}`));
 
   return (
-    <ProjectContext.Provider value={{ project, setProject, reloadProject, isOwner, isAdmin, canManage, counts, refreshCounts }}>
+    <ProjectContext.Provider value={{ project, setProject, reloadProject, isOwner, isAdmin, canManage, counts, refreshCounts, inbox, refreshInbox }}>
       <Layout wide>
         <div className="flex flex-wrap gap-6 items-start">
           <aside aria-label="Navigation du projet" className="w-full md:w-56 shrink-0 md:sticky md:top-6">
@@ -122,13 +129,13 @@ export default function ProjectShell() {
                 return (
                   <NavLink key={item.label} to={item.to} end={item.end}
                     className={({ isActive }) => `shrink-0 flex items-center gap-2.5 px-3 h-11 rounded-[10px] text-sm transition ${
-                      isActive ? 'bg-action-light text-action font-extrabold' : 'text-ink-soft font-semibold hover:bg-white'
+                      isActive || groupActive(item) ? 'bg-action-light text-action font-extrabold' : 'text-ink-soft font-semibold hover:bg-white'
                     }`}>
                     <item.icon size={18} aria-hidden="true" />
                     <span className="flex-1 whitespace-nowrap">{item.label}</span>
                     {badge > 0 ? (
                       <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-await-light text-await text-xs font-extrabold inline-flex items-center justify-center"
-                        title={item.badge === 'decisions' ? 'Décisions remises en question' : item.badge === 'actions' ? 'Actions en retard' : item.badge === 'dev' ? 'Développements à relire ou à reprendre' : 'Points d’attention sur les outils'}>
+                        title={item.badge === 'inbox' ? 'Éléments qui attendent votre réponse' : item.badge === 'dev' ? 'Développements à relire ou à reprendre' : 'Points d’attention sur les outils'}>
                         {badge}
                       </span>
                     ) : item.badge === 'dev' && counts.devRunning && (
@@ -147,6 +154,8 @@ export default function ProjectShell() {
             </Suspense>
           </main>
         </div>
+        {/* Le bras droit, toujours à portée de main (sauf sur sa page en grand) */}
+        {!location.pathname.endsWith('/bras-droit') && <BrasDroitDock project={project} inbox={inbox} onChanged={refreshInbox} />}
       </Layout>
     </ProjectContext.Provider>
   );

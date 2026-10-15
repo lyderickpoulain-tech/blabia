@@ -19,6 +19,7 @@ const NewProject       = lazy(() => import('./pages/NewProject'));
 const ProjectShell     = lazy(() => import('./components/project/ProjectShell'));
 const ProjectDashboard = lazy(() => import('./pages/project/ProjectDashboard'));
 const ProjectAssistant = lazy(() => import('./pages/project/ProjectAssistant')); // v5.1 : bras droit
+const ProjectInbox     = lazy(() => import('./pages/project/ProjectInbox'));     // v5.1 : « À trancher »
 const ProjectPlan      = lazy(() => import('./pages/project/ProjectPlan'));
 const ProjectHistory   = lazy(() => import('./pages/project/ProjectHistory'));
 const ProjectDecisions = lazy(() => import('./pages/project/ProjectDecisions'));
@@ -61,6 +62,7 @@ export default function App() {
         }>
           <Route index element={<ProjectDashboard />} />
           <Route path="bras-droit" element={<ProjectAssistant />} />
+          <Route path="a-trancher" element={<ProjectInbox />} />
           <Route path="reunions" element={<ProjectPlan />} />
           <Route path="historique" element={<ProjectHistory />} />
           <Route path="decisions" element={<ProjectDecisions />} />

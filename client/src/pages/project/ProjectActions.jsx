@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Check, ChevronDown, ChevronUp, CalendarDays, Link2, Bot, Users, FileText, Ban, Undo2, Lock } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
+import SubTabs from '../../components/project/SubTabs';
 import { Button, IconButton, Card, SectionLabel } from '../../components/ui';
 import ExportButtons from '../../components/ExportButtons';
 import RemindersToggle from '../../components/RemindersToggle';
@@ -278,6 +279,7 @@ export default function ProjectActions() {
 
   return (
     <>
+      <SubTabs group="follow" />
       <PageHeader title="Actions" subtitle="Ce que vous avez à faire entre deux réunions, dans l'ordre où les mener. BlabIA les propose à la conclusion ; les agents commencent la réunion suivante par un point d'avancement.">
         <ExportButtons pdfPath={`/projects/${project.id}/imprimer/registre`} wordPath={`/projects/${project.id}/export/registry/word`} />
         {!adding && <Button variant="secondary" onClick={() => setAdding(true)}><Plus size={16} aria-hidden="true" /> Ajouter une action</Button>}

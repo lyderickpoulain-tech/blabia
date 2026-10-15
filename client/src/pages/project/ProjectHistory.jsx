@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Code2, RotateCcw, Plus, CornerDownRight, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject, PageHeader } from '../../components/project/ProjectShell';
+import SubTabs from '../../components/project/SubTabs';
 import { Badge, Button, Card } from '../../components/ui';
 import { formatUSD, kindLabel } from '../../utils/cost';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
@@ -179,6 +180,7 @@ export default function ProjectHistory() {
 
   return (
     <>
+      <SubTabs group="meetings" />
       <PageHeader title="Historique" subtitle="Les réunions déjà tenues, avec leur compte-rendu et leur livrable.">
         {project.status === 'active' && (
           <Link to={`/projects/${project.id}/meeting/new`} className="h-11 px-4 inline-flex items-center gap-2 rounded-[10px] bg-action text-white text-sm font-bold hover:bg-action-dark">

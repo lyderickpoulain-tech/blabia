@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check, GitPullRequest, Flag, RotateCcw } from 'lucide-react';
+import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check, GitPullRequest, Flag, RotateCcw, Inbox } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
@@ -12,6 +12,7 @@ import { isOverdueAction } from './ProjectActions';
 import useMissions from '../../hooks/useMissions';
 import { notifyError } from '../../utils/notify';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
+import InboxList from '../../components/assistant/InboxList';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
@@ -106,7 +107,7 @@ function AskBlabIA({ projectId, onDone }) {
 }
 
 export default function ProjectDashboard() {
-  const { project, counts } = useProject();
+  const { project, counts, inbox, refreshInbox } = useProject();
   const navigate = useNavigate();
   const [plan, setPlan] = useState(null);         // { milestones, milestoneSessions }
   // v5.1 (15/10/2026) : récapitulatif du projet, une fois le plan terminé
@@ -183,18 +184,10 @@ export default function ProjectDashboard() {
     state: { milestoneId: next.id, milestoneTitle: next.title, milestoneType: next.type, autoPrepare: prepare },
   });
 
+  // v5.1 (16/10/2026) : ce qui attend l'humain est dans « À trancher » (InboxList) ; ne restent
+  // ici que les points qui n'y sont pas (outils, développement en échec, réunion restée ouverte)
   const attention = [
-    ...delegatedDone.map(s => ({ text: `Votre bras droit a tenu « ${s.task} » : sa note de retour vous attend (décisions prises dans votre cadre, questions gardées pour vous).`, to: 'bras-droit', cta: 'Lire la note' })),
-    ...delegatedRunning.map(s => ({ text: `Votre bras droit tient « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Suivre' })),
-    ...preparedSessions.map(s => ({ text: `Réunion préparée par les agents : « ${s.task} ». Leurs conclusions et les décisions qui vous reviennent sont prêtes.`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Voir les conclusions' })),
-    ...preparingSessions.map(s => ({ text: `Les agents préparent « ${s.task} » : vous serez prévenu ici quand les conclusions seront prêtes.`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Suivre' })),
-    counts.decisionsReopened > 0 && { text: `${counts.decisionsReopened} décision${counts.decisionsReopened > 1 ? 's remises' : ' remise'} en question, à retraiter en réunion.`, to: 'decisions', cta: 'Voir' },
-    ...reportsToReview.map(m => ({ text: `Compte rendu de la mission « ${m.title} » (${m.agentName}) prêt : intégrez-le au projet ou écartez-le.`, to: 'actions', cta: 'Lire' })),
-    proposedMissions.length > 0 && { text: `${proposedMissions.length} mission${proposedMissions.length > 1 ? 's' : ''} proposée${proposedMissions.length > 1 ? 's' : ''} par les agents attend${proposedMissions.length > 1 ? 'ent' : ''} votre accord (« ${proposedMissions[0].title} »).`, to: 'actions', cta: 'Voir' },
-    ...devOf('ready').map(t => ({ text: `Développement prêt à relire : « ${t.title} ». Claude Code a terminé ; rien n’est en ligne sans votre accord.`, to: 'developpements', cta: 'Relire' })),
-    ...devOf('deploy_failed').map(t => ({ text: `La mise en ligne de « ${t.title} » a échoué : rien n’a été mis en ligne.`, to: 'developpements', cta: 'Voir' })),
     ...devOf('failed').slice(0, 1).map(t => ({ text: `Le développement « ${t.title} » n’a pas abouti.`, to: 'developpements', cta: 'Voir' })),
-    lateActions.length > 0 && { text: `${lateActions.length} action${lateActions.length > 1 ? 's' : ''} en retard (« ${lateActions[0].title} »${lateActions.length > 1 ? '…' : ''}).`, to: 'actions', cta: 'Voir' },
     counts.toolsAttention > 0 && { text: `${counts.toolsAttention} point${counts.toolsAttention > 1 ? 's' : ''} d'attention sur les outils du projet.`, to: 'outils', cta: 'Revoir' },
     ...openSessions.slice(0, 3).map(s => ({ text: `Réunion restée ouverte : « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Rejoindre' })),
   ].filter(Boolean);
@@ -283,18 +276,24 @@ export default function ProjectDashboard() {
           content={recap.content} onClose={() => setShowRecap(false)} />
       )}
 
-      {/* Points d'attention */}
-      {attention.length > 0 && (
-        <section data-tour="pd-attention" aria-labelledby="att-title" className="bg-await-bg border border-await-border rounded-2xl p-5 space-y-2">
-          <h2 id="att-title" className="text-sm font-extrabold text-await flex items-center gap-2"><AlertTriangle size={16} aria-hidden="true" />{attention.length} point{attention.length > 1 ? 's attendent' : ' attend'} votre arbitrage</h2>
-          <ul className="space-y-1.5">
-            {attention.map((a, i) => (
-              <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-between">
-                <span className="text-sm text-ink-soft flex-1 min-w-[240px]">{a.text}</span>
-                <Link to={a.to} className="text-sm font-bold text-await">{a.cta}</Link>
-              </li>
-            ))}
-          </ul>
+      {/* À trancher (v5.1) : les 3 premiers éléments, réponse possible ici même */}
+      {(inbox?.count > 0 || inbox?.running?.length > 0 || attention.length > 0) && (
+        <section data-tour="pd-attention" aria-labelledby="att-title" className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="att-title" className="text-base font-extrabold text-ink flex items-center gap-2"><Inbox size={17} className="text-await" aria-hidden="true" />À trancher{inbox?.count ? ` · ${inbox.count}` : ''}</h2>
+            {inbox?.count > 0 && <Link to="a-trancher" className="text-sm font-bold">Tout voir</Link>}
+          </div>
+          <InboxList project={project} inbox={inbox} onChanged={refreshInbox} limit={3} compact />
+          {attention.length > 0 && (
+            <ul className="space-y-1.5 bg-white border border-line rounded-2xl p-4">
+              {attention.map((a, i) => (
+                <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-between">
+                  <span className="text-sm text-ink-soft flex-1 min-w-[240px] flex items-center gap-2"><AlertTriangle size={15} className="text-await shrink-0" aria-hidden="true" />{a.text}</span>
+                  <Link to={a.to} className="text-sm font-bold text-await">{a.cta}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 

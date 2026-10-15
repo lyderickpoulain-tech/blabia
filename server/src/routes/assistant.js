@@ -8,6 +8,7 @@ const { DEFAULT_MODEL } = require('../services/models');
 const { projectKnowledge } = require('../services/projectKnowledge');
 const { POSTURE } = require('../services/prompts/posture');
 const { parseJsonField } = require('../utils/parseJsonField');
+const { buildInbox, inboxForPrompt } = require('../services/inbox');
 
 // Bras droit (v5.1, 16/10/2026, étape 1) : l'interlocuteur principal de l'humain sur un projet,
 // en tête-à-tête. Il connaît tout le projet (services/projectKnowledge.js), cite ses sources,
@@ -54,6 +55,19 @@ function parseReply(text, milestones) {
 
 const shape = r => ({ id: r.id, role: r.role, content: r.content, sources: parseJsonField(r.sources, []), proposal: parseJsonField(r.proposal, null), createdAt: r.createdAt });
 
+// GET /api/projects/:id/assistant/inbox — « À trancher » : ce qui m'attend, ce qui tourne sans
+// moi, et le dernier message du bras droit (son retour proactif, v5.1)
+router.get('/:id/assistant/inbox', async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    res.json(await buildInbox(project, req.user.id));
+  } catch (err) {
+    console.error('[assistant inbox]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // GET /api/projects/:id/assistant — ma conversation avec le bras droit
 router.get('/:id/assistant', async (req, res) => {
   try {
@@ -95,7 +109,11 @@ router.post('/:id/assistant', async (req, res) => {
     const response = await anthropic.messages.create({
       model: DEFAULT_MODEL, max_tokens: 900,
       // Connaissance du projet en cache : relue à 10 % du prix d'un message à l'autre
-      system: [{ type: 'text', text: buildSystem(project, knowledgeText), cache_control: { type: 'ephemeral' } }],
+      // + ce qui attend l'humain, hors cache (change d'un message à l'autre)
+      system: [
+        { type: 'text', text: buildSystem(project, knowledgeText), cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: inboxForPrompt(await buildInbox(project, req.user.id)) || 'Rien n’attend l’humain pour l’instant.' },
+      ],
       messages: turns,
     });
     const raw = response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
