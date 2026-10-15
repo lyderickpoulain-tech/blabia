@@ -20,10 +20,11 @@ router.get('/:id/actions', async (req, res) => {
     // Dernière mission confiée à un agent depuis chaque action (page Actions)
     const missions = actions.length
       ? await db('AgentMission').whereIn('todoId', actions.map(a => a.id)).whereNotIn('status', ['rejected', 'cancelled'])
-        .orderBy('createdAt', 'desc').select('id', 'todoId', 'status', 'agentName', 'title', 'costUSD', 'budgetUSD', 'documentId', 'error')
+        .orderBy('createdAt', 'desc').select('id', 'todoId', 'status', 'agentName', 'title', 'costUSD', 'budgetUSD', 'documentId', 'error', 'outcome')
       : [];
     const byTodo = {};
-    for (const m of missions) if (!byTodo[m.todoId]) byTodo[m.todoId] = m;
+    // Mission traitée (compte rendu intégré ou écarté) : plus rien à afficher sur l'action
+    for (const m of missions) if (!(m.todoId in byTodo)) byTodo[m.todoId] = m.outcome ? null : m;
     res.json(actions.map(a => ({ ...a, mission: byTodo[a.id] || null })));
   } catch (err) {
     console.error('[actions GET]', err.message);

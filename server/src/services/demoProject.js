@@ -264,7 +264,7 @@ async function seedSalonProject(user, { isDemo, name, description }) {
     await trx('AgentMission').insert([
       { projectId, sessionId: s1, agentName: agents1[1]?.name || 'Analyste', kind: 'research',
         title: 'Comparer les loyers commerciaux de la Croix-Rousse', objective: 'Relever les loyers pratiqués pour 60 à 80 m² et les comparer à la Presqu’île.',
-        deliverable: 'Tableau comparatif', status: 'done', budgetUSD: 0.6, costUSD: 0.42, report: missionReport,
+        deliverable: 'Tableau comparatif', status: 'done', outcome: 'integrated', budgetUSD: 0.6, costUSD: 0.42, report: missionReport,
         documentId: reportDoc.id ?? reportDoc, approvedBy: user.id, createdAt: new Date(now - 5 * day), approvedAt: new Date(now - 5 * day),
         startedAt: new Date(now - 5 * day), finishedAt: new Date(now - 3 * day) },
       { projectId, sessionId: s1, agentName: agents1[0]?.name || 'Stratège', kind: 'research',

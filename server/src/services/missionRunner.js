@@ -16,6 +16,7 @@ const { DEFAULT_MODEL } = require('./models');
 const { buildWebSearchTool } = require('./webSearchTool');
 const { KIND_LABEL, LEVELS, levelOf } = require('./missions');
 const { memoryForPrompt, appendMemory, missionDigest } = require('../utils/projectMemory');
+// appendMemory / missionDigest : intégration du compte rendu, au choix de l'humain (integrateMission)
 const { codeAccess, sourcePaths, compactTree, readFile } = require('./codeContext');
 
 const MAX_STEPS = 10;
@@ -206,7 +207,8 @@ async function runOne(mission) {
     const content = `${report}${sourcesMd}`;
     const [doc] = await db('ProjectDocument').insert({
       id: randomUUID(), projectId: mission.projectId, name: `Mission — ${mission.title}`.slice(0, 200), mimeType: 'text/markdown',
-      sizeBytes: Buffer.byteLength(content), charCount: content.length, content, enabled: true, createdAt: new Date(), createdBy: mission.approvedBy,
+      // Inactif tant que l'humain n'a pas choisi « Intégrer le CR au projet » (routes/missions.js)
+      sizeBytes: Buffer.byteLength(content), charCount: content.length, content, enabled: false, createdAt: new Date(), createdBy: mission.approvedBy,
     }).returning('id');
     await db('AgentMission').where({ id: mission.id }).update({
       status: 'done', report: content, sources: JSON.stringify(sources), costUSD: cost,
@@ -214,12 +216,8 @@ async function runOne(mission) {
     });
     // Mission d'une réunion reportée : son action est cochée, la réunion de reprise est débloquée
     if (mission.todoId) await db('TodoItem').where({ id: mission.todoId, source: 'mission' }).whereIn('status', ['todo', 'in_progress']).update({ status: 'done' });
-    // Mémoire du projet : ce que la mission a établi, relu par les agents à chaque réunion
-    // (le rapport complet reste dans les documents). Un échec ici n'annule pas la mission.
-    try {
-      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      await appendMemory(mission.projectId, `[MISSION:${mission.id} | ${date} — Mission « ${mission.title} » menée pour ${mission.agentName}]\n${missionDigest(report)}\n(Rapport complet : document « Mission — ${mission.title} ».)`);
-    } catch (err) { console.error(`[missions] ${mission.id} mémoire :`, err.message); }
+    // v5.1 (15/10/2026) : la mémoire du projet n'est plus alimentée d'office — l'humain choisit
+    // d'intégrer le compte rendu au projet ou non (integrateMission, routes/missions.js).
   } catch (err) {
     console.error(`[missions] ${mission.id} :`, err.message);
     await db('AgentMission').where({ id: mission.id }).update({ status: 'failed', error: String(err.message).slice(0, 500), finishedAt: new Date() });
@@ -231,4 +229,22 @@ function kickMissions() {
   setImmediate(() => processMissions().catch(err => console.error('[missions]', err.message)));
 }
 
-module.exports = { processMissions, kickMissions, executeMission, collectSources, settingsFor, TOOLS, MAX_STEPS, FINALIZE_AT };
+// « Intégrer le CR au projet » : document actif (lu par les agents), mémoire du projet,
+// action d'origine cochée. « Ne pas intégrer » : document retiré, l'action reste à faire.
+async function setMissionOutcome(mission, outcome) {
+  if (outcome === 'integrated') {
+    if (mission.documentId) await db('ProjectDocument').where({ id: mission.documentId }).update({ enabled: true });
+    try {
+      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      await appendMemory(mission.projectId, `[MISSION:${mission.id} | ${date} — Mission « ${mission.title} » menée pour ${mission.agentName}]\n${missionDigest(mission.report || '')}\n(Rapport complet : document « Mission — ${mission.title} ».)`);
+    } catch (err) { console.error(`[missions] ${mission.id} mémoire :`, err.message); }
+    if (mission.todoId) await db('TodoItem').where({ id: mission.todoId, projectId: mission.projectId }).whereIn('status', ['todo', 'in_progress']).update({ status: 'done' });
+  } else if (mission.documentId) {
+    await db('AgentMission').where({ id: mission.id }).update({ documentId: null });
+    await db('ProjectDocument').where({ id: mission.documentId }).del();
+  }
+  const [m] = await db('AgentMission').where({ id: mission.id }).update({ outcome }).returning('*');
+  return m;
+}
+
+module.exports = { setMissionOutcome, processMissions, kickMissions, executeMission, collectSources, settingsFor, TOOLS, MAX_STEPS, FINALIZE_AT };

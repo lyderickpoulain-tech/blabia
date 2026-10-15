@@ -200,7 +200,12 @@ function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove, agents, 
 export default function ProjectActions() {
   const { project, setProject, canManage, refreshCounts } = useProject();
   const missionsApi = useMissions(project.id);
-  const shownMissions = missionsApi.missions.filter(m => !['rejected', 'cancelled'].includes(m.status));
+  // Mission traitée (compte rendu intégré ou écarté) : elle disparaît de la liste (v5.1)
+  const shownMissions = missionsApi.missions.filter(m => !['rejected', 'cancelled'].includes(m.status) && !m.outcome);
+  const decide = async (mission, how) => {
+    const data = await (how === 'integrated' ? missionsApi.integrate(mission) : missionsApi.discard(mission));
+    if (data) { setReport(null); load(); }
+  };
   const [report, setReport] = useState(null);
   const { user } = useAuth();
   const setReminders = async enabled => {
@@ -381,7 +386,8 @@ export default function ProjectActions() {
               {shownMissions.map(m => (
                 <li key={m.id}>
                   <MissionCard mission={m} onApprove={missionsApi.approve} onReject={missionsApi.reject}
-                    onCancel={missionsApi.cancel} onOpenReport={setReport} />
+                    onCancel={missionsApi.cancel} onOpenReport={setReport}
+                    onIntegrate={project.isDemo ? null : m2 => decide(m2, 'integrated')} onDiscard={m2 => decide(m2, 'discarded')} />
                 </li>
               ))}
             </ul>
@@ -389,7 +395,13 @@ export default function ProjectActions() {
         </section>
       </div>
 
-      {report && <SummaryDisplayModal title={`Mission — ${report.title}`} content={report.report || ''} onClose={() => setReport(null)} />}
+      {report && <SummaryDisplayModal title={`Mission — ${report.title}`} content={report.report || ''} onClose={() => setReport(null)}
+        actions={report.status === 'done' && !report.outcome && !project.isDemo ? (
+          <>
+            <Button variant="primary" onClick={() => decide(report, 'integrated')}>Intégrer le CR au projet</Button>
+            <Button variant="ghost" onClick={() => decide(report, 'discarded')}>Ne pas intégrer</Button>
+          </>
+        ) : null} />}
     </>
   );
 }

@@ -22,7 +22,7 @@ function installFakeAI() {
   proto.create = async function fakeCreate(params) {
     ai.calls.push(params);
     if (!ai.responder) throw new Error('IA simulée : aucun scénario défini pour cet appel');
-    const r = ai.responder(params) || {};
+    const r = (await ai.responder(params)) || {}; // scénario éventuellement asynchrone (délais simulés)
     return {
       id: `msg_test_${ai.calls.length}`, type: 'message', role: 'assistant', model: params.model,
       content: r.content ?? [{ type: 'text', text: r.text ?? '' }], stop_reason: r.stop_reason || 'end_turn',

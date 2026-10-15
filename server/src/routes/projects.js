@@ -1,4 +1,5 @@
 const express = require('express');
+const { PREP_READY_SQL, runningProjects } = require('../services/preparation');
 const { randomUUID } = require('crypto');
 const db = require('../utils/db');
 const { appendMemory, memoryForPrompt } = require('../utils/projectMemory');
@@ -53,6 +54,8 @@ router.get('/', async (req, res) => {
         'Project.isDemo',
         db.raw('COUNT(DISTINCT "Session"."id")::int AS "sessionCount"'),
         db.raw(`(SELECT COUNT(*)::int FROM "Session" WHERE "projectId" = "Project"."id" AND status = 'open') AS "openSessionCount"`),
+        // v5.1 : réunions préparées par les agents, conclusions prêtes, pas encore consultées
+        db.raw(`(SELECT COUNT(*)::int FROM "Session" AS ps WHERE ps."projectId" = "Project"."id" AND ${PREP_READY_SQL('ps')}) AS "prepReadyCount"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status != 'cancelled') AS "todoTotal"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'done') AS "todoDone"`),
         db.raw(`(SELECT COUNT(*)::int FROM "TodoItem" WHERE "projectId" = "Project"."id" AND status = 'in_progress') AS "todoInProgress"`),
@@ -92,6 +95,7 @@ router.get('/', async (req, res) => {
     // Participants (projet à plusieurs) ou créateur (projet solo) : carte du projet
     const presence = await require('../services/presence').peopleOf(rows.filter(p => !p.isDemo), req.user.id);
 
+    const preparing = runningProjects(); // v5.1 : agents en train de préparer une réunion
     const projects = rows.map(p => {
       const totalTokens = parseInt(p.totalTokens) || 0;
       const inp = parseInt(p.totalInputTokens) || 0;
@@ -103,6 +107,7 @@ router.get('/', async (req, res) => {
         realCostUSD, legacyCostUSD,
         estimatedCostUSD: realCostUSD + legacyCostUSD, // DEPRECATED v5.1 — remplacé par realCostUSD + legacyCostUSD
         ...(presence[p.id] || {}),
+        prepRunning: preparing.has(p.id),
       };
     });
 

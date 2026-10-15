@@ -38,7 +38,7 @@ Produis :
    ## Désaccords et options en présence
    ## Recommandation
 2. "decisions" : ${max === 0 ? 'une liste VIDE (budget de questions épuisé)' : `les décisions qui reviennent VRAIMENT à l'humain (préférences, budget, contraintes, choix structurants), ${max} au maximum, les plus importantes d'abord`}. Pour chacune : "question" (claire et courte), "choices" (2 à 4 options, la recommandation des agents en premier, toujours "Autre (précise)" en dernier), "context" (pourquoi c'est important, une phrase simple).
-Les points que les agents ont pu trancher seuls ne sont PAS des décisions pour l'humain : ils vont dans la synthèse.
+Les détails que les agents ont pu trancher seuls ne sont PAS des décisions pour l'humain : ils vont dans la synthèse. Mais une hypothèse des agents sur une préférence, le budget, une priorité, le périmètre ou un choix structurant lui revient : présente-la comme une décision à valider (leur choix en premier).
 
 Format : {"summary":"...","decisions":[{"question":"...","choices":["..."],"context":"..."}]}`,
     max,

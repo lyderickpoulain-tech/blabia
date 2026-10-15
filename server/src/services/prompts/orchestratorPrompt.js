@@ -44,6 +44,8 @@ function buildOrchestratorPrompt({
   challengeSection = '', // v5.1 : contradicteur disponible (services/challenger.js)
   codeSection = '',      // v5.1 : code du dépôt lisible à la demande (buildOrchestratorCodeSection)
   projectGoal = '',      // v5.1 : objectif du projet (utils/projectObjective.js), pour repérer la dérive
+  decisionsAsked = 0,    // v5.1 : cartes déjà soumises à l'humain dans la réunion
+  questionMode = 'balanced',
 }) {
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
   const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
@@ -54,13 +56,18 @@ function buildOrchestratorPrompt({
     : '';
 
   const closeInstruction = CLOSE_INSTRUCTIONS[intentionKey] || DEFAULT_CLOSE_INSTRUCTION;
+  // v5.1 : en « Équilibré » ou « Je veux tout trancher », l'humain doit être consulté
+  const askAfter = { balanced: 4, control: 2 }[questionMode];
+  const askNote = askAfter && decisionsAsked === 0 && turnCount >= askAfter && decisionsLeft !== 0
+    ? `\nAucune question n'a encore été soumise à l'humain après ${turnCount} tours, alors qu'il veut ${questionMode === 'control' ? 'tout trancher' : 'trancher ce qui lui revient'}. Choisis l'agent le mieux placé pour lui soumettre, par une carte de décision, le choix qui lui appartient dans ce qui vient d'être discuté (préférence, budget, priorité, périmètre), et écris-le dans "reason".`
+    : '';
 
   return `Tu es l'orchestrateur d'une réunion IA.
 
 Objectif de la réunion : "${session.task}"${projectGoal ? `
 Objectif du projet : "${projectGoal}"` : ''}
 Livrable attendu : ${intentionKey || 'compte-rendu'}
-Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${decisionsLeft === 0
+Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${askNote}${decisionsLeft === 0
     ? "\n⚠️ Le budget de questions à l'humain est épuisé : privilégie les agents qui concluent, et propose shouldClose=true dès que l'essentiel est couvert."
     : ''}
 

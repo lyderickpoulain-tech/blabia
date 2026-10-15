@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Radio, Archive, ArchiveRestore, MessagesSquare, CalendarDays, FolderOpen, Coins, UserRound } from 'lucide-react';
+import { Plus, Search, Radio, Archive, ArchiveRestore, MessagesSquare, CalendarDays, FolderOpen, Coins, UserRound, Coffee } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Button, Badge, Card } from '../components/ui';
 import { formatUSD } from '../utils/cost';
@@ -52,6 +52,7 @@ function People({ people }) {
 
 function ProjectCard({ project, archiving, onArchive, onOpen }) {
   const open      = (project.openSessionCount ?? 0) > 0;
+  const prepReady = (project.prepReadyCount ?? 0) > 0; // v5.1 : conclusions préparées par les agents
   const sessions  = project.sessionCount ?? 0;
   const archived  = project.status !== 'active';
   return (
@@ -65,6 +66,8 @@ function ProjectCard({ project, archiving, onArchive, onOpen }) {
           ? <Badge tone="ai">Exemple</Badge>
           : archived
           ? <Badge tone="muted">Archivé</Badge>
+          : prepReady ? <Badge tone="ok"><Coffee size={12} aria-hidden="true" /> {project.prepReadyCount > 1 ? `${project.prepReadyCount} réunions préparées` : 'Réunion préparée'}</Badge>
+          : project.prepRunning ? <Badge tone="ai"><Coffee size={12} aria-hidden="true" /> Préparation en cours</Badge>
           : open && <Badge tone="await"><Radio size={12} aria-hidden="true" /> Réunion en cours</Badge>}
       </div>
       {project.description && (
@@ -86,8 +89,8 @@ function ProjectCard({ project, archiving, onArchive, onOpen }) {
       </div>
 
       <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line">
-        <Button size="sm" variant={open ? 'await' : 'secondary'} className="flex-1" onClick={onOpen}>
-          {open ? 'Rejoindre la réunion' : 'Ouvrir'}
+        <Button size="sm" variant={prepReady ? 'primary' : open ? 'await' : 'secondary'} className="flex-1" onClick={onOpen}>
+          {prepReady ? 'Voir les conclusions préparées' : open ? 'Rejoindre la réunion' : 'Ouvrir'}
         </Button>
         <Button size="sm" variant="ghost" onClick={onArchive} disabled={archiving}
           aria-label={archived ? 'Réactiver le projet' : 'Archiver le projet'} title={archived ? 'Réactiver' : 'Archiver'}>
@@ -129,8 +132,8 @@ export default function Dashboard() {
     const q = search.toLowerCase();
     return projects
       .filter(p => p.name.toLowerCase().includes(q) && (statusTab === 'all' || p.status === statusTab))
-      // Réunions en cours d'abord : ce sont elles qui attendent l'humain
-      .sort((a, b) => ((b.openSessionCount ?? 0) > 0) - ((a.openSessionCount ?? 0) > 0));
+      // Réunions préparées prêtes, puis réunions en cours : ce sont elles qui attendent l'humain
+      .sort((a, b) => ((b.prepReadyCount ?? 0) > 0) - ((a.prepReadyCount ?? 0) > 0) || ((b.openSessionCount ?? 0) > 0) - ((a.openSessionCount ?? 0) > 0));
   }, [projects, search, statusTab]);
 
   const counts = useMemo(() => ({

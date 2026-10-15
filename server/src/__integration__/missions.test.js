@@ -97,6 +97,9 @@ describe.skipIf(!harness.enabled)('missions des agents (IA simulée)', () => {
   });
 
   it('réunion suivante : la mission et son rapport sont connus des agents', async () => {
+    // Compte rendu intégré au projet par l'humain : document actif, connu des agents
+    const done = (await h.db('AgentMission').where({ projectId: pid, title: 'Comparer les devis' }).first());
+    expect((await h.request('POST', `/api/projects/${pid}/missions/${done.id}/outcome`, { token: owner.token, body: { outcome: 'integrated' } })).status).toBe(200);
     const sid2 = (await h.request('POST', `/api/projects/${pid}/sessions`, { token: owner.token, body: { task: 'Suite', intention: ['decision'], activeAgents: AGENTS, challengerEnabled: false } })).body.session.id;
     agentReplies.push({ text: 'Le rapport de mission confirme le devis.' });
     const calls = h.ai.calls.length;

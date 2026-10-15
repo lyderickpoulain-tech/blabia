@@ -48,5 +48,8 @@ export default function useMissions(projectId, { sessionId } = {}) {
     approve: (m, level) => call(m, 'approve', { level }, 'Mission lancée : le rapport arrivera dans les documents du projet.'),
     reject:  m => call(m, 'reject'),
     cancel:  m => call(m, 'cancel'),
+    // v5.1 : compte rendu prêt — intégré au projet ou non ; la mission disparaît ensuite
+    integrate: m => call(m, 'outcome', { outcome: 'integrated' }, 'Compte rendu intégré au projet : les agents s’en serviront.'),
+    discard:   m => call(m, 'outcome', { outcome: 'discarded' }, 'Compte rendu écarté : il n’est pas intégré au projet.'),
   };
 }

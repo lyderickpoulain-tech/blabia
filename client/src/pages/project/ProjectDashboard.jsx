@@ -142,13 +142,16 @@ export default function ProjectDashboard() {
   const next = nextIdx >= 0 ? milestones[nextIdx] : null;
   const nextSession = next ? plan?.milestoneSessions?.[next.id] : null;
   const upcoming = milestones.filter(m => m.status !== 'done').slice(0, 3);
-  const openSessions = sessions.filter(s => s.status === 'open' && (!nextSession || s.id !== nextSession.id));
+  const openSessions = sessions.filter(s => s.status === 'open' && !s.prepReady && !s.prepRunning && (!nextSession || s.id !== nextSession.id));
+  const preparedSessions = sessions.filter(s => s.status === 'open' && s.prepReady);   // v5.1 : conclusions prêtes
+  const preparingSessions = sessions.filter(s => s.status === 'open' && s.prepRunning); // v5.1 : agents au travail
   const activeDecisions = decisions.filter(d => d.status === 'active');
   const validatedTools = (tools?.tools || []).filter(t => t.status === 'validated');
   const pastSessions = sessions.filter(s => s.status === 'accepted').slice(0, 2);
   const openActions = actions.filter(a => a.status !== 'done');
   const lateActions = openActions.filter(isOverdueAction);
   const proposedMissions = missions.filter(m => m.status === 'proposed');
+  const reportsToReview = missions.filter(m => m.status === 'done' && !m.outcome); // v5.1 : intégrer ou non
   const devOf = status => (devTasks || []).filter(t => t.status === status);
   const devCurrent = (devTasks || []).find(t => ['running', 'deploying', 'ready'].includes(t.status));
   const devLastDeployed = devOf('deployed')[0];
@@ -158,7 +161,10 @@ export default function ProjectDashboard() {
   });
 
   const attention = [
+    ...preparedSessions.map(s => ({ text: `Réunion préparée par les agents : « ${s.task} ». Leurs conclusions et les décisions qui vous reviennent sont prêtes.`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Voir les conclusions' })),
+    ...preparingSessions.map(s => ({ text: `Les agents préparent « ${s.task} » : vous serez prévenu ici quand les conclusions seront prêtes.`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Suivre' })),
     counts.decisionsReopened > 0 && { text: `${counts.decisionsReopened} décision${counts.decisionsReopened > 1 ? 's remises' : ' remise'} en question, à retraiter en réunion.`, to: 'decisions', cta: 'Voir' },
+    ...reportsToReview.map(m => ({ text: `Compte rendu de la mission « ${m.title} » (${m.agentName}) prêt : intégrez-le au projet ou écartez-le.`, to: 'actions', cta: 'Lire' })),
     proposedMissions.length > 0 && { text: `${proposedMissions.length} mission${proposedMissions.length > 1 ? 's' : ''} proposée${proposedMissions.length > 1 ? 's' : ''} par les agents attend${proposedMissions.length > 1 ? 'ent' : ''} votre accord (« ${proposedMissions[0].title} »).`, to: 'actions', cta: 'Voir' },
     ...devOf('ready').map(t => ({ text: `Développement prêt à relire : « ${t.title} ». Claude Code a terminé ; rien n’est en ligne sans votre accord.`, to: 'developpements', cta: 'Relire' })),
     ...devOf('deploy_failed').map(t => ({ text: `La mise en ligne de « ${t.title} » a échoué : rien n’a été mis en ligne.`, to: 'developpements', cta: 'Voir' })),

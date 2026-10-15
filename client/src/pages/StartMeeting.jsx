@@ -7,9 +7,10 @@ import api from '../utils/api';
 import QuestionModePicker from '../components/QuestionModePicker';
 import ChallengerToggle from '../components/ChallengerToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
-import { notifyError } from '../utils/notify';
+import { notifyError, notifySuccess } from '../utils/notify';
 import ToolsMeetingHint from '../components/project/ToolsMeetingHint';
 import { AgentAvatar } from '../components/ui/icons';
+import { launchPreparation } from '../utils/preparation';
 
 // v5.0 : decision | claude_code | stack (phase 4)
 const DELIVERABLES = [
@@ -282,8 +283,21 @@ export default function StartMeeting() {
         ...(actionId ? { todoId: actionId } : {}),
       });
 
-      // La salle de réunion lance la préparation dès l'ouverture (si au moins 2 agents)
-      navigate(`/projects/${projectId}/meeting/${data.session.id}`, { state: { autoPrepare: autoPrepare && activeAgents.length >= 2 } });
+      // Préparation par les agents (au moins 2) : elle tourne sur le serveur, l'humain ne
+      // rentre pas dans la conversation — retour à « Mes projets », où la réunion préparée
+      // se signale quand ses conclusions sont prêtes (v5.1, 15/10/2026)
+      if (autoPrepare && activeAgents.length >= 2) {
+        try {
+          await launchPreparation(projectId, data.session.id);
+          notifySuccess(`Les agents préparent « ${task.trim()} ». Vous la retrouverez signalée dans vos projets quand les conclusions seront prêtes.`);
+          navigate('/');
+        } catch (err) {
+          notifyError(err, err.message);
+          navigate(`/projects/${projectId}/meeting/${data.session.id}`);
+        }
+        return;
+      }
+      navigate(`/projects/${projectId}/meeting/${data.session.id}`);
     } catch (err) {
       if (err.response?.data?.kind === 'blocked') setBlockingActions(err.response.data.blockingActions || []);
       else setError(err.response?.data?.error || 'Erreur lors du démarrage de la réunion');

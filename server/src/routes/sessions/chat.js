@@ -17,12 +17,13 @@ const { ORCHESTRATOR_MODEL, ORCHESTRATOR_PARAMS } = require('../../services/mode
 const { buildAgentSystemPrompt } = require('../../services/prompts/agentPrompt');
 const { buildOrchestratorPrompt, buildOrchestratorCodeSection, MAX_TURNS } = require('../../services/prompts/orchestratorPrompt');
 const { parseAgentOutput, detectArtifactRequest } = require('../../services/markers');
-const { decisionBudgetFor } = require('../../services/questionModes');
+const { decisionBudgetFor, effectiveQuestionMode } = require('../../services/questionModes');
 const { listDecisions, formatRegistryForPrompt } = require('../../services/decisions');
 const { analyzeAndSaveNeeds, formatNeedsForPrompt } = require('../../services/tools/toolNeeds');
 const { sessionCodeContext, lookupCode, codeAccess, readPaths } = require('../../services/codeContext');
 const { meetingHistory, withHistory } = require('../../services/prompts/meetingHistory');
 const { projectObjective } = require('../../utils/projectObjective');
+const preparation = require('../../services/preparation');
 const { actionForPrompt } = require('../../services/actions');
 const { agendaDecisions, formatAgendaForPrompt } = require('../../services/agenda');
 const { listActions, formatActionsForPrompt } = require('../../services/actions');
@@ -73,7 +74,7 @@ async function loadMessages(sessionId) {
 async function orchestrate({ session, project, messages, activeAgents,
   lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false,
   artifactRequested = false, decisionBudget, preparing = false, challengerOn = false,
-  codeReadable = false, codeText = '' }) {
+  codeReadable = false, codeText = '', questionMode = 'balanced' }) {
 
   // Contradicteur : disponible seulement sur fort enjeu, 2 fois par réunion au plus
   const canChallenge = challengerAvailable({ enabled: challengerOn, messages, preparing });
@@ -150,6 +151,8 @@ async function orchestrate({ session, project, messages, activeAgents,
     delegated,
     turnCount: countAgentTurns(messages),
     decisionsLeft: Math.max(0, decisionBudget - countDecisions(messages)),
+    decisionsAsked: countDecisions(messages),
+    questionMode: preparing ? 'delegate' : questionMode,
     challengeSection: canChallenge
       ? buildOrchestratorChallengeSection({ left: challengesLeft(messages), priorText: priorVigilanceText(messages) })
       : '',
@@ -268,6 +271,11 @@ router.post('/:sessionId/chat', async (req, res) => {
       return res.status(400).json({ error: 'Aucun agent actif dans cette réunion' });
     }
 
+    // Préparation en cours (elle tourne sans l'humain) : pas d'autre échange en parallèle
+    if (preparation.isRunning(sessionId)) {
+      return res.status(409).json({ error: 'Les agents préparent encore cette réunion : revenez quand les conclusions sont prêtes.', preparing: true });
+    }
+
     // Préparation sans l'humain : seulement au début de la réunion, à plusieurs agents
     if (prepare) {
       if (activeAgents.length < 2) {
@@ -302,9 +310,12 @@ router.post('/:sessionId/chat', async (req, res) => {
   }, 15000);
 
   const abortController = new AbortController();
+  // v5.1 : une préparation continue sans l'humain quand il quitte la page (retour au tableau
+  // de bord) ; les autres échanges s'arrêtent avec la connexion.
+  if (prepare) preparation.start(sessionId, projectId, abortController);
   req.on('close', () => {
     clearInterval(heartbeatInterval);
-    abortController.abort();
+    if (!prepare) abortController.abort();
   });
 
   send('connected', { sessionId });
@@ -350,6 +361,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     const humorLevel     = session.humorLevel     ?? project.humorLevel     ?? 2;
     // Mode de questions (réunion > projet) : budget de cartes de décision
     const decisionBudget = decisionBudgetFor(session, project);
+    const questionMode   = effectiveQuestionMode(session, project);
     // Registre des décisions du projet (chargé une fois par requête)
     const decisionRegistry = formatRegistryForPrompt(await listDecisions(projectId));
     const actionsText = formatActionsForPrompt(await listActions(projectId));
@@ -469,6 +481,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         delegated:            turnCount === 0 && !!delegated,
         artifactRequested:    turnCount === 0 && wantsArtifact,
         decisionBudget,
+        questionMode,
         preparing:            !!prepare,
         challengerOn,
         codeReadable,
@@ -530,6 +543,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         pastCodePromptsText,
         expertiseLevel,
         humorLevel,
+        questionMode,
         webSearchEnabled: session.webSearchEnabled === true,
         projectToolsText,
         artifactRequest: turnArtifact,
@@ -772,6 +786,7 @@ router.post('/:sessionId/chat', async (req, res) => {
     res.end();
   } finally {
     clearInterval(heartbeatInterval);
+    if (prepare) preparation.finish(sessionId);
   }
 });
 

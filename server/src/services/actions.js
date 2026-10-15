@@ -160,6 +160,7 @@ async function actionForPrompt(todoId, projectId) {
   const [a] = await db('TodoItem').where({ id: todoId, projectId }).select('title', 'description').limit(1);
   if (!a) return '';
   const [m] = await db('AgentMission').where({ todoId }).whereNotIn('status', ['rejected', 'cancelled'])
+    .where(q => q.whereNull('outcome').orWhereNot('outcome', 'discarded'))
     .orderByRaw(`CASE WHEN status = 'done' THEN 0 ELSE 1 END, "createdAt" DESC`).select('status', 'agentName', 'report', 'error').limit(1);
   const head = `« ${a.title} »${a.description ? ` — ${a.description}` : ''}`;
   if (!m) return head;

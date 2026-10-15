@@ -36,8 +36,10 @@ function buildThreads(sessions) {
   return roots.flatMap(r => flatten(r, 0));
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, session }) {
   if (status === 'accepted' || status === 'complete') return <Badge tone="ok">Conclue</Badge>;
+  if (status === 'open' && session?.prepRunning) return <Badge tone="ai">Préparation en cours</Badge>;
+  if (status === 'open' && session?.prepReady)   return <Badge tone="ok">Préparée, à consulter</Badge>;
   if (status === 'open')      return <Badge tone="action">En cours</Badge>;
   if (status === 'abandoned') return <Badge tone="muted">Abandonnée</Badge>;
   if (status === 'postponed') return <Badge tone="await">Reportée</Badge>;
@@ -89,7 +91,7 @@ function SessionItem({ session, projectId, cost, onViewDeliverable, tour, canDel
           {cost > 0 && <span title="Coût réel de l'IA pour cette réunion"> · {formatUSD(cost)}</span>}
         </p>
       </div>
-      <StatusBadge status={session.status} />
+      <StatusBadge status={session.status} session={session} />
       <div className="flex items-center gap-1">
         {session.status === 'accepted' && (
           <Button size="sm" variant="ghost" onClick={() => onViewDeliverable(session)}>

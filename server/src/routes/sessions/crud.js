@@ -1,4 +1,5 @@
 const express        = require('express');
+const { PREP_READY_SQL, isRunning, stop: stopPreparation } = require('../../services/preparation');
 const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const { findProject: getProject } = require('../../utils/projectHelpers');
@@ -124,12 +125,30 @@ router.get('/', async (req, res) => {
         db.raw('jsonb_array_length(agents) as "agentCount"')
       )
       .where({ projectId })
-      .whereIn('status', ['open', 'accepted', 'abandoned'])
+      .select(db.raw(`${PREP_READY_SQL('"Session"')} AS "prepReady"`))
+      .whereIn('status', ['open', 'accepted', 'abandoned', 'postponed'])
       .orderBy('createdAt', 'desc');
 
-    res.json(sessions);
+    // v5.1 : préparation par les agents en cours (mémoire du serveur) ou prête à livrer ses conclusions
+    res.json(sessions.map(s => ({ ...s, prepRunning: isRunning(s.id) })));
   } catch (err) {
     console.error('[sessions GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── POST /:sessionId/prepare/stop — Arrêter la préparation menée sans l'humain (v5.1) ──
+router.post('/:sessionId/prepare/stop', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [session] = await db('Session').where({ id: sessionId, projectId }).select('id').limit(1);
+    if (!session) return res.status(404).json({ error: 'Réunion introuvable' });
+    res.json({ stopped: stopPreparation(sessionId) });
+  } catch (err) {
+    console.error('[sessions prepare/stop]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -162,6 +181,7 @@ router.get('/:sessionId', async (req, res) => {
       pendingMeetingSuggestions: parseJsonField(session.pendingMeetingSuggestions, []),
       pendingToolSuggestions: parseJsonField(session.pendingToolSuggestions, []).filter(t => t && t.name),
       decisionBudget: decisionBudgetFor(session, project),
+      prepRunning: isRunning(session.id), // v5.1 : les agents préparent la réunion sans l'humain
       projectQuestionMode: project.questionMode,
       planAlreadyAdded: parseInt(planCount || 0) > 0,
     });

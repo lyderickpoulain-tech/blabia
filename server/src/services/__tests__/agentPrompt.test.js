@@ -140,3 +140,24 @@ describe('prompt agent : le cap', () => {
     expect(p).toContain('"offTrack": false');
   });
 });
+
+// 15/10/2026 : le mode de questions règle ce qui revient à l'humain, pas seulement le plafond
+describe('prompt agent : mode de questions', () => {
+  const sharedFor = questionMode => buildAgentSystemPrompt({ ...base, agent: agents[0], questionMode })[0].text;
+  it('« Équilibré » : les choix qui appartiennent à l’humain passent par une carte', () => {
+    expect(sharedFor('balanced')).toContain('Ce qui APPARTIENT à l\'humain se tranche par une carte');
+    expect(sharedFor('balanced')).toContain('2 à 4');
+    expect(sharedFor('delegate')).toContain('L\'humain DÉLÈGUE');
+    expect(sharedFor('control')).toContain('VEUT TOUT TRANCHER');
+    expect(sharedFor(undefined)).toContain('Ce qui APPARTIENT');
+  });
+  it('orchestrateur : aucune carte après quelques tours → faire consulter l’humain', () => {
+    const { buildOrchestratorPrompt } = require('../prompts/orchestratorPrompt');
+    const p = (turnCount, decisionsAsked, questionMode) => buildOrchestratorPrompt({ session: { task: 'T', intention: ['decision'] }, agentsForSelection: agents, turnCount, decisionsAsked, questionMode, decisionsLeft: 8 });
+    expect(p(4, 0, 'balanced')).toContain('Aucune question n\'a encore été soumise');
+    expect(p(3, 0, 'balanced')).not.toContain('Aucune question');
+    expect(p(4, 1, 'balanced')).not.toContain('Aucune question');
+    expect(p(9, 0, 'delegate')).not.toContain('Aucune question');
+    expect(p(2, 0, 'control')).toContain('tout trancher');
+  });
+});

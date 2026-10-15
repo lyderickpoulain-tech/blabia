@@ -58,9 +58,9 @@ async function listMissions(projectId, { sessionId } = {}) {
 function formatMissionsForPrompt(missions) {
   const label = { queued: 'en attente', running: 'en cours', done: 'terminée', failed: 'échouée' };
   return missions
-    .filter(m => label[m.status])
+    .filter(m => label[m.status] && m.outcome !== 'discarded')
     .slice(0, 10)
-    .map(m => `- [${label[m.status]}] ${m.title} (${m.agentName})${m.status === 'done' ? ` — rapport dans les documents : « Mission — ${m.title} »` : ''}`)
+    .map(m => `- [${label[m.status]}] ${m.title} (${m.agentName})${m.status === 'done' ? (m.outcome === 'integrated' ? ` — rapport dans les documents : « Mission — ${m.title} »` : ' — rapport pas encore validé par l\'humain') : ''}`)
     .join('\n');
 }
 

@@ -331,6 +331,7 @@ model AgentMission {
   error       String?
   documentId  String?
   todoId      String?   // v5.1 : action d'où la mission a été confiée (page Actions)
+  outcome     String?   // v5.1 : rapport examiné — integrated | discarded ; null = en attente du choix de l'humain
   approvedBy  String?
   createdAt   DateTime  @default(now())
   approvedAt  DateTime?

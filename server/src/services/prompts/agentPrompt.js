@@ -52,6 +52,19 @@ Ne propose pas d'outil quand un outil de l'humain couvre déjà le besoin. L'hum
 `;
 }
 
+// v5.1 (15/10/2026) : le mode de questions fixait seulement un PLAFOND de cartes ; la consigne
+// « une carte uniquement si… » s'appliquait à tous, et en « Équilibré » les agents tranchaient
+// presque tout par hypothèse (projet « Noël CSE » : 2 cartes en 7 réunions). Désormais le
+// mode règle aussi ce qui revient à l'humain.
+const QUESTION_RULES = {
+  delegate: `- L'humain DÉLÈGUE : pose une carte UNIQUEMENT si plusieurs options ont des conséquences réellement différentes pour le projet ET qu'aucune information disponible (brief, mémoire, échanges) ne permet de trancher.
+- Sinon, fais une HYPOTHÈSE et avance`,
+  balanced: `- Ce qui APPARTIENT à l'humain se tranche par une carte : ses goûts et préférences, son budget, ses priorités, le périmètre, et tout choix qui engage la suite (difficile à défaire, structurant pour les réunions suivantes). Dès qu'un tel choix se présente, soumets-le-lui : une réunion de décision en compte normalement 2 à 4. Ne le remplace pas par une hypothèse.
+- Pour le reste (détails, choix faciles à défaire, points que le brief ou la mémoire règlent déjà), fais une HYPOTHÈSE et avance`,
+  control: `- L'humain VEUT TOUT TRANCHER : tout choix qui a plusieurs options raisonnables passe par une carte, même s'il te semble évident ; donne ta recommandation en premier choix.
+- Seuls les détails sans conséquence passent par une HYPOTHÈSE`,
+};
+
 // ── Curseur « maîtrise du sujet » (1 → 5) ──────────────────────────────────────
 // v5.1 (audit du 13/10/2026) : des profils nettement distincts — longueur, vocabulaire,
 // détails techniques, chiffres — avec un exemple « à éviter / à préférer » chacun.
@@ -209,6 +222,7 @@ function buildAgentSystemPrompt({
   today = '',
   challengerSection = '', // v5.1 : tour du contradicteur (services/challenger.js)
   humorRoll = Math.random(), // tirage de l'humour pour ce tour (fixé dans les tests)
+  questionMode = 'balanced', // services/questionModes.js : ce qui revient à l'humain
 }) {
   // Registre des décisions du projet : ce qui est tranché ne se redemande pas ;
   // ce que l'humain a remis en question est à retraiter en priorité.
@@ -331,9 +345,8 @@ FORMAT DE TES MESSAGES :
 
 MISE EN FORME possible dans tes bulles, avec parcimonie : gras sur un mot clé, liste ou tableau seulement pour comparer des options, liens. INTERDIT : titres (#), HTML.
 
-QUESTIONS À L'HUMAIN — il est l'initiateur et l'arbitre, pas un formulaire à remplir :
-- Pose une carte UNIQUEMENT si plusieurs options ont des conséquences réellement différentes pour le projet ET qu'aucune information disponible (brief, mémoire, échanges) ne permet de trancher.
-- Sinon, fais une HYPOTHÈSE et avance : une bulle qui commence par « Hypothèse : », puis ce que tu retiens et pourquoi, en une phrase naturelle (ex. « Hypothèse : on ouvre au printemps, ça laisse le temps de trouver le local. »). L'humain peut la contester d'un clic.
+QUESTIONS À L'HUMAIN — il est l'initiateur et l'arbitre :
+${QUESTION_RULES[questionMode] || QUESTION_RULES.balanced} : une bulle qui commence par « Hypothèse : », puis ce que tu retiens et pourquoi, en une phrase naturelle (ex. « Hypothèse : on ouvre au printemps, ça laisse le temps de trouver le local. »). L'humain peut la contester d'un clic.
 - Avant de poser une carte, regroupe : rassemble en une seule fois toutes les questions qui bloquent vraiment (jusqu'à 3 cartes dans le même message) plutôt que d'en poser une à chaque tour.
 - Le budget de cartes restant pour cette réunion est indiqué à la fin de ce prompt.
 Format d'une carte (JSON valide, une seule ligne par carte) :

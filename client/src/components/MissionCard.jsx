@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Telescope, Search, FileSearch, PenLine, FileText, RotateCcw, X, Play } from 'lucide-react';
+import { Telescope, Search, FileSearch, PenLine, FileText, RotateCcw, X, Play, FileCheck2, FileX2 } from 'lucide-react';
 import { Badge, Button } from './ui';
 import { formatUSD } from '../utils/cost';
 import { MISSION_LEVELS, levelById } from '../utils/missionLevels';
@@ -24,7 +24,7 @@ const STATUS = {
   cancelled: { label: 'Annulée',                         tone: 'muted' },
 };
 
-export default function MissionCard({ mission, onApprove, onReject, onCancel, onOpenReport, compact = false, disabled = false, approveLabel = 'Lancer' }) {
+export default function MissionCard({ mission, onApprove, onReject, onCancel, onOpenReport, onIntegrate, onDiscard, compact = false, disabled = false, approveLabel = 'Lancer' }) {
   const [level, setLevel] = useState(mission.level || 'standard');
   const [busy, setBusy] = useState(false);
   const kind = KIND[mission.kind] || KIND.research;
@@ -83,10 +83,24 @@ export default function MissionCard({ mission, onApprove, onReject, onCancel, on
               <RotateCcw size={13} aria-hidden="true" /> Relancer
             </Button>
           )}
-          {mission.status === 'done' && onOpenReport && (
-            <Button size="sm" variant="secondary" className="!h-8 mt-2" onClick={() => onOpenReport(mission)}>
-              <FileText size={13} aria-hidden="true" /> Lire le rapport
-            </Button>
+          {mission.status === 'done' && (onOpenReport || (onIntegrate && !mission.outcome)) && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {onOpenReport && (
+                <Button size="sm" variant="secondary" className="!h-8" onClick={() => onOpenReport(mission)}>
+                  <FileText size={13} aria-hidden="true" /> Lire le rapport
+                </Button>
+              )}
+              {onIntegrate && !mission.outcome && (
+                <>
+                  <Button size="sm" variant="primary" className="!h-8" disabled={busy} onClick={() => act(() => onIntegrate(mission))}>
+                    <FileCheck2 size={13} aria-hidden="true" /> Intégrer le CR au projet
+                  </Button>
+                  <Button size="sm" variant="ghost" className="!h-8" disabled={busy} onClick={() => act(() => onDiscard(mission))}>
+                    <FileX2 size={13} aria-hidden="true" /> Ne pas intégrer
+                  </Button>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>

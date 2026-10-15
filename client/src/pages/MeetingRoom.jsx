@@ -23,6 +23,7 @@ import usePresence from '../hooks/usePresence';
 import { DecisionPeopleContext } from '../components/meeting/decisionPeople';
 import { useAuth } from '../contexts/AuthContext';
 import { notifySuccess } from '../utils/notify';
+import { launchPreparation, stopPreparation } from '../utils/preparation';
 
 // ── MeetingRoom ───────────────────────────────────────────────────────────────
 
@@ -127,10 +128,14 @@ export default function MeetingRoom() {
   // Tokens consommés (cumulés par les turn_complete SSE)
   const [tokensUsed,      setTokensUsed]      = useState(null); // { input, output, total } | null
 
+  // Réunion conclue (ou abandonnée) : retour au tableau de bord du projet, où se lit la suite
+  // (actions, prochaine réunion, développement lancé) — v5.1, 15/10/2026
   const handleSessionClosed = useCallback((newStatus) => {
     setSession(prev => prev ? { ...prev, status: newStatus } : prev);
     setShowCloseModal(false);
-  }, []);
+    notifySuccess(newStatus === 'accepted' ? 'Réunion conclue : voici la suite du projet.' : 'Réunion abandonnée.');
+    navigate(`/projects/${projectId}`);
+  }, [navigate, projectId]);
 
   const handleResetSession = useCallback(async () => {
     setResettingSession(true);
@@ -273,11 +278,13 @@ export default function MeetingRoom() {
   const watchUntilRef = useRef(0);
   const awaitingHuman = messages.some(m => m.type === 'decision' && m.status === 'awaiting_human');
   if (awaitingHuman) watchUntilRef.current = Date.now() + 3 * 60 * 1000;
+  if (session?.prepRunning) watchUntilRef.current = Date.now() + 60 * 1000; // préparation en cours sur le serveur
   useEffect(() => {
     const t = setInterval(() => {
       if (isStreamingRef.current || Date.now() > watchUntilRef.current || document.visibilityState !== 'visible') return;
       api.get(`/projects/${projectId}/sessions/${sessionId}`).then(({ data }) => {
         if (isStreamingRef.current || !Array.isArray(data.messages)) return;
+        setSession(prev => (prev && prev.prepRunning !== data.prepRunning ? { ...prev, prepRunning: data.prepRunning } : prev));
         const sig = list => list.map(m => `${m.id}:${m.status || ''}`).join(',');
         setMessages(prev => (sig(prev) === sig(data.messages) ? prev : data.messages));
       }).catch(() => {});
@@ -668,9 +675,14 @@ export default function MeetingRoom() {
   }, [handleSend]);
 
   // Préparation sans l'humain : les agents débattent, puis synthèse + décisions
-  const handlePrepare = useCallback(() => {
-    handleSend('', { resume: true, prepare: true });
-  }, [handleSend]);
+  // v5.1 (15/10/2026) : elle tourne sur le serveur ; l'humain retourne à ses projets
+  const handlePrepare = useCallback(async () => {
+    try {
+      await launchPreparation(projectId, sessionId);
+      notifySuccess('Les agents préparent la réunion. Vous la retrouverez signalée dans vos projets quand les conclusions seront prêtes.');
+      navigate('/');
+    } catch (err) { notifyError(err, err.message); setPrepRequested(false); }
+  }, [projectId, sessionId, navigate]);
 
   // « Préparer avant mon arrivée » choisi au démarrage : une seule fois, réunion vide
   useEffect(() => {
@@ -728,7 +740,7 @@ export default function MeetingRoom() {
   let phase = 'exchanges';
   if (isClosed || showCloseModal)                                  phase = 'conclusion';
   // Préparation arrêtée avant la synthèse : on passe directement aux échanges
-  else if (prepStarted && !prepSummaryMsg && isStreaming)          phase = 'preparation';
+  else if ((prepStarted && !prepSummaryMsg && isStreaming) || session?.prepRunning) phase = 'preparation';
   else if (prepSummaryMsg && pendingPrepDecisions.length > 0)      phase = 'briefing';
   const skippedPhases = prepStarted ? [] : ['preparation', 'briefing'];
 
@@ -960,13 +972,15 @@ export default function MeetingRoom() {
                 </div>
               )}
 
-              {phase === 'preparation' && isStreaming ? (
+              {phase === 'preparation' && (isStreaming || session?.prepRunning) ? (
                 // Préparation en cours : pas de saisie (le focus interromprait le débat)
                 <div className="shrink-0 bg-white border-t border-line px-4 py-2">
                   <div className="max-w-[820px] mx-auto flex flex-wrap items-center gap-3">
                     <span className="w-4 h-4 border-2 border-ai border-t-transparent rounded-full animate-spin shrink-0" aria-hidden="true" />
-                    <p className="flex-1 text-sm font-semibold text-ai">Les agents préparent la réunion. Le briefing s'affichera dès qu'ils auront fini.</p>
-                    <button type="button" onClick={() => abortControllerRef.current?.abort()}
+                    <p className="flex-1 text-sm font-semibold text-ai">Les agents préparent la réunion. Le briefing s'affichera dès qu'ils auront fini ; vous pouvez revenir plus tard.</p>
+                    <button type="button" onClick={() => (session?.prepRunning
+                      ? stopPreparation(projectId, sessionId).then(() => setSession(s => ({ ...s, prepRunning: false }))).catch(err => notifyError(err, 'La préparation n’a pas pu être arrêtée.'))
+                      : abortControllerRef.current?.abort())}
                       className="min-h-[36px] text-[13px] font-bold text-ink-muted hover:text-ink">Arrêter la préparation</button>
                   </div>
                 </div>

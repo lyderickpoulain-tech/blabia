@@ -3,7 +3,7 @@ const authMiddleware = require('../middleware/auth');
 const db = require('../utils/db');
 const { findProject } = require('../utils/projectHelpers');
 const { listMissions, monthlyCommitted, KINDS, ACTIVE, LEVELS, LEVEL_IDS, postponeMeetingForMission } = require('../services/missions');
-const { kickMissions } = require('../services/missionRunner');
+const { kickMissions, setMissionOutcome } = require('../services/missionRunner');
 
 // Missions des agents (v5.1) : liste, validation (plafond), refus, annulation, relance.
 const router = express.Router();
@@ -77,6 +77,23 @@ router.post('/:id/missions/:mid/reject', async (req, res) => {
     res.json(m);
   } catch (err) {
     console.error('[missions reject]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/missions/:mid/outcome { outcome: 'integrated'|'discarded' } — v5.1 :
+// le rapport prêt est intégré au projet (document, mémoire, action cochée) ou écarté
+router.post('/:id/missions/:mid/outcome', async (req, res) => {
+  try {
+    const { mission } = await load(req, res);
+    if (!mission) return;
+    const outcome = req.body?.outcome;
+    if (!['integrated', 'discarded'].includes(outcome)) return res.status(400).json({ error: 'Choix attendu : integrated ou discarded.' });
+    if (mission.status !== 'done') return res.status(409).json({ error: 'Le rapport de cette mission n’est pas prêt.' });
+    if (mission.outcome) return res.status(409).json({ error: 'Ce compte rendu a déjà été traité.' });
+    res.json(await setMissionOutcome(mission, outcome));
+  } catch (err) {
+    console.error('[missions outcome]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

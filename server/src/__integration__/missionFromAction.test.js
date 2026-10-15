@@ -38,23 +38,47 @@ describe.skipIf(!harness.enabled)('mission confiée depuis une action', () => {
     expect((await h.db('TodoItem').where({ id: actionId }).first()).status).toBe('in_progress');
   });
 
-  it('rapport prêt : visible sur l’action, rangé dans les documents', async () => {
+  it('rapport prêt : en attente du choix de l’humain, puis intégré au projet (action cochée, mission retirée)', async () => {
     const action = await waitFor(async () => {
       const list = (await h.request('GET', `/api/projects/${pid}/actions`, { token: owner.token })).body;
       const a = list.find(x => x.id === actionId);
       return a?.mission?.status === 'done' ? a : null;
     });
-    expect(action.mission).toMatchObject({ agentName: 'Juriste', status: 'done' });
-    expect(action.mission.documentId).toBeTruthy();
-    expect(action.status).toBe('in_progress'); // l'humain coche l'action une fois satisfait
-    // Mémoire du projet : la synthèse et la recommandation, relues par les agents en réunion
+    expect(action.mission).toMatchObject({ agentName: 'Juriste', status: 'done', outcome: null });
+    expect(action.status).toBe('in_progress');
+    // Pas encore intégré : document inactif, mémoire inchangée
+    const doc = await h.db('ProjectDocument').where({ id: action.mission.documentId }).first();
+    expect(doc.enabled).toBe(false);
+    expect((await h.db('Project').where({ id: pid }).first()).context || '').not.toContain('[MISSION:');
+    // « Intégrer le CR au projet »
+    const r = await h.request('POST', `/api/projects/${pid}/missions/${action.mission.id}/outcome`, { token: owner.token, body: { outcome: 'integrated' } });
+    expect(r.status).toBe(200);
+    expect(r.body.outcome).toBe('integrated');
+    expect((await h.db('ProjectDocument').where({ id: action.mission.documentId }).first()).enabled).toBe(true);
     const { context } = await h.db('Project').where({ id: pid }).first();
     expect(context).toMatch(/^\[MISSION:[0-9a-f-]+ \| \d\d\/\d\d\/\d{4} — Mission « Vérifier si la démo célébrités pose un problème légal ou d’image » menée pour Juriste\]/);
     expect(context).toContain('Risque faible si les dates sont publiques et l’usage non commercial.\nAjouter une mention.');
-    expect(context).toContain('(Rapport complet : document « Mission — Vérifier si la démo');
-    // Nouvelle mission possible une fois la précédente terminée ; pas sur une action faite
-    await h.db('TodoItem').where({ id: actionId }).update({ status: 'done' });
+    expect((await h.db('TodoItem').where({ id: actionId }).first()).status).toBe('done');
+    const after = (await h.request('GET', `/api/projects/${pid}/actions`, { token: owner.token })).body.find(x => x.id === actionId);
+    expect(after.mission).toBeNull();
+    // Déjà traité : refusé ; pas de nouvelle mission sur une action faite
+    expect((await h.request('POST', `/api/projects/${pid}/missions/${action.mission.id}/outcome`, { token: owner.token, body: { outcome: 'discarded' } })).status).toBe(409);
     expect((await h.request('POST', `/api/projects/${pid}/actions/${actionId}/mission`, { token: owner.token, body: { agentName: 'Juriste' } })).status).toBe(409);
+  });
+
+  it('« Ne pas intégrer » : document retiré, action toujours à faire, rapport plus transmis', async () => {
+    const todo = crypto.randomUUID();
+    await h.db('TodoItem').insert({ id: todo, projectId: pid, title: 'Comparer les hébergeurs', status: 'todo', displayOrder: 9 });
+    const docId = crypto.randomUUID();
+    await h.db('ProjectDocument').insert({ id: docId, projectId: pid, name: 'Mission — Hébergeurs', content: 'x', charCount: 1, enabled: false });
+    const [m] = await h.db('AgentMission').insert({ projectId: pid, todoId: todo, agentName: 'Juriste', kind: 'research', title: 'Hébergeurs', objective: 'o', status: 'done', report: '# Rapport hors sujet', documentId: docId }).returning('*');
+    const r = await h.request('POST', `/api/projects/${pid}/missions/${m.id}/outcome`, { token: owner.token, body: { outcome: 'discarded' } });
+    expect(r.status).toBe(200);
+    expect(await h.db('ProjectDocument').where({ id: docId }).first()).toBeUndefined();
+    expect((await h.db('TodoItem').where({ id: todo }).first()).status).toBe('todo');
+    const { actionForPrompt } = require('../services/actions');
+    expect(await actionForPrompt(todo, pid)).not.toContain('Rapport hors sujet');
+    expect((await h.request('POST', `/api/projects/${pid}/missions/${m.id}/outcome`, { token: owner.token, body: { outcome: 'autre' } })).status).toBe(400);
   });
 
   it('« Traiter en réunion » : action et rapport complet transmis aux agents ; action cochée à la conclusion', async () => {

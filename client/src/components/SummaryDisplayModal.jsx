@@ -4,7 +4,7 @@ import Markdown from './Markdown';
 import ExportButtons from './ExportButtons';
 
 // exports (v5.1) : { pdfPath, wordPath } pour exporter le compte-rendu en PDF / Word
-export default function SummaryDisplayModal({ title, date, content, onClose, exports }) {
+export default function SummaryDisplayModal({ title, date, content, onClose, exports, actions = null }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -64,10 +64,11 @@ export default function SummaryDisplayModal({ title, date, content, onClose, exp
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 px-5 pb-4 pt-3 border-t border-gray-100">
+        <div className="shrink-0 px-5 pb-4 pt-3 border-t border-line flex flex-wrap gap-2">
+          {actions}
           <button
             onClick={onClose}
-            className="w-full border border-gray-200 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50 transition font-medium"
+            className={`${actions ? 'ml-auto px-4' : 'w-full'} h-11 border border-line text-ink-soft rounded-[10px] text-sm hover:bg-canvas transition font-bold`}
           >
             Fermer
           </button>

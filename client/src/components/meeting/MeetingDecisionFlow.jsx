@@ -1,5 +1,9 @@
 import { CircleCheck, Rocket, Flag } from 'lucide-react';
-// ── Bannières suggest_close (orchestrateur) ───────────────────────────────────
+import { Button } from '../ui';
+// ── Bannière suggest_close (orchestrateur) ────────────────────────────────────
+// v5.1 (15/10/2026) : charte v5 (jetons ok / ai, boutons du kit), à la place du
+// vert et du bleu de la v4. Conclure ouvre la fenêtre de conclusion ; une fois la
+// réunion conclue, on revient au tableau de bord du projet (MeetingRoom).
 
 export function MeetingSuggestCloseBanner({
   suggestClose,
@@ -11,64 +15,25 @@ export function MeetingSuggestCloseBanner({
 }) {
   if (!suggestClose || isClosed) return null;
 
-  if (currentIntention === 'claude_code') {
-    return (
-      <div className="shrink-0 mx-3 mt-2 mb-1 bg-blabia-blue-light border border-blabia-blue rounded-xl px-4 py-3 space-y-2">
-        <div className="flex items-start gap-2">
-          <CircleCheck size={18} strokeWidth={1.75} className="text-blabia-blue shrink-0 mt-0.5" aria-hidden="true" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-blabia-blue">
-              Les agents estiment que les besoins sont clarifiés.
-            </p>
-            {suggestClose.reason && (
-              <p className="text-xs text-gray-600 mt-0.5 leading-snug">
-                Points couverts : {suggestClose.reason}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setShowCloseModal(true); setSuggestClose(null); }}
-            className="flex-1 text-xs font-semibold bg-blabia-blue hover:bg-blabia-blue-dark text-white px-3 py-2 rounded-lg transition"
-          >
-            <Rocket size={14} className="inline -mt-0.5 mr-1" aria-hidden="true" />{hasDevRepo ? 'Générer le prompt et lancer le développement' : 'Générer le prompt et clore'}
-          </button>
-          <button
-            onClick={() => setSuggestClose(null)}
-            className="text-xs font-medium text-blabia-blue hover:text-blabia-blue-dark border border-blabia-blue hover:bg-white px-3 py-2 rounded-lg transition"
-          >
-            Continuer les échanges
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const code = currentIntention === 'claude_code';
+  const conclude = () => { setShowCloseModal(true); setSuggestClose(null); };
 
   return (
-    <div className="shrink-0 mx-3 mt-2 mb-1 flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-      <CircleCheck size={18} strokeWidth={1.75} className="text-green-600 shrink-0 mt-0.5" aria-hidden="true" />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-green-800">
-          Les agents estiment que l'objectif est atteint.
+    <div role="status" className={`shrink-0 mx-3 mt-2 mb-1 rounded-2xl border px-4 py-3 flex flex-wrap items-center gap-3 ${code ? 'bg-ai-bg border-ai-border' : 'bg-ok-light border-ok-border'}`}>
+      <CircleCheck size={20} strokeWidth={1.75} className={`shrink-0 ${code ? 'text-ai' : 'text-ok'}`} aria-hidden="true" />
+      <div className="flex-1 min-w-[200px]">
+        <p className={`text-sm font-extrabold ${code ? 'text-ai' : 'text-ok'}`}>
+          {code ? 'Les agents estiment que les besoins sont clarifiés.' : 'Les agents estiment que l’objectif est atteint.'}
         </p>
-        {suggestClose.reason && (
-          <p className="text-xs text-green-600 mt-0.5 leading-snug">{suggestClose.reason}</p>
-        )}
+        {suggestClose.reason && <p className="text-[13px] text-ink-soft mt-0.5 leading-snug">{suggestClose.reason}</p>}
       </div>
       <div className="flex gap-2 shrink-0">
-        <button
-          onClick={() => { setShowCloseModal(true); setSuggestClose(null); }}
-          className="text-xs font-semibold bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition"
-        >
-          <Flag size={13} className="inline -mt-0.5 mr-1" aria-hidden="true" />Clore
-        </button>
-        <button
-          onClick={() => setSuggestClose(null)}
-          className="text-xs font-medium text-green-700 hover:text-green-900 border border-green-200 hover:bg-green-100 px-3 py-1.5 rounded-lg transition"
-        >
-          Continuer
-        </button>
+        <Button size="sm" variant="ghost" onClick={() => setSuggestClose(null)}>Continuer les échanges</Button>
+        <Button size="sm" variant="primary" onClick={conclude}>
+          {code
+            ? <><Rocket size={15} aria-hidden="true" /> {hasDevRepo ? 'Générer le prompt et lancer le développement' : 'Générer le prompt et conclure'}</>
+            : <><Flag size={15} aria-hidden="true" /> Conclure la réunion</>}
+        </Button>
       </div>
     </div>
   );

@@ -25,11 +25,15 @@ describe('missions des agents', () => {
 
   it('texte pour les agents : missions utiles seulement, rapport cité', () => {
     const text = formatMissionsForPrompt([
-      { status: 'done', title: 'Loyers', agentName: 'Max' },
+      { status: 'done', title: 'Loyers', agentName: 'Max', outcome: 'integrated' },
+      { status: 'done', title: 'Prix', agentName: 'Max', outcome: null },
+      { status: 'done', title: 'Hors sujet', agentName: 'Max', outcome: 'discarded' },
       { status: 'running', title: 'Aides', agentName: 'Léa' },
       { status: 'rejected', title: 'Écartée', agentName: 'Léa' },
     ]);
     expect(text).toContain('[terminée] Loyers (Max) — rapport dans les documents : « Mission — Loyers »');
+    expect(text).toContain("[terminée] Prix (Max) — rapport pas encore validé par l'humain");
+    expect(text).not.toContain('Hors sujet');
     expect(text).toContain('[en cours] Aides');
     expect(text).not.toContain('Écartée');
   });
