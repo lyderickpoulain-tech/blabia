@@ -9,6 +9,7 @@ const { projectKnowledge } = require('../services/projectKnowledge');
 const { POSTURE } = require('../services/prompts/posture');
 const { parseJsonField } = require('../utils/parseJsonField');
 const { buildInbox, inboxForPrompt } = require('../services/inbox');
+const { appendMemory } = require('../utils/projectMemory');
 
 // Bras droit (v5.1, 16/10/2026, étape 1) : l'interlocuteur principal de l'humain sur un projet,
 // en tête-à-tête. Il connaît tout le projet (services/projectKnowledge.js), cite ses sources,
@@ -22,6 +23,9 @@ const MAX_INPUT = 4000;
 
 const SOURCES_RE = /\[SOURCES:\s*(\[[\s\S]*?\])\s*\]/;
 const MEETING_RE = /\[MEETING:\s*(R\d{1,3})\s*\]/i;
+const EVOLVE_TAG = '[EVOLVE:';
+const EVOLVE_TYPES = ['decision', 'claude_code', 'stack'];
+const MAX_EVOLVE_MEETINGS = 4;
 
 function buildSystem(project, knowledgeText) {
   return `Tu es le bras droit de l'humain sur le projet « ${project.name} » : son interlocuteur principal, en tête-à-tête. Tu connais tout le projet, tu vérifies avant d'affirmer, et tu l'aides à avancer : répondre, faire le point, recommander la prochaine étape, proposer une réunion.
@@ -35,10 +39,58 @@ COMMENT TU PARLES : comme un bras droit à l'oral, en vouvoyant l'humain. Désig
 
 SOURCES : à la toute fin de ta réponse, une ligne [SOURCES:["Réunion « Titre », 9 oct.","Registre : …","Document « … »"]] avec une à trois sources réellement utilisées, en étiquettes courtes. Aucune ligne si ta réponse ne s'appuie pas sur le projet.
 RÉUNION : si la meilleure suite est une réunion du plan À VENIR, ajoute à la fin [MEETING:R6] (son repère dans le plan ci-dessus), une seule. L'humain choisira de la faire préparer par les agents ou de la tenir.
+FAIRE ÉVOLUER LE PROJET : quand l'humain veut élargir ou changer son projet (« et si je vendais mes vinyles sur mon site ? », « je vais créer une appli », une nouvelle cible, un nouveau volet), dis en clair ce que ça change, ce que ça coûte et ce qui l'attend, puis ajoute à la fin, sur une ligne :
+[EVOLVE:{"summary":"une phrase : ce qui change","brief":"une à deux phrases à ajouter au brief","meetings":[{"title":"titre clair, sans jargon","type":"decision","why":"ce que la réunion tranchera ou produira"}],"after":"R3","technical":true}]
+- meetings : 1 à 4 réunions nouvelles, sans doublon avec le plan ; type « decision » (choisir, trancher), « claude_code » (construire ou modifier le site ou l'appli), « stack » (choisir et mettre en place des outils). Une réunion à venir qui couvre déjà le sujet ne se recrée pas : cite-la.
+- after : repère de la réunion après laquelle les insérer (null = à la fin du plan) ; respecte l'ordre logique : on décide avant de construire, et ce qui complète le site vient après la réunion qui construit sa base. technical : true seulement si le projet devient un site ou une appli à construire.
+- Une seule proposition par réponse, seulement pour une vraie évolution (pas pour une simple question). Elle ne s'applique qu'après l'accord de l'humain (bouton sous ta réponse) : ne dis jamais que c'est fait.
 TU NE MODIFIES RIEN toi-même (décisions, actions, plan) : tu proposes, l'humain décide. Une question hors du projet : réponds brièvement si c'est utile, sans rien inventer.`;
 }
 
+// Extrait [EVOLVE:{…}] (JSON avec tableaux imbriqués : accolades comptées, chaînes respectées)
+function extractEvolve(text) {
+  const start = text.indexOf(EVOLVE_TAG);
+  if (start < 0) return { json: null, text };
+  const open = text.indexOf('{', start);
+  if (open < 0) return { json: null, text: text.slice(0, start) };
+  let depth = 0, inStr = false, esc = false, end = -1;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) { end = i; break; }
+  }
+  if (end < 0) return { json: null, text: text.slice(0, start) };
+  const close = text.indexOf(']', end);
+  const stop = close >= 0 && /^\s*$/.test(text.slice(end + 1, close)) ? close + 1 : end + 1;
+  return { json: text.slice(open, end + 1), text: text.slice(0, start) + text.slice(stop) };
+}
+
+// Proposition d'évolution validée : bornes, types connus, repère « after » vérifié
+function parseEvolution(json, milestones) {
+  let raw;
+  try { raw = JSON.parse(json); } catch { return null; }
+  if (!raw || typeof raw !== 'object') return null;
+  const clip = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const meetings = (Array.isArray(raw.meetings) ? raw.meetings : [])
+    .map(m => ({ title: clip(m?.title, 120), type: EVOLVE_TYPES.includes(m?.type) ? m.type : 'decision', why: clip(m?.why, 300) }))
+    .filter(m => m.title).slice(0, MAX_EVOLVE_MEETINGS);
+  const brief = clip(raw.brief, 600);
+  if (!meetings.length && !brief) return null;
+  let after = null;
+  const ref = /^R(\d{1,3})$/i.exec(String(raw.after || '').trim());
+  if (ref && milestones[Number(ref[1]) - 1]) {
+    const ms = milestones[Number(ref[1]) - 1];
+    after = { ref: `R${Number(ref[1])}`, milestoneId: ms.id, title: ms.title };
+  }
+  return { kind: 'evolution', status: 'pending', summary: clip(raw.summary, 300), brief: brief || null, meetings, after, technical: raw.technical === true };
+}
+
 function parseReply(text, milestones) {
+  const evo = extractEvolve(text);
+  text = evo.text;
+  const evolution = evo.json ? parseEvolution(evo.json, milestones) : null;
   let sources = [];
   const s = text.match(SOURCES_RE);
   if (s) { try { sources = JSON.parse(s[1]).map(x => String(x).slice(0, 120)).filter(Boolean).slice(0, 3); } catch { sources = []; } }
@@ -49,6 +101,7 @@ function parseReply(text, milestones) {
     const ms = milestones[idx];
     if (ms && ms.status !== 'done') proposal = { ref: `R${idx + 1}`, milestoneId: ms.id, title: ms.title, type: ms.type };
   }
+  if (evolution) proposal = evolution; // l'évolution prime : une seule carte par réponse
   const content = text.replace(SOURCES_RE, '').replace(MEETING_RE, '').replace(/\n{3,}/g, '\n\n').trim();
   return { content, sources, proposal };
 }
@@ -107,7 +160,7 @@ router.post('/:id/assistant', async (req, res) => {
     else turns.push({ role: 'user', content: message });
 
     const response = await anthropic.messages.create({
-      model: DEFAULT_MODEL, max_tokens: 900,
+      model: DEFAULT_MODEL, max_tokens: 1200, // 900 + la ligne [EVOLVE:…] éventuelle
       // Connaissance du projet en cache : relue à 10 % du prix d'un message à l'autre
       // + ce qui attend l'humain, hors cache (change d'un message à l'autre)
       system: [
@@ -130,6 +183,69 @@ router.post('/:id/assistant', async (req, res) => {
   }
 });
 
+// POST /api/projects/:id/assistant/:messageId/evolution { accept } — l'humain accepte ou écarte
+// une évolution proposée par le bras droit (v5.1, étape C du test « Gérard ») : ajout au brief,
+// réunions insérées dans le plan, projet devenu « site ou appli », trace dans la mémoire
+router.post('/:id/assistant/:messageId/evolution', async (req, res) => {
+  const accept = req.body?.accept === true;
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [msg] = await db('AssistantMessage').where({ id: req.params.messageId, projectId: project.id, userId: req.user.id, role: 'assistant' }).limit(1);
+    const proposal = msg ? parseJsonField(msg.proposal, null) : null;
+    if (proposal?.kind !== 'evolution') return res.status(404).json({ error: 'Proposition introuvable' });
+    if (proposal.status !== 'pending') return res.status(409).json({ error: 'Cette proposition a déjà été traitée.' });
+    if (accept && project.userId !== req.user.id && !isAdminOf(req)) {
+      return res.status(403).json({ error: 'Seul le porteur du projet peut le faire évoluer.' });
+    }
+
+    const result = { status: accept ? 'applied' : 'declined', decidedAt: new Date().toISOString() };
+    if (accept) {
+      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      await db.transaction(async trx => {
+        const updates = { updatedAt: new Date() };
+        if (proposal.brief) updates.brief = [project.brief, `ÉVOLUTION (${date}) : ${proposal.brief}`].filter(Boolean).join('\n\n');
+        if (proposal.technical) updates.hasTechnicalStack = true;
+        await trx('Project').where({ id: project.id }).update(updates);
+
+        // Réunions : juste après la réunion désignée si elle existe encore, sinon à la fin du plan
+        let order = null;
+        if (proposal.after?.milestoneId && proposal.meetings.length) {
+          const [after] = await trx('Milestone').where({ id: proposal.after.milestoneId, projectId: project.id }).select('displayOrder').limit(1);
+          if (after) {
+            order = after.displayOrder + 1;
+            await trx('Milestone').where({ projectId: project.id }).where('displayOrder', '>=', order).increment('displayOrder', proposal.meetings.length);
+          }
+        }
+        if (order === null) {
+          const [{ maxOrder }] = await trx('Milestone').max('displayOrder as maxOrder').where({ projectId: project.id });
+          order = (maxOrder ?? -1) + 1;
+        }
+        result.milestoneIds = [];
+        for (const [i, m] of proposal.meetings.entries()) {
+          const id = randomUUID();
+          await trx('Milestone').insert({
+            id, projectId: project.id, title: m.title, description: m.why || null, status: 'pending',
+            type: m.type, displayOrder: order + i, createdAt: new Date(), createdBy: req.user.id,
+          });
+          result.milestoneIds.push(id);
+        }
+        await trx('AssistantMessage').where({ id: msg.id }).update({ proposal: JSON.stringify({ ...proposal, ...result }) });
+      });
+      const lines = [proposal.summary || proposal.brief, ...proposal.meetings.map(m => `- Réunion ajoutée : « ${m.title} »`)].filter(Boolean);
+      await appendMemory(project.id, `[${date} — Évolution du projet, acceptée avec le bras droit]\n${lines.join('\n')}`)
+        .catch(err => console.error('[assistant evolution memory]', err.message));
+    } else {
+      await db('AssistantMessage').where({ id: msg.id }).update({ proposal: JSON.stringify({ ...proposal, ...result }) });
+    }
+    const [updated] = await db('AssistantMessage').where({ id: msg.id }).limit(1);
+    res.json({ message: shape(updated) });
+  } catch (err) {
+    console.error('[assistant evolution]', err.message);
+    res.status(500).json({ error: 'L’évolution n’a pas pu être appliquée.' });
+  }
+});
+
 // DELETE /api/projects/:id/assistant — effacer ma conversation (le projet n'est pas touché)
 router.delete('/:id/assistant', async (req, res) => {
   try {
@@ -145,3 +261,4 @@ router.delete('/:id/assistant', async (req, res) => {
 
 module.exports = router;
 module.exports.parseReply = parseReply;
+module.exports.extractEvolve = extractEvolve;

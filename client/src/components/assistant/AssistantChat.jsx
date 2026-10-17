@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send } from 'lucide-react';
+import { Send, Sparkles } from 'lucide-react';
 import api from '../../utils/api';
 import { Button } from '../ui';
 import Markdown from '../Markdown';
@@ -8,6 +8,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import DelegateMeetingModal from '../DelegateMeetingModal';
 import { quickStartMeeting, quickStartError } from '../../utils/quickMeeting';
 import { launchPreparation } from '../../utils/preparation';
+import { useProject } from '../project/ProjectShell';
 
 // Conversation avec le bras droit (v5.1) : page « Bras droit » et panneau toujours disponible
 // (BrasDroitDock). Sur un bouton, l'acteur est toujours nommé (« le bras droit », « vous ») :
@@ -43,6 +44,51 @@ function Proposal({ proposal, ...choices }) {
         <p className="text-[15px] font-extrabold text-ink">{proposal.title}</p>
       </div>
       <MeetingChoices meeting={proposal} {...choices} />
+    </div>
+  );
+}
+
+const MEETING_KIND = { decision: 'Décider', claude_code: 'Construire', stack: 'Outils' };
+
+// Le projet évolue (v5.1, étape C du test « Gérard ») : ce que propose le bras droit, appliqué
+// seulement sur l'accord de l'humain (brief, réunions insérées dans le plan, site ou appli)
+function EvolutionProposal({ projectId, messageId, proposal, onDecided }) {
+  const [busy, setBusy] = useState(false);
+  const decide = async accept => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/assistant/${messageId}/evolution`, { accept });
+      onDecided(data.message, accept);
+      if (accept) notifySuccess(proposal.meetings.length ? 'Projet mis à jour : les réunions sont ajoutées au plan.' : 'Projet mis à jour.');
+    } catch (err) { notifyError(err, 'Le projet n’a pas pu être mis à jour.'); }
+    setBusy(false);
+  };
+  const done = proposal.status !== 'pending';
+  return (
+    <div className={`border rounded-xl px-3.5 py-3 space-y-2.5 bg-white ${done ? 'border-line' : 'border-ai-border'}`}>
+      <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai flex items-center gap-1.5"><Sparkles size={13} aria-hidden="true" /> Faire évoluer le projet</p>
+      {proposal.summary && <p className="text-[15px] font-extrabold text-ink">{proposal.summary}</p>}
+      <ul className="space-y-1.5 text-sm text-ink-soft">
+        {proposal.brief && <li><strong className="text-ink">Ajouté au brief :</strong> {proposal.brief}</li>}
+        {proposal.meetings.map(m => (
+          <li key={m.title} className="flex items-start gap-2">
+            <span className="shrink-0 mt-0.5 text-[11px] font-bold text-ink-muted bg-muted-light rounded-full px-2 py-0.5">{MEETING_KIND[m.type] || 'Décider'}</span>
+            <span><strong className="text-ink">Réunion « {m.title} »</strong>{m.why && <span className="block text-xs text-ink-muted">{m.why}</span>}</span>
+          </li>
+        ))}
+        {proposal.meetings.length > 0 && <li className="text-xs text-ink-muted">{proposal.after ? `Placées juste après « ${proposal.after.title} ».` : 'Placées à la fin du plan.'}</li>}
+        {proposal.technical && <li className="text-xs text-ink-muted">Le projet devient un site ou une appli à construire : la page Outils apparaît.</li>}
+      </ul>
+      {done ? (
+        <p className={`text-xs font-bold ${proposal.status === 'applied' ? 'text-ok' : 'text-ink-muted'}`}>
+          {proposal.status === 'applied' ? 'Vous avez accepté : le projet est à jour.' : 'Vous avez écarté cette proposition.'}
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="primary" disabled={busy} onClick={() => decide(true)}>D’accord, mettre le projet à jour</Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => decide(false)}>Pas maintenant</Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -92,6 +138,7 @@ function DelegationReport({ projectId, report, onOpen }) {
 
 export default function AssistantChat({ project, compact = false, reloadKey = null, onChanged }) {
   const navigate = useNavigate();
+  const projectCtx = useProject(); // absent hors des pages du projet (salle de réunion)
   const [messages, setMessages] = useState(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -143,6 +190,11 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
     else navigate(`/projects/${project.id}/a-trancher`);
   };
 
+  const evolutionDecided = (updated, accepted) => {
+    setMessages(prev => prev.map(x => (x.id === updated.id ? updated : x)));
+    if (accepted) { projectCtx?.reloadProject?.(); onChanged?.(); }
+  };
+
   const pad = compact ? 'p-3.5 space-y-3' : 'p-5 space-y-4';
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -179,6 +231,8 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
               )}
               {m.proposal?.kind === 'delegation_report' ? (
                 <DelegationReport projectId={project.id} report={m.proposal} onOpen={openReport} />
+              ) : m.proposal?.kind === 'evolution' ? (
+                <EvolutionProposal projectId={project.id} messageId={m.id} proposal={m.proposal} onDecided={evolutionDecided} />
               ) : m.proposal && !project.isDemo && (
                 <Proposal proposal={m.proposal} {...choices} />
               )}

@@ -60,4 +60,57 @@ describe.skipIf(!harness.enabled)('bras droit', () => {
     expect((await h.request('GET', `/api/projects/${pid}/assistant`, { token: owner.token })).body.messages).toEqual([]);
     expect((await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: '' } })).status).toBe(400);
   });
+
+  // Étape C du test « Gérard » : le projet évolue sur proposition du bras droit, après accord
+  const EVOLVE = 'Vendre vos vinyles demande une boutique et un paiement en ligne (1,5 % par vente environ).\n'
+    + '[EVOLVE:{"summary":"Le site vend aussi des vinyles.","brief":"Vendre une sélection de vinyles en ligne.","meetings":['
+    + '{"title":"Choisir comment vendre les vinyles","type":"decision","why":"Prix, envoi, paiement [cartes]."},'
+    + '{"title":"Ajouter la boutique au site","type":"claude_code","why":"Pages produits."},{"title":"x","type":"inconnu"}],'
+    + '"after":"R1","technical":true}]\n[SOURCES:["Brief"]]';
+
+  it('propose une évolution : carte « evolution », marqueur retiré du texte, types bornés', async () => {
+    h.ai.responder = () => ({ text: EVOLVE });
+    const r = await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: 'Et si je vendais mes vinyles sur mon site ?' } });
+    expect(r.body.reply.content).toBe('Vendre vos vinyles demande une boutique et un paiement en ligne (1,5 % par vente environ).');
+    expect(r.body.reply.sources).toEqual(['Brief']);
+    expect(r.body.reply.proposal).toMatchObject({
+      kind: 'evolution', status: 'pending', technical: true, after: { ref: 'R1', milestoneId: r1.id },
+      meetings: [{ title: 'Choisir comment vendre les vinyles', type: 'decision', why: 'Prix, envoi, paiement [cartes].' },
+        { title: 'Ajouter la boutique au site', type: 'claude_code' }, { title: 'x', type: 'decision' }],
+    });
+    expect(h.ai.calls[h.ai.calls.length - 1].system[0].text).toContain('[EVOLVE:');
+  });
+
+  it('accepter : brief complété, réunions insérées après R1, projet technique, mémoire ; une seule fois', async () => {
+    const msgId = (await h.request('GET', `/api/projects/${pid}/assistant`, { token: owner.token })).body.messages.at(-1).id;
+    const r = await h.request('POST', `/api/projects/${pid}/assistant/${msgId}/evolution`, { token: owner.token, body: { accept: true } });
+    expect(r.status).toBe(200);
+    expect(r.body.message.proposal.status).toBe('applied');
+    const project = await h.db('Project').where({ id: pid }).first();
+    expect(project.brief).toMatch(/OBJECTIF : Choisir 5 jeux[\s\S]*ÉVOLUTION \(\d\d\/\d\d\/\d{4}\) : Vendre une sélection de vinyles en ligne\./);
+    expect(project.hasTechnicalStack).toBe(true);
+    const plan = await h.db('Milestone').where({ projectId: pid }).orderBy('displayOrder');
+    expect(plan.map(m => m.title)).toEqual(['Retenir les jeux', 'Choisir comment vendre les vinyles', 'Ajouter la boutique au site', 'x', 'Valider la liste']);
+    expect(plan[2].type).toBe('claude_code');
+    expect(project.context).toContain('Évolution du projet, acceptée avec le bras droit');
+    expect((await h.request('POST', `/api/projects/${pid}/assistant/${msgId}/evolution`, { token: owner.token, body: { accept: true } })).status).toBe(409);
+  });
+
+  it('un membre ne fait pas évoluer le projet ; il peut écarter la proposition', async () => {
+    h.ai.responder = () => ({ text: 'Une appli, c’est possible.\n[EVOLVE:{"summary":"Une appli.","meetings":[{"title":"Choisir l’appli","type":"decision"}],"after":null}]' });
+    const reply = (await h.request('POST', `/api/projects/${pid}/assistant`, { token: member.token, body: { message: 'Je vais créer une appli' } })).body.reply;
+    expect(reply.proposal).toMatchObject({ kind: 'evolution', after: null, technical: false });
+    const url = `/api/projects/${pid}/assistant/${reply.id}/evolution`;
+    expect((await h.request('POST', url, { token: member.token, body: { accept: true } })).status).toBe(403);
+    expect((await h.request('POST', url, { token: owner.token, body: { accept: false } })).status).toBe(404); // pas sa conversation
+    const r = await h.request('POST', url, { token: member.token, body: { accept: false } });
+    expect(r.body.message.proposal.status).toBe('declined');
+    expect(await h.db('Milestone').where({ projectId: pid, title: 'Choisir l’appli' })).toHaveLength(0);
+  });
+
+  it('marqueur malformé : pas de carte, texte nettoyé', async () => {
+    h.ai.responder = () => ({ text: 'Bonne idée.\n[EVOLVE:{"summary": "coupé' });
+    const r = await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: 'Et un podcast ?' } });
+    expect(r.body.reply).toMatchObject({ content: 'Bonne idée.', proposal: null });
+  });
 });

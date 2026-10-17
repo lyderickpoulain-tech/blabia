@@ -89,7 +89,8 @@ export default function BrasDroitDock({ project, inbox, onChanged, liftForInput 
 
       <button type="button" onClick={() => (open ? setOpen(false) : openChat())} aria-expanded={open}
         aria-label={`Votre bras droit${count ? ` — ${count} élément${count > 1 ? 's' : ''} à trancher` : ''}`}
-        className={`fixed right-5 ${bottom} z-50 h-16 min-w-16 ${open ? 'w-16' : 'w-16 sm:w-auto sm:px-5 sm:gap-2.5'} rounded-full bg-violet-700 text-white shadow-xl inline-flex items-center justify-center font-extrabold text-lg hover:bg-violet-800 transition ${nudge ? 'ring-4 ring-ai-border animate-pulse' : ''}`}>
+        className={`fixed right-5 ${bottom} z-50 h-16 min-w-16 ${open ? 'w-16' : 'w-16 sm:w-auto sm:px-5 sm:gap-2.5'} rounded-full bg-violet-700 text-white shadow-xl inline-flex items-center justify-center font-extrabold text-lg hover:bg-violet-800 transition ${nudge ? 'ring-4 ring-ai-border' : ''}`}>
+        {nudge && !open && <span aria-hidden="true" className="absolute inset-0 rounded-full ring-4 ring-violet-400 animate-ping opacity-60 pointer-events-none" />}
         {open ? <X size={22} aria-hidden="true" /> : <>BD<span aria-hidden="true" className="hidden sm:inline text-[15px]">Votre bras droit</span></>}
         {!open && count > 0 && (
           <span className="absolute -top-1 -right-1 min-w-[24px] h-6 px-1.5 rounded-full bg-await text-white text-xs font-extrabold inline-flex items-center justify-center border-2 border-white">{count}</span>
