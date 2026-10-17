@@ -187,6 +187,7 @@ HUMOUR — ${HUMOR_INSTRUCTIONS[humor]}${humor > 1 ? ' La consigne de chaque tou
  * @param {string}  [p.projectToolsText] - outils validés du projet, par catégorie (phase 4)
  * @param {object}  [p.toolReview] - réunion stack : { toolCategories, userToolsText, toolSuggestionsText } (phase 4.3)
  * @param {string|null} [p.artifactRequest] - illustration demandée par l'humain pour ce tour (phase 5), null sinon
+ * @param {boolean} [p.artifactCompare] - v5.1 : trois maquettes à comparer plutôt qu'une
  * @param {{used:number, max:number}|null} [p.decisionBudget] - cartes de décision déjà posées / budget de la réunion
  * @param {{activeText:string, reopenedText:string}|null} [p.decisionRegistry] - registre des décisions du projet (services/decisions.js)
  * @param {string}  [p.preparationSection] - consigne de préparation sans l'humain (services/prompts/preparationPrompt.js)
@@ -210,6 +211,7 @@ function buildAgentSystemPrompt({
   projectToolsText = '',
   toolReview = null,
   artifactRequest = null,
+  artifactCompare = false,
   decisionBudget = null,
   decisionRegistry = null,
   preparationSection = '',
@@ -240,7 +242,16 @@ function buildAgentSystemPrompt({
       ? `- BUDGET DE QUESTIONS ÉPUISÉ (${decisionBudget.max} cartes déjà posées dans cette réunion) : n'utilise PLUS AUCUNE carte [DECISION]. Tranche par hypothèse explicite ou propose de conclure la réunion.`
       : `- Budget de la réunion : il reste ${remaining} carte${remaining > 1 ? 's' : ''} de décision sur ${decisionBudget.max}. Garde-les pour l'essentiel.`;
   // v5.0 phase 5 : illustration uniquement sur demande de l'humain
-  const artifactSection = artifactRequest
+  const artifactSection = artifactRequest && artifactCompare
+    ? `
+TROIS MAQUETTES À COMPARER, DEMANDÉES PAR L'HUMAIN : « ${artifactRequest} »
+Produis dans ce tour TROIS maquettes HTML de la même page, nettement différentes (ambiance, couleurs, typographie, disposition), pour que l'humain réagisse : « celle-ci », « pas celle-là », « mélanger ».
+- Pour chacune, sur une ligne juste avant son bloc : [ARTIFACT_TITLE: A — deux ou trois mots qui la résument] (puis B, puis C).
+- Chaque bloc \`\`\`html est autonome et COMPACT (2 500 caractères au plus) : une balise <style> courte, aucune ressource externe, aucun script, de vrais textes du projet (pas de lorem ipsum), lisible sur téléphone.
+- Respecte les décisions déjà prises (registre) ; ce qui n'est pas tranché varie d'une maquette à l'autre.
+Une seule bulle courte, avant les blocs : ce qui distingue les trois en une phrase. Les blocs ne comptent pas dans la limite de mots.
+`
+    : artifactRequest
     ? `
 ILLUSTRATION DEMANDÉE PAR L'HUMAIN : « ${artifactRequest} »
 Produis UNE illustration dans ce tour, en choisissant le format le plus adapté :
@@ -251,7 +262,7 @@ Juste avant le bloc, donne-lui un titre court sur une ligne : [ARTIFACT_TITLE: T
 Accompagne-le d'UNE bulle courte (une phrase) qui dit ce que montre l'illustration. Le bloc ne compte pas dans la limite de mots.
 `
     : `
-ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. Si un schéma ou une maquette aiderait, propose-le en une phrase : l'humain peut le demander avec le bouton « Illustrer ».
+ILLUSTRATIONS : n'inclus JAMAIS de bloc \`\`\`mermaid, \`\`\`html ou \`\`\`svg. Si un schéma ou une maquette aiderait, propose-le en une phrase : l'humain peut le demander avec le bouton « Illustrer » (une illustration, ou trois maquettes à comparer pour un choix visuel).
 `;
   // v5.1 : actions entre les réunions, et point d'avancement en ouverture
   const actionsSection = actionsText

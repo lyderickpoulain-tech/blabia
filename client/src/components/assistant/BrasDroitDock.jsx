@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, Maximize2, Inbox } from 'lucide-react';
-import AssistantChat, { Avatar } from './AssistantChat';
+import AssistantChat, { Avatar, readSeen, writeSeen } from './AssistantChat';
 
 // Le bras droit, toujours à portée de main (v5.1, 16/10/2026) : un bouton en bas à droite de
 // chaque page du projet (et de la salle de réunion), avec la pastille de ce qui attend
 // l'humain ; un clic ouvre la conversation. Quand il a du nouveau (réunion qu'il a tenue,
 // réponse…), c'est LUI qui revient vers vous : une bulle s'ouvre au-dessus du bouton.
 
-const seenKey = projectId => `blabia:bd-seen:${projectId}`;
-const readSeen = projectId => { try { return localStorage.getItem(seenKey(projectId)); } catch { return null; } };
-const writeSeen = (projectId, id) => { try { localStorage.setItem(seenKey(projectId), id); } catch { /* stockage indisponible : la bulle reviendra */ } };
 
 function nudgeText(last) {
   const r = last.report;

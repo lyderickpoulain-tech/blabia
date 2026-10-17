@@ -163,4 +163,21 @@ describe('questions regroupées (budget de questions)', () => {
     expect(r.decision.question).toBe('Q1 ?');
     expect(r.content).toBe('Trois points bloquent.');
   });
+
+  it('trois maquettes à comparer : chacune avec son titre, dans l’ordre ; 3 au plus', () => {
+    const block = t => `[ARTIFACT_TITLE: ${t}]
+\`\`\`html
+<p>${t}</p>
+\`\`\``;
+    const r = parseAgentOutput(`Trois ambiances bien distinctes.
+${block('A — Chaleureuse')}
+${block('B — Épurée')}
+\`\`\`html
+<p>sans titre</p>
+\`\`\`
+${block('D — En trop')}`);
+    expect(r.artifacts.map(a => a.title)).toEqual(['A — Chaleureuse', 'B — Épurée', 'Maquette']);
+    expect(r.artifact.title).toBe('A — Chaleureuse');
+    expect(r.content).toBe('Trois ambiances bien distinctes.');
+  });
 });

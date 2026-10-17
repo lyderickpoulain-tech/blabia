@@ -14,6 +14,12 @@ import { useProject } from '../project/ProjectShell';
 // (BrasDroitDock). Sur un bouton, l'acteur est toujours nommé (« le bras droit », « vous ») :
 // la première personne est réservée à ses messages.
 
+// Dernier message du bras droit vu (par projet) : la bulle de BrasDroitDock ne rappelle que
+// ce que vous n'avez pas lu, ici ou dans le panneau
+const seenKey = projectId => `blabia:bd-seen:${projectId}`;
+export const readSeen = projectId => { try { return localStorage.getItem(seenKey(projectId)); } catch { return null; } };
+export const writeSeen = (projectId, id) => { try { localStorage.setItem(seenKey(projectId), id); } catch { /* stockage indisponible : la bulle reviendra */ } };
+
 const SUGGESTIONS = [
   'Qu’est-ce que je dois trancher ?',
   'Où en est le projet ?',
@@ -150,6 +156,11 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
       .catch(err => { notifyError(err, 'La conversation n’a pas pu être chargée.'); setMessages([]); });
   }, [project.id, reloadKey]);
   useEffect(() => { feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, sending]);
+  // Affiché ici = lu
+  useEffect(() => {
+    const lastReply = [...(messages || [])].reverse().find(m => m.role === 'assistant');
+    if (lastReply) writeSeen(project.id, lastReply.id);
+  }, [messages, project.id]);
 
   const send = async text => {
     const message = String(text ?? draft).trim();

@@ -13,7 +13,7 @@ export default function MeetingInputBar({
   handleDragOver, handleDragLeave, handleDrop, isDragging,
   isStreaming, pendingDecisionId,
   inputText, handleInputChange, handleKeyDown, handleSend, handleTextareaFocus,
-  onIllustrate, inputRef,
+  onIllustrate, inputRef, suggestCompare = null,
 }) {
   const [showIllustrate, setShowIllustrate] = useState(false);
   const [illustrateText, setIllustrateText] = useState('');
@@ -26,10 +26,10 @@ export default function MeetingInputBar({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [inputText, inputRef]);
 
-  const submitIllustrate = () => {
+  const submitIllustrate = (compare = false) => {
     const request = illustrateText.trim();
     if (!request) return;
-    onIllustrate?.(request);
+    onIllustrate?.(request, { compare });
     setIllustrateText('');
     setShowIllustrate(false);
   };
@@ -102,6 +102,13 @@ export default function MeetingInputBar({
           </div>
         )}
 
+        {suggestCompare && !showIllustrate && !isStreaming && (
+          <button type="button" onClick={() => onIllustrate?.(suggestCompare, { compare: true })}
+            className="self-start h-9 px-3 rounded-full border border-ai-border bg-ai-bg text-[13px] font-bold text-ai inline-flex items-center gap-1.5 hover:bg-ai-light disabled:opacity-40">
+            <ImageIcon size={14} aria-hidden="true" /> Voir 3 propositions : {suggestCompare.replace(/ \(.*\)$/, '')}
+          </button>
+        )}
+
         {showIllustrate && (
           <div className="flex flex-wrap items-center gap-1.5 bg-ai-bg border border-ai-border rounded-[10px] p-1.5">
             <ImageIcon size={16} className="text-ai ml-1" aria-hidden="true" />
@@ -110,8 +117,11 @@ export default function MeetingInputBar({
               aria-label="Que voulez-vous voir ?"
               placeholder="Que voulez-vous voir ? (le parcours d'un client, la maquette de l'accueil…)"
               className="flex-1 min-w-[200px] h-9 text-sm border border-ai-border bg-white rounded-lg px-3 outline-none focus:ring-2 focus:ring-ai-border" />
-            <button type="button" onClick={submitIllustrate} disabled={!illustrateText.trim() || blocked}
+            <button type="button" onClick={() => submitIllustrate(false)} disabled={!illustrateText.trim() || blocked}
               className="h-9 px-3 rounded-lg bg-ai text-white text-[13px] font-bold disabled:opacity-40">Illustrer</button>
+            <button type="button" onClick={() => submitIllustrate(true)} disabled={!illustrateText.trim() || blocked}
+              title="Trois maquettes différentes de la même page, pour choisir"
+              className="h-9 px-3 rounded-lg border border-ai-border bg-white text-ai text-[13px] font-bold disabled:opacity-40">Comparer 3 maquettes</button>
             <button type="button" onClick={() => setShowIllustrate(false)} className="h-9 px-2 text-[13px] font-semibold text-ink-muted">Annuler</button>
           </div>
         )}

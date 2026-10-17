@@ -232,7 +232,7 @@ router.post('/:sessionId/extract-file', upload.single('file'), async (req, res) 
 
 router.post('/:sessionId/chat', async (req, res) => {
   const { projectId, sessionId } = req.params;
-  const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated, artifactRequest, prepare } = req.body;
+  const { message: humanMessage, agentIds, attachments: rawAttachments, resume, delegated, artifactRequest, artifactCompare, prepare } = req.body;
   // v5.1 : réunion tenue par le bras droit à la place de l'humain (services/delegation.js)
   const delegate = req.body.delegate === true && !prepare;
   const background = prepare || delegate; // continue sans l'humain, même s'il quitte la page
@@ -243,8 +243,10 @@ router.post('/:sessionId/chat', async (req, res) => {
   // explicite dans le message. Ne vaut que pour le premier agent qui répond.
   const wantsArtifact  = hasText && (artifactRequest === true || detectArtifactRequest(humanMessage));
   const artifactText   = wantsArtifact
-    ? humanMessage.trim().replace(/^\s*(\/illustrer|(?:🎨\s*)?Illustration demandée\s*:)\s*/i, '').slice(0, 500) || 'une illustration utile à la réunion'
+    ? humanMessage.trim().replace(/^\s*(\/illustrer|(?:🎨\s*)?(Illustration demandée|Trois maquettes à comparer)\s*:)\s*/i, '').slice(0, 500) || 'une illustration utile à la réunion'
     : null;
+  // v5.1 (test « Gérard ») : trois maquettes à comparer (bouton « Comparer 3 maquettes »)
+  const compareArtifacts = wantsArtifact && artifactCompare === true;
   const hasAttachments = Array.isArray(rawAttachments) && rawAttachments.length > 0;
   console.log(`[chat] session=${sessionId} resume=${!!resume} hasText=${hasText} hasAtt=${hasAttachments}`);
   if (!hasText && !hasAttachments && !resume) {
@@ -577,6 +579,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         webSearchEnabled: session.webSearchEnabled === true,
         projectToolsText,
         artifactRequest: turnArtifact,
+        artifactCompare: !!turnArtifact && compareArtifacts,
         toolReview: toolReview && {
           ...toolReview,
           toolSuggestionsText: toolReview.suggested.map(n => `- ${n}`).join('\n'),
@@ -620,7 +623,7 @@ router.post('/:sessionId/chat', async (req, res) => {
       try {
         // Tour avec illustration demandée : marge de tokens pour le code (phase 5)
         const agentResult = await callAgent(
-          withHistory(systemPrompt, history), userMessage, turnArtifact ? 4000 : 600, session.model || MODEL, abortController.signal,
+          withHistory(systemPrompt, history), userMessage, turnArtifact ? (compareArtifacts ? 9000 : 4000) : 600, session.model || MODEL, abortController.signal,
           session.webSearchEnabled === true
         );
         agentFullText   = agentResult.text;
@@ -671,6 +674,8 @@ router.post('/:sessionId/chat', async (req, res) => {
       // Illustration gardée seulement si demandée pour ce tour ; sinon le bloc a
       // déjà été retiré du texte par parseAgentOutput et est ignoré (phase 5).
       const artifact = turnArtifact ? parsed.artifact : null;
+      // Comparaison : les maquettes (2 ou 3) sur le même message, réactions côté client
+      const artifactSet = turnArtifact && compareArtifacts && parsed.artifacts.length > 1 ? parsed.artifacts : null;
       // v5.1 : mission proposée à un sous-agent (validée ensuite par l'humain, carte dans le fil)
       const proposedMission = parsed.mission && !isChallenge
         ? await proposeMission({ projectId, sessionId, agentName: agent.name, proposal: parsed.mission })
@@ -692,7 +697,7 @@ router.post('/:sessionId/chat', async (req, res) => {
         timestamp: new Date().toISOString(),
         type:      'message',
         pinned:    false,
-        ...(artifact && i === bubbles.length - 1 ? { artifact } : {}),
+        ...(artifactSet && i === bubbles.length - 1 ? { artifacts: artifactSet } : artifact && i === bubbles.length - 1 ? { artifact } : {}),
         // Bulles du débat de préparation : repliées côté client derrière la synthèse
         ...(prepare ? { prep: true } : {}),
       }));
@@ -722,6 +727,9 @@ router.post('/:sessionId/chat', async (req, res) => {
 
       if (blockedForHuman) { delegationStoppedOnBlock = true; conversationDone = true; break; }
       if (decisionEmitted && !delegate) { conversationDone = true; break; }
+      // Maquettes à comparer : la main revient à l'humain (« Celle-ci », « Pas celle-là »…) ;
+      // sans cet arrêt, les agents suivants choisissaient à sa place (test « Gérard »)
+      if (artifactSet && !delegate) { conversationDone = true; break; }
 
       if (parsed.suggestedAgent) {
         send('suggest_agent', { ...parsed.suggestedAgent, reason: `Suggéré par ${agent.name}` });

@@ -454,7 +454,7 @@ export default function MeetingRoom() {
 
   // ── Envoi + streaming SSE ─────────────────────────────────────────────────
 
-  const handleSend = useCallback(async (overrideText, { resume = false, delegated = false, artifactRequest = false, prepare = false } = {}) => {
+  const handleSend = useCallback(async (overrideText, { resume = false, delegated = false, artifactRequest = false, artifactCompare = false, prepare = false } = {}) => {
     const text              = (typeof overrideText === 'string' ? overrideText : inputText).trim();
     const currentAttachments = attachmentsRef.current;
     // resume:true = reprise silencieuse après décision, bypass guards normaux
@@ -527,6 +527,7 @@ export default function MeetingRoom() {
             ...(resume    ? { resume: true }    : {}),
             ...(delegated ? { delegated: true } : {}),
             ...(artifactRequest ? { artifactRequest: true } : {}),
+            ...(artifactCompare ? { artifactCompare: true } : {}),
             ...(prepare ? { prepare: true } : {}),
           }),
           signal: ac.signal,
@@ -838,7 +839,14 @@ export default function MeetingRoom() {
   const liveVigilances = messages.filter(m => m.vigilance && m.vigilance.status !== 'open')
     .map(m => ({ id: m.id, status: m.vigilance.status, text: shortText((m.content || '').replace(/^\s*\*\*Point de vigilance\*\*\s*:\s*/i, '')) }));
 
-  const artifactMessages = messages.filter(m => m.artifact);
+  // Réunion sur un choix visuel d'un site ou d'une appli : maquettes à comparer proposées
+  const visualMeeting = /style|visuel|identit|maquette|accueil|logo|design|charte|apparence|affiche/i.test(session?.task || '');
+  const visualTarget  = project?.hasTechnicalStack || project?.githubRepo || /\b(site|appli|application)\b/i.test(`${project?.name || ''} ${project?.brief || ''}`)
+    ? 'la page d’accueil du site' : 'l’ambiance visuelle du projet (affiche, page ou visuel)';
+  // Une entrée par illustration ; une comparaison en compte plusieurs (clé « message:rang »)
+  const artifactMessages = messages.flatMap(m => (m.artifacts?.length > 1
+    ? m.artifacts.map((a, i) => ({ ...m, id: `${m.id}:${i}`, artifact: a }))
+    : m.artifact ? [m] : []));
   const openArtifact     = artifactMessages.find(m => m.id === openArtifactId) || null;
   const questionsUsed    = decisions.length;
 
@@ -905,6 +913,15 @@ export default function MeetingRoom() {
       setSendError(err.response?.data?.error || 'Votre réponse n’a pas pu être enregistrée.');
     }
   }, [projectId, sessionId, project?.isDemo]);
+
+  // Réagir à une maquette (v5.1, test « Gérard ») : la saisie s'ouvre pré-remplie, à compléter
+  const handlePrefill = useCallback((text) => {
+    setInputText(text);
+    setTimeout(() => {
+      const el = inputRef.current;
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    }, 0);
+  }, []);
 
   // « Je contredis » : la saisie s'ouvre adressée à l'agent
   const handleContradict = useCallback((agentName) => {
@@ -1063,6 +1080,11 @@ export default function MeetingRoom() {
                   onFeedback={handleFeedback}
                   prepExpanded={prepExpanded}
                   onTogglePrep={() => setPrepExpanded(v => !v)}
+                  onChooseArtifact={text => handleSend(text)}
+                  onPrefill={handlePrefill}
+                  onVisualizeChoices={visualMeeting ? (question, choices) => handleSend(
+                    `Trois maquettes à comparer : ${visualTarget}, une maquette par option de la question « ${question} » — ${choices.map((c, i) => `${'ABC'[i]}) ${c}`).join(' ; ')}`,
+                    { artifactRequest: true, artifactCompare: true }) : null}
                 />
               </div>
 
@@ -1131,7 +1153,10 @@ export default function MeetingRoom() {
                 handleInputChange={handleInputChange}
                 handleKeyDown={handleKeyDown}
                 handleSend={handleSend}
-                onIllustrate={(request) => handleSend(`Illustration demandée : ${request}`, { artifactRequest: true })}
+                onIllustrate={(request, { compare = false } = {}) => (compare
+                  ? handleSend(`Trois maquettes à comparer : ${request}`, { artifactRequest: true, artifactCompare: true })
+                  : handleSend(`Illustration demandée : ${request}`, { artifactRequest: true }))}
+                suggestCompare={visualMeeting ? visualTarget : null}
                 handleTextareaFocus={handleTextareaFocus}
                 inputRef={inputRef}
               />

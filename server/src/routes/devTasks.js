@@ -7,6 +7,7 @@ const dev = require('../services/devTasks');
 const { getProjectTools } = require('../services/tools/toolsStore');
 const { requiredCategories, missingTools, describeMissing } = require('../services/devTools');
 const { parseJsonField } = require('../utils/parseJsonField');
+const { appendMemory } = require('../utils/projectMemory');
 
 // Développements lancés depuis BlabIA (v5.1) : dépôt du projet, lancement, suivi,
 // mise en ligne, abandon. Lecture : tout membre du projet. Configuration, lancement,
@@ -161,6 +162,46 @@ router.post('/:id/dev-tasks', async (req, res) => {
     }
     res.status(201).json(await dev.createTask({ project, session, prompt: prompt.slice(0, 60000), userId: req.user.id }));
   } catch (err) { fail(res, 'create', err); }
+});
+
+// POST /api/projects/:id/dev-tasks/:devId/remarks { likes, dislikes, changes, launch } — l'avis du
+// porteur sur l'aperçu ou le site en ligne (v5.1, étape B du test « Gérard ») : gardé en mémoire
+// (les réunions suivantes le connaissent) et, si launch, transformé en demande pour Claude Code :
+// aperçu pas encore en ligne → refait avec les remarques ; site en ligne → retouches.
+const REMARKS_MAX = 2000;
+function remarksText({ likes, dislikes, changes }) {
+  return [['Ce qui lui plaît (à garder)', likes], ['Ce qui ne lui plaît pas', dislikes], ['Ce qu’il veut changer ou ajouter', changes]]
+    .filter(([, v]) => v).map(([k, v]) => `${k} : ${v}`).join('\n');
+}
+router.post('/:id/dev-tasks/:devId/remarks', async (req, res) => {
+  try {
+    const { project, task } = await load(req, res, { owner: true });
+    if (!task) return;
+    const clip = v => String(v || '').trim().slice(0, REMARKS_MAX);
+    const remarks = { likes: clip(req.body?.likes), dislikes: clip(req.body?.dislikes), changes: clip(req.body?.changes) };
+    const text = remarksText(remarks);
+    if (!text) return res.status(400).json({ error: 'Écrivez au moins une remarque.' });
+    const live = task.status === 'deployed';
+    if (!live && !['ready', 'deploy_failed'].includes(task.status)) return res.status(409).json({ error: 'Ce développement ne peut pas être commenté maintenant.' });
+
+    const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    await appendMemory(project.id, `[${date} — Avis du porteur sur ${live ? 'le site en ligne' : 'l’aperçu'} « ${task.title} »]\n${text}`);
+    if (req.body?.launch !== true) return res.json({ saved: true, task: null });
+
+    if (await db('DevTask').where({ projectId: project.id }).whereIn('status', dev.ACTIVE).whereNot({ id: task.id }).first()) {
+      return res.status(409).json({ error: 'Un autre développement est en cours : vos remarques sont notées, relancez une fois qu’il est terminé.' });
+    }
+    const [session] = task.sessionId ? await db('Session').where({ id: task.sessionId }).limit(1) : [null];
+    let prompt;
+    if (live) {
+      prompt = `Le site est en ligne. Le porteur du projet (non technicien) l'a regardé et demande des retouches. Ne modifie que ce qui est nécessaire, garde tout ce qui lui plaît.\n\n## Ses remarques\n${text}\n\n## Pour mémoire : le développement précédent (« ${task.title} »)\n${String(task.prompt || '').slice(0, 20000)}`;
+    } else {
+      await dev.abandonTask(project, task); // une seule demande active : l'aperçu commenté est remplacé
+      prompt = `${task.prompt}\n\n## Retouches demandées par le porteur du projet après avoir vu un premier aperçu\nRéalise la demande ci-dessus en tenant compte de ces remarques (elles priment en cas de conflit) :\n${text}`;
+    }
+    const created = await dev.createTask({ project, session: session || { task: task.title }, prompt: prompt.slice(0, 60000), userId: req.user.id });
+    res.status(201).json({ saved: true, task: created });
+  } catch (err) { fail(res, 'remarks', err); }
 });
 
 // POST /api/projects/:id/dev-tasks/:devId/deploy — sauvegarde de la base puis fusion

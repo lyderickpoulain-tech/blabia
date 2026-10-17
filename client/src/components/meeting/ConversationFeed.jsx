@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ArtifactCompare from './ArtifactCompare';
 import { Image as ImageIcon, Sparkles, ShieldAlert, Check, ThumbsUp, Crosshair, GraduationCap, Scissors, Megaphone } from 'lucide-react';
 import DecisionCard from '../DecisionCard';
 import MissionCard from '../MissionCard';
@@ -88,7 +89,7 @@ export default function ConversationFeed({
   onOpenArtifact, openArtifactId, onContradict,
   prepExpanded, onTogglePrep, onVigilance,
   missions = [], onApproveMission, onRejectMission, onOpenMissionReport,
-  feedback = {}, onFeedback,
+  feedback = {}, onFeedback, onChooseArtifact, onPrefill, onVisualizeChoices,
 }) {
   const [acknowledged] = useState(() => new Set()); // hypothèses approuvées (ancien bouton « D'accord »)
 
@@ -143,10 +144,20 @@ export default function ConversationFeed({
   const isPrepItem = (m, i) => isPrepMessage(m, i) || m.type === 'prep_summary' || (m.type === 'decision' && m.agentName === 'Préparation');
   const decisionsOnly = messages.filter(m => m.type === 'decision');
 
+  // v5.1 (test « Gérard ») : un choix visuel se voit avant de se trancher
+  const visualChoices = d => (d.choices || []).filter(c => !/^(autre|laisser|les agents)/i.test(String(c).trim()));
   const decisionCard = (d) => (
-    <DecisionCard key={d.id} message={d} number={decisionsOnly.indexOf(d) + 1} budget={decisionBudget}
-      onAnswer={onAnswerDecision} onDefer={onDeferDecision} onDelegate={onDelegateDecision}
-      disabled={isClosed || (!!pendingDecisionId && pendingDecisionId !== d.id)} />
+    <div key={d.id} className="space-y-1.5">
+      <DecisionCard message={d} number={decisionsOnly.indexOf(d) + 1} budget={decisionBudget}
+        onAnswer={onAnswerDecision} onDefer={onDeferDecision} onDelegate={onDelegateDecision}
+        disabled={isClosed || (!!pendingDecisionId && pendingDecisionId !== d.id)} />
+      {onVisualizeChoices && !['answered', 'delegated', 'deferred'].includes(d.status) && !isClosed && visualChoices(d).length >= 2 && (
+        <button type="button" disabled={isStreaming} onClick={() => onVisualizeChoices(d.question, visualChoices(d).slice(0, 3))}
+          className="h-9 px-3 rounded-full border border-ai-border bg-ai-bg text-[13px] font-bold text-ai inline-flex items-center gap-1.5 hover:bg-ai-light disabled:opacity-40">
+          <ImageIcon size={14} aria-hidden="true" /> Voir ces choix en maquettes
+        </button>
+      )}
+    </div>
   );
 
   const renderAgentMessage = (msg, grouped) => {
@@ -209,6 +220,10 @@ export default function ConversationFeed({
               </span>
               <span className="text-[13px] font-bold text-ai shrink-0">{openArtifactId === msg.id ? 'Ouverte' : 'Ouvrir'}</span>
             </button>
+          )}
+          {msg.artifacts?.length > 1 && (
+            <ArtifactCompare message={msg} disabled={isClosed} openKey={openArtifactId}
+              onOpen={key => onOpenArtifact?.({ id: key })} onChoose={text => onChooseArtifact?.(text)} onPrefill={text => onPrefill?.(text)} />
           )}
           {msg.interrupted && <p className="text-xs text-await mt-0.5">Interrompu</p>}
           {/* Mission proposée par l'agent dans ce message (v5.1) */}

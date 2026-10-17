@@ -299,7 +299,52 @@ function Publication({ task, projectId, siteUrl }) {
   }
 }
 
-function TaskCard({ task, status, isOwner, onAction, onRetry, busy, projectId, siteUrl }) {
+// Avis du porteur sur l'aperçu ou le site en ligne (v5.1, étape B du test « Gérard »)
+function SiteRemarksModal({ task, projectId, onClose, onDone }) {
+  const live = task.status === 'deployed';
+  const [form, setForm] = useState({ likes: '', dislikes: '', changes: '' });
+  const [sending, setSending] = useState(false);
+  const filled = Object.values(form).some(v => v.trim());
+  const submit = async launch => {
+    setSending(true);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/dev-tasks/${task.id}/remarks`, { ...form, launch });
+      notifySuccess(data.task ? (live ? 'Retouches lancées : Claude Code s’en occupe.' : 'Claude Code refait l’aperçu avec vos remarques.') : 'Vos remarques sont notées : les assistants les connaîtront.');
+      onDone();
+    } catch (err) { notifyError(err, 'Vos remarques n’ont pas pu être envoyées.'); setSending(false); }
+  };
+  const field = (key, label, hint) => (
+    <label className="block space-y-1">
+      <span className="block text-sm font-extrabold text-ink">{label}</span>
+      <span className="block text-xs text-ink-muted">{hint}</span>
+      <textarea rows={3} value={form[key]} maxLength={2000} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+        className="w-full border border-line rounded-[10px] px-3 py-2 text-[15px] bg-white outline-none focus:ring-2 focus:ring-action-border" />
+    </label>
+  );
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="remarks-title">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto p-6 space-y-4">
+        <div>
+          <h2 id="remarks-title" className="text-lg font-extrabold text-ink">Votre avis sur {live ? 'le site' : 'l’aperçu'}</h2>
+          <p className="text-sm text-ink-muted mt-1">Avec vos mots, comme à quelqu’un qui le découvre avec vous. Un seul champ suffit.</p>
+        </div>
+        {field('likes', 'Ce qui vous plaît', 'À garder tel quel.')}
+        {field('dislikes', 'Ce qui ne vous plaît pas', 'Couleurs, textes, photos, une page…')}
+        {field('changes', 'Ce que vous voudriez changer ou ajouter', 'Par exemple : « le menu plus gros », « une page pour mes vinyles ».')}
+        <p className="text-xs text-ink-muted">{live
+          ? 'Claude Code fera les retouches sur une copie ; vous verrez un nouvel aperçu avant toute mise en ligne.'
+          : 'Claude Code refait cet aperçu en tenant compte de vos remarques (quelques minutes) ; l’aperçu actuel est remplacé.'}</p>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <Button variant="ghost" onClick={onClose} disabled={sending}>Annuler</Button>
+          <Button variant="secondary" onClick={() => submit(false)} disabled={!filled || sending}>Seulement noter</Button>
+          <Button variant="primary" onClick={() => submit(true)} disabled={!filled || sending}>{live ? 'Lancer les retouches' : 'Refaire avec mes remarques'}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({ task, status, isOwner, onAction, onRetry, busy, projectId, siteUrl, onRemarks }) {
   const [showFiles, setShowFiles] = useState(false);
   const st = statusOf(task);
   const files = Array.isArray(task.files) ? task.files : [];
@@ -369,6 +414,9 @@ function TaskCard({ task, status, isOwner, onAction, onRetry, busy, projectId, s
             <Globe size={15} aria-hidden="true" /> Voir le site
           </a>
         )}
+        {isOwner && onRemarks && ((task.status === 'ready' && task.previewUrl) || (task.status === 'deployed' && task.publishState === 'live')) && (
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => onRemarks(task)}>Donner votre avis</Button>
+        )}
         {canDeploy && (
           <Button size="sm" variant="primary" disabled={busy} onClick={() => onAction(task, 'deploy')}>
             <Rocket size={15} aria-hidden="true" /> {task.status === 'deploy_failed' ? 'Réessayer la mise en ligne' : 'Mettre en ligne'}
@@ -432,6 +480,7 @@ export default function ProjectDev() {
     } catch (err) { notifyError(err, 'Le développement n’a pas pu être lancé.'); } finally { setBusy(false); }
   };
 
+  const [remarksTask, setRemarksTask] = useState(null);
   const onAction = async (task, action) => {
     const todo = summarySections(task.summary).todo;
     const before = todo && /avant la mise en ligne/i.test(todo.body);
@@ -519,10 +568,15 @@ export default function ProjectDev() {
       )}
 
       {data.tasks.map(t => (
-        <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} projectId={project.id} siteUrl={siteUrl} onAction={onAction} busy={busy || active}
+        <TaskCard key={t.id} task={t} status={status} isOwner={status.isOwner} projectId={project.id} siteUrl={siteUrl} onAction={onAction} onRemarks={setRemarksTask} busy={busy || active}
           // Développement échoué, le dernier de sa réunion : relancé avec le même prompt
           onRetry={canRetry(t) ? task => launch({ id: task.sessionId, task: task.title }) : null} />
       ))}
+
+      {remarksTask && (
+        <SiteRemarksModal task={remarksTask} projectId={project.id} onClose={() => setRemarksTask(null)}
+          onDone={() => { setRemarksTask(null); loadTasks(); }} />
+      )}
     </div>
   );
 }

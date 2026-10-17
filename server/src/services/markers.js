@@ -32,6 +32,7 @@ const ARTIFACT_TITLE_RE       = /\[ARTIFACT_TITLE:\s*([^\]\n]+)\]/;
 const ARTIFACT_TITLE_STRIP_RE = /\[ARTIFACT_TITLE:[^\]\n]*\]/g;
 const ARTIFACT_DEFAULT_TITLE  = { mermaid: 'Schéma', html: 'Maquette', svg: 'Visuel' };
 const MAX_ARTIFACT_CODE       = 60000;
+const MAX_ARTIFACTS           = 3; // v5.1 (test « Gérard ») : trois maquettes à comparer
 
 // Demande explicite d'illustration dans un message humain (« fais-moi un schéma »…)
 const ARTIFACT_REQUEST_RE = /(^\s*\/illustrer\b)|\b(fais|fait|faites|montre|montrez|dessine|dessinez|g[ée]n[èe]re|cr[ée]e|cr[ée]ez|propose|proposez|illustre|illustrez|peux-tu|pourrais-tu|tu peux|vous pouvez|j'aimerais|je voudrais)\b[^.?!\n]{0,50}\b(sch[ée]ma|diagramme|tableau visuel|maquette|visuel|illustration|organigramme|logigramme|carte mentale|mind ?map|wireframe)/i;
@@ -57,6 +58,7 @@ function safeJsonParse(text) {
  *   suggestedMeeting: {title:string, objective:string, type:string, reason:string, after:string|null} | null,
  *   neededTool: object | null,
  *   artifact: {kind:"mermaid"|"html"|"svg", title:string, code:string} | null,
+ *   artifacts: Array<{kind, title, code}>  (toutes les illustrations du tour, 3 au plus ; la 1re = artifact),
  * }}
  */
 function parseAgentOutput(text) {
@@ -64,17 +66,19 @@ function parseAgentOutput(text) {
 
   // Illustration : toujours extraite et retirée du texte ; c'est l'appelant qui
   // décide de la garder (tour avec demande d'illustration) ou de l'ignorer.
-  const artifactMatch = original.match(ARTIFACT_BLOCK_RE);
-  const titleMatch    = original.match(ARTIFACT_TITLE_RE);
-  let artifact = null;
-  if (artifactMatch && artifactMatch[2].trim()) {
-    const kind = artifactMatch[1].toLowerCase();
-    artifact = {
-      kind,
-      title: (titleMatch ? titleMatch[1].trim() : ARTIFACT_DEFAULT_TITLE[kind]).slice(0, 120),
-      code:  artifactMatch[2].trim().slice(0, MAX_ARTIFACT_CODE),
-    };
+  // Chaque bloc prend le dernier [ARTIFACT_TITLE] écrit depuis le bloc précédent
+  const artifacts = [];
+  let from = 0;
+  for (const m of original.matchAll(new RegExp(ARTIFACT_BLOCK_RE.source, 'gi'))) {
+    if (artifacts.length >= MAX_ARTIFACTS) break;
+    const titles = [...original.slice(from, m.index).matchAll(new RegExp(ARTIFACT_TITLE_RE.source, 'g'))];
+    from = m.index + m[0].length;
+    if (!m[2].trim()) continue;
+    const kind = m[1].toLowerCase();
+    const title = titles.length ? titles[titles.length - 1][1].trim() : ARTIFACT_DEFAULT_TITLE[kind];
+    artifacts.push({ kind, title: title.slice(0, 120), code: m[2].trim().slice(0, MAX_ARTIFACT_CODE) });
   }
+  const artifact = artifacts[0] || null;
   const raw = original.replace(ARTIFACT_BLOCK_STRIP_RE, '').replace(ARTIFACT_TITLE_STRIP_RE, '');
 
   // Jusqu'à MAX_DECISIONS_PER_MESSAGE cartes par message : un agent regroupe ses
@@ -156,7 +160,7 @@ function parseAgentOutput(text) {
     .map(s => s.trim())
     .filter(Boolean);
 
-  return { bubbles, content, decision, decisions, suggestedAgent, suggestedMeeting, neededTool, artifact, mission };
+  return { bubbles, content, decision, decisions, suggestedAgent, suggestedMeeting, neededTool, artifact, artifacts, mission };
 }
 
 module.exports = { parseAgentOutput, detectArtifactRequest, MAX_DECISIONS_PER_MESSAGE };

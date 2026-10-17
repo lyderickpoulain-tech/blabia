@@ -501,4 +501,35 @@ describe.skipIf(!harness.enabled)('développements depuis BlabIA (GitHub simulé
     await h.request('DELETE', `/api/projects/${projectId}/memory`, { token: owner.token });
     expect(gh.pulls.filter(p => p.state === 'closed').length).toBe(closedBefore);
   });
+
+  // v5.1, étape B du test « Gérard » : l'avis du porteur sur l'aperçu ou le site en ligne
+  it('avis sur le site : noté en mémoire ; aperçu refait avec les remarques ; retouches du site en ligne', async () => {
+    await h.db('DevTask').where({ projectId }).update({ status: 'abandoned' });
+    const base = { projectId, sessionId: null, createdBy: owner.id, repo: 'moi/app', createdAt: new Date() }; // réunions effacées par la réinitialisation
+    const [ready] = await h.db('DevTask').insert({ ...base, title: 'Page d’accueil', prompt: 'Construire la page d’accueil du site.', status: 'ready', prNumber: 5, issueNumber: 1, previewUrl: 'https://apercu.example' }).returning('*');
+    const [live] = await h.db('DevTask').insert({ ...base, title: 'Page Concerts', prompt: 'Ajouter la page Concerts.', status: 'deployed', prNumber: 6, issueNumber: 2 }).returning('*');
+    const url = id => `/api/projects/${projectId}/dev-tasks/${id}/remarks`;
+
+    expect((await h.request('POST', url(ready.id), { token: collaborator.token, body: { likes: 'x' } })).status).toBe(403);
+    expect((await h.request('POST', url(ready.id), { token: owner.token, body: { likes: '  ' } })).status).toBe(400);
+
+    const issuesBefore = gh.issues.length;
+    const noted = await h.request('POST', url(ready.id), { token: owner.token, body: { likes: 'Les couleurs', launch: false } });
+    expect(noted.body).toEqual({ saved: true, task: null });
+    expect(gh.issues.length).toBe(issuesBefore);
+    expect((await h.db('Project').where({ id: projectId }).first()).context).toContain('Avis du porteur sur l’aperçu « Page d’accueil »]\nCe qui lui plaît (à garder) : Les couleurs');
+
+    const redo = await h.request('POST', url(ready.id), { token: owner.token, body: { dislikes: 'Le menu trop petit', changes: 'Le menu plus gros', launch: true } });
+    expect(redo.status).toBe(201);
+    expect((await h.db('DevTask').where({ id: ready.id }).first()).status).toBe('abandoned');
+    expect(gh.issues.at(-1).body).toMatch(/Construire la page d’accueil du site\.[\s\S]*Retouches demandées[\s\S]*Ce qu’il veut changer ou ajouter : Le menu plus gros/);
+
+    // Un développement est en cours (l'aperçu refait) : les retouches attendent
+    expect((await h.request('POST', url(live.id), { token: owner.token, body: { changes: 'Une photo', launch: true } })).status).toBe(409);
+    await h.db('DevTask').where({ id: redo.body.task.id }).update({ status: 'abandoned' });
+    const retouch = await h.request('POST', url(live.id), { token: owner.token, body: { changes: 'Une photo', launch: true } });
+    expect(retouch.status).toBe(201);
+    expect(gh.issues.at(-1).body).toMatch(/^Le site est en ligne\.[\s\S]*Une photo[\s\S]*Ajouter la page Concerts\./);
+    expect((await h.db('DevTask').where({ id: live.id }).first()).status).toBe('deployed');
+  });
 });

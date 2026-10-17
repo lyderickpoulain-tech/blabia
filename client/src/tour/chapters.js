@@ -102,7 +102,7 @@ export const CHAPTERS = [
         body: 'Ce que les agents retiennent de leur débat, en quelques lignes. Le débat complet reste consultable.' },
       { target: 'mr-decisions', interactive: true, placement: 'top',
         title: 'À vous de trancher',
-        body: 'Choisissez une option pour chaque question : la recommandation des agents est en premier. Essayez !' },
+        body: 'Choisissez une option pour chaque question : la recommandation des agents est en premier. Essayez ! Pour un choix visuel (style, page d’accueil), « Voir ces choix en maquettes » montre une maquette par option : « Celle-ci », « Pas celle-là » ou « Mélanger ».' },
       { target: 'mr-delegate', interactive: true,
         title: 'Pas d’avis ?',
         body: '« Laisser les agents décider » : ils tranchent ce point entre eux. Vous pourrez toujours les contredire ensuite.' },
