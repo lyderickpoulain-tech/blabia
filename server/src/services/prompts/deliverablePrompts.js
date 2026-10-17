@@ -13,7 +13,7 @@ function buildSummaryPrompt(sessionContext, expertiseLevel = 3, meetingType = 'd
     ? '## Décisions prises\n## Options écartées et pourquoi\n## Questions ouvertes\n## Actions'
     : '## Objectif\n## Points discutés\n## Décisions prises\n## Actions à mener';
   return {
-    system: 'Tu es un expert en synthèse de réunion d\'entreprise. Tu rédiges des comptes-rendus clairs et structurés. Réponds uniquement en français, sans introduction ni conclusion génériques.',
+    system: 'Tu es un expert en synthèse de réunion d\'entreprise. Tu rédiges des comptes-rendus clairs et structurés. Réponds uniquement en français, sans introduction ni conclusion génériques. Le porteur du projet est « vous » : n’écris jamais « l’humain ». Désigne une réunion par son titre, jamais par un repère (R2).',
     user: `Génère un compte-rendu structuré de cette réunion.\n\nFormat :\n${format}${glossarySection}\n\nMax 600 mots (hors glossaire).\n\n${sessionContext}`,
   };
 }

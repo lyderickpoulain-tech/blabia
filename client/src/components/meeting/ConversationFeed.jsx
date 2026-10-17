@@ -67,7 +67,7 @@ const FEEDBACK = [
   { kind: 'too_technical', label: 'Trop technique',      icon: GraduationCap },
   { kind: 'too_long',      label: 'Trop long',           icon: Scissors },
 ];
-const stripHypothesisPrefix = t => t.replace(/^\s*hypoth[eè]se\s*:\s*/i, '');
+const stripHypothesisPrefix = t => { const s = t.replace(/^\s*hypoth[eè]se\s*:\s*/i, ''); return s.charAt(0).toUpperCase() + s.slice(1); };
 const KIND_LABEL = { mermaid: 'Schéma', html: 'Maquette', svg: 'Visuel' };
 const TURN_SEPARATOR = 'mt-2 pt-2.5 border-t border-line [&:first-child]:mt-0 [&:first-child]:border-t-0';
 const timeOf = ts => {
@@ -90,7 +90,7 @@ export default function ConversationFeed({
   missions = [], onApproveMission, onRejectMission, onOpenMissionReport,
   feedback = {}, onFeedback,
 }) {
-  const [acknowledged, setAcknowledged] = useState(() => new Set()); // hypothèses approuvées
+  const [acknowledged] = useState(() => new Set()); // hypothèses approuvées (ancien bouton « D'accord »)
 
   function agentColor(name) {
     const idx = activeAgents.findIndex(a => a.name === name);
@@ -163,23 +163,22 @@ export default function ConversationFeed({
               <strong className={`font-bold ${color.text}`}>{msg.agentName}</strong>
               {agent?.role && <> · {agent.role}</>}
               {timeOf(msg.timestamp) && <> · {timeOf(msg.timestamp)}</>}
-              {msg.reason && <span className="italic"> · {msg.reason}</span>}
             </p>
           )}
           <div className={`inline-block max-w-full mt-0.5 px-3 py-1.5 rounded-[12px] ${grouped ? '' : 'rounded-tl-[4px]'} text-sm leading-[1.45] text-ink-soft ${color.soft || 'bg-white ring-1 ring-line'}`}>
             {isHypothesis && (
-              <span className="inline-block mr-1.5 px-1.5 rounded-md bg-muted-light text-ink-soft text-[11px] font-extrabold uppercase tracking-wider">Hypothèse</span>
+              <span className="inline-block mr-1.5 px-1.5 rounded-md bg-muted-light text-ink-soft text-[11px] font-extrabold uppercase tracking-wider" title="Retenue sauf avis contraire">Proposition</span>
             )}
             <Markdown size="bubble">
               {msg.webSearch?.sources?.length > 0 ? annotateWithCitations(text, msg.webSearch.sources) : text}
             </Markdown>
           </div>
+          {/* v5.1 (test « Gérard ») : une proposition est retenue sauf avis contraire — un seul
+              bouton, discret, au survol, au lieu de « D'accord / Je contredis » sous chacune */}
           {isHypothesis && !isClosed && !acknowledged.has(msg.id) && (
-            <div className="flex gap-4 text-[13px]">
-              <button type="button" onClick={() => setAcknowledged(s => new Set(s).add(msg.id))}
-                className="min-h-[32px] font-bold text-ok hover:underline">D'accord</button>
+            <div className="text-[13px] opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
               <button type="button" onClick={() => onContradict?.(msg.agentName)}
-                className="min-h-[32px] font-bold text-await hover:underline">Je contredis</button>
+                className="min-h-[32px] font-bold text-await hover:underline">Pas d’accord ?</button>
             </div>
           )}
           {onFeedback && !msg.prep && (
@@ -377,7 +376,7 @@ export default function ConversationFeed({
           {streamingAgent === 'BlabIA' && streamingReason?.startsWith('Je lis le code : ') ? (
             <span><strong className="text-ink-soft">BlabIA</strong> lit le code du site…<span className="italic"> ({streamingReason.slice('Je lis le code : '.length)})</span></span>
           ) : (
-            <span><strong className="text-ink-soft">{streamingAgent}</strong> écrit…{streamingReason && <span className="italic"> ({streamingReason})</span>}</span>
+            <span><strong className="text-ink-soft">{streamingAgent}</strong> écrit…</span>
           )}
         </div>
       )}

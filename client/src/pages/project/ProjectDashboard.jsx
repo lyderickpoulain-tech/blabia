@@ -10,7 +10,9 @@ import { totalLabel } from '../../utils/toolsCatalog';
 import { formatUSD } from '../../utils/cost';
 import { isOverdueAction } from './ProjectActions';
 import useMissions from '../../hooks/useMissions';
-import { notifyError } from '../../utils/notify';
+import { notifyError, notifySuccess } from '../../utils/notify';
+import { quickStartMeeting, quickStartError } from '../../utils/quickMeeting';
+import { launchPreparation } from '../../utils/preparation';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 import InboxList from '../../components/assistant/InboxList';
 
@@ -180,9 +182,27 @@ export default function ProjectDashboard() {
   const devCurrent = (devTasks || []).find(t => ['running', 'deploying', 'ready'].includes(t.status));
   const devLastDeployed = devOf('deployed')[0];
 
-  const startMeeting = (prepare) => navigate(`/projects/${project.id}/meeting/new`, {
-    state: { milestoneId: next.id, milestoneTitle: next.title, milestoneType: next.type, autoPrepare: prepare },
+  // v5.1 (test « Gérard ») : un clic suffit — la réunion est créée avec les assistants proposés ;
+  // « Personnaliser » ouvre l'ancienne page de réglages
+  const [starting, setStarting] = useState(null);
+  const customize = () => navigate(`/projects/${project.id}/meeting/new`, {
+    state: { milestoneId: next.id, milestoneTitle: next.title, milestoneType: next.type },
   });
+  const startMeeting = async (prepare) => {
+    if (starting) return;
+    setStarting(prepare ? 'prepare' : 'start');
+    try {
+      const s = await quickStartMeeting(project, next, { prepare });
+      if (prepare) {
+        await launchPreparation(project.id, s.id);
+        notifySuccess(`Les assistants préparent « ${next.title} ». Votre bras droit vous préviendra quand leurs conclusions seront prêtes.`);
+        refreshInbox?.();
+        setStarting(null);
+        return;
+      }
+      navigate(`/projects/${project.id}/meeting/${s.id}`, { state: { autoStart: true } });
+    } catch (err) { notifyError(err, quickStartError(err)); setStarting(null); }
+  };
 
   // v5.1 (16/10/2026) : ce qui attend l'humain est dans « À trancher » (InboxList) ; ne restent
   // ici que les points qui n'y sont pas (outils, développement en échec, réunion restée ouverte)
@@ -218,10 +238,11 @@ export default function ProjectDashboard() {
                 </Link>
               ) : project.status === 'active' && (
                 <>
-                  <Button variant="secondary" onClick={() => startMeeting(true)} className="text-ai border-ai-border">
-                    <Sparkles size={16} /> Préparer avant mon arrivée
+                  <Button variant="ghost" onClick={customize} title="Choisir les assistants, le type de réunion, les réglages">Personnaliser</Button>
+                  <Button variant="secondary" onClick={() => startMeeting(true)} disabled={!!starting} className="text-ai border-ai-border">
+                    <Sparkles size={16} /> {starting === 'prepare' ? 'Lancement…' : 'Les assistants la préparent'}
                   </Button>
-                  <Button variant="primary" onClick={() => startMeeting(false)}>Démarrer la réunion <ArrowRight size={16} /></Button>
+                  <Button variant="primary" onClick={() => startMeeting(false)} disabled={!!starting}>{starting === 'start' ? 'Ouverture…' : 'Démarrer la réunion'} <ArrowRight size={16} /></Button>
                 </>
               )}
             </div>
@@ -297,7 +318,7 @@ export default function ProjectDashboard() {
         </section>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <SummaryCard icon={ListOrdered} title="Plan" meta={milestones.length ? `${done} sur ${milestones.length} tenues` : null} to="reunions" linkLabel="Voir le plan">
           {milestones.length > 0 && (
             <div className="h-2 bg-muted-light rounded-full overflow-hidden mb-3"><div className="h-full bg-ok" style={{ width: `${Math.round((done / milestones.length) * 100)}%` }} /></div>
@@ -346,7 +367,7 @@ export default function ProjectDashboard() {
           )}
         </SummaryCard>
 
-        <SummaryCard icon={Wrench} title="Outils" meta={tools ? `${validatedTools.length} retenu${validatedTools.length > 1 ? 's' : ''}` : null} to="outils" linkLabel="Voir les outils">
+        {(project.hasTechnicalStack || project.githubRepo || (tools?.tools || []).some(t => ['validated', 'suggested'].includes(t.status))) && <SummaryCard icon={Wrench} title="Outils" meta={tools ? `${validatedTools.length} retenu${validatedTools.length > 1 ? 's' : ''}` : null} to="outils" linkLabel="Voir les outils">
           {tools && (
             <div className="space-y-1">
               <p className="text-xs text-ink-faint">Coût mensuel estimé</p>
@@ -354,7 +375,7 @@ export default function ProjectDashboard() {
               {counts.toolsAttention > 0 && <p className="text-sm text-await font-semibold">{counts.toolsAttention} point{counts.toolsAttention > 1 ? 's' : ''} d'attention</p>}
             </div>
           )}
-        </SummaryCard>
+        </SummaryCard>}
 
         {project.githubRepo && (
           <SummaryCard icon={GitPullRequest} title="Développements" meta={project.githubRepo} to="developpements" linkLabel="Voir les développements">

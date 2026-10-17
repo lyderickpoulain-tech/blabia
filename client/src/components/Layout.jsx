@@ -41,6 +41,8 @@ export default function Layout({ children, wide = false }) {
 
   return (
     <div className="min-h-screen bg-canvas flex flex-col">
+      {/* Accès direct au contenu, au clavier (audit d'accessibilité) */}
+      <a href="#contenu" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:text-action focus:font-bold focus:px-4 focus:py-2 focus:rounded-[10px] focus:shadow-lg">Aller au contenu</a>
       <header className="bg-white border-b border-line">
         <div className="px-4 py-1.5 flex items-center gap-4">
           <Link to="/dashboard" className="shrink-0" aria-label="BlabIA, accueil">
@@ -88,7 +90,7 @@ export default function Layout({ children, wide = false }) {
         </nav>
       </header>
 
-      <main className={`flex-1 w-full mx-auto px-4 py-6 ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
+      <main id="contenu" tabIndex={-1} className={`flex-1 w-full mx-auto px-4 py-6 pb-24 outline-none ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
         {children}
       </main>
 
@@ -97,7 +99,7 @@ export default function Layout({ children, wide = false }) {
           onClose={closeGuide} onStart={startTour} />
       )}
 
-      <footer className="text-center py-2 text-[10px] text-ink-faint/60 select-none">
+      <footer className="text-center py-2 text-[11px] text-ink-faint select-none">
         BlabIA v{APP_VERSION} — {APP_BUILD}
       </footer>
     </div>

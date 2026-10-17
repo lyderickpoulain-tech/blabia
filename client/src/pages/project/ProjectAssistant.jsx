@@ -4,7 +4,9 @@ import { Trash2, CalendarClock, Inbox } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
-import { notifyError } from '../../utils/notify';
+import { notifyError, notifySuccess } from '../../utils/notify';
+import { quickStartMeeting, quickStartError } from '../../utils/quickMeeting';
+import { launchPreparation } from '../../utils/preparation';
 import DelegateMeetingModal from '../../components/DelegateMeetingModal';
 import AssistantChat, { Avatar, MeetingChoices } from '../../components/assistant/AssistantChat';
 import InboxList from '../../components/assistant/InboxList';
@@ -27,9 +29,13 @@ export default function ProjectAssistant() {
     try { await api.delete(`/projects/${project.id}/assistant`); setChatKey(k => k + 1); }
     catch (err) { notifyError(err, 'La conversation n’a pas pu être effacée.'); }
   };
-  const startMeeting = (m, prepare) => navigate(`/projects/${project.id}/meeting/new`, {
-    state: { milestoneId: m.milestoneId || m.id, milestoneTitle: m.title, milestoneType: m.type, autoPrepare: prepare },
-  });
+  const startMeeting = async (m, prepare) => {
+    try {
+      const s = await quickStartMeeting(project, m, { prepare });
+      if (prepare) { await launchPreparation(project.id, s.id); notifySuccess(`Les assistants préparent « ${m.title} ».`); refreshInbox(); return; }
+      navigate(`/projects/${project.id}/meeting/${s.id}`, { state: { autoStart: true } });
+    } catch (err) { notifyError(err, quickStartError(err)); }
+  };
 
   const milestones = [...(plan?.milestones || [])].sort((a, b) => a.displayOrder - b.displayOrder);
   const nextIdx = milestones.findIndex(m => m.status !== 'done');

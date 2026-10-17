@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sparkles, Workflow, Map as MapIcon, ArrowRight, ArrowLeft, X, Check, Play } from 'lucide-react';
 import { Button, IconButton, Badge } from './ui';
 import { chaptersFor, roleKind } from '../tour/chapters';
@@ -53,6 +54,8 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
   const chapters = chaptersFor(role);
   const todo = chapters.filter(c => !tourProgress?.[c.id]);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const [showDetails, setShowDetails] = useState(false); // tout le détail, replié (test « Gérard »)
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose(); };
@@ -62,7 +65,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
 
   const header = {
     welcome:   { icon: Sparkles, tone: 'ai',     title: 'Bienvenue dans BlabIA' },
-    principle: { icon: Workflow, tone: 'action', title: 'Le principe' },
+    principle: { icon: Workflow, tone: 'action', title: 'Comment ça marche' },
     chapters:  { icon: MapIcon,  tone: 'ok',     title: 'Visite guidée' },
   }[screen];
 
@@ -79,15 +82,14 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
             <header.icon size={28} aria-hidden="true" />
           </span>
           <h2 id="tuto-title" className="text-xl font-extrabold text-ink mt-3">{header.title}</h2>
-          {screen === 'principle' && <div className="mt-4"><Flow /></div>}
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {screen === 'welcome' && (
             <div className="text-center space-y-3">
-              <p className="text-sm text-ink-soft">
-                BlabIA réunit une équipe d'<strong>agents IA spécialisés</strong> pour faire avancer vos projets, informatiques ou non.
-                Vous lancez le sujet, ils débattent et proposent ; <strong>vous tranchez</strong>, et vous pouvez toujours les contredire.
+              <p className="text-[15px] text-ink-soft">
+                BlabIA vous aide à mener vos projets de l’idée à la réalisation : un site, un commerce, un événement, une association…
+                <strong> Pas besoin de vous y connaître</strong> : une équipe d’assistants vous accompagne, et vous gardez toujours le dernier mot.
               </p>
               <p className="text-sm text-ink-muted">
                 {kind === 'admin' && 'Votre compte est administrateur : vous menez vos projets et vous gérez aussi les comptes de BlabIA.'}
@@ -99,6 +101,23 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
 
           {screen === 'principle' && (
             <div className="space-y-4">
+              {/* La promesse, en quatre temps (v5.1, test « Gérard ») ; tout le détail est replié */}
+              <ol className="space-y-3">
+                {[
+                  ['Vous décrivez votre projet', 'Avec vos mots, comme à quelqu’un de confiance.'],
+                  ['Une équipe d’assistants en discute avec vous, en réunions courtes', 'Ils proposent des idées concrètes et vous posent seulement les questions qui comptent.'],
+                  ['Vous décidez', 'D’un clic, sur ce qu’on vous montre : vous dites ce qui vous plaît et ce qui ne vous plaît pas.'],
+                  ['BlabIA fait le reste', 'Construire votre site, rédiger vos documents, faire les recherches, suivre ce qui reste à faire. Votre bras droit vous prévient quand il a du nouveau.'],
+                ].map(([t, d], i) => (
+                  <li key={t} className="flex gap-3">
+                    <span className="w-8 h-8 rounded-full bg-action-light text-action text-sm font-extrabold inline-flex items-center justify-center shrink-0" aria-hidden="true">{i + 1}</span>
+                    <span><span className="block text-[15px] font-extrabold text-ink">{t}</span><span className="block text-sm text-ink-muted">{d}</span></span>
+                  </li>
+                ))}
+              </ol>
+              <button type="button" onClick={() => setShowDetails(v => !v)} aria-expanded={showDetails}
+                className="w-full min-h-[40px] text-sm font-bold text-action hover:underline">{showDetails ? 'Masquer le détail' : 'Tout savoir sur BlabIA'}</button>
+              {showDetails && (<>
               <ul className="space-y-1.5">
                 {[
                   'Un projet décrit votre objectif : le brief et vos documents de référence, que les agents lisent avant chaque réunion.',
@@ -114,7 +133,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                   'Toutes les réunions du plan tenues : « Faire le récapitulatif » rédige un bilan bref de tout le projet — le résultat obtenu et, point par point, la réponse aux objectifs de départ.',
                   'En réunion, l’animation cadre les échanges aux moments clés et fait le point à la demande (« Où en est-on ? ») ; le relevé en direct montre ce qui est acquis. Votre avis sur une bulle (bien vu, à côté de la plaque, trop technique, trop long) apprend aux agents votre façon de travailler.',
                   'Tout ce qui attend votre réponse — questions des agents de toutes les réunions, notes du bras droit, comptes rendus de mission, décisions remises en question — est dans « À trancher » : vous y répondez directement.',
-                  'Entre les réunions, votre bras droit (le bouton BD en bas à droite de chaque page) est votre interlocuteur en tête-à-tête : il connaît tout le projet, cite ses sources (« qu’avait-on décidé sur le prix ? »), vous propose la prochaine réunion et ne modifie rien sans vous. Vous pouvez lui confier une réunion : il la tient à votre place, dans le cadre que vous fixez (ce qu’il peut trancher, ce qui vous est réservé), puis vous rend une note de retour — ses décisions se contestent d’un clic. Pendant qu’il la tient, vous pouvez suivre en retrait (vue salle : une vignette par participant), lui glisser un mot ou reprendre la main ; la vue salle s’active aussi dans n’importe quelle réunion. Pour une question ponctuelle, la zone « Demander à BlabIA » du tableau de bord suffit.',
+                  'Entre les réunions, votre bras droit (le bouton « Votre bras droit », en bas à droite de chaque page) est votre interlocuteur en tête-à-tête : il connaît tout le projet, cite ses sources (« qu’avait-on décidé sur le prix ? »), vous propose la prochaine réunion et ne modifie rien sans vous. Vous pouvez lui confier une réunion : il la tient à votre place, dans le cadre que vous fixez (ce qu’il peut trancher, ce qui vous est réservé), puis vous rend une note de retour — ses décisions se contestent d’un clic. Pendant qu’il la tient, vous pouvez suivre en retrait (vue salle : une vignette par participant), lui glisser un mot ou reprendre la main ; la vue salle s’active aussi dans n’importe quelle réunion. Pour une question ponctuelle, la zone « Demander à BlabIA » du tableau de bord suffit.',
                   'Comptes rendus, décisions et actions s’exportent en PDF ou en Word ; un compte rendu se décline aussi en relevé de décisions, synthèse exécutive ou procès-verbal.',
                   'Projet informatique : le prompt d’une réunion Claude Code se lance depuis BlabIA ; Claude Code travaille dans votre dépôt GitHub avec votre abonnement Claude, et vous mettez en ligne d’un clic (Projet › Développements).',
                   'Site web à créer de zéro : BlabIA crée le dépôt GitHub et prévoit les réunions dans l’ordre — définir le site, son style, puis le construire. La mise en ligne est automatique (Projet › Outils, « Mettre le site en ligne ») : d’abord à une adresse de test gratuite, puis à votre nom de domaine. Pour ajouter un service plus tard (e-mails, paiement…), tenez une réunion « Ajouter un service ». Un guide pas à pas relie ensuite tous les outils, une section par outil à déplier (ceux déjà en place sont repliés ; il indique s’il a été vérifié en ligne, avec ses sources), et une discussion sous le guide répond aux questions et aux messages d’erreur (Projet › Outils).',
@@ -128,14 +147,20 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                 <p className="text-xs font-extrabold uppercase tracking-wider text-ink-faint text-center mb-2">Une couleur, un sens</p>
                 <ColorLegend />
               </div>
+              </>)}
             </div>
           )}
 
           {screen === 'chapters' && (
             <div className="space-y-3">
+              {kind !== 'user' && (
+                <div className="rounded-xl border border-action-border bg-action-light/40 p-4 text-center space-y-2">
+                  <p className="text-[15px] font-bold text-ink">Le plus simple : commencer par votre projet.</p>
+                  <Button variant="primary" onClick={() => { onClose(); navigate('/projects/new'); }}>Créer mon projet</Button>
+                </div>
+              )}
               <p className="text-sm text-ink-soft text-center">
-                La visite se déroule sur les vraies pages, avec un <strong>projet exemple</strong> : un salon de thé à Lyon.
-                Les agents ne sont pas sollicités (aucun coût) et l'exemple est supprimé à la fin.
+                Ou faites la <strong>visite guidée</strong>, sur un projet exemple (un salon de thé à Lyon) : sans coût, l’exemple est supprimé à la fin.
               </p>
               {kind !== 'user' && (
                 <p className="text-xs text-ink-muted text-center">
@@ -187,7 +212,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
               Suivant <ArrowRight size={16} aria-hidden="true" />
             </Button>
           ) : (
-            <Button variant="primary" onClick={() => onStart((todo.length ? todo : chapters).map(c => c.id))} autoFocus>
+            <Button variant={kind === 'user' ? 'primary' : 'secondary'} onClick={() => onStart((todo.length ? todo : chapters).map(c => c.id))} autoFocus>
               <Play size={16} aria-hidden="true" /> {todo.length === chapters.length ? 'Commencer la visite' : todo.length ? 'Continuer la visite' : 'Tout revoir'}
             </Button>
           )}

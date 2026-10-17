@@ -7,6 +7,7 @@ const { memoryForPrompt } = require('../utils/projectMemory');
 const { listDecisions, formatRegistryForPrompt } = require('./decisions');
 const { listActions } = require('./actions');
 const { listDocuments, formatDocumentsForPrompt } = require('./documents');
+const { getProjectTools } = require('./tools/toolsStore');
 
 const REPORTS_CHARS = 40000; // comptes rendus : les plus récents en entier, les plus anciens tronqués
 const REPORT_CHARS = 4000;
@@ -20,6 +21,12 @@ async function projectKnowledge(project) {
   const registry = formatRegistryForPrompt(await listDecisions(project.id));
   const actions = await listActions(project.id);
   const documentsText = formatDocumentsForPrompt(await listDocuments(project.id, { withContent: true }));
+  // v5.1 (test « Gérard ») : les outils retenus et leur coût — « combien ça coûte ? » est LA
+  // question d'un débutant ; sans eux, le bras droit répondait que l'hébergement était le seul coût
+  const euros = c => (!c ? 'coût non renseigné' : c.type === 'free' ? 'gratuit'
+    : `${c.monthlyMin ?? 0} à ${c.monthlyMax ?? c.monthlyMin ?? 0} €/mois${c.type === 'subscription' ? ' (abonnement)' : c.type === 'usage' ? ' (selon l’utilisation)' : c.type === 'freemium' ? ' (gratuit au départ)' : ''}`);
+  const tools = (await getProjectTools(project).catch(() => [])).filter(t => ['validated', 'suggested'].includes(t.status));
+  const toolsText = tools.map(t => `- ${t.name} : ${euros(t.cost)}${t.status === 'suggested' ? ' — suggéré, pas encore retenu' : /^Pack recommandé/.test(t.why || '') ? ' — recommandé par BlabIA' : ''}${t.setupDone ? ' — en place' : ''}`).join('\n');
   let left = REPORTS_CHARS;
   const reports = [...sessions].reverse().map(s => {
     const text = String(s.summary || '').trim().slice(0, Math.min(REPORT_CHARS, Math.max(0, left)));
@@ -35,6 +42,9 @@ ${registry.activeText || '(aucune)'}
 ${registry.reopenedText ? `\nDÉCISIONS REMISES EN QUESTION :\n${registry.reopenedText}\n` : ''}
 ACTIONS :
 ${actions.length ? actions.slice(0, 30).map(a => `- [${a.status === 'done' ? 'faite' : a.status === 'cancelled' ? 'annulée' : 'à faire'}] ${a.title}`).join('\n') : '(aucune)'}
+
+OUTILS DU PROJET ET LEUR COÛT (estimations mensuelles) :
+${toolsText || '(aucun outil retenu)'}
 
 COMPTES RENDUS DES RÉUNIONS TENUES (dans l'ordre) :
 ${reports || '(aucune réunion tenue)'}

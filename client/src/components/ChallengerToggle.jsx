@@ -7,7 +7,7 @@ export default function ChallengerToggle({ checked, onChange, hint, disabled = f
     <label className={`flex items-start gap-3 rounded-xl border p-3.5 transition ${checked ? 'border-await-border bg-await-bg' : 'border-line'} ${disabled ? 'opacity-60' : 'cursor-pointer'}`}>
       <ShieldAlert size={20} className={`shrink-0 mt-0.5 ${checked ? 'text-await' : 'text-ink-muted'}`} aria-hidden="true" />
       <span className="flex-1">
-        <span className="block text-sm font-extrabold text-ink">Contradicteur</span>
+        <span className="block text-sm font-extrabold text-ink">Contradicteur <span className="font-semibold text-ink-muted">· un assistant qui pointe les risques</span></span>
         <span className="block text-xs text-ink-muted mt-0.5">
           {hint || 'Signale un point de vigilance seulement sur les choix à fort enjeu que personne n’a remis en cause (2 fois par réunion au plus). Vous en tenez compte ou l’écartez.'}
         </span>

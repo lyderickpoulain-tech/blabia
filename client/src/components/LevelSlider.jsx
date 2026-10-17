@@ -3,17 +3,20 @@ import { Meh, Smile, Laugh, SmilePlus, PartyPopper } from 'lucide-react';
 // de projet, démarrage de réunion, MeetingHeader en cours de réunion).
 export default function LevelSlider({ label, value, onChange, labels, icons, disabled }) {
   const idx = Math.min(Math.max(value, 1), 5) - 1;
+  const id = `lvl-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`; // libellé relié au curseur (lecteurs d'écran)
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <label className="text-sm font-bold text-ink-soft">{label}</label>
+        <label htmlFor={id} className="text-sm font-bold text-ink-soft">{label}</label>
         <span className="text-xs font-bold text-action bg-action-light rounded-full px-2 py-0.5 flex items-center gap-1">
           {icons && (() => { const Icon = icons[idx]; return <Icon size={13} strokeWidth={2} aria-hidden="true" />; })()}
           {labels[idx]}
         </span>
       </div>
       <input
+        id={id}
         type="range"
+        aria-valuetext={labels[idx]}
         min={1}
         max={5}
         step={1}

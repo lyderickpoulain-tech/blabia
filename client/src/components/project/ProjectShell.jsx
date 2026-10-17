@@ -27,7 +27,8 @@ const NAV = [
   { to: 'reunions',   label: 'Réunions',    icon: ListOrdered, also: ['historique'] },
   { to: 'decisions',  label: 'Décisions et actions', icon: ScrollText, also: ['actions'] },
   { to: 'documents',  label: 'Documents',   icon: FileText },
-  { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools' },
+  // v5.1 (test « Gérard ») : « Outils » n'a de sens que pour un site ou une appli, ou si des outils ont été retenus
+  { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools', show: (p, c) => !!(p.hasTechnicalStack || p.githubRepo || c.toolsCount) },
   { to: 'developpements', label: 'Développements', icon: GitPullRequest, show: p => !!p.githubRepo, badge: 'dev' }, // dépôt GitHub choisi (Paramètres)
   { to: 'equipe',     label: 'Équipe',      icon: Users },
   { to: 'parametres', label: 'Paramètres',  icon: Settings },
@@ -66,7 +67,7 @@ export default function ProjectShell() {
       })
       .catch(() => {}); // pastille de la barre latérale : la page concernée signale l'erreur
     api.get(`/projects/${id}/tools`)
-      .then(({ data }) => setCounts(c => ({ ...c, toolsAttention: attentionCount(data.tools, data.needs) })))
+      .then(({ data }) => setCounts(c => ({ ...c, toolsAttention: attentionCount(data.tools, data.needs), toolsCount: (data.tools || []).filter(t => ['validated', 'suggested'].includes(t.status)).length })))
       .catch(() => {}); // pastille de la barre latérale : la page concernée signale l'erreur
     refreshDevCount();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -124,7 +125,7 @@ export default function ProjectShell() {
               {project.isDemo && <Badge tone="ai" className="mt-1">Projet exemple</Badge>}
             </div>
             <nav data-tour="shell-nav" className="flex md:flex-col gap-1 overflow-x-auto pb-1 md:pb-0">
-              {NAV.filter(item => !item.show || item.show(project)).map(item => {
+              {NAV.filter(item => !item.show || item.show(project, counts)).map(item => {
                 const badge = item.badge ? badgeOf(item.badge) : 0;
                 return (
                   <NavLink key={item.label} to={item.to} end={item.end}

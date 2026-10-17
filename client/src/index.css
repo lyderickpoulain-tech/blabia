@@ -15,7 +15,7 @@
   --c-ink: 30 34 56;
   --c-ink-soft: 54 60 87;
   --c-ink-muted: 86 93 120;
-  --c-ink-faint: 106 113 144;
+  --c-ink-faint: 95 102 132; /* v5.1 : contraste ≥ 4,5:1 sur --c-canvas (audit d'accessibilité) */
   --c-action: 51 82 224;
   --c-action-dark: 35 56 176;
   --c-action-light: 230 234 255;

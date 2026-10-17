@@ -349,7 +349,7 @@ export default function StartMeeting() {
         </Step>
 
         {/* ── 2. Livrable ─────────────────────────────────────────────────── */}
-        <Step n={2} title="Livrable attendu" hint="Ce que BlabIA produira à la clôture.">
+        <Step n={2} title="Ce que vous obtiendrez" hint="Ce que BlabIA produira à la fin de la réunion.">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {DELIVERABLES.map(d => {
               const active = deliverable === d.id;

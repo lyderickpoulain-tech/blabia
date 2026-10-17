@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,6 +32,14 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [invitedEmail, setInvitedEmail] = useState(null);
+
+  useEffect(() => {
+    if (!invitationToken) return;
+    api.get(`/auth/invitation/${encodeURIComponent(invitationToken)}`)
+      .then(({ data }) => setInvitedEmail(data.email))
+      .catch(err => setError(err.response?.data?.error || ''));
+  }, [invitationToken]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -98,6 +106,9 @@ export default function Login() {
               <p className="text-sm text-ink-soft bg-action-light/60 border border-action-border rounded-[10px] px-3.5 py-2.5">
                 Vous avez été invité à rejoindre BlabIA. Choisissez votre mot de passe pour activer votre compte.
               </p>
+              {invitedEmail && (
+                <p className="text-sm text-ink-soft">Compte : <strong className="text-ink break-all">{invitedEmail}</strong> · c’est avec cette adresse que vous vous connecterez.</p>
+              )}
               <Field label="Mot de passe" hint="8 caractères minimum">
                 <input type="password" required autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••" className={inputCls} autoFocus />

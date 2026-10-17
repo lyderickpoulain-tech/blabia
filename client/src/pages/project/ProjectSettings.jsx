@@ -204,7 +204,7 @@ function MemorySection({ project, canEdit, memoryOpen, setMemoryOpen }) {
             </div>
           </>
         ) : mem.summary ? (
-          <div className="max-h-96 overflow-y-auto bg-canvas rounded-lg p-3"><Markdown size="synthesis">{mem.summary}</Markdown></div>
+          <div tabIndex={0} role="region" aria-label="Synthèse de la mémoire du projet" className="max-h-96 overflow-y-auto bg-canvas rounded-lg p-3 focus:outline focus:outline-2 focus:outline-action"><Markdown size="synthesis">{mem.summary}</Markdown></div>
         ) : (
           <p className="text-xs text-ink-muted">Elle se construit d’elle-même quand la mémoire s’allonge, ou dès maintenant à partir de l’historique.</p>
         )}

@@ -179,10 +179,18 @@ export default function MeetingRoom() {
     setWhereBusy(false);
   }, [projectId, sessionId]);
 
-  const handleSessionClosed = useCallback((newStatus) => {
+  const handleSessionClosed = useCallback((newStatus, info) => {
     setSession(prev => prev ? { ...prev, status: newStatus } : prev);
     setShowCloseModal(false);
-    notifySuccess(newStatus === 'accepted' ? 'Réunion conclue : voici la suite du projet.' : 'Réunion abandonnée.');
+    // v5.1 (test « Gérard ») : dire ce qui a changé dans le plan, et pourquoi
+    const added = info?.added || [];
+    const appended = (info?.appended || []).filter(Boolean);
+    notifySuccess(newStatus !== 'accepted' ? 'Réunion abandonnée.'
+      : [
+        'Réunion conclue.',
+        added.length ? `${added.length === 1 ? 'Une réunion ajoutée' : `${added.length} réunions ajoutées`} au plan pour ce qui reste à décider : ${added.map(t => `« ${t} »`).join(', ')}.` : '',
+        appended.length ? `Le travail à faire rejoint la réunion déjà prévue « ${appended[0]} ».` : '',
+      ].filter(Boolean).join(' '));
     navigate(`/projects/${projectId}`);
   }, [navigate, projectId]);
 
@@ -215,7 +223,10 @@ export default function MeetingRoom() {
     const feed = feedRef.current;
     if (!feed) return;
     const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 100;
-    if (atBottom) {
+    // v5.1 (test « Gérard ») : une question qui attend une réponse est toujours amenée à l'écran
+    const last = messages[messages.length - 1];
+    const questionWaiting = last?.type === 'decision' && last.status === 'pending' && !isStreaming;
+    if (atBottom || questionWaiting) {
       feed.scrollTo({ top: feed.scrollHeight, behavior: isStreaming ? 'instant' : 'smooth' });
       setShowNewMessage(false);
     } else {
@@ -741,6 +752,16 @@ export default function MeetingRoom() {
     } catch (err) { notifyError(err, err.message); setPrepRequested(false); }
   }, [projectId, sessionId, navigate]);
 
+  // v5.1 (test « Gérard ») : réunion ouverte en un clic depuis le tableau de bord ou le bras
+  // droit — les échanges démarrent d'eux-mêmes (plus de troisième « Démarrer »)
+  const autoStartDone = useRef(false);
+  useEffect(() => {
+    if (autoStartDone.current || loading || !session || !project || !location.state?.autoStart) return;
+    autoStartDone.current = true;
+    navigate(location.pathname, { replace: true, state: {} });
+    if (messages.length === 0 && !isClosed) handleAutoLaunch();
+  }, [loading, session, project, location, messages.length, isClosed, handleAutoLaunch, navigate]);
+
   // v5.1 : depuis la note de retour du bras droit, « Valider et conclure » ouvre la conclusion
   const openClosureDone = useRef(false);
   useEffect(() => {
@@ -1179,6 +1200,7 @@ export default function MeetingRoom() {
         projectId={projectId}
         onClose={() => setShowCloseModal(false)}
         onClosed={handleSessionClosed}
+        expertiseLevel={effectiveExpertiseLevel}
       />
     )}
 

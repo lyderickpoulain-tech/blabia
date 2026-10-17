@@ -37,7 +37,10 @@ const { projectObjective } = require('../../utils/projectObjective');
 
 // Réunions proposées à la conclusion à partir de ce qui n'est pas une action
 const cut = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trim()}…` : s);
-function buildMeetingProposals(triage, meetingType) {
+// v5.1 (test « Gérard ») : les décisions restées ouvertes se placent JUSTE APRÈS la réunion en
+// cours (avant la construction) ; le travail de code rejoint la réunion de construction déjà
+// prévue au lieu d'en créer une seconde.
+function buildMeetingProposals(triage, meetingType, { currentMilestoneId = null, upcoming = [] } = {}) {
   const out = [];
   // v5.1 : ce qui élargit le projet au-delà de son objectif est proposé à part, décoché
   const widening = new Set(triage.widening || []);
@@ -47,13 +50,15 @@ function buildMeetingProposals(triage, meetingType) {
   ];
   for (const g of groups) {
     if (!g.list.length) continue;
-    out.push({ key: g.key, type: 'decision', ...(g.widens ? { widens: true } : {}),
+    out.push({ key: g.key, type: 'decision', ...(g.widens ? { widens: true } : {}), afterMilestoneId: currentMilestoneId,
       title: cut(`Trancher : ${g.list[0].replace(/\?$/, '')}${g.list.length > 1 ? ` (+${g.list.length - 1})` : ''}`, 120),
       description: `Questions restées ouvertes :\n${g.list.map(q => `- ${q}`).join('\n')}` });
   }
   // Réunion Claude Code : le travail de code est déjà dans son prompt
   if (triage.codeTasks.length && meetingType !== 'claude_code') {
+    const build = upcoming.find(m => m.type === 'claude_code' && m.id !== currentMilestoneId);
     out.push({ key: 'code', type: 'claude_code',
+      ...(build ? { appendToMilestoneId: build.id, appendToTitle: build.title } : {}),
       title: cut(`Développer : ${triage.codeTasks[0].title}${triage.codeTasks.length > 1 ? ` (+${triage.codeTasks.length - 1})` : ''}`, 120),
       description: `À réaliser par Claude Code :\n${triage.codeTasks.map(t => `- ${t.title}${t.detail ? ` — ${t.detail}` : ''}`).join('\n')}` });
   }
@@ -279,7 +284,8 @@ router.post('/:sessionId/generate-deliverable', async (req, res) => {
     // Ce qui n'est pas une action (v5.1) : décisions à prendre → réunion de décision proposée ;
     // travail de code → réunion Claude Code proposée ; outils → page Outils
     const triage = extraction?.triage || { toDecide: [], toolSetups: [], codeTasks: [] };
-    const meetingProposals = buildMeetingProposals(triage, meetingType);
+    const upcomingMilestones = await db('Milestone').where({ projectId }).whereNot('status', 'done').orderBy('displayOrder', 'asc').select('id', 'title', 'type');
+    const meetingProposals = buildMeetingProposals(triage, meetingType, { currentMilestoneId: session.milestoneId || null, upcoming: upcomingMilestones });
 
     // Sources web citées pendant la réunion (dédupliquées), agrégées en fin de CR
     const citedSources = new Map();

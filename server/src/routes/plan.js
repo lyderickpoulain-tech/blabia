@@ -69,15 +69,34 @@ router.get('/:id/plan', async (req, res) => {
 
 // POST /api/projects/:id/milestones
 router.post('/:id/milestones', async (req, res) => {
-  const { title, description, dueDate, displayOrder, type } = req.body;
+  const { title, description, dueDate, displayOrder, type, afterMilestoneId, appendToMilestoneId } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Le titre est requis' });
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {
     const project = await findProject(req.params.id, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
 
-    // Calculer le displayOrder si non fourni
+    // v5.1 (test « Gérard ») : travail à ajouter à une réunion DÉJÀ prévue (pas de doublon au plan)
+    if (appendToMilestoneId) {
+      const [target] = await db('Milestone').where({ id: String(appendToMilestoneId), projectId: req.params.id }).whereNot('status', 'done').limit(1);
+      if (target) {
+        const addition = description?.trim() || title.trim();
+        const [updated] = await db('Milestone').where({ id: target.id })
+          .update({ description: [target.description, addition].filter(Boolean).join('\n\n') })
+          .returning(['id', 'title', 'description', 'dueDate', 'status', 'type', 'displayOrder', 'createdAt', 'createdBy']);
+        return res.status(200).json({ ...updated, appended: true });
+      }
+    }
+
+    // Calculer le displayOrder si non fourni ; « juste après » une réunion du plan (v5.1)
     let order = displayOrder;
+    if ((order === undefined || order === null) && afterMilestoneId) {
+      const [after] = await db('Milestone').where({ id: String(afterMilestoneId), projectId: req.params.id }).select('displayOrder').limit(1);
+      if (after) {
+        order = after.displayOrder + 1;
+        await db('Milestone').where({ projectId: req.params.id }).where('displayOrder', '>=', order).increment('displayOrder', 1);
+      }
+    }
     if (order === undefined || order === null) {
       const [{ maxOrder }] = await db('Milestone').max('displayOrder as maxOrder').where({ projectId: req.params.id });
       order = (maxOrder ?? -1) + 1;

@@ -42,9 +42,9 @@ function ToolPicker({ category, myTools, catalogTools, excludeKeys, onPick, onCa
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg p-2">
+    <div className="flex flex-wrap items-center gap-2 bg-action-light border border-blue-100 rounded-lg p-2">
       <select value={choice} onChange={e => setChoice(e.target.value)}
-        className="text-sm border border-gray-200 rounded-lg px-2 py-1 bg-white outline-none flex-1 min-w-[180px]">
+        className="text-sm border border-line rounded-lg px-2 py-1 bg-white outline-none flex-1 min-w-[180px]">
         <option value="">{label}</option>
         {mineHere.length > 0 && (
           <optgroup label="Mes outils">
@@ -65,11 +65,11 @@ function ToolPicker({ category, myTools, catalogTools, excludeKeys, onPick, onCa
       </select>
       {choice === '__custom' && (
         <input autoFocus value={custom} onChange={e => setCustom(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
-          placeholder="Nom de l'outil" className="text-sm border border-gray-200 rounded-lg px-2 py-1 outline-none flex-1 min-w-[140px]" />
+          placeholder="Nom de l'outil" className="text-sm border border-line rounded-lg px-2 py-1 outline-none flex-1 min-w-[140px]" />
       )}
       <button onClick={submit} disabled={!choice || (choice === '__custom' && !custom.trim())}
-        className="text-xs bg-blabia-blue text-white px-3 py-1.5 rounded-lg disabled:opacity-40">OK</button>
-      <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600">Annuler</button>
+        className="text-xs bg-action text-white px-3 py-1.5 rounded-lg disabled:opacity-40">OK</button>
+      <button onClick={onCancel} className="text-xs text-ink-muted hover:text-ink-soft">Annuler</button>
     </div>
   );
 }
@@ -78,43 +78,46 @@ function ToolLine({ tool, onChange, onRemove, onReplace, needsSetup }) {
   const [editingCost, setEditingCost] = useState(false);
   const refused = tool.status === 'refused';
   return (
-    <div className={`border rounded-lg px-3 py-2 space-y-1 ${refused ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200'}`}>
+    <div className={`border rounded-lg px-3 py-2 space-y-1 ${refused ? 'bg-canvas border-line opacity-60' : 'bg-white border-line'}`}>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className={`text-sm font-medium flex-1 min-w-[110px] ${refused ? 'line-through text-gray-500' : 'text-gray-900'}`}>{tool.name}</span>
-        <span className={`text-[10px] font-medium border px-1.5 py-0.5 rounded-full ${PROJECT_STATUS[tool.status]?.cls}`}>{PROJECT_STATUS[tool.status]?.label}</span>
-        <span className="text-xs text-gray-500">{costLabel(tool.cost)}</span>
+        <span className={`text-sm font-medium flex-1 min-w-[110px] ${refused ? 'line-through text-ink-muted' : 'text-ink'}`}>{tool.name}</span>
+        {/* v5.1 : le pack posé d'office par BlabIA n'est pas « Validé » par la personne */}
+        <span className={`text-[10px] font-medium border px-1.5 py-0.5 rounded-full ${PROJECT_STATUS[tool.status]?.cls}`}>
+          {tool.status === 'validated' && /^Pack recommandé/.test(tool.why || '') ? 'Recommandé par BlabIA' : PROJECT_STATUS[tool.status]?.label}
+        </span>
+        <span className="text-xs text-ink-muted">{costLabel(tool.cost)}</span>
       </div>
       {/* v5.1 : outil à mettre en place (compte, branchement) — un développement qui s'en sert
           n'est lancé qu'une fois la case cochée (services/devTools.js) */}
       {needsSetup && tool.status === 'validated' && (
-        <label className={`flex items-center gap-2 text-xs font-semibold cursor-pointer min-h-[28px] ${tool.setupDone ? 'text-green-700' : 'text-amber-800'}`}>
-          <input type="checkbox" className="w-4 h-4 accent-green-600" checked={!!tool.setupDone} onChange={e => onChange({ ...tool, setupDone: e.target.checked })} />
+        <label className={`flex items-center gap-2 text-xs font-semibold cursor-pointer min-h-[28px] ${tool.setupDone ? 'text-ok' : 'text-await'}`}>
+          <input type="checkbox" className="w-4 h-4 accent-action" checked={!!tool.setupDone} onChange={e => onChange({ ...tool, setupDone: e.target.checked })} />
           {tool.setupDone ? 'Mis en place (compte créé et branché)' : 'À mettre en place : cochez une fois le compte créé et branché (voir le guide ci-dessus)'}
         </label>
       )}
       {tool.warning && !refused && (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 flex items-start gap-1.5"><TriangleAlert size={13} className="shrink-0 mt-px" aria-hidden="true" /> <span>{tool.warning}</span></p>
+        <p className="text-xs text-await bg-await-bg border border-await-border rounded-md px-2 py-1 flex items-start gap-1.5"><TriangleAlert size={13} className="shrink-0 mt-px" aria-hidden="true" /> <span>{tool.warning}</span></p>
       )}
-      {tool.why && <p className="text-xs text-gray-600"><span className="text-gray-400">Pourquoi :</span> {tool.why}</p>}
+      {tool.why && <p className="text-xs text-ink-soft"><span className="text-ink-muted">Pourquoi :</span> {tool.why}</p>}
       {tool.origin === 'complementary' && (
-        <p className="text-[11px] text-gray-400">
+        <p className="text-[11px] text-ink-muted">
           Proposé en réunion{tool.cost?.freeTier ? ` · gratuit jusqu'à : ${tool.cost.freeTier}` : ''}
           {tool.priceSource
-            ? <> · <a href={tool.priceSource} target="_blank" rel="noopener noreferrer" className="text-blabia-blue hover:underline">source du prix</a></>
-            : <span className="text-amber-600"> · prix indicatif, à vérifier</span>}
+            ? <> · <a href={tool.priceSource} target="_blank" rel="noopener noreferrer" className="text-action hover:underline">source du prix</a></>
+            : <span className="text-await"> · prix indicatif, à vérifier</span>}
         </p>
       )}
       {editingCost && <ToolCostEditor cost={tool.cost} onChange={cost => onChange({ ...tool, cost })} />}
       <div className="flex gap-3 flex-wrap text-xs pt-0.5">
         {tool.status === 'suggested' && (
-          <button onClick={() => onChange({ ...tool, status: 'validated', warning: null })} className="text-green-700 hover:underline font-medium inline-flex items-center gap-1"><Check size={12} aria-hidden="true" /> Garder</button>
+          <button onClick={() => onChange({ ...tool, status: 'validated', warning: null })} className="text-ok hover:underline font-medium inline-flex items-center gap-1"><Check size={12} aria-hidden="true" /> Garder</button>
         )}
         {refused
-          ? <button onClick={() => onChange({ ...tool, status: 'suggested' })} className="text-gray-600 hover:underline">Rétablir</button>
-          : <button onClick={() => onChange({ ...tool, status: 'refused' })} className="text-gray-500 hover:underline">Refuser</button>}
-        {!refused && <button onClick={onReplace} className="text-blabia-blue hover:underline">Remplacer</button>}
-        <button onClick={() => setEditingCost(e => !e)} className="text-gray-500 hover:underline">{editingCost ? 'Fermer' : 'Coût'}</button>
-        <button onClick={onRemove} className="text-gray-300 hover:text-red-500 ml-auto">Retirer</button>
+          ? <button onClick={() => onChange({ ...tool, status: 'suggested' })} className="text-ink-soft hover:underline">Rétablir</button>
+          : <button onClick={() => onChange({ ...tool, status: 'refused' })} className="text-ink-muted hover:underline">Refuser</button>}
+        {!refused && <button onClick={onReplace} className="text-action hover:underline">Remplacer</button>}
+        <button onClick={() => setEditingCost(e => !e)} className="text-ink-muted hover:underline">{editingCost ? 'Fermer' : 'Coût'}</button>
+        <button onClick={onRemove} className="text-ink-faint hover:text-red-500 ml-auto">Retirer</button>
       </div>
     </div>
   );
@@ -138,24 +141,24 @@ function CategoryBlock({ category, need, tools, myTools, catalogTools, onSave, s
   };
 
   return (
-    <div className={`rounded-xl border p-3 space-y-2 ${need && !covered ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
+    <div className={`rounded-xl border p-3 space-y-2 ${need && !covered ? 'border-await-border bg-await-bg/40' : 'border-line bg-white'}`}>
       <div className="flex items-start gap-2">
         <ToolCategoryIcon id={category.id} size={20} className="shrink-0 text-ink-soft" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900">
-            {category.label} <span className="text-xs font-normal text-gray-400">· {category.technical}</span>
+          <p className="text-sm font-semibold text-ink">
+            {category.label} <span className="text-xs font-normal text-ink-muted">· {category.technical}</span>
           </p>
-          {need?.need && <p className="text-xs text-gray-600">Besoin : {need.need}</p>}
+          {need?.need && <p className="text-xs text-ink-soft">Besoin : {need.need}</p>}
         </div>
         {!picker && (
-          <button onClick={() => setPicker({ replaceId: null })} className="text-xs text-blabia-blue hover:underline shrink-0">+ Ajouter</button>
+          <button onClick={() => setPicker({ replaceId: null })} className="text-xs text-action hover:underline shrink-0">+ Ajouter</button>
         )}
       </div>
 
       {need && !covered && (
-        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+        <div className="text-xs text-await bg-await-bg border border-await-border rounded-md px-2 py-1.5">
           <TriangleAlert size={13} className="inline -mt-0.5 mr-1" aria-hidden="true" />Aucun outil retenu pour ce besoin. {need.warning || need.need}
-          {need.examples?.length > 0 && <span className="block text-amber-700 mt-0.5">Exemples : {need.examples.join(', ')}</span>}
+          {need.examples?.length > 0 && <span className="block text-await mt-0.5">Exemples : {need.examples.join(', ')}</span>}
         </div>
       )}
 
@@ -245,7 +248,7 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
     return (
       <Shell>
         {error ? <p className="text-sm text-red-600">{error}</p>
-          : <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" /></div>}
+          : <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-action border-t-transparent rounded-full animate-spin" /></div>}
       </Shell>
     );
   }
@@ -264,50 +267,50 @@ export default function ProjectToolsPanel({ projectId, onChanged }) {
     <Shell saving={saving}>
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className="flex items-center justify-between gap-3 flex-wrap bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap bg-canvas border border-line rounded-xl px-4 py-3">
         <div>
-          <p className="text-sm text-gray-600">Total mensuel estimé <span className="text-xs text-gray-400">(outils validés)</span></p>
-          <p className="text-base font-bold text-gray-900">{totalLabel(total)}</p>
+          <p className="text-sm text-ink-soft">Total mensuel estimé <span className="text-xs text-ink-muted">(outils validés)</span></p>
+          <p className="text-base font-bold text-ink">{totalLabel(total)}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {(missingCount > 0 || warnCount > 0) && (
-            <span className="text-xs text-amber-700 inline-flex items-center gap-1"><TriangleAlert size={13} aria-hidden="true" /> {missingCount + warnCount} point{missingCount + warnCount > 1 ? 's' : ''} d'attention</span>
+            <span className="text-xs text-await inline-flex items-center gap-1"><TriangleAlert size={13} aria-hidden="true" /> {missingCount + warnCount} point{missingCount + warnCount > 1 ? 's' : ''} d'attention</span>
           )}
           <button onClick={analyze} disabled={analyzing}
-            className="text-xs border border-gray-300 text-gray-700 hover:bg-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            className="text-xs border border-line text-ink-soft hover:bg-white px-3 py-1.5 rounded-lg disabled:opacity-50">
             <span className="inline-flex items-center gap-1.5">{needs ? <RefreshCw size={13} aria-hidden="true" /> : <Sparkles size={13} aria-hidden="true" />}{analyzing ? 'Analyse…' : needs ? 'Réanalyser les besoins' : 'Analyser les besoins'}</span>
           </button>
         </div>
       </div>
 
       {analyzing && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <div className="w-4 h-4 border-2 border-blabia-blue border-t-transparent rounded-full animate-spin" />
+        <div className="flex items-center gap-2 text-sm text-ink-muted">
+          <div className="w-4 h-4 border-2 border-action border-t-transparent rounded-full animate-spin" />
           BlabIA identifie les outils nécessaires au projet à partir de son brief…
         </div>
       )}
-      {notice && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{notice}</p>}
+      {notice && <p className="text-xs text-await bg-await-bg border border-await-border rounded-lg px-3 py-2">{notice}</p>}
 
       <ToolsFlow catalog={catalog} tools={tools} needByCat={needByCat} />
 
       {neededCats.length > 0 && (
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-700">Outils nécessaires pour ce projet</h3>
-          <p className="text-xs text-gray-400">Pré-remplis avec <a href="/outils" className="text-blabia-blue hover:underline">Mes outils</a> — modifiables à tout moment.</p>
+          <h3 className="text-sm font-semibold text-ink-soft">Outils nécessaires pour ce projet</h3>
+          <p className="text-xs text-ink-muted">Pré-remplis avec <a href="/outils" className="text-action hover:underline">Mes outils</a> — modifiables à tout moment.</p>
           {neededCats.map(c => <CategoryBlock key={c.id} category={c} need={needByCat[c.id]} {...blockProps} />)}
         </section>
       )}
 
       {otherWithTools.length > 0 && (
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-700">{needs ? 'Autres outils du projet' : 'Outils du projet'}</h3>
+          <h3 className="text-sm font-semibold text-ink-soft">{needs ? 'Autres outils du projet' : 'Outils du projet'}</h3>
           {otherWithTools.map(c => <CategoryBlock key={c.id} category={c} need={null} {...blockProps} />)}
         </section>
       )}
 
       {otherEmpty.length > 0 && (
         <section className="space-y-2">
-          <button onClick={() => setShowOthers(s => !s)} className="text-xs text-gray-500 hover:text-gray-800">
+          <button onClick={() => setShowOthers(s => !s)} className="text-xs text-ink-muted hover:text-ink">
             {showOthers ? '▲' : '▼'} {needs ? 'Catégories jugées non nécessaires' : 'Autres catégories'} ({otherEmpty.length})
           </button>
           {showOthers && otherEmpty.map(c => <CategoryBlock key={c.id} category={c} need={null} {...blockProps} />)}

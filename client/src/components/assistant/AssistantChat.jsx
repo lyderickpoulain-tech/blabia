@@ -6,6 +6,8 @@ import { Button } from '../ui';
 import Markdown from '../Markdown';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import DelegateMeetingModal from '../DelegateMeetingModal';
+import { quickStartMeeting, quickStartError } from '../../utils/quickMeeting';
+import { launchPreparation } from '../../utils/preparation';
 
 // Conversation avec le bras droit (v5.1) : page « Bras droit » et panneau toujours disponible
 // (BrasDroitDock). Sur un bouton, l'acteur est toujours nommé (« le bras droit », « vous ») :
@@ -120,9 +122,19 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
     setSending(false);
   };
 
-  const startMeeting = (m, prepare) => navigate(`/projects/${project.id}/meeting/new`, {
-    state: { milestoneId: m.milestoneId || m.id, milestoneTitle: m.title, milestoneType: m.type, autoPrepare: prepare },
-  });
+  // Un clic : réunion créée avec les assistants proposés (utils/quickMeeting.js)
+  const startMeeting = async (m, prepare) => {
+    try {
+      const s = await quickStartMeeting(project, m, { prepare });
+      if (prepare) {
+        await launchPreparation(project.id, s.id);
+        notifySuccess(`Les assistants préparent « ${m.title} ». Je vous préviens quand c’est prêt.`);
+        onChanged?.();
+        return;
+      }
+      navigate(`/projects/${project.id}/meeting/${s.id}`, { state: { autoStart: true } });
+    } catch (err) { notifyError(err, quickStartError(err)); }
+  };
   const choices = { onDelegate: m => setDelegating(m), onPrepare: m => startMeeting(m, true), onHold: m => startMeeting(m, false) };
   const openReport = async (report, conclude) => {
     await api.post(`/projects/${project.id}/sessions/${report.sessionId}/delegation/ack`).catch(() => {});

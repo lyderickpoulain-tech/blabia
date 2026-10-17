@@ -15,6 +15,7 @@ export default function PhaseStepper({ phase, skipped = [] }) {
     <ol aria-label="Temps de la réunion" className="flex items-center gap-1 flex-wrap">
       {PHASES.map((p, i) => {
         const isSkipped = skipped.includes(p.id);
+        if (isSkipped) return null; // v5.1 : une étape non utilisée est masquée, pas barrée (« j'ai raté quelque chose ? »)
         const state = i === currentIdx ? 'current' : i < currentIdx ? 'done' : 'next';
         const cls = state === 'current'
           ? 'bg-action-light text-action font-extrabold'

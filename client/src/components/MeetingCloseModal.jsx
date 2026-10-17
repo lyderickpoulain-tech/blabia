@@ -4,7 +4,8 @@ import SummaryDisplayModal from './SummaryDisplayModal';
 import MeetingSuggestionCard from './meeting/MeetingSuggestionCard';
 import MeetingPlanModal, { buildMergedPlan } from './meeting/MeetingPlanModal';
 import { costLabel } from '../utils/toolsCatalog';
-import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft, CalendarPlus, PenLine } from 'lucide-react';
+import { Flag, X, Check, RotateCcw, FileText, Maximize2, Code2, Copy, ScrollText, ListChecks, ShieldAlert, Wrench, Lightbulb, ListOrdered, Ban, ArrowRight, ArrowLeft, CalendarPlus, PenLine, Pencil } from 'lucide-react';
+import Markdown from './Markdown';
 import { Link } from 'react-router-dom';
 import { Button, IconButton, Badge, SectionLabel, AutoTextarea } from './ui';
 import { notifyError, notifySuccess } from '../utils/notify';
@@ -28,7 +29,7 @@ const ACTION_CHANGE = {
 // v5.0 phase 3.3 : bouton unique "Conclure la réunion" — génération automatique
 // à l'ouverture, puis assistant en 3 étapes : relecture CR + livrable → revue
 // des réunions suggérées → validation (statut accepté, CR en mémoire, livrable enregistré).
-export default function MeetingCloseModal({ session, initialSuggestions, meetingRefs, initialToolSuggestions, projectId, onClose, onClosed }) {
+export default function MeetingCloseModal({ session, initialSuggestions, meetingRefs, initialToolSuggestions, projectId, onClose, onClosed, expertiseLevel = 3 }) {
   const [step, setStep] = useState('generating');
   const [meetingType, setMeetingType] = useState(null);
   const [summary, setSummary]         = useState('');
@@ -36,6 +37,8 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
   const [genError, setGenError]       = useState('');
   const [copied, setCopied]           = useState(false);
   const [showFullContent, setShowFullContent] = useState(false);
+  const [editingSummary, setEditingSummary] = useState(false);
+  const closingInfoRef = useRef(null); // réunions ajoutées au plan, pour l'annoncer au retour // compte rendu : lu mis en forme, texte brut pour le modifier
 
   const [suggestions, setSuggestions] = useState(
     Array.isArray(initialSuggestions) ? initialSuggestions
@@ -218,9 +221,21 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
       // Réunions proposées (décisions à prendre, travail de code) : ajoutées au plan (une seule fois)
       const keptMeetings = meetingProposals.filter(m => m.keep && m.title.trim());
       if (keptMeetings.length > 0 && !meetingsSavedRef.current) {
+        // v5.1 : décisions à prendre juste après cette réunion (dans l'ordre) ; travail de code
+        // ajouté à la réunion de construction déjà prévue
+        let after = null;
         for (const m of keptMeetings) {
-          await api.post(`/projects/${projectId}/milestones`, { title: m.title.trim(), description: m.description, type: m.type });
+          const { data: saved } = await api.post(`/projects/${projectId}/milestones`, {
+            title: m.title.trim(), description: m.description, type: m.type,
+            ...(m.appendToMilestoneId ? { appendToMilestoneId: m.appendToMilestoneId } : {}),
+            ...(!m.appendToMilestoneId && (after || m.afterMilestoneId) ? { afterMilestoneId: after || m.afterMilestoneId } : {}),
+          });
+          if (!m.appendToMilestoneId && m.afterMilestoneId && saved?.id) after = saved.id;
         }
+        closingInfoRef.current = {
+          added: keptMeetings.filter(m => !m.appendToMilestoneId).map(m => m.title.trim()),
+          appended: keptMeetings.filter(m => m.appendToMilestoneId).map(m => m.appendToTitle),
+        };
         meetingsSavedRef.current = true;
       }
 
@@ -257,7 +272,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
             : 'Le développement n’a pas pu être lancé : relancez-le depuis Projet › Développements.');
         }
       }
-      onClosed?.('accepted');
+      onClosed?.('accepted', closingInfoRef.current);
     } catch (err) {
       setApplyError(err.response?.data?.error || 'Erreur lors de la validation');
       setApplying(false);
@@ -343,7 +358,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   <span className="flex-1 min-w-[220px]">
                     {draftInfo.changedSince
                       ? <><strong>La réunion a continué</strong> depuis la préparation de cette conclusion ({draftInfo.changedSince} message{draftInfo.changedSince > 1 ? 's' : ''}) : régénérez-la pour en tenir compte.</>
-                      : <>Conclusion préparée {fmtDraftDate(draftInfo.generatedAt)}. Vous pouvez fermer cette fenêtre (vérifier un outil, une action…) : vous la retrouverez telle quelle, avec vos modifications.</>}
+                      : <>Préparée {fmtDraftDate(draftInfo.generatedAt)}. Vous pouvez fermer cette fenêtre : vous la retrouverez telle quelle.</>}
                   </span>
                   <Button size="sm" variant={draftInfo.changedSince ? 'await' : 'ghost'} className="!h-8" onClick={generate}>
                     <RotateCcw size={14} aria-hidden="true" /> Régénérer
@@ -386,18 +401,31 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                     <FileText size={16} className="text-ai" aria-hidden="true" /> Compte-rendu
                     <Badge tone="ai">Rédigé par BlabIA</Badge>
                   </h3>
-                  <Button size="sm" variant="ghost" onClick={() => setShowFullContent(true)}>
-                    <Maximize2 size={14} aria-hidden="true" /> Plein écran
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => setEditingSummary(v => !v)} aria-pressed={editingSummary}>
+                      <Pencil size={14} aria-hidden="true" /> {editingSummary ? 'Voir le résultat' : 'Modifier'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setShowFullContent(true)}>
+                      <Maximize2 size={14} aria-hidden="true" /> Plein écran
+                    </Button>
+                  </div>
                 </div>
-                <textarea
-                  value={summary}
-                  onChange={e => setSummary(e.target.value)}
-                  rows={8}
-                  aria-label="Compte-rendu"
-                  className="w-full px-3.5 py-3 border border-ai-border bg-ai-bg rounded-xl text-sm outline-none focus:ring-2 focus:ring-ai resize-y text-ink-soft leading-relaxed"
-                />
-                <p className="text-[11px] text-ink-faint">Modifiable : c'est ce texte qui sera mémorisé dans le projet.</p>
+                {/* v5.1 (test « Gérard ») : le compte rendu se lit mis en forme ; le texte brut
+                    (Markdown) n'apparaît que pour le modifier */}
+                {editingSummary ? (
+                  <textarea
+                    value={summary}
+                    onChange={e => setSummary(e.target.value)}
+                    rows={10}
+                    aria-label="Compte-rendu"
+                    className="w-full px-3.5 py-3 border border-ai-border bg-ai-bg rounded-xl text-sm outline-none focus:ring-2 focus:ring-ai resize-y text-ink-soft leading-relaxed font-mono"
+                  />
+                ) : (
+                  <div className="max-h-80 overflow-y-auto px-4 py-3 border border-ai-border bg-ai-bg rounded-xl" tabIndex={0} role="region" aria-label="Compte-rendu">
+                    <Markdown size="synthesis">{summary || ''}</Markdown>
+                  </div>
+                )}
+                <p className="text-[11px] text-ink-faint">C’est ce compte rendu qui sera gardé dans le projet ; « Modifier » pour le corriger.</p>
               </section>
 
               {/* Livrable claude_code (éditable) */}
@@ -563,8 +591,9 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                 )}
               </section>
 
-              {/* Outils à mettre en place : relèvent de la page Outils, pas des actions (v5.1) */}
-              {toolSetups.length > 0 && (
+              {/* Outils à mettre en place : relèvent de la page Outils, pas des actions (v5.1).
+                  Pour un débutant (niveau 1-2), pas de technique ici : la réunion de construction s'en charge */}
+              {toolSetups.length > 0 && expertiseLevel > 2 && (
                 <section className="space-y-1.5">
                   <h3 className="flex items-center gap-2 text-sm font-extrabold text-ink">
                     <Wrench size={16} className="text-action" aria-hidden="true" /> Outils à mettre en place
@@ -655,7 +684,8 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                           onChange={e => updateMeeting(m.key, { keep: e.target.checked })} className="mt-2 w-4 h-4 accent-action shrink-0" />
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <Badge tone={m.type === 'claude_code' ? 'ai' : 'action'} className="!text-[10px] !px-2 !py-0.5">{m.type === 'claude_code' ? 'Claude Code' : 'Décision'}</Badge>
+                            <Badge tone={m.type === 'claude_code' ? 'ai' : 'action'} className="!text-[10px] !px-2 !py-0.5">{m.type === 'claude_code' ? 'Construction' : 'Décision'}</Badge>
+                            {m.appendToTitle && <Badge tone="muted" className="!text-[10px] !px-2 !py-0.5" title="Pas de nouvelle réunion : ce travail rejoint la réunion déjà prévue">Ajouté à « {m.appendToTitle} »</Badge>}
                             {m.widens && <Badge tone="await" className="!text-[10px] !px-2 !py-0.5" title="Ces questions vont au-delà de l'objectif du projet : à ajouter seulement si vous voulez élargir le projet">Élargit le projet</Badge>}
                             <input value={m.title} onChange={e => updateMeeting(m.key, { title: e.target.value })} disabled={!m.keep} aria-label="Titre de la réunion"
                               className="flex-1 min-w-[180px] text-sm font-semibold text-ink border border-transparent hover:border-line focus:border-action-border rounded-md px-1.5 py-1 outline-none bg-transparent" />

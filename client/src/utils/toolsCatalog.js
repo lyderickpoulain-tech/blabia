@@ -27,22 +27,22 @@ export function useToolsCatalog() {
 }
 
 export const USER_STATUS = {
-  using:   { label: "J'utilise",     cls: 'bg-green-100 text-green-700 border-green-200' },
-  account: { label: "J'ai un compte", cls: 'bg-blue-100 text-blue-700 border-blue-200' },
-  to_try:  { label: 'À essayer',      cls: 'bg-gray-100 text-gray-600 border-gray-200' },
+  using:   { label: "J'utilise",     cls: 'bg-ok-light text-ok border-ok-border' },
+  account: { label: "J'ai un compte", cls: 'bg-action-light text-action border-action-border' },
+  to_try:  { label: 'À essayer',      cls: 'bg-muted-light text-ink-soft border-line' },
 };
 
 export const PROJECT_STATUS = {
-  suggested: { label: 'Suggéré', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
-  validated: { label: 'Validé',  cls: 'bg-green-100 text-green-700 border-green-200' },
-  refused:   { label: 'Refusé',  cls: 'bg-gray-100 text-gray-500 border-gray-200' },
+  suggested: { label: 'Suggéré', cls: 'bg-await-light text-await border-await-border' },
+  validated: { label: 'Validé',  cls: 'bg-ok-light text-ok border-ok-border' },
+  refused:   { label: 'Refusé',  cls: 'bg-muted-light text-ink-muted border-line' },
 };
 
 export const COST_TYPES = {
   free:         'Gratuit',
-  freemium:     'Freemium',
+  freemium:     'Gratuit au départ',
   subscription: 'Abonnement',
-  usage:        "À l'usage",
+  usage:        'Selon l’utilisation',
 };
 
 const euros = (n) => `${Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} €`;

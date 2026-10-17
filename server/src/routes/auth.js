@@ -24,6 +24,13 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const invitationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 function makeToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
@@ -56,6 +63,19 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
+
+// GET /api/auth/invitation/:token — l'adresse que l'invitation active (v5.1, test « Gérard » :
+// l'écran d'activation ne disait pas quel compte on créait)
+router.get('/invitation/:token', invitationLimiter, async (req, res) => {
+  try {
+    const [invitation] = await db('Invitation').where({ token: req.params.token }).limit(1);
+    if (!invitation || invitation.used) return res.status(404).json({ error: 'Invitation invalide ou déjà utilisée' });
+    res.json({ email: invitation.email });
+  } catch (err) {
+    console.error('[auth/invitation]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // POST /api/auth/register — inscription par invitation uniquement
 router.post('/register', registerLimiter, async (req, res) => {

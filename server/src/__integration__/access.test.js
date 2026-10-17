@@ -17,6 +17,7 @@ const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const PUBLIC = [
   'GET /api/health', 'GET /api/ping', 'POST /api/auth/login', 'POST /api/auth/register',
+  'GET /api/auth/invitation/:token', // adresse de l'invitation (écran d'activation)
   'POST /api/reminders/run', // protégée par CRON_SECRET (testé à part)
   'GET /api/github/callback', // retour de GitHub : utilisateur reconnu par l'état signé (testé à part)
   'GET /api/railway/callback', // retour de Railway : utilisateur reconnu par l'état signé (testé à part)
