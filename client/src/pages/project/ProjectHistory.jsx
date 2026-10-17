@@ -133,6 +133,7 @@ function CostCard({ stats }) {
         {stats.realCostUSD > 0 && <>{formatUSD(stats.realCostUSD)} réels{since && <> depuis le {since}</>} ({stats.calls} appel{stats.calls > 1 ? 's' : ''})</>}
         {stats.realCostUSD > 0 && stats.legacyCostUSD > 0 && ' · '}
         {stats.legacyCostUSD > 0 && <>{formatUSD(stats.legacyCostUSD)} estimés pour les réunions antérieures au suivi</>}
+        {stats.userKeyCostUSD > 0 && <> · dont {formatUSD(stats.userKeyCostUSD)} payés sur la clé API du porteur du projet</>}
       </p>
       {stats.byKind?.length > 0 && (
         <ul className="mt-3 space-y-1.5">

@@ -17,7 +17,8 @@ const LEGACY_COST_SQL = (projectRef) => `
 async function projectCostReport(projectId) {
   const [totals, byKind, bySession, legacy] = await Promise.all([
     db('UsageLog').where({ projectId })
-      .select(db.raw('COALESCE(SUM("costUSD"), 0) AS cost'), db.raw('MIN("createdAt") AS since'), db.raw('COUNT(*)::int AS calls'))
+      .select(db.raw('COALESCE(SUM("costUSD"), 0) AS cost'), db.raw('MIN("createdAt") AS since'), db.raw('COUNT(*)::int AS calls'),
+        db.raw(`COALESCE(SUM("costUSD") FILTER (WHERE "billedTo" = 'user'), 0) AS "userKeyCost"`))
       .first(),
     db('UsageLog').where({ projectId }).groupBy('kind')
       .select('kind', db.raw('SUM("costUSD") AS "costUSD"'), db.raw('COUNT(*)::int AS calls'))
@@ -31,6 +32,7 @@ async function projectCostReport(projectId) {
     legacyCostUSD: Number(Object.values(legacy.rows[0] || {})[0]) || 0,
     trackedSince:  totals?.since || null,
     calls:         totals?.calls || 0,
+    userKeyCostUSD: Number(totals?.userKeyCost) || 0, // v5.1 : payé sur la clé API du porteur
     byKind:        byKind.map(k => ({ kind: k.kind, costUSD: Number(k.costUSD) || 0, calls: k.calls })),
     bySession:     Object.fromEntries(bySession.map(r => [r.sessionId, Number(r.costUSD) || 0])),
   };

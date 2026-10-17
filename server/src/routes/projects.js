@@ -262,6 +262,10 @@ router.get('/:id/stats', async (req, res) => {
       totalOutput,
       ...cost, // realCostUSD, legacyCostUSD, trackedSince, byKind, bySession
       estimatedCost: cost.realCostUSD + cost.legacyCostUSD, // DEPRECATED v5.1
+      // v5.1 : état de la clé API du porteur, montré à lui seul (BlabIA a-t-il pris le relais ?)
+      ownerKeyStatus: project.userId === req.user.id
+        ? ((await db('User').where({ id: req.user.id }).whereNotNull('anthropicApiKey').select('anthropicKeyStatus').first())?.anthropicKeyStatus ?? null)
+        : null,
     });
   } catch (err) {
     console.error('[projects/:id/stats GET]', err.message);

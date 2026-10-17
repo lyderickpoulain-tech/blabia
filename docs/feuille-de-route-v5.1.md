@@ -396,6 +396,15 @@ Test d'accessibilité joué dans le rôle d'un boulanger passionné de musiques 
 - **Bras droit** : la conversation marque elle-même ses messages comme lus (plus de bulle pour une réponse déjà lue sur la page du bras droit).
 - **Étape suivante** : D (étude d'un mode « Tout compris » géré par BlabIA, sans code avant décision).
 
+### D36. « Apportez votre clé API » — fait le 17/10/2026
+Question de l'utilisateur : utiliser son abonnement Claude pour les agents plutôt que l'API, avec bascule sur l'API sinon. Écarté : Anthropic interdit les jetons d'abonnement (Free, Pro, Max) hors Claude.ai et Claude Code (rappel de février 2026, bloqué côté serveur) ; on perdrait aussi le cache, Haiku pour l'orchestration, les plafonds et le suivi des coûts. Version autorisée retenue :
+- **Clé API du porteur** (Mon profil, `PUT/DELETE /api/users/me/anthropic-key`) : vérifiée par un appel minuscule à Haiku, chiffrée (`utils/secretBox.js`, AES-256-GCM dérivé de `JWT_SECRET`), jamais renvoyée (4 derniers caractères seulement). Migration additive `20261017000001_v5_user_api_key` (`User.anthropicApiKey…`, `UsageLog.billedTo`).
+- **Qui paie** (`services/userKeys.js`, branché dans le point de passage unique `services/anthropic.js`) : la clé du PROPRIÉTAIRE du projet pour toute l'IA du projet (collaborateurs, bras droit, missions et tâches de fond compris, via le contexte `services/usage.js`) ; hors projet, celle de la personne connectée ; sinon BlabIA.
+- **Relais par la clé BlabIA** : 401/403 → clé écartée jusqu'à remplacement ; crédit épuisé → nouvel essai au bout d'une heure ; 429, 400, 404 (modèle, bêta ou recherche web absents de son compte) → relais pour cet appel seulement ; panne d'Anthropic (5xx) ou demande interrompue → pas de relais.
+- **Visibilité** : Mon profil (état, coût du mois sur votre clé / sur BlabIA), Historique (« dont … payés sur la clé du porteur »), point d'attention du tableau de bord (porteur seulement) si la clé ne fonctionne plus.
+- Les développements (Claude Code dans le dépôt du porteur, avec son abonnement) ne changent pas : c'est un usage officiel de Claude Code.
+- Tests : `__integration__/userApiKey.test.js` (le harnais relève la clé de chaque appel).
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

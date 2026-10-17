@@ -25,6 +25,11 @@ model User {
   railwayRefreshToken  String?   // v5.1 : accès Railway (OAuth), jeton de renouvellement CHIFFRÉ (services/railway.js)
   railwayConnectedAt   DateTime?
   railwayEmail         String?
+  anthropicApiKey       String?   // v5.1 : « Apportez votre clé API » — clé Anthropic CHIFFRÉE (utils/secretBox.js)
+  anthropicKeyLast4     String?   // 4 derniers caractères, pour l'affichage
+  anthropicKeyStatus    String?   // ok | invalid | no_credit (services/userKeys.js)
+  anthropicKeyError     String?
+  anthropicKeyCheckedAt DateTime?
   createdAt        DateTime        @default(now())
   projects           Project[]
   invitations        Invitation[]
@@ -322,6 +327,7 @@ model UsageLog {
   cacheReadTokens  Int      @default(0)
   webSearches      Int      @default(0)
   costUSD          Float    @default(0) // calculé au tarif du modèle (services/pricing.js)
+  billedTo         String   @default("blabia") // v5.1 : « blabia » ou « user » (clé API du porteur du projet)
   createdAt        DateTime @default(now())
   user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   project          Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)

@@ -1,6 +1,9 @@
 const express = require('express');
 const db = require('../utils/db');
 const authMiddleware = require('../middleware/auth');
+const userKeys = require('../services/userKeys');
+const { adaptForModel } = require('../services/anthropic');
+const { ORCHESTRATOR_MODEL } = require('../services/models');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -11,13 +14,65 @@ const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 router.get('/me', async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'reminderDay', 'createdAt')
+      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'reminderDay', 'createdAt',
+        'anthropicApiKey', 'anthropicKeyLast4', 'anthropicKeyStatus', 'anthropicKeyError', 'anthropicKeyCheckedAt')
       .where({ id: req.user.id })
       .limit(1);
     if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    res.json(user);
+    const { anthropicApiKey, anthropicKeyLast4, anthropicKeyStatus, anthropicKeyError, anthropicKeyCheckedAt, ...profile } = user;
+    res.json({ ...profile, anthropicKey: await keySummary(req.user.id, user) });
   } catch (err) {
     console.error('[users/me GET]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// « Apportez votre clé API » (v5.1, services/userKeys.js) : état de la clé (jamais la clé
+// elle-même) et ce que l'IA de mes projets a coûté ce mois-ci, sur ma clé et sur celle de BlabIA
+async function keySummary(userId, user) {
+  const since = new Date(); since.setDate(1); since.setHours(0, 0, 0, 0);
+  const rows = await db('UsageLog').join('Project', 'Project.id', 'UsageLog.projectId')
+    .where('Project.userId', userId).where('UsageLog.createdAt', '>=', since)
+    .groupBy('UsageLog.billedTo').select('UsageLog.billedTo', db.raw('COALESCE(SUM("UsageLog"."costUSD"), 0) AS cost'));
+  const month = Object.fromEntries(rows.map(r => [r.billedTo, Number(r.cost) || 0]));
+  return {
+    configured: !!user.anthropicApiKey,
+    last4: user.anthropicKeyLast4 || null,
+    status: user.anthropicApiKey ? (user.anthropicKeyStatus || 'ok') : null,
+    error: user.anthropicKeyError || null,
+    checkedAt: user.anthropicKeyCheckedAt || null,
+    monthUSD: { user: month.user || 0, blabia: month.blabia || 0 },
+  };
+}
+const keyRow = id => db('User').where({ id }).select('anthropicApiKey', 'anthropicKeyLast4', 'anthropicKeyStatus', 'anthropicKeyError', 'anthropicKeyCheckedAt').first();
+
+// PUT /api/users/me/anthropic-key { apiKey } — vérifiée auprès d'Anthropic, puis chiffrée
+router.put('/me/anthropic-key', async (req, res) => {
+  const apiKey = String(req.body?.apiKey || '').trim();
+  if (!userKeys.KEY_RE.test(apiKey)) {
+    return res.status(400).json({ error: 'Ce n’est pas une clé API Anthropic : elle commence par « sk-ant- » (Claude Console › API keys).' });
+  }
+  try {
+    const params = adaptForModel({ model: ORCHESTRATOR_MODEL, max_tokens: 16, messages: [{ role: 'user', content: 'ok' }] });
+    delete params.fallbacks;
+    const check = await userKeys.testKey(apiKey, params);
+    if (check.status === 'invalid') return res.status(400).json({ error: 'Anthropic refuse cette clé (révoquée ou mal copiée).' });
+    if (check.status === 'error') return res.status(502).json({ error: 'Anthropic ne répond pas : réessayez dans un instant.' });
+    await userKeys.saveKey(req.user.id, apiKey, check);
+    res.json({ anthropicKey: await keySummary(req.user.id, await keyRow(req.user.id)) });
+  } catch (err) {
+    console.error('[users/me/anthropic-key PUT]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/users/me/anthropic-key — retour à la clé de BlabIA
+router.delete('/me/anthropic-key', async (req, res) => {
+  try {
+    await userKeys.removeKey(req.user.id);
+    res.json({ anthropicKey: await keySummary(req.user.id, await keyRow(req.user.id)) });
+  } catch (err) {
+    console.error('[users/me/anthropic-key DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

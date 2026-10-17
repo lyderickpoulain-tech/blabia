@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Mail, AtSign, Shield, Bell, Send, Github, Check, Wrench, ChevronRight } from 'lucide-react';
+import { Mail, AtSign, Shield, Bell, Send, Github, Check, Wrench, ChevronRight, KeyRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import api from '../utils/api';
 import { dayName } from '../components/RemindersToggle';
-import { notifyError } from '../utils/notify';
+import { notifyError, notifySuccess } from '../utils/notify';
+import { formatUSD } from '../utils/cost';
 import { startGitHubConnect, useGitHubReturn } from '../utils/github';
 
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
@@ -55,6 +56,61 @@ function ReminderSettings() {
       </div>
       <p className="text-xs text-ink-faint mt-2">Un e-mail par semaine avec les actions en retard, de la semaine et les prochaines, pour les projets où vous avez activé le rappel (page Actions ou Paramètres du projet).</p>
       {status && <p className="text-xs font-bold text-ink-soft mt-1" role="status">{status}</p>}
+    </Section>
+  );
+}
+
+// « Apportez votre clé API » (v5.1, 17/10/2026) : l'IA de vos projets facturée sur votre compte
+// Anthropic, au prix coûtant ; BlabIA prend le relais si la clé ne fonctionne plus
+const KEY_STATUS = {
+  ok:        { tone: 'text-ok',    text: 'Active : l’IA de vos projets est facturée sur votre compte Anthropic.' },
+  no_credit: { tone: 'text-await', text: 'Crédit épuisé sur votre compte Anthropic : BlabIA a pris le relais. Nouvel essai toutes les heures.' },
+  invalid:   { tone: 'text-await', text: 'Anthropic refuse cette clé (révoquée ?) : BlabIA a pris le relais. Remplacez-la pour l’utiliser de nouveau.' },
+};
+function ApiKeySettings() {
+  const [key, setKey] = useState(null);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get('/users/me').then(({ data }) => setKey(data.anthropicKey)).catch(() => setKey({ configured: false })); }, []);
+  const save = async e => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { data } = await api.put('/users/me/anthropic-key', { apiKey: value.trim() });
+      setKey(data.anthropicKey); setValue('');
+      notifySuccess(data.anthropicKey.status === 'ok' ? 'Clé vérifiée et enregistrée.' : 'Clé enregistrée, mais votre compte Anthropic n’a plus de crédit.');
+    } catch (err) { notifyError(err, 'La clé n’a pas pu être enregistrée.'); }
+    setBusy(false);
+  };
+  const remove = async () => {
+    if (!confirm('Retirer votre clé ? L’IA de vos projets repassera sur le compte de BlabIA.')) return;
+    try { const { data } = await api.delete('/users/me/anthropic-key'); setKey(data.anthropicKey); }
+    catch (err) { notifyError(err, 'La clé n’a pas pu être retirée.'); }
+  };
+  if (!key) return null;
+  const status = key.configured ? KEY_STATUS[key.status] || KEY_STATUS.ok : null;
+  const month = key.monthUSD || { user: 0, blabia: 0 };
+  return (
+    <Section icon={KeyRound} title="Votre clé API Anthropic (facultatif)">
+      <p className="text-sm text-ink-soft">Si vous avez un compte développeur Anthropic (Claude Console), BlabIA peut utiliser votre clé : l’IA de vos projets (réunions, bras droit, missions) est alors facturée directement sur votre compte, au prix coûtant. Sans clé, ou si elle ne fonctionne plus, BlabIA prend le relais.</p>
+      <p className="text-xs text-ink-faint mt-1.5">Ce n’est pas votre abonnement Claude (Pro, Max) : Anthropic le réserve à Claude.ai et Claude Code. Il continue de servir aux développements (Projet › Développements).</p>
+      {key.configured && (
+        <div className="mt-3 space-y-1">
+          <p className="text-sm text-ink">Clé enregistrée, se termine par <strong className="font-mono">…{key.last4}</strong></p>
+          <p className={`text-xs font-bold ${status.tone}`} role="status">{status.text}</p>
+        </div>
+      )}
+      <form onSubmit={save} className="mt-3 flex flex-wrap gap-2">
+        <label htmlFor="anthropic-key" className="sr-only">Clé API Anthropic</label>
+        <input id="anthropic-key" type="password" autoComplete="off" spellCheck={false} value={value} onChange={e => setValue(e.target.value)}
+          placeholder={key.configured ? 'Remplacer par une autre clé (sk-ant-…)' : 'sk-ant-…'} className={`${inputCls} flex-1 min-w-[220px] font-mono`} />
+        <Button type="submit" size="sm" variant="primary" disabled={busy || !value.trim()}>{busy ? 'Vérification…' : 'Vérifier et enregistrer'}</Button>
+        {key.configured && <Button size="sm" variant="ghost" onClick={remove} disabled={busy}>Retirer</Button>}
+      </form>
+      <p className="text-xs text-ink-faint mt-2">
+        Ce mois-ci, l’IA de vos projets : {formatUSD(month.user)} sur votre clé · {formatUSD(month.blabia)} sur le compte BlabIA.
+        La clé est vérifiée auprès d’Anthropic, puis conservée chiffrée ; elle n’est plus jamais affichée.
+      </p>
     </Section>
   );
 }
@@ -172,6 +228,7 @@ export default function ProfilePage() {
           </Section>
 
           <ReminderSettings />
+          {user?.role !== 'user' && <ApiKeySettings />}
           {user?.role !== 'user' && <GitHubSettings />}
           {/* Outils habituels (v5.1) : facultatif — sans eux, BlabIA propose son pack recommandé */}
           {user?.role !== 'user' && (

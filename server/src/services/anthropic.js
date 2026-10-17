@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const { recordUsage } = require('./usage');
+const { recordUsage, currentContext } = require('./usage');
+const userKeys = require('./userKeys');
 const { currentModel, THINKING_MODELS, DEFAULT_EFFORT, THINKING_HEADROOM } = require('./models');
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -33,14 +34,30 @@ function adaptForModel(params) {
 
 // Coût réel (v5.1) : toute réponse est journalisée dans UsageLog (services/usage.js).
 // Point de passage unique : aucun appel, présent ou futur, n'échappe au décompte.
+// « Apportez votre clé API » (v5.1, services/userKeys.js) : la clé du propriétaire du projet
+// d'abord, s'il en a une ; si Anthropic la refuse (clé révoquée, crédit épuisé, limite de débit,
+// modèle absent de son compte), la clé de BlabIA prend le relais pour cet appel.
 const create = client.messages.create.bind(client.messages);
+const done = (response, p, billedTo) => {
+  if (response?.usage) recordUsage(response.model || p.model, response.usage, { billedTo }); // sans attendre
+  if (response?.stop_reason === 'refusal') console.warn(`[anthropic] demande déclinée (${response.stop_details?.category || 'sans catégorie'}) — ${p.model}`);
+  return response;
+};
 client.messages.create = async (params, options) => {
   const p = adaptForModel(params);
   const opts = p.fallbacks ? { ...(options || {}), headers: { ...(options?.headers || {}), 'anthropic-beta': FALLBACK_BETA } } : options;
-  const response = await create(p, opts);
-  if (response?.usage) recordUsage(response.model || p.model, response.usage); // sans attendre
-  if (response?.stop_reason === 'refusal') console.warn(`[anthropic] demande déclinée (${response.stop_details?.category || 'sans catégorie'}) — ${p.model}`);
-  return response;
+  const own = await userKeys.resolve(currentContext()).catch(err => { console.error('[anthropic] clé du porteur :', err.message); return null; });
+  if (own) {
+    try {
+      return done(await userKeys.clientFor(own.apiKey).messages.create(p, opts), p, 'user');
+    } catch (err) {
+      const verdict = userKeys.classify(err);
+      if (!verdict || options?.signal?.aborted) throw err;
+      console.warn(`[anthropic] clé du porteur refusée (${verdict}) : relais par la clé BlabIA`);
+      userKeys.markKey(own.userId, verdict, err?.error?.error?.message || err?.message).catch(() => {});
+    }
+  }
+  return done(await create(p, opts), p, 'blabia');
 };
 
 // Texte d'une réponse : seulement les blocs « text » (avec la réflexion des modèles Claude 5,

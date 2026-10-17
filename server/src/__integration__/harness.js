@@ -15,12 +15,13 @@ function assertTestDatabase() {
 
 // IA simulée : remplace Messages.create AVANT le chargement de services/anthropic.js
 // (qui l'enveloppe pour journaliser l'usage), afin que UsageLog soit aussi testé.
-const ai = { calls: [], responder: null };
+const ai = { calls: [], keys: [], responder: null }; // keys : clé API de chaque appel (v5.1, « Apportez votre clé »)
 function installFakeAI() {
   const Anthropic = require('@anthropic-ai/sdk');
   const proto = Object.getPrototypeOf(new Anthropic({ apiKey: 'test' }).messages);
   proto.create = async function fakeCreate(params) {
     ai.calls.push(params);
+    ai.keys.push(this?._client?.apiKey ?? null);
     if (!ai.responder) throw new Error('IA simulée : aucun scénario défini pour cet appel');
     const r = (await ai.responder(params)) || {}; // scénario éventuellement asynchrone (délais simulés)
     return {

@@ -39,7 +39,10 @@ function runWithUsage(ctx, fn) {
   return store.run(ctx, fn);
 }
 
-async function recordUsage(model, usage) {
+// Contexte de l'appel en cours (projet, réunion, personne) : sert aussi à choisir la clé API
+const currentContext = () => store.getStore() || null;
+
+async function recordUsage(model, usage, { billedTo = 'blabia' } = {}) {
   if (!usage) return;
   const ctx = store.getStore() || {};
   const u = normalizeUsage(usage);
@@ -56,11 +59,12 @@ async function recordUsage(model, usage) {
       cacheReadTokens:  u.cacheReadTokens,
       webSearches:      u.webSearches,
       costUSD:          costUSD(model, usage),
+      billedTo,
     });
   } catch (err) {
     // Projet/réunion supprimé entre-temps (clé étrangère) : on garde le coût sans rattachement
     if (err.code === '23503' && (ctx.projectId || ctx.sessionId)) {
-      return store.run({ ...ctx, projectId: null, sessionId: null }, () => recordUsage(model, usage));
+      return store.run({ ...ctx, projectId: null, sessionId: null }, () => recordUsage(model, usage, { billedTo }));
     }
     console.error('[usage] journalisation impossible :', err.message);
   }
@@ -89,4 +93,4 @@ async function demoGuard(req, res, next) {
   next();
 }
 
-module.exports = { usageMiddleware, demoGuard, runWithUsage, recordUsage, parseUsageTarget, AI_KINDS };
+module.exports = { usageMiddleware, demoGuard, runWithUsage, recordUsage, currentContext, parseUsageTarget, AI_KINDS };

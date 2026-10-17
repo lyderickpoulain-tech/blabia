@@ -210,6 +210,8 @@ export default function ProjectDashboard() {
     ...devOf('failed').slice(0, 1).map(t => ({ text: `Le développement « ${t.title} » n’a pas abouti.`, to: 'developpements', cta: 'Voir' })),
     counts.toolsAttention > 0 && { text: `${counts.toolsAttention} point${counts.toolsAttention > 1 ? 's' : ''} d'attention sur les outils du projet.`, to: 'outils', cta: 'Revoir' },
     ...openSessions.slice(0, 3).map(s => ({ text: `Réunion restée ouverte : « ${s.task} ».`, to: `/projects/${project.id}/meeting/${s.id}`, cta: 'Rejoindre' })),
+    // v5.1 : votre clé API Anthropic ne fonctionne plus, BlabIA a pris le relais
+    ['invalid', 'no_credit'].includes(stats?.ownerKeyStatus) && { text: stats.ownerKeyStatus === 'no_credit' ? 'Votre compte Anthropic n’a plus de crédit : BlabIA a pris le relais pour l’IA.' : 'Anthropic refuse votre clé API : BlabIA a pris le relais pour l’IA.', to: '/profile', cta: 'Voir' },
   ].filter(Boolean);
 
   return (
