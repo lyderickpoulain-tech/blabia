@@ -147,7 +147,7 @@ export default function ConversationFeed({
   // v5.1 (test « Gérard ») : un choix visuel se voit avant de se trancher
   const visualChoices = d => (d.choices || []).filter(c => !/^(autre|laisser|les agents)/i.test(String(c).trim()));
   const decisionCard = (d) => (
-    <div key={d.id} className="space-y-1.5">
+    <div key={d.id} data-card-id={d.id} className="space-y-1.5">
       <DecisionCard message={d} number={decisionsOnly.indexOf(d) + 1} budget={decisionBudget}
         onAnswer={onAnswerDecision} onDefer={onDeferDecision} onDelegate={onDelegateDecision}
         disabled={isClosed || (!!pendingDecisionId && pendingDecisionId !== d.id)} />
@@ -246,7 +246,7 @@ export default function ConversationFeed({
     const v = msg.vigilance;
     const text = (msg.content || '').replace(/^\s*\*\*Point de vigilance\*\*\s*:\s*/i, '');
     return (
-      <div key={msg.id} data-tour="mr-vigilance" className={`flex gap-2.5 items-start ${TURN_SEPARATOR}`}>
+      <div key={msg.id} data-card-id={msg.id} data-tour="mr-vigilance" className={`flex gap-2.5 items-start ${TURN_SEPARATOR}`}>
         <span className="w-8 h-8 rounded-full bg-await-light text-await inline-flex items-center justify-center shrink-0" aria-hidden="true">
           <ShieldAlert size={16} />
         </span>
@@ -344,6 +344,8 @@ export default function ConversationFeed({
     // Réponses aux questions (decision_answer) : messages techniques pour les
     // agents, déjà visibles sur la carte de question et dans « Tranché ici »
     if (msg.role === 'system' && msg.type === 'decision_answer') return;
+    // Proposition de conclure : portée par la barre d'état de la salle (MeetingStatusBar)
+    if (msg.type === 'close_suggestion') return;
     // v5.1 : la voix de l'animation (transitions, « Où en est-on ? »)
     if (msg.type === 'animator') {
       items.push(

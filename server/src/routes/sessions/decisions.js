@@ -1,4 +1,5 @@
 const express        = require('express');
+const { openCards } = require('../../services/meetingState');
 const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const { appendMemory } = require('../../utils/projectMemory');
@@ -260,7 +261,16 @@ router.post('/:sessionId/answer-decision', async (req, res) => {
     await db('Session').where({ id: sessionId }).update({ messages: JSON.stringify(messages) });
     await db('Project').where({ id: projectId }).update({ updatedAt: new Date() });
 
-    return res.json({ message: messages[idx], systemMessage });
+    // v5.1 (18/10/2026) : ce qui suit la réponse (avant : « les agents en tiendront compte à la
+    // reprise », et rien ne reprenait). delegate : le bras droit peut terminer la réunion qu'il
+    // tenait ; resume : la réunion peut reprendre ; more : d'autres questions attendent.
+    const remaining = openCards(messages).length;
+    const d = parseJsonField(session.delegation, null);
+    const followUp = remaining > 0 ? 'more'
+      : session.status !== 'open' ? null
+        : d && ['done', 'stopped'].includes(d.status) && !d.note?.takenOver && (d.resumes || 0) < 3 ? 'delegate'
+          : 'resume';
+    return res.json({ message: messages[idx], systemMessage, followUp, remaining });
   } catch (err) {
     console.error('[sessions/answer-decision]', err.message);
     return res.status(500).json({ error: 'Erreur serveur' });

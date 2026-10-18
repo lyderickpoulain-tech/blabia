@@ -87,6 +87,40 @@ describe.skipIf(!harness.enabled)('réunion tenue par le bras droit', () => {
     expect(list.find(x => x.id === sid).delegation).toEqual({ status: 'done', reviewed: true });
   });
 
+  // v5.1 (18/10/2026, constat sur « WorldOfMetal ») : après les réponses de l'humain aux questions
+  // gardées, la réunion ne reprenait jamais
+  it('vos réponses aux questions gardées : le bras droit reprend et termine la réunion', async () => {
+    const open = (await h.request('GET', `/api/projects/${pid}/sessions/${sid}`, { token: owner.token })).body.messages
+      .filter(m => m.type === 'decision' && m.status === 'pending');
+    expect(open).toHaveLength(2);
+    // Une relance tant qu'une question attend : refusée
+    expect((await h.request('POST', `/api/projects/${pid}/sessions/${sid}/chat`, { token: owner.token, body: { message: '', resume: true, delegate: true } })).status).toBe(409);
+    const answer = id => h.request('POST', `/api/projects/${pid}/sessions/${sid}/answer-decision`, { token: owner.token, body: { messageId: id, answer: id === open[1].id ? '30 €' : 'Par prix', status: 'answered' } });
+    expect((await answer(open[0].id)).body).toMatchObject({ followUp: 'more', remaining: 1 });
+    expect((await answer(open[1].id)).body).toMatchObject({ followUp: 'delegate', remaining: 0 });
+    const inbox = (await h.request('GET', `/api/projects/${pid}/assistant/inbox`, { token: owner.token })).body;
+    expect(inbox.items.find(i => i.sessionId === sid && i.kind === 'delegation_resume')).toBeTruthy();
+
+    h.ai.responder = p => {
+      if (p.model === ORCHESTRATOR_MODEL) {
+        const done = (p.messages?.[0]?.content || '').includes('On termine');
+        return { text: JSON.stringify({ agentIndex: 1, reason: 'Terminer avec les réponses', shouldClose: done }) };
+      }
+      if (sysText(p).includes('tu lui rends compte')) return { text: 'Réunion terminée : liste par prix, 30 € par enfant.' };
+      return { text: 'On termine : liste par prix, 30 € par enfant.' };
+    };
+    const res = await fetch(`${h.base}/api/projects/${pid}/sessions/${sid}/chat`, { method: 'POST', headers: { Authorization: `Bearer ${owner.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '', resume: true, delegate: true }) });
+    expect(res.status).toBe(200);
+    await res.text();
+    const s = (await h.request('GET', `/api/projects/${pid}/sessions/${sid}`, { token: owner.token })).body;
+    expect(s.delegation).toMatchObject({ status: 'done', resumes: 1, note: { headline: 'Réunion terminée : liste par prix, 30 € par enfant.', waiting: [] } });
+    expect(s.messages.at(-1)).toMatchObject({ role: 'system', type: 'close_suggestion' }); // conservée, pour la barre d'état
+    const thread = (await h.request('GET', `/api/projects/${pid}/assistant`, { token: owner.token })).body.messages;
+    expect(thread.at(-1)).toMatchObject({ content: 'Réunion terminée : liste par prix, 30 € par enfant.', proposal: { kind: 'delegation_report', sessionId: sid } });
+    const after = (await h.request('GET', `/api/projects/${pid}/assistant/inbox`, { token: owner.token })).body;
+    expect(after.items.find(i => i.sessionId === sid && i.kind === 'meeting_close')).toBeTruthy();
+  });
+
   it('suivi en retrait : un mot glissé au bras droit, puis « Reprendre la main »', async () => {
     const sid2 = (await h.request('POST', `/api/projects/${pid}/sessions`, { token: owner.token, body: {
       task: 'Choisir le fournisseur', intention: ['decision'], activeAgents: AGENTS, challengerEnabled: false, delegation: {},

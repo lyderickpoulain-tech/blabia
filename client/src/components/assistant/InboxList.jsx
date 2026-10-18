@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CircleHelp, FileText, Coffee, Bot, ScrollText, ListChecks, GitPullRequest, NotebookPen, Radio } from 'lucide-react';
+import { CircleHelp, FileText, Coffee, Bot, ScrollText, ListChecks, GitPullRequest, NotebookPen, Radio, PlayCircle, Flag } from 'lucide-react';
 import api from '../../utils/api';
 import { Button } from '../ui';
 import { ChoicePill } from '../DecisionCard';
 import SummaryDisplayModal from '../SummaryDisplayModal';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import { launchPreparation } from '../../utils/preparation';
 
 // « À trancher » (v5.1, 16/10/2026) : tout ce qui attend l'humain, au même endroit, et les
 // questions des agents auxquelles il répond ICI, sans rouvrir chaque réunion.
@@ -20,8 +21,16 @@ function QuestionItem({ projectId, item, onDone }) {
     if (busy) return;
     setBusy(true);
     try {
-      await api.post(`/projects/${projectId}/sessions/${item.sessionId}/answer-decision`, { messageId: item.messageId, status, ...(value ? { answer: value } : {}) });
-      notifySuccess(status === 'delegated' ? 'Les agents trancheront à la reprise de la réunion.' : 'Réponse enregistrée : les agents en tiendront compte à la reprise de la réunion.');
+      const { data } = await api.post(`/projects/${projectId}/sessions/${item.sessionId}/answer-decision`, { messageId: item.messageId, status, ...(value ? { answer: value } : {}) });
+      // v5.1 (18/10/2026) : avant, « à la reprise de la réunion »… et rien ne la reprenait
+      if (data.followUp === 'delegate') {
+        await launchPreparation(projectId, item.sessionId, { delegate: true });
+        notifySuccess(`Votre bras droit reprend « ${item.sessionTask} » avec votre réponse. Il revient vers vous à la fin.`);
+      } else if (data.followUp === 'more') {
+        notifySuccess(`Réponse enregistrée. ${data.remaining > 1 ? `${data.remaining} autres questions attendent` : 'Une autre question attend'} dans « ${item.sessionTask} ».`);
+      } else {
+        notifySuccess(`Réponse enregistrée. « ${item.sessionTask} » peut reprendre : elle vous attend ici.`);
+      }
       onDone?.();
     } catch (err) { notifyError(err, 'La réponse n’a pas pu être enregistrée.'); setBusy(false); }
   };
@@ -88,7 +97,30 @@ const META = {
   decision_reopened: { icon: ScrollText,     tone: 'text-await' },
   actions_late:      { icon: ListChecks,     tone: 'text-await' },
   dev:               { icon: GitPullRequest, tone: 'text-action' },
+  meeting_resume:    { icon: PlayCircle,     tone: 'text-action' },
+  delegation_resume: { icon: PlayCircle,     tone: 'text-ai' },
+  meeting_close:     { icon: Flag,           tone: 'text-ok' },
 };
+
+// Le bras droit termine la réunion qu'il tenait, avec vos réponses (v5.1, 18/10/2026)
+function DelegationResumeItem({ projectId, item, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const resume = async () => {
+    setBusy(true);
+    try {
+      await launchPreparation(projectId, item.sessionId, { delegate: true });
+      notifySuccess(`Votre bras droit reprend « ${item.sessionTask} ». Il revient vers vous à la fin.`);
+      onDone?.();
+    } catch (err) { notifyError(err, 'Le bras droit n’a pas pu reprendre la réunion.'); setBusy(false); }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="flex-1 min-w-[220px] text-[15px] text-ink-soft">Vous avez répondu aux questions de « {item.sessionTask} » : votre bras droit peut terminer la réunion.</p>
+      <Link to={`/projects/${projectId}/meeting/${item.sessionId}`} state={{ resume: true }} className="h-9 px-3 inline-flex items-center rounded-[10px] text-[13px] font-bold text-ink-soft hover:bg-canvas">Je reprends moi-même</Link>
+      <Button size="sm" variant="primary" disabled={busy} onClick={resume}>Le bras droit termine la réunion</Button>
+    </div>
+  );
+}
 
 function SimpleItem({ projectId, item }) {
   const p = `/projects/${projectId}`;
@@ -100,13 +132,15 @@ function SimpleItem({ projectId, item }) {
     decision_reopened: () => ({ text: <>Décision remise en question : {item.statement}</>, to: `${p}/decisions`, cta: 'Voir' }),
     actions_late: () => ({ text: <>{item.count} action{item.count > 1 ? 's' : ''} en retard : {item.titles.join(' ; ')}</>, to: `${p}/actions`, cta: 'Voir' }),
     dev: () => ({ text: <>Développement « {item.title} » : {item.status === 'ready' ? 'prêt à relire' : 'la mise en ligne a échoué'}</>, to: `${p}/developpements`, cta: 'Voir' }),
+    meeting_resume: () => ({ text: <>Vous avez répondu : « {item.sessionTask} » peut reprendre.</>, to: `${p}/meeting/${item.sessionId}`, state: { resume: true }, cta: 'Reprendre la réunion' }),
+    meeting_close: () => ({ text: <>« {item.sessionTask} » est prête à conclure{item.reason ? ` : ${item.reason}` : '.'}</>, to: `${p}/meeting/${item.sessionId}`, state: { openClosure: true }, cta: 'Conclure' }),
   }[item.kind];
   const content = build?.();
   if (!content) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <p className="flex-1 min-w-[220px] text-[15px] text-ink-soft">{content.text}</p>
-      <Link to={content.to} className="h-9 px-3 inline-flex items-center rounded-[10px] border border-line bg-white text-[13px] font-bold text-ink-soft hover:bg-canvas">{content.cta}</Link>
+      <Link to={content.to} state={content.state} className="h-9 px-3 inline-flex items-center rounded-[10px] border border-line bg-white text-[13px] font-bold text-ink-soft hover:bg-canvas">{content.cta}</Link>
     </div>
   );
 }
@@ -141,6 +175,7 @@ export default function InboxList({ project, inbox, onChanged, limit = null, com
               )}
               {item.kind === 'question' ? <QuestionItem projectId={project.id} item={item} onDone={onChanged} />
                 : item.kind === 'mission_report' ? <MissionReportItem projectId={project.id} item={item} onDone={onChanged} />
+                : item.kind === 'delegation_resume' ? <DelegationResumeItem projectId={project.id} item={item} onDone={onChanged} />
                 : <SimpleItem projectId={project.id} item={item} />}
             </div>
           </article>

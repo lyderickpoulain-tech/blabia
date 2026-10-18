@@ -1,5 +1,6 @@
 const express        = require('express');
 const { agentStreak } = require('../../services/agentStreak');
+const { openCards } = require('../../services/meetingState');
 const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const anthropic      = require('../../services/anthropic');
@@ -52,6 +53,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const router = express.Router({ mergeParams: true });
 
 const MAX_CONSECUTIVE = 2;
+const MAX_DELEGATION_RESUMES = 3; // reprises par le bras droit après des réponses de l'humain
 const countDecisions = (messages) => messages.filter(m => m.type === 'decision').length;
 // Tours d'agents depuis le début de la réunion (un tour = un turnId, plusieurs bulles)
 const countAgentTurns = (messages) => new Set(messages.filter(m => m.role === 'agent').map(m => m.turnId || m.id)).size;
@@ -173,6 +175,7 @@ async function orchestrate({ session, project, messages, activeAgents,
     projectGoal: projectObjective(project),
     projectName: project?.name || '',
     expertiseLevel,
+    openQuestions: openCards(messages).length,
     // v5.1 (rejeu « WorldOfMetal ») : la même phrase d'animation revenait quatre fois
     pastAnimations: messages.filter(m => m.type === 'animator').slice(-4).map(m => String(m.content || '').slice(0, 200)),
   });
@@ -301,8 +304,16 @@ router.post('/:sessionId/chat', async (req, res) => {
     if (delegate) {
       const d = parseJsonField(s.delegation, null);
       if (!d) return res.status(400).json({ error: 'Cette réunion n’a pas été confiée au bras droit.' });
-      if (!['pending', 'failed'].includes(d.status)) return res.status(409).json({ error: 'Le bras droit a déjà tenu cette réunion.' });
-      if (parseJsonField(s.messages, []).length > 0) return res.status(400).json({ error: 'Le bras droit tient une réunion depuis son début.' });
+      // v5.1 (18/10/2026) : après les réponses de l'humain aux questions qu'il lui a gardées, le
+      // bras droit reprend la réunion et la termine (avant : rien ne la relançait)
+      const msgs = parseJsonField(s.messages, []);
+      const resumable = ['done', 'stopped'].includes(d.status) && !d.note?.takenOver
+        && msgs.length > 0 && openCards(msgs).length === 0 && (d.resumes || 0) < MAX_DELEGATION_RESUMES;
+      if (!['pending', 'failed'].includes(d.status) && !resumable) {
+        return res.status(409).json({ error: openCards(msgs).length ? 'Des questions vous attendent encore dans cette réunion.' : 'Le bras droit a déjà tenu cette réunion.' });
+      }
+      if (!resumable && msgs.length > 0) return res.status(400).json({ error: 'Le bras droit tient une réunion depuis son début.' });
+      if (resumable) await delegation.setStatus(sessionId, { resumes: (d.resumes || 0) + 1 });
     }
 
     // Préparation sans l'humain : seulement au début de la réunion, à plusieurs agents
@@ -536,7 +547,13 @@ router.post('/:sessionId/chat', async (req, res) => {
       }
 
       if (next.shouldClose && !turnArtifact && !prepare) {
-        send('suggest_close', { reason: next.reason });
+        // v5.1 (18/10/2026) : conservée dans la réunion (la bannière disparaissait au rechargement)
+        // et accompagnée des questions encore ouvertes : on ne conclut pas par-dessus
+        const pendingCount = openCards(currentMessages).length;
+        const closeMsg = { id: randomUUID(), role: 'system', type: 'close_suggestion', content: next.reason || '', pendingCount, timestamp: new Date().toISOString() };
+        await appendMessageEntry(sessionId, closeMsg);
+        currentMessages.push(closeMsg);
+        send('suggest_close', { reason: next.reason, pendingCount, message: closeMsg });
         conversationDone = true;
         break;
       }

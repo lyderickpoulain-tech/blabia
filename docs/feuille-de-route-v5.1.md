@@ -414,6 +414,15 @@ Constat (prod, 17/10, 33 messages) : réunion « outils » ouvrant un projet san
 - **Rejeu réel** (base de dev, même sujet, niveau 1) : jargon 0 (avant : des dizaines), plus longue série 2 tours (avant 5), une seule carte (le nom de l'adresse), coût total annoncé, chemin Railway. Reste : bulles plus longues que visé (≈ 46 mots au lieu de 20 au niveau 1), prix redits à quelques reprises.
 - Tests : `agentPrompt.test.js` (coulisses, incertitude, projet, orchestrateur, agentStreak), `__integration__/toolsFraming.test.js`.
 
+### D38. Le déroulé des réunions (étape F1, constats sur « WorldOfMetal ») — fait le 18/10/2026
+Constats : questions en attente alors que l'animation disait « on clôt » ; réunion confiée au bras droit jamais reprise après la réponse à la question qu'il avait gardée ; réunions arrêtées sans que rien ne dise quoi faire.
+- **État d'une réunion** (`services/meetingState.js`, même calcul côté client `utils/meetingState.js`) : question / réponses prêtes / prête à conclure / en pause, lu dans les messages.
+- **Barre d'état** (`components/meeting/MeetingStatusBar.jsx`, remplace la bannière « objectif atteint » qui disparaissait au rechargement) : toujours affichée quand les agents ne parlent pas — « Voir la question », « Reprendre les échanges », « Le bras droit termine la réunion », « Conclure », « Relancer les échanges » ; un point de vigilance ouvert est signalé.
+- **Proposer de conclure** : conservé dans la réunion (message `close_suggestion`, masqué dans le fil), avec le nombre de questions encore ouvertes ; l'orchestrateur les connaît et l'animation ne dit plus jamais « on clôt » (seul l'humain conclut).
+- **Après une réponse** (`answer-decision` → `followUp`) : `delegate` (le bras droit reprend et termine la réunion qu'il tenait, 3 reprises au plus, nouvelle note de retour), `resume` (la réunion peut reprendre), `more` (d'autres questions attendent). « À trancher » : « Reprendre la réunion », « Le bras droit termine la réunion », « Conclure ».
+- Tests : `meetingState.test.js`, `__integration__/meetingFlow.test.js`, `delegation.test.js` (reprise par le bras droit).
+- **Suite (F2, F3)** : bras droit (réunions en cours, « occupe-toi de… », réordonner le plan, niveau), « Je veux tout trancher », comparaison fidèle à la demande (polices, couleurs), plan proportionné et difficulté d'abord.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

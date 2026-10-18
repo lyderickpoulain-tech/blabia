@@ -5,6 +5,7 @@
 // développements à relire. Sert la page « À trancher », la pastille du menu, le bras droit
 // (qui en parle quand on l'interroge) et son retour proactif (dernier message).
 const db = require('../utils/db');
+const { meetingState } = require('./meetingState');
 const { parseJsonField } = require('../utils/parseJsonField');
 const { prepReady, isRunning, kindOf } = require('./preparation');
 const { OPEN, isOverdue } = require('./actions');
@@ -44,6 +45,14 @@ async function buildInbox(project, userId) {
       items.push({ kind: 'prep_ready', id: `p-${s.id}`, sessionId: s.id, sessionTask: s.task });
     }
     items.push(...questionsOf(s, userId));
+    // v5.1 (18/10/2026) : une réunion en pause dit ce qu'elle attend
+    const st = meetingState(parseJsonField(s.messages, []));
+    const delegated = d && ['done', 'stopped'].includes(d.status) && !d.note?.takenOver;
+    if (st.state === 'answers_ready') {
+      items.push({ kind: delegated ? 'delegation_resume' : 'meeting_resume', id: `a-${s.id}`, sessionId: s.id, sessionTask: s.task });
+    } else if (st.state === 'ready_to_close') {
+      items.push({ kind: 'meeting_close', id: `c-${s.id}`, sessionId: s.id, sessionTask: s.task, reason: st.closeReason });
+    }
   }
 
   const missions = await db('AgentMission').where({ projectId: project.id })
@@ -85,9 +94,12 @@ function inboxForPrompt(inbox) {
     decision_reopened: i => `Décision remise en question : ${i.statement}`,
     actions_late: i => `${i.count} action(s) en retard : ${i.titles.join(' ; ')}`,
     dev: i => `Développement « ${i.title} » : ${i.status === 'ready' ? 'à relire' : 'mise en ligne échouée'}`,
+    meeting_resume: i => `Réunion « ${i.sessionTask} » : l'humain a répondu, elle peut reprendre`,
+    delegation_resume: i => `Réunion « ${i.sessionTask} » tenue par toi : l'humain a répondu à tes questions, tu peux la terminer`,
+    meeting_close: i => `Réunion « ${i.sessionTask} » : prête à conclure`,
   };
   return `À TRANCHER PAR L'HUMAIN (sa page « À trancher ») :
-${qs.map(q => `- Question de ${q.agentName}, réunion « ${q.sessionTask} » : ${q.question}${q.choices.length ? ` (choix : ${q.choices.join(' | ')})` : ''}${q.reserved ? ' — gardée pour lui par le bras droit' : ''}`).join('\n')}${qs.length && others.length ? '\n' : ''}${others.map(i => `- ${label[i.kind](i)}`).join('\n')}`;
+${qs.map(q => `- Question de ${q.agentName}, réunion « ${q.sessionTask} » : ${q.question}${q.choices.length ? ` (choix : ${q.choices.join(' | ')})` : ''}${q.reserved ? ' — gardée pour lui par le bras droit' : ''}`).join('\n')}${qs.length && others.length ? '\n' : ''}${others.filter(i => label[i.kind]).map(i => `- ${label[i.kind](i)}`).join('\n')}`;
 }
 
 module.exports = { buildInbox, inboxForPrompt };

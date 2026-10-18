@@ -49,6 +49,7 @@ function buildOrchestratorPrompt({
   projectName = '',      // v5.1 (« WorldOfMetal ») : sans lui, l'animation a parlé de « BlabIA »
   expertiseLevel = 3,    // v5.1 : la technique se règle en coulisses pour un débutant
   pastAnimations = [],   // v5.1 : animations déjà dites (ne pas les répéter)
+  openQuestions = 0,     // v5.1 : cartes qui attendent encore l'humain
 }) {
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
   const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
@@ -81,7 +82,9 @@ Projet : « ${projectName} » (le projet de l'humain ; BlabIA n'est que l'outil 
 Objectif de la réunion : "${session.task}"${projectGoal ? `
 Objectif du projet : "${projectGoal}"` : ''}
 Livrable attendu : ${intentionKey || 'compte-rendu'}
-Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${askNote}${technicalNote}${decisionsLeft === 0
+Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${askNote}${technicalNote}${openQuestions
+    ? `\n${openQuestions} question${openQuestions > 1 ? 's attendent' : ' attend'} la réponse de l'humain : n'avance pas la conclusion par-dessus. Si l'objectif est atteint pour le reste, shouldClose=true : l'humain verra qu'il lui reste ${openQuestions > 1 ? 'ces questions' : 'cette question'} avant de conclure.`
+    : ''}${decisionsLeft === 0
     ? "\n⚠️ Le budget de questions à l'humain est épuisé : privilégie les agents qui concluent, et propose shouldClose=true dès que l'essentiel est couvert."
     : ''}
 
@@ -101,7 +104,8 @@ Décide maintenant :
 2. Pourquoi ? (1 phrase courte)
 3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
 
-ANIMATION : tu es aussi l'animateur VISIBLE de la réunion. Dans "animation", écris UNE phrase courte, dite à voix haute aux participants, SEULEMENT à une transition : ouverture de la réunion (ce qu'on doit produire), recentrage après une digression, point épuisé qu'il faut faire trancher, objectif atteint (proposer de conclure). Ton d'animateur bienveillant et ferme, sans jargon (ex. « On a fait le tour des prix ; Léa, tu proposes une fourchette à valider ? »). Le reste du temps, laisse "animation" vide : la plupart des tours.${pastAnimations.length ? `
+ANIMATION : tu es aussi l'animateur VISIBLE de la réunion. Dans "animation", écris UNE phrase courte, dite à voix haute aux participants, SEULEMENT à une transition : ouverture de la réunion (ce qu'on doit produire), recentrage après une digression, point épuisé qu'il faut faire trancher, objectif atteint (proposer de conclure). Ton d'animateur bienveillant et ferme, sans jargon (ex. « On a fait le tour des prix ; Léa, tu proposes une fourchette à valider ? »). Le reste du temps, laisse "animation" vide : la plupart des tours.
+Ne dis JAMAIS que la réunion est close, terminée, ou qu'on « clôt » : seul l'humain conclut (bouton « Conclure »). Pour proposer de conclure : « On peut conclure » ; s'il lui reste une question, dis-le.${pastAnimations.length ? `
 Animations déjà dites dans cette réunion (ne les répète pas, ni leur idée ; si tu n'as rien de neuf à dire, laisse "animation" vide) :
 ${pastAnimations.map(a => `- ${a}`).join('\n')}` : ''}
 TOURNER EN ROND : si les derniers tours redisent un choix déjà acquis sans rien ajouter, choisis l'agent qui traite le point suivant de l'objectif ; s'il n'en reste pas, shouldClose=true.

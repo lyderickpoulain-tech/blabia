@@ -6,7 +6,7 @@ import useMissions from '../hooks/useMissions';
 import ExportModal from '../components/ExportModal';
 import MeetingHeader from '../components/meeting/MeetingHeader';
 import MeetingInputBar from '../components/meeting/MeetingInputBar';
-import { MeetingSuggestCloseBanner } from '../components/meeting/MeetingDecisionFlow';
+import MeetingStatusBar from '../components/meeting/MeetingStatusBar';
 import MeetingSidePanel, { IllustrationPanel } from '../components/meeting/MeetingSidePanel';
 import BriefingView from '../components/meeting/BriefingView';
 import { DELEGATE } from '../components/DecisionCard';
@@ -121,8 +121,6 @@ export default function MeetingRoom() {
   const questionsRef = useRef(null);
   // Modal livrable (section isClosed)
   const [showDeliverable, setShowDeliverable] = useState(false);
-  // Bannière suggest_close émise par l'orchestrateur
-  const [suggestClose,    setSuggestClose]    = useState(null); // { reason: string } | null
   // Menu ⋮ + modale réinitialisation réunion
   const [showMenuDots,       setShowMenuDots]       = useState(false);
   const [showResetModal,     setShowResetModal]     = useState(false);
@@ -607,7 +605,7 @@ export default function MeetingRoom() {
               }
 
             } else if (ev.type === 'suggest_close') {
-              setSuggestClose({ reason: ev.reason || '' });
+              if (ev.message) setMessages(prev => (prev.some(m => m.id === ev.message.id) ? prev : [...prev, ev.message]));
 
             } else if (ev.type === 'turn_complete') {
               setIsStreaming(false);
@@ -762,6 +760,29 @@ export default function MeetingRoom() {
     navigate(location.pathname, { replace: true, state: {} });
     if (messages.length === 0 && !isClosed) handleAutoLaunch();
   }, [loading, session, project, location, messages.length, isClosed, handleAutoLaunch, navigate]);
+
+  // Barre d'état (v5.1, 18/10/2026) : aller à la question ouverte ; le bras droit termine la réunion
+  const showQuestion = useCallback((card) => {
+    const el = card && document.querySelector(`[data-card-id="${card.id}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (card?.type === 'decision' && !pendingDecisionIdRef.current) setPendingDecisionId(card.id);
+  }, []);
+  const delegateResume = useCallback(async () => {
+    try {
+      await launchPreparation(projectId, sessionId, { delegate: true });
+      setSession(prev => ({ ...prev, prepRunning: true, runKind: 'delegate', delegation: { ...(prev?.delegation || {}), status: 'running' } }));
+      notifySuccess('Votre bras droit reprend la réunion avec vos réponses.');
+    } catch (err) { notifyError(err, 'Le bras droit n’a pas pu reprendre la réunion.'); }
+  }, [projectId, sessionId]);
+
+  // Depuis « À trancher » : « Reprendre la réunion » relance les échanges à l'ouverture
+  const resumeDone = useRef(false);
+  useEffect(() => {
+    if (resumeDone.current || loading || !session || !location.state?.resume) return;
+    resumeDone.current = true;
+    navigate(location.pathname, { replace: true, state: {} });
+    if (!isClosed && messages.length > 0) handleSend('', { resume: true });
+  }, [loading, session, location, isClosed, messages.length, handleSend, navigate]);
 
   // v5.1 : depuis la note de retour du bras droit, « Valider et conclure » ouvre la conclusion
   const openClosureDone = useRef(false);
@@ -1036,14 +1057,6 @@ export default function MeetingRoom() {
                 </div>
               )}
 
-              <MeetingSuggestCloseBanner
-                hasDevRepo={!!project?.githubRepo}
-                suggestClose={suggestClose}
-                setSuggestClose={setSuggestClose}
-                isClosed={isClosed}
-                currentIntention={currentIntention}
-                setShowCloseModal={setShowCloseModal}
-              />
 
               {(visio || delegateRunning) && (
                 <VisioStrip agents={activeAgents} agentColors={AGENT_COLORS} messages={messages} streamingAgent={streamingAgent} delegateRunning={delegateRunning} />
@@ -1126,6 +1139,17 @@ export default function MeetingRoom() {
                   </div>
                 </div>
               ) : (
+              <>
+              {phase !== 'briefing' && (
+                <MeetingStatusBar
+                  messages={messages} isStreaming={isStreaming} isClosed={isClosed}
+                  intention={currentIntention} hasDevRepo={!!project?.githubRepo} delegation={session?.delegation}
+                  onShowQuestion={showQuestion}
+                  onResume={() => handleSend('', { resume: true })}
+                  onConclude={() => setShowCloseModal(true)}
+                  onDelegateResume={delegateResume}
+                />
+              )}
               <MeetingInputBar
                 isClosed={isClosed}
                 session={session}
@@ -1160,6 +1184,7 @@ export default function MeetingRoom() {
                 handleTextareaFocus={handleTextareaFocus}
                 inputRef={inputRef}
               />
+              </>
               )}
             </>
           )}
