@@ -495,6 +495,14 @@ router.delete('/:id/memory', async (req, res) => {
     // Le registre des décisions fait partie de la mémoire du projet
     await db('Decision').where({ projectId: req.params.id }).delete();
 
+    // v5.1 (18/10/2026) : un vrai nouveau départ — le bras droit reparlait des anciennes réunions,
+    // « Votre vision » venait de réunions effacées, actions et missions restaient orphelines.
+    // Restent : le brief, les documents de référence, les outils, l'équipe.
+    await db('AssistantMessage').where({ projectId: req.params.id }).delete();
+    await db('AgentMission').where({ projectId: req.params.id }).delete();
+    await db('TodoItem').where({ projectId: req.params.id }).delete();
+    await db('Project').where({ id: req.params.id }).update({ vision: null, visionStatus: null, visionUpdatedAt: null });
+
     // Réunions planifiées : suppression seulement si l'utilisateur l'a cochée
     // (?deleteMilestones=true), sinon simple remise à "à tenir".
     // TodoItem.milestoneId passe à NULL via onDelete: SetNull.

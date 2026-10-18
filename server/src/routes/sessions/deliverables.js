@@ -48,9 +48,14 @@ function buildMeetingProposals(triage, meetingType, { currentMilestoneId = null,
     { key: 'decide', list: triage.toDecide.filter(q => !widening.has(q)) },
     { key: 'widen', list: triage.toDecide.filter(q => widening.has(q)), widens: true },
   ];
+  // v5.1 (répétition du 18/10) : une question restée ouverte rejoint la prochaine réunion de
+  // décision du plan, plutôt que de créer une réunion entière pour elle
+  const nextDecision = upcoming.find(m => m.type === 'decision' && m.id !== currentMilestoneId);
   for (const g of groups) {
     if (!g.list.length) continue;
-    out.push({ key: g.key, type: 'decision', ...(g.widens ? { widens: true } : {}), afterMilestoneId: currentMilestoneId,
+    const join = !g.widens && nextDecision;
+    out.push({ key: g.key, type: 'decision', ...(g.widens ? { widens: true } : {}),
+      ...(join ? { appendToMilestoneId: nextDecision.id, appendToTitle: nextDecision.title } : { afterMilestoneId: currentMilestoneId }),
       title: cut(`Trancher : ${g.list[0].replace(/\?$/, '')}${g.list.length > 1 ? ` (+${g.list.length - 1})` : ''}`, 120),
       description: `Questions restées ouvertes :\n${g.list.map(q => `- ${q}`).join('\n')}` });
   }

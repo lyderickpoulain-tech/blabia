@@ -416,7 +416,7 @@ export default function ProjectSettings() {
               <Button variant="secondary" onClick={archive} disabled={archiving}><Archive size={15} /> {project.status === 'active' ? 'Archiver' : 'Réactiver'}</Button>
             </div>
             <div className="flex flex-wrap items-center gap-3 justify-between">
-              <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Réinitialiser la mémoire : supprime les réunions tenues, le registre des décisions et la mémoire.</p>
+              <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Réinitialiser la mémoire : repartir de zéro avec le même brief (réunions tenues, décisions, actions, vision et conversation avec le bras droit effacées).</p>
               <Button variant="await" onClick={openReset}><RotateCcw size={15} /> Réinitialiser</Button>
             </div>
             <div className="flex flex-wrap items-center gap-3 justify-between">
@@ -433,6 +433,8 @@ export default function ProjectSettings() {
           <ul className="list-disc pl-5 text-sm text-ink-soft space-y-1">
             <li>Effacer la mémoire et le registre des décisions</li>
             <li>Supprimer les réunions tenues (historique, comptes-rendus, livrables)</li>
+            <li>Effacer les actions, les missions, « Votre vision » et la conversation avec le bras droit</li>
+            <li>Conserver le brief, les documents de référence, les outils et l’équipe</li>
             <li>{deleteMilestones ? 'Supprimer les réunions du plan' : 'Remettre les réunions du plan à « à tenir »'}</li>
           </ul>
           <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">

@@ -449,6 +449,15 @@ Personas (fichier de l'utilisateur) : cible principale = « je ne connais rien �
 - **Livrables à la conclusion** (onglets « Livrables » du compte rendu, `FORMATS` de `routes/sessions/assist.js`) : liste de tâches, rétroplanning, budget, messages prêts à envoyer — tirés de ce qui a été décidé, sans rien inventer (« La réunion n'a pas abordé ce point »), vouvoiement ; bouton « Télécharger » (.md). Essai réel : liste ordonnée, budget honnête (« aucun montant chiffré n'a été décidé »).
 - Tests : `__integration__/planTemplates.test.js`.
 
+### D42. Répétition du parcours « persona 2 » sur WorldOfMetal — fait le 18/10/2026
+Miroir du projet de prod en dev (brief, niveau 3, humour 5, « Équilibré », outils habituels du porteur, ancien plan de 10 réunions), vraie IA, humain simulé qui répond par l'option recommandée. Parcours : réinitialisation (plan supprimé) → plan proposé (8 réunions, prototype de la carte en 1er) → réunion 1 conclue (3 séries, 60 s, 0,10 $, 2 questions utiles, 0 jargon, boucle « diaspora » repérée et tranchée par l'animation) → « Votre vision » fidèle → bras droit « occupe-toi de la prochaine réunion » (tenue, une question gardée, reprise après réponse, note) → réunion « pages et fiches » (« proposez-moi 3 polices » → carte immédiate, 78 s, 0,16 $).
+Corrigé pendant la répétition :
+- **Réinitialisation** : efface aussi la conversation avec le bras droit, « Votre vision », les actions et les missions (le bras droit reparlait des anciennes réunions) ; brief, documents, outils et équipe restent ; la fenêtre l'annonce.
+- **Une réponse de l'humain ne se change jamais sans lui** : un fait nouveau qui la contredit devient une carte (agents et bras droit ; la réponse « Bandsintown » avait été écartée entre agents).
+- **Questions restées ouvertes à la conclusion** : elles rejoignent la prochaine réunion de décision du plan (« Ajouté à … ») au lieu de créer une réunion entière.
+- **Bras droit** : plus d'auto-correction inutile (« je dois corriger ma réponse précédente ») quand le projet a simplement avancé ; réponse d'abord.
+Non répété (environnement de dev sans application GitHub) : lecture du code du dépôt, développements Claude Code et mise en ligne.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

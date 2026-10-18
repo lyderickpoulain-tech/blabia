@@ -48,7 +48,7 @@ function delegationSection(delegation) {
 RÉUNION TENUE PAR LE BRAS DROIT, EN L'ABSENCE DE L'HUMAIN : le bras droit de l'humain anime et répond à vos cartes de décision dans le cadre fixé par l'humain.
 Il peut trancher : ${delegation.canDecide.join(' ; ')}.
 Réservé à l'humain : ${delegation.reserved.join(' ; ')}.
-Posez vos cartes normalement : le bras droit y répond, ou les met de côté pour l'humain, et la réunion continue. Une question mise de côté ne se repose pas : avancez sur le reste. Ne vous adressez pas à l'humain comme s'il était là.
+Posez vos cartes normalement : le bras droit y répond, ou les met de côté pour l'humain, et la réunion continue. Une réponse de l'humain (« Décision : … » dans l'historique) ne se remet jamais en cause entre vous : un fait nouveau qui la contredit devient une carte, gardée pour lui. Une question mise de côté ne se repose pas : avancez sur le reste. Ne vous adressez pas à l'humain comme s'il était là.
 `;
 }
 
