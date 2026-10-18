@@ -99,7 +99,8 @@ describe('prompt agent : comment tu parles', () => {
   });
 
   it('humour tiré au sort à chaque tour selon sa fréquence ; niveau inconnu → valeurs par défaut', () => {
-    expect(build(3, 5, 0.8)[1].text).toContain("CE TOUR-CI : glisse UNE vraie touche d'humour");
+    expect(build(3, 5, 0.3)[1].text).toContain("CE TOUR-CI : glisse UNE vraie touche d'humour");
+    expect(build(3, 5, 0.8)[1].text).toContain("pas d'humour, ton naturel suffit"); // même « potes » : une respiration, pas un tic
     expect(build(3, 3, 0.8)[1].text).toContain("pas d'humour, ton naturel suffit");
     expect(build(3, 1, 0)[1].text).not.toContain('CE TOUR-CI');
     expect(sharedFor(9, 9)).toContain('Intermédiaire');
@@ -159,5 +160,56 @@ describe('prompt agent : mode de questions', () => {
     expect(p(4, 1, 'balanced')).not.toContain('Aucune question');
     expect(p(9, 0, 'delegate')).not.toContain('Aucune question');
     expect(p(2, 0, 'control')).toContain('tout trancher');
+  });
+});
+
+// Réunion « WorldOfMetal » (17/10/2026) : DNS débattu devant un non-technicien, « je n'ai pas
+// vérifié » à chaque message, blague en chute un message sur deux, projet appelé « BlabIA »
+describe('prompt agent : réunion « Gérard compatible »', () => {
+  const build = (expertiseLevel, extra = {}) => buildAgentSystemPrompt({ ...base, agent: agents[0], expertiseLevel, humorLevel: 2, ...extra })[0].text;
+
+  it('la technique se règle en coulisses jusqu’au niveau 3, pas pour un expert', () => {
+    expect(build(1)).toContain('LA TECHNIQUE SE RÈGLE EN COULISSES');
+    expect(build(1)).toContain('le coût en euros par mois');
+    expect(build(2)).toContain('La technique se règle en coulisses');
+    expect(build(3)).toContain("ne t'y attarde que s'ils changent le coût");
+    expect(build(5)).not.toMatch(/coulisses|ne t'y attarde/);
+  });
+
+  it('incertitude dite une fois ; recherche web plutôt que « pas vérifié »', () => {
+    expect(build(3)).toContain('INCERTITUDE : une information non vérifiée se signale une fois');
+    expect(build(3, { webSearchEnabled: true })).toContain("plutôt que d'annoncer que tu ne l'as pas vérifiée");
+  });
+
+  it('dépôt : les fichiers blabia-* ne font pas de BlabIA le projet', () => {
+    const p = buildAgentSystemPrompt({ ...base, project: { ...base.project, name: 'WorldOfMetal', githubRepo: 'moi/worldofmetal' }, agent: agents[0] })[0].text;
+    expect(p).toContain("le projet s'appelle « WorldOfMetal », pas BlabIA");
+  });
+
+  it('orchestrateur : nom du projet, technique hors débat pour un débutant', () => {
+    const { buildOrchestratorPrompt } = require('../prompts/orchestratorPrompt');
+    const p = level => buildOrchestratorPrompt({ session: { task: 'Choisir les outils', intention: ['stack'] }, agentsForSelection: agents, turnCount: 3, projectName: 'WorldOfMetal', expertiseLevel: level });
+    expect(p(1)).toContain('Projet : « WorldOfMetal »');
+    expect(p(1)).toContain("ce n'est jamais le sujet");
+    expect(p(1)).toContain('se règlent entre agents, sans débat devant lui');
+    expect(p(3)).toContain('deux tours de suite portent sur un réglage technique');
+    expect(p(5)).not.toContain('INTERLOCUTEUR NON TECHNICIEN');
+  });
+});
+
+describe('pas de monologue (agentStreak)', () => {
+  const { agentStreak } = require('../agentStreak');
+  const a = (name, turnId, extra = {}) => ({ role: 'agent', agentName: name, turnId, type: 'message', ...extra });
+
+  it('compte les tours (pas les bulles) du dernier agent ; animation et réponses aux cartes ne coupent pas la série', () => {
+    const msgs = [a('Critique', 't1'), a('DevOps', 't2'), a('DevOps', 't2'), { role: 'agent', agentName: 'Animation', type: 'animator' },
+      a('DevOps', 't3'), { type: 'decision_answer', role: 'system' }, a('DevOps', 't4'), a('DevOps', 't4')];
+    expect(agentStreak(msgs)).toEqual({ name: 'DevOps', turns: 3 });
+  });
+
+  it('un message de l’humain ou d’un autre agent remet à zéro', () => {
+    expect(agentStreak([a('DevOps', 't1'), { role: 'human', content: 'ok' }, a('Critique', 't2')])).toEqual({ name: 'Critique', turns: 1 });
+    expect(agentStreak([a('DevOps', 't1'), a('Critique', 't2'), a('DevOps', 't3')])).toEqual({ name: 'DevOps', turns: 1 });
+    expect(agentStreak([])).toEqual({ name: null, turns: 0 });
   });
 });

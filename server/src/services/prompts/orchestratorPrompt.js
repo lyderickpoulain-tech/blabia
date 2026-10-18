@@ -46,6 +46,9 @@ function buildOrchestratorPrompt({
   projectGoal = '',      // v5.1 : objectif du projet (utils/projectObjective.js), pour repérer la dérive
   decisionsAsked = 0,    // v5.1 : cartes déjà soumises à l'humain dans la réunion
   questionMode = 'balanced',
+  projectName = '',      // v5.1 (« WorldOfMetal ») : sans lui, l'animation a parlé de « BlabIA »
+  expertiseLevel = 3,    // v5.1 : la technique se règle en coulisses pour un débutant
+  pastAnimations = [],   // v5.1 : animations déjà dites (ne pas les répéter)
 }) {
   const intentionKey = Array.isArray(session.intention) ? session.intention[0] : '';
   const agentList = agentsForSelection.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
@@ -62,12 +65,23 @@ function buildOrchestratorPrompt({
     ? `\nAucune question n'a encore été soumise à l'humain après ${turnCount} tours, alors qu'il veut ${questionMode === 'control' ? 'tout trancher' : 'trancher ce qui lui revient'}. Choisis l'agent le mieux placé pour lui soumettre, par une carte de décision, le choix qui lui appartient dans ce qui vient d'être discuté (préférence, budget, priorité, périmètre), et écris-le dans "reason".`
     : '';
 
+  // v5.1 (« WorldOfMetal ») : 14 messages sur 33 consacrés à la configuration du nom de domaine
+  // devant un interlocuteur qui n'est pas technicien
+  const level = Number(expertiseLevel) || 3;
+  const technicalNote = level <= 2
+    ? `
+INTERLOCUTEUR NON TECHNICIEN : les réglages techniques (configuration, nom de domaine, hébergement, stockage, sécurité…) se règlent entre agents, sans débat devant lui. Si un tour s'y attarde, "offTrack": true : recentre sur ce qui le concerne (ce que ça change pour lui, le coût, ce qu'il aura à faire).`
+    : level === 3
+      ? `
+INTERLOCUTEUR NON TECHNICIEN : si deux tours de suite portent sur un réglage technique de détail qui ne change ni le coût, ni le délai, ni ce qu'il aura à faire, "offTrack": true.`
+      : '';
   return `Tu es l'orchestrateur d'une réunion IA.
-
+${projectName ? `
+Projet : « ${projectName} » (le projet de l'humain ; BlabIA n'est que l'outil qui anime la réunion, ce n'est jamais le sujet)` : ''}
 Objectif de la réunion : "${session.task}"${projectGoal ? `
 Objectif du projet : "${projectGoal}"` : ''}
 Livrable attendu : ${intentionKey || 'compte-rendu'}
-Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${askNote}${decisionsLeft === 0
+Tours d'agents depuis le début de la réunion : ${turnCount}${tourNote}${askNote}${technicalNote}${decisionsLeft === 0
     ? "\n⚠️ Le budget de questions à l'humain est épuisé : privilégie les agents qui concluent, et propose shouldClose=true dès que l'essentiel est couvert."
     : ''}
 
@@ -87,7 +101,10 @@ Décide maintenant :
 2. Pourquoi ? (1 phrase courte)
 3. La réunion doit-elle se clore ? (oui/non) — ${closeInstruction}
 
-ANIMATION : tu es aussi l'animateur VISIBLE de la réunion. Dans "animation", écris UNE phrase courte, dite à voix haute aux participants, SEULEMENT à une transition : ouverture de la réunion (ce qu'on doit produire), recentrage après une digression, point épuisé qu'il faut faire trancher, objectif atteint (proposer de conclure). Ton d'animateur bienveillant et ferme, sans jargon (ex. « On a fait le tour des prix ; Léa, tu proposes une fourchette à valider ? »). Le reste du temps, laisse "animation" vide : la plupart des tours.
+ANIMATION : tu es aussi l'animateur VISIBLE de la réunion. Dans "animation", écris UNE phrase courte, dite à voix haute aux participants, SEULEMENT à une transition : ouverture de la réunion (ce qu'on doit produire), recentrage après une digression, point épuisé qu'il faut faire trancher, objectif atteint (proposer de conclure). Ton d'animateur bienveillant et ferme, sans jargon (ex. « On a fait le tour des prix ; Léa, tu proposes une fourchette à valider ? »). Le reste du temps, laisse "animation" vide : la plupart des tours.${pastAnimations.length ? `
+Animations déjà dites dans cette réunion (ne les répète pas, ni leur idée ; si tu n'as rien de neuf à dire, laisse "animation" vide) :
+${pastAnimations.map(a => `- ${a}`).join('\n')}` : ''}
+TOURNER EN ROND : si les derniers tours redisent un choix déjà acquis sans rien ajouter, choisis l'agent qui traite le point suivant de l'objectif ; s'il n'en reste pas, shouldClose=true.
 
 Réponds UNIQUEMENT avec ce JSON :
 {"agentIndex": 1, "reason": "...", "shouldClose": false, "offTrack": false, "animation": ""${challengeSection ? ', "challenge": false, "challengeTarget": ""' : ''}${codeSection ? ', "codeQuestion": ""' : ''}}`;

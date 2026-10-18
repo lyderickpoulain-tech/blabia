@@ -13,6 +13,7 @@ const {
   generateSetupGuide, answerGuideQuestion, MAX_CHAT, needsOverwriteConfirmation, checkStatusOf, draftExpired,
 } = require('../services/tools/setupGuide');
 const { projectRepoText } = require('../services/repoOverview');
+const { addRecommendedPack, RECOMMENDED_PACK } = require('../services/websiteStarter');
 const { listDecisions, formatRegistryForPrompt } = require('../services/decisions');
 
 // Réunion « outils » (type stack) : déjà tenue ? sinon, celle prévue au plan. Sert à la
@@ -31,9 +32,24 @@ function missingBuildTools(tools, needs) {
     .filter(c => c && BUILD_ZONES.includes(c.zone) && !validated.some(t => t.category === c.id))
     .map(c => c.label);
 }
+// Pack recommandé proposé d'un clic à un débutant (v5.1) : ce qu'il fait et ce qu'il coûte
+function packOffer() {
+  const items = RECOMMENDED_PACK.map(id => TOOLS.find(t => t.id === id)).filter(Boolean);
+  return {
+    tools: items.map(t => ({ name: t.name, role: t.role })),
+    monthlyMin: items.reduce((n, t) => n + (t.cost?.monthlyMin || 0), 0),
+    monthlyMax: items.reduce((n, t) => n + (t.cost?.monthlyMax || 0), 0),
+  };
+}
+
 async function toolsMeetingStatus(project, tools, needs) {
   const meeting = await db('Session').where({ projectId: project.id, status: 'accepted' })
     .whereRaw(`"intention"::text LIKE '%stack%'`).first('id');
+  // v5.1 (« WorldOfMetal ») : une réunion « outils » ouvrait un projet sans brief ni réunion
+  // tenue — les agents choisissaient un hébergement sans savoir ce que fait le site
+  const framed = !!String(project.brief || '').trim()
+    || !!(await db('Session').where({ projectId: project.id, status: 'accepted' }).first('id'));
+  const simple = (project.expertiseLevel ?? 3) <= 2;
   const missing = missingBuildTools(tools, needs);
   // Pack recommandé (mise en ligne automatique par Railway) : pas de réunion « outils » à exiger
   // avant de développer ; les choix techniques du code reviennent à Claude Code
@@ -41,7 +57,7 @@ async function toolsMeetingStatus(project, tools, needs) {
   if (meeting || autoHosting || (missing && !missing.length)) return { done: true, planned: null, missing: [] };
   const planned = await db('Milestone').where({ projectId: project.id, type: 'stack' }).whereNot({ status: 'done' })
     .orderBy('displayOrder', 'asc').first('id', 'title');
-  return { done: false, planned: planned || null, missing: missing || [] };
+  return { done: false, planned: planned || null, missing: missing || [], framingFirst: !framed, simple, pack: simple ? packOffer() : null };
 }
 
 const router = express.Router();
@@ -116,6 +132,20 @@ router.put('/projects/:id/tools', authMiddleware, async (req, res) => {
 
 // POST /api/projects/:id/tools/guide — guide pas à pas pour relier les outils retenus
 // (demandé par l'utilisateur ; conservé sur le projet, régénéré à chaque demande)
+// POST /api/projects/:id/tools/recommended-pack — les outils recommandés par BlabIA, sans réunion
+// (v5.1 : un débutant valide un coût, il ne choisit pas un hébergeur). Propriétaire seulement.
+router.post('/projects/:id/tools/recommended-pack', authMiddleware, async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, false);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.userId !== req.user.id) return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    res.status(201).json({ added: await addRecommendedPack(project) });
+  } catch (err) {
+    console.error('[tools/recommended-pack]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 router.post('/projects/:id/tools/guide', authMiddleware, async (req, res) => {
   const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
   try {

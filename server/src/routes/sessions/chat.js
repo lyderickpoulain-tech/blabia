@@ -1,4 +1,5 @@
 const express        = require('express');
+const { agentStreak } = require('../../services/agentStreak');
 const { randomUUID } = require('crypto');
 const db             = require('../../utils/db');
 const anthropic      = require('../../services/anthropic');
@@ -72,9 +73,12 @@ async function loadMessages(sessionId) {
 }
 
 // ── orchestrate ───────────────────────────────────────────────────────────────
+// Tours d'affilée du dernier agent : services/agentStreak.js
+
 
 async function orchestrate({ session, project, messages, activeAgents,
   lastAgentId, consecutiveCount, humanMessage, resumeAfterDecision, delegated = false,
+  expertiseLevel = 3,
   artifactRequested = false, decisionBudget, preparing = false, challengerOn = false,
   codeReadable = false, codeText = '', questionMode = 'balanced' }) {
 
@@ -119,6 +123,11 @@ async function orchestrate({ session, project, messages, activeAgents,
     }
   }
   if (askingAgentId) excludedAgentIds.add(askingAgentId);
+  // Pas de monologue : au-delà de MAX_CONSECUTIVE tours d'affilée, l'agent est écarté (plus
+  // seulement « déconseillé » à l'orchestrateur, qui passait outre)
+  const streak = agentStreak(messages);
+  const streakAgent = streak.turns >= MAX_CONSECUTIVE ? activeAgents.find(a => a.name === streak.name) : null;
+  if (streakAgent) excludedAgentIds.add(streakAgent.id);
   const candidateAgents    = activeAgents.filter(a => !excludedAgentIds.has(a.id));
   const agentsForSelection = candidateAgents.length > 0 ? candidateAgents : activeAgents;
 
@@ -162,6 +171,10 @@ async function orchestrate({ session, project, messages, activeAgents,
       ? buildOrchestratorCodeSection({ readFiles: [...readPaths(codeText)], lastMessageText: lastMsg?.content || lastMsg?.question || '' })
       : '',
     projectGoal: projectObjective(project),
+    projectName: project?.name || '',
+    expertiseLevel,
+    // v5.1 (rejeu « WorldOfMetal ») : la même phrase d'animation revenait quatre fois
+    pastAnimations: messages.filter(m => m.type === 'animator').slice(-4).map(m => String(m.content || '').slice(0, 200)),
   });
 
   try {
@@ -495,7 +508,7 @@ router.post('/:sessionId/chat', async (req, res) => {
 
       const next = await orchestrate({
         session, project, messages: currentMessages, activeAgents,
-        lastAgentId, consecutiveCount,
+        lastAgentId, consecutiveCount, expertiseLevel,
         // Premier tour seulement : une mention « @agent » désigne qui répond, pas qui parle à
         // tous les tours (l'agent mentionné reparlait sinon jusqu'à MAX_TURNS, sans clôture)
         humanMessage:         turnCount === 0 && hasText ? humanMessage : null,

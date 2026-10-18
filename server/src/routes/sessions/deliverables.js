@@ -126,7 +126,8 @@ Agents disponibles pour CE projet :
 ${agentsList}
 
 1. Sélectionne 2 à ${agenda.length ? 5 : 4} agents parmi la liste ci-dessus qui sont DIRECTEMENT utiles. Ne sélectionne pas un agent simplement parce qu'il existe.
-2. Si une compétence importante manque pour cet objectif et qu'aucun agent existant ne la couvre, suggère la création d'UN SEUL nouvel agent spécialisé avec un nom et un rôle précis. Sinon, mets null.
+2. Si une compétence importante manque pour cet objectif et qu'aucun agent existant ne la couvre, suggère la création d'UN SEUL nouvel agent spécialisé avec un nom et un rôle précis. Sinon, mets null.${(project.expertiseLevel ?? 3) <= 2 ? `
+   Le porteur du projet n'est pas technicien : nom et rôle en mots de tous les jours (ex. « Mise en ligne », « Nom et image »), sans sigle ni jargon (DevOps, CI/CD, UX, SEO, stack…).` : ''}
 3. Recommande les réglages de la réunion :
    - "model" : "opus" seulement si la réunion est complexe ET à fort enjeu (arbitrage structurant entre options interdépendantes, architecture technique, analyse fine d'un document juridique ou financier, stratégie d'ensemble) ; "sonnet" pour tout le reste (la plupart des réunions : organiser, choisir, lister, rédiger, avancer une étape).
    - "webSearch" : true seulement si la réunion a besoin d'informations EXTERNES ou récentes (prix, offres, concurrents, produits existants, fournisseurs, réglementation, actualité, avis) ; false pour ce qui se décide avec ce que l'humain et le projet savent déjà (préférences, organisation, rédaction, code).

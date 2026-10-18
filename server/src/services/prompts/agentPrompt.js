@@ -23,7 +23,7 @@ const INTENTION_INSTRUCTIONS = {
 };
 
 // v5.0 phase 4.3 : section propre aux réunions de type stack
-function buildToolReviewSection({ toolCategories, userToolsText, needsText = '', webSearchEnabled }) {
+function buildToolReviewSection({ toolCategories, userToolsText, needsText = '', webSearchEnabled, expertiseLevel = 3, buildsWithBlabia = false }) {
   const grid = toolCategories.map(c => `- ${c.label} (${c.technical})`).join('\n');
   const priceRule = webSearchEnabled
     ? 'Les prix DOIVENT venir d\'une recherche web : renseigne "priceSource" avec l\'URL de la page de tarifs consultée.'
@@ -40,11 +40,19 @@ ${needsText}
 Pour chaque catégorie marquée « À DEMANDER À L'HUMAIN » : demande-lui d'abord ce qu'il utilise déjà ou préfère, par une carte [DECISION] (2 à 3 outils adaptés avec leur coût en quelques mots, recommandation en premier, « J'en utilise déjà un autre (précise) », « Je ne sais pas, conseillez-moi »). Ne propose un outil [NEED_TOOL] qu'après sa réponse, en suivant son choix. Une catégorie à la fois.
 `
     : methodBlock;
-  return `${needsBlock}
+  // v5.1 (rejeu « WorldOfMetal ») : un débutant à qui l'on demandait de choisir son outil de
+  // pages s'est vu recommander WordPress chez OVH — hors du chemin par lequel BlabIA construit
+  // et met en ligne le site. Ici, on part de ce chemin et on ne lui soumet que ce qui lui revient.
+  const beginnerBlock = expertiseLevel <= 2 && buildsWithBlabia
+    ? `
+DÉBUTANT, SITE CONSTRUIT PAR BLABIA : BlabIA construit le site avec Claude Code (le code est rangé dans GitHub) et le met en ligne avec Railway. Pars de ce chemin et propose ces outils-là ([NEED_TOOL], avec leur coût), sans lui demander de choisir un outil technique, et sans proposer de constructeur de site (WordPress, Wix, Webflow…) qui le sortirait de ce chemin, sauf s'il le demande. Les seules cartes de cette réunion : le NOM de l'adresse de son site (ex. monsite.fr ou monsite.com) et, si un service payant s'ajoute, son accord sur le budget. Cette consigne prime sur « À DEMANDER À L'HUMAIN » ci-dessous.
+`
+    : '';
+  return `${beginnerBlock}${needsBlock}
 GRILLE DES CATÉGORIES D'OUTILS :
 ${grid}
 
-OUTILS PERSONNELS DE L'HUMAIN (« Mes outils », à privilégier s'ils conviennent) :
+OUTILS HABITUELS DE L'HUMAIN (les siens, à privilégier s'ils conviennent ; dis « vos outils », jamais « mes outils ») :
 ${userToolsText || '(aucun renseigné)'}
 Quand un outil complémentaire est nécessaire, ajoute EXACTEMENT ce format (JSON valide, une seule ligne, un seul par réponse) :
 [NEED_TOOL:{"name":"Nom de l'outil","category":"<id de catégorie : ${toolCategories.map(c => c.id).join('|')}>","need":"Besoin couvert, en une phrase simple","why":"Pourquoi cet outil plutôt qu'un autre","costMin":0,"costMax":25,"freeTier":"Limite gratuite ou null","priceSource":"URL ou null"}]
@@ -75,15 +83,18 @@ const EXPERTISE_INSTRUCTIONS = {
 - Mots de tous les jours, phrases courtes. Parle de ce que ça change pour lui (temps, argent, ce que verront ses clients), jamais de comment c'est fait.
 - Aucun terme technique, sigle, nom d'outil technique, nom de fichier ou chiffre technique. Si une notion est indispensable, dis-la avec ses mots à lui ; une image du quotidien seulement si elle aide vraiment, pas à chaque message.
 - Environ 20 mots par prise de parole.
+- LA TECHNIQUE SE RÈGLE EN COULISSES, EN SILENCE : configuration, hébergement, stockage, sécurité, réglages de l'adresse du site, limites d'un service se tranchent entre agents, par hypothèse, sans débat devant lui et jamais par une carte. Ne l'annonce pas (« on règle ça en coulisses », « vous validerez à la clôture ») : donne seulement, une fois, le résultat qui le concerne — ce que ça change pour lui, le coût en euros par mois, ce qu'il aura à faire (BlabIA le guidera pas à pas).
+- Ce qui reste à LUI : ses goûts, son budget, ses contenus, et le NOM de l'adresse de son site (ex. monsite.fr) — ça, c'est une carte.
 - À éviter : « Le webhook Stripe doit mettre à jour la table des abonnements. » À préférer : « Quand quelqu'un paie, son compte passe en premium tout seul, tu n'as rien à faire. »`,
   2: `Initié — il connaît les bases, sans être du métier.
 - Mots courants du domaine ; un terme technique seulement s'il est utile, expliqué en quelques mots la première fois.
 - La conséquence d'abord, le comment en une phrase au plus. Pas de nom de fichier ni de code.
 - Environ 25 mots par prise de parole.
+- La technique se règle en coulisses, sans l'annoncer : les réglages (configuration, hébergement, stockage, sécurité) se tranchent entre agents, par hypothèse, sans débat devant lui ; une carte seulement si le choix change son budget ou ce que verront ses visiteurs (le nom de l'adresse du site en fait partie).
 - À éviter : « Il faut un cron qui purge les sessions expirées. » À préférer : « Il faudra une tâche automatique qui fait le ménage chaque nuit, sinon la base grossit pour rien. »`,
   3: `Intermédiaire — à l'aise avec le sujet, mais pas technicien.
 - Vocabulaire du métier normal. Les détails techniques (fichiers, code, noms de tables) seulement s'il les demande ou s'ils changent la décision.
-- Parle d'arbitrages et d'ordres de grandeur.
+- Parle d'arbitrages et d'ordres de grandeur. Les réglages techniques de détail (configuration, enregistrements, limites d'un service) se règlent entre agents : ne t'y attarde que s'ils changent le coût, le délai ou ce qu'il aura à faire.
 - Environ 30 mots par prise de parole.
 - À éviter : « Dans chat.js, le budget est recalculé à chaque tour. » À préférer : « Le budget de questions est revu à chaque tour, donc on peut en garder pour la fin. »`,
   4: `Avancé — un pair.
@@ -104,11 +115,13 @@ const HUMOR_INSTRUCTIONS = {
   4: `Taquin — petites piques amicales envers les autres agents, liées à leur rôle ; tu peux rebondir sur une blague précédente.`,
   5: `Réunion de potes — ton de copains : vannes, running gags nés dans la réunion, autodérision.`,
 };
-const HUMOR_FREQUENCY = { 1: 0, 2: 0.2, 3: 0.35, 4: 0.55, 5: 0.85 };
+// v5.1 (« WorldOfMetal ») : à 0,85, une blague de metal finissait un message sur deux, toujours
+// en chute — un tic. Même « réunion de potes », l'humour reste une respiration.
+const HUMOR_FREQUENCY = { 1: 0, 2: 0.15, 3: 0.25, 4: 0.35, 5: 0.45 };
 function humorTurnLine(humor, roll) {
   if (!HUMOR_FREQUENCY[humor]) return '';
   return roll < HUMOR_FREQUENCY[humor]
-    ? ' CE TOUR-CI : glisse UNE vraie touche d\'humour dans une de tes bulles (elle doit faire sourire, pas décorer) ; si le sujet est grave (argent perdu, juridique, problème), garde-la très légère.'
+    ? ' CE TOUR-CI : glisse UNE vraie touche d\'humour, au fil d\'une phrase et pas en chute finale, avec un ressort neuf (pas une variante d\'une blague déjà faite dans la réunion) ; si le sujet est grave (argent perdu, juridique, problème), garde-la très légère.'
     : ' Ce tour-ci : pas d\'humour, ton naturel suffit.';
 }
 
@@ -277,7 +290,7 @@ POINT D'AVANCEMENT : seulement s'il y a du nouveau. Si aucun agent n'a encore pa
     : '';
   const toolsSection = projectToolsText ? `\nOutils retenus pour ce projet :\n${projectToolsText}\n` : '';
   const toolReviewSection = intention[0] === 'stack' && toolReview
-    ? buildToolReviewSection({ ...toolReview, webSearchEnabled })
+    ? buildToolReviewSection({ ...toolReview, webSearchEnabled, expertiseLevel, buildsWithBlabia: !!(project.hasTechnicalStack || project.githubRepo) })
     : '';
   const toolSuggestionsNote = intention[0] === 'stack' && toolReview?.toolSuggestionsText
     ? `\nOUTILS DÉJÀ PROPOSÉS DANS CETTE RÉUNION — ne les repropose pas :\n${toolReview.toolSuggestionsText}\n`
@@ -285,7 +298,7 @@ POINT D'AVANCEMENT : seulement s'il y a du nouveau. Si aucun agent n'a encore pa
   const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
   // v5.1 : dépôt GitHub relié (développements lancés depuis BlabIA) — ne pas en redemander l'adresse
   const repoSection     = project.githubRepo
-    ? `\nDÉPÔT DU CODE : GitHub ${project.githubRepo} (https://github.com/${project.githubRepo}). Les prompts des réunions Claude Code y sont réalisés par Claude Code, seul, dans GitHub ; ne demande pas l'adresse du dépôt.\n${codeReadable
+    ? `\nDÉPÔT DU CODE : GitHub ${project.githubRepo} (https://github.com/${project.githubRepo}). Les prompts des réunions Claude Code y sont réalisés par Claude Code, seul, dans GitHub ; ne demande pas l'adresse du dépôt. Les fichiers « blabia-* » y servent à BlabIA, l'outil qui anime cette réunion : le projet s'appelle « ${project.name} », pas BlabIA.\n${codeReadable
       ? `BlabIA peut lire ce code pendant la réunion. Si tu as besoin de savoir comment le site est fait (écran, fonction, règle, ce qui existe déjà) et que ce n'est pas dans le code ci-dessous, ne le demande PAS à l'humain et n'invente pas : écris précisément ce que tu dois vérifier dans le code (« Je dois vérifier dans le code … ») ; BlabIA le lira avant le tour suivant.\n`
       : ''}`
     : '';
@@ -337,9 +350,11 @@ ${resumeText}
     ? 'question compréhensible par un non-technicien, contexte en langage simple, '
     : '';
 
-  const webSearchSection = webSearchEnabled
-    ? '\nRECHERCHE WEB DISPONIBLE : utilise-la pour toute information factuelle récente ou chiffrée (prix, versions, actualité, réglementation). Ne présente JAMAIS comme vérifiée une information que tu n\'as pas trouvée via une recherche.\n'
-    : '';
+  // v5.1 (« WorldOfMetal ») : « je n'ai pas vérifié » répété huit fois, recherche web activée
+  const webSearchSection = (webSearchEnabled
+    ? '\nRECHERCHE WEB DISPONIBLE : utilise-la pour toute information factuelle récente ou chiffrée (prix, versions, actualité, réglementation) dont tu as besoin, plutôt que d\'annoncer que tu ne l\'as pas vérifiée. Ne présente JAMAIS comme vérifiée une information que tu n\'as pas trouvée via une recherche.\n'
+    : '')
+    + 'INCERTITUDE : une information non vérifiée se signale une fois, en deux mots (« à confirmer »), sans le répéter de message en message ni en faire une phrase ; déjà signalée par un autre agent, elle ne se re-signale pas. N’explique jamais ce que tu n’as pas recherché.\n';
 
   // ── 1. Bloc commun à la réunion (mis en cache) ─────────────────────────────
   const shared = `Tu participes à une réunion collaborative entre agents IA spécialisés, animée pour un humain qui initie le projet et tranche les décisions. Ton rôle précis t'est donné à la fin de ce prompt.
@@ -349,7 +364,7 @@ Livrable attendu : ${intentionText}
 
 Tu peux rebondir sur ce qu'un autre agent vient de dire ou lui poser une question directement. Les questions à l'humain passent UNIQUEMENT par des cartes de décision (règles plus bas) : ne termine pas tes bulles par une question ouverte à l'humain (« qu'en penses-tu ? », « tu préfères quoi ? »).
 Mentionne un agent avec "@NomAgent, ..." pour lui adresser directement ta remarque.
-Ne répète PAS ce que les autres agents ont déjà dit.
+Ne répète PAS ce que les autres agents ont déjà dit, ni ce que tu as toi-même déjà dit. Un choix acquis ne se redit pas : passe au point suivant de l'objectif, ou propose de conclure s'il n'en reste pas.
 
 RÈGLE ABSOLUE : cette réunion sert à vous organiser — échanger, clarifier, décider. PERSONNE ne rédige le livrable final (prompt Claude Code, document, etc.) pendant les échanges : il sera généré automatiquement à la clôture, à partir de la conversation.
 ${webSearchSection}

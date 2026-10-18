@@ -15,6 +15,7 @@ import { quickStartMeeting, quickStartError } from '../../utils/quickMeeting';
 import { launchPreparation } from '../../utils/preparation';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 import InboxList from '../../components/assistant/InboxList';
+import BriefPrompt from '../../components/project/BriefPrompt';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
@@ -109,7 +110,7 @@ function AskBlabIA({ projectId, onDone }) {
 }
 
 export default function ProjectDashboard() {
-  const { project, counts, inbox, refreshInbox } = useProject();
+  const { project, counts, inbox, refreshInbox, isOwner, reloadProject } = useProject();
   const navigate = useNavigate();
   const [plan, setPlan] = useState(null);         // { milestones, milestoneSessions }
   // v5.1 (15/10/2026) : récapitulatif du projet, une fois le plan terminé
@@ -206,6 +207,9 @@ export default function ProjectDashboard() {
 
   // v5.1 (16/10/2026) : ce qui attend l'humain est dans « À trancher » (InboxList) ; ne restent
   // ici que les points qui n'y sont pas (outils, développement en échec, réunion restée ouverte)
+  // Projet sans brief (créé avant le nouveau formulaire) : deux questions d'abord
+  const askBrief = isOwner && !project.isDemo && !String(project.brief || '').trim();
+
   const attention = [
     ...devOf('failed').slice(0, 1).map(t => ({ text: `Le développement « ${t.title} » n’a pas abouti.`, to: 'developpements', cta: 'Voir' })),
     counts.toolsAttention > 0 && { text: `${counts.toolsAttention} point${counts.toolsAttention > 1 ? 's' : ''} d'attention sur les outils du projet.`, to: 'outils', cta: 'Revoir' },
@@ -222,7 +226,12 @@ export default function ProjectDashboard() {
         {project.status === 'archived' && <p className="text-sm font-bold text-ink-faint mt-1">Projet archivé</p>}
       </div>
 
-      {/* Prochaine étape */}
+      {askBrief && (
+        <BriefPrompt project={project} onSaved={async () => { await reloadProject(); setShowGenerate(true); }} />
+      )}
+
+      {/* Prochaine étape (masquée tant que « Racontez votre projet » est affiché : même demande) */}
+      {!askBrief && (
       <Card as="section" data-tour="pd-next" aria-labelledby="next-title" className="p-5 border-action-border flex flex-wrap items-center gap-5">
         {plan === null ? (
           <div className="w-6 h-6 border-2 border-action border-t-transparent rounded-full animate-spin" />
@@ -293,6 +302,7 @@ export default function ProjectDashboard() {
           </>
         )}
       </Card>
+      )}
 
       {showRecap && recap && (
         <SummaryDisplayModal title={`Récapitulatif — ${project.name}`} date={new Date(recap.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
