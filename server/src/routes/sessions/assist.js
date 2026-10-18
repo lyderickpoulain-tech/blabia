@@ -168,6 +168,33 @@ const FORMATS = {
 (heure non connue : ne pas l'inventer ; prochaine réunion si elle est connue)`,
   },
 };
+// v5.1 (F4, personas) : livrables concrets, surtout pour les projets hors technique — tirés de
+// ce qui a été décidé, rien d'inventé ; si la réunion n'en a pas parlé, on le dit
+const NOT_DISCUSSED = 'Si la réunion n\'a pas abordé ce sujet, écris seulement : « La réunion n\'a pas abordé ce point. » N\'invente aucun chiffre, aucune date, aucun nom.';
+Object.assign(FORMATS, {
+  checklist: {
+    label: 'Liste de tâches',
+    rules: `Une LISTE DE TÂCHES, dans l'ordre où les faire, prête à cocher :
+- [ ] tâche concrète et autonome (qui, si c'est connu ; pour quand, si c'est connu)
+Regroupe sous des titres ## seulement s'il y a plus de 10 tâches. ${NOT_DISCUSSED}`,
+  },
+  retroplanning: {
+    label: 'Rétroplanning',
+    rules: `Un RÉTROPLANNING, en tableau, de la première étape à l'échéance finale :
+| Quand | Étape | Qui | Dépend de |
+Dates ou délais tels qu'ils ont été dits (« J-30 », « mi-novembre ») ; « à fixer » sinon. ${NOT_DISCUSSED}`,
+  },
+  budget: {
+    label: 'Budget',
+    rules: `Un BUDGET, en tableau :
+| Poste | Montant | Statut (décidé, estimé, à chiffrer) |
+puis une ligne **Total** (seulement des montants décidés ou estimés dans la réunion) et, s'il y en a, les recettes dans un second tableau. ${NOT_DISCUSSED}`,
+  },
+  messages: {
+    label: 'Messages prêts à envoyer',
+    rules: `Les MESSAGES décidés dans la réunion (invitation, annonce, relance, courrier…), prêts à copier : pour chacun, un titre ## (à qui, par quel moyen), puis l'objet s'il y en a un, puis le texte complet, au ton décidé. ${NOT_DISCUSSED}`,
+  },
+});
 const hashOf = s => crypto.createHash('sha1').update(String(s || '')).digest('hex');
 
 // POST /:sessionId/summary-format { format } — généré une fois, conservé tant que le CR ne change pas
@@ -187,7 +214,7 @@ router.post('/:sessionId/summary-format', async (req, res) => {
     const agents = parseJsonField(session.activeAgents, []).map(a => `${a.name} (${a.role})`);
     const response = await anthropic.messages.create({
       model: DEFAULT_MODEL, max_tokens: 1800,
-      system: 'Tu mets en forme le compte rendu d\'une réunion de projet. Français, Markdown simple. Tu n\'ajoutes AUCUNE information absente des sources.',
+      system: 'Tu mets en forme le compte rendu d\'une réunion de projet. Français, Markdown simple. Tu n\'ajoutes AUCUNE information absente des sources. Le porteur du projet est « vous » (vouvoiement, jamais « toi » ni « l\'humain »).',
       messages: [{ role: 'user', content: `Réunion : « ${session.task} », le ${new Date(session.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
 Participants : ${[...(humans.length ? humans : ['le porteur du projet']), ...agents].join(', ')}
 

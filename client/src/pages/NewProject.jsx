@@ -57,6 +57,11 @@ export default function NewProject() {
   const [humorLevel, setHumorLevel] = useState(2);
   const [questionMode, setQuestionMode] = useState('balanced');
   const [challengerEnabled, setChallengerEnabled] = useState(true);
+  // v5.1 (F4, personas) : outils déjà en main ? (projet technique, « J'en connais un peu » ou plus)
+  const [toolsMode, setToolsMode] = useState(null); // 'own' | 'blabia'
+  const [planType, setPlanType] = useState(true);   // plan type hors technique
+  const [express, setExpress] = useState(true);     // expert sur un projet hors technique
+  const [settingsTouched, setSettingsTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -73,7 +78,18 @@ export default function NewProject() {
     setLevel(1); setHumorLevel(3); setQuestionMode('balanced');
   }, [tour?.step?.prefill]);
 
-  const ready = kind && name.trim() && story.trim() && level;
+  // Réglages par défaut selon le profil, tant que l'humain n'y a pas touché (v5.1, F4)
+  useEffect(() => {
+    if (settingsTouched || inTour || !level) return;
+    if (level >= 5 && kind && !tech) { setQuestionMode('delegate'); setHumorLevel(1); }
+    else { setQuestionMode('balanced'); setHumorLevel(2); }
+  }, [level, kind, tech, settingsTouched, inTour]);
+  const askTools = tech && level >= 3 && !inTour;
+  const expressOffer = level >= 5 && kind && !tech && !inTour;
+  const templateOffer = ['business', 'event', 'association'].includes(kind) && !expressOffer && !inTour;
+  const ownTools = askTools && toolsMode === 'own';
+
+  const ready = kind && name.trim() && story.trim() && level && (!askTools || toolsMode);
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!ready) return;
@@ -90,9 +106,14 @@ export default function NewProject() {
         name, description, objectif: story, contexte: `Genre de projet : ${KIND_LABEL[kind]}.`,
         hasTechnicalStack: !!tech, expertiseLevel: level, humorLevel, questionMode, challengerEnabled,
       });
+      // v5.1 (F4) : plan type hors technique, ou cadrage express pour un expert
+      if (!tech && (expressOffer ? express : templateOffer && planType)) {
+        await api.post(`/projects/${data.id}/plan/template`, expressOffer ? { express: true } : { kind }).catch(() => {});
+      }
       if (tech && website) {
-        // Plan type (définir → style → construire), puis création du dépôt en passant par GitHub
-        await api.post(`/projects/${data.id}/plan/website`).catch(() => {});
+        // Plan type (définir → style → construire), puis création du dépôt en passant par GitHub ;
+        // avec ses propres outils, pas de pack BlabIA
+        await api.post(`/projects/${data.id}/plan/website`, { pack: !ownTools }).catch(() => {});
         try {
           await startRepoCreation(data.id);
           return;
@@ -115,7 +136,7 @@ export default function NewProject() {
         </Link>
 
         <h1 className="text-2xl font-extrabold text-ink">Votre projet</h1>
-        <p className="text-[15px] text-ink-muted mt-1 mb-5">Quatre questions. Ensuite, une équipe d’assistants en discute avec vous, en réunions courtes ; vous décidez.</p>
+        <p className="text-[15px] text-ink-muted mt-1 mb-5">{askTools ? 'Cinq' : 'Quatre'} questions. Ensuite, une équipe d’assistants en discute avec vous, en réunions courtes ; vous décidez.</p>
 
         <form onSubmit={handleSubmit}>
           <Card className="p-5 sm:p-6 space-y-7">
@@ -157,6 +178,36 @@ export default function NewProject() {
               </div>
             </Question>
 
+            {askTools && (
+              <Question number={5} title="Avez-vous déjà vos outils ?" hint="Hébergement, compte GitHub, abonnement Claude… BlabIA s’en sert, ou vous propose les siens.">
+                <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Vos outils">
+                  {[
+                    { id: 'own', label: 'Oui, j’ai mes outils', hint: 'BlabIA orchestre avec ce que vous avez (Mon profil › Mes outils)' },
+                    { id: 'blabia', label: 'Non, proposez-moi les vôtres', hint: 'BlabIA choisit des outils simples et vous guide' },
+                  ].map(o => (
+                    <button key={o.id} type="button" role="radio" aria-checked={toolsMode === o.id} onClick={() => setToolsMode(o.id)}
+                      className={`min-h-[64px] px-3.5 py-2 rounded-xl border text-left transition ${toolsMode === o.id ? 'border-action bg-action-light' : 'border-line bg-white hover:border-action-border'}`}>
+                      <span className={`block text-[15px] font-bold ${toolsMode === o.id ? 'text-action' : 'text-ink'}`}>{o.label}</span>
+                      <span className="block text-[13px] text-ink-muted">{o.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </Question>
+            )}
+
+            {expressOffer && (
+              <label className="flex items-start gap-3 rounded-xl border border-line bg-canvas p-4 cursor-pointer">
+                <input type="checkbox" className="mt-1 w-5 h-5 accent-action shrink-0" checked={express} onChange={e => setExpress(e.target.checked)} />
+                <span className="text-[15px] text-ink-soft"><strong className="text-ink">Mode express.</strong> Une seule réunion de cadrage, puis directement le rétroplanning et la liste de tâches, sans réunions en cascade.</span>
+              </label>
+            )}
+            {templateOffer && (
+              <label className="flex items-start gap-3 rounded-xl border border-line bg-canvas p-4 cursor-pointer">
+                <input type="checkbox" className="mt-1 w-5 h-5 accent-action shrink-0" checked={planType} onChange={e => setPlanType(e.target.checked)} />
+                <span className="text-[15px] text-ink-soft"><strong className="text-ink">Partir d’un plan type.</strong> Quatre réunions courtes ; chacune vous laisse un livrable prêt à servir (budget, rétroplanning, messages, liste de tâches). Vous l’adaptez ensuite.</span>
+              </label>
+            )}
+
             {tech && !inTour && (
               <section className="rounded-xl border border-line bg-canvas p-4 space-y-2.5">
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -166,12 +217,19 @@ export default function NewProject() {
                     Trois réunions pour le définir et choisir son style, puis la construction ; vous le voyez d’abord à une adresse de test gratuite.
                   </span>
                 </label>
-                {website && (
+                {website && (ownTools ? (
                   <p className="text-[13px] text-ink-muted pl-8">
-                    <strong className="text-ink-soft">Ce que ça coûte :</strong> l’adresse de test est gratuite. Pour construire le site, BlabIA utilise votre abonnement Claude
-                    (à partir de 18 €/mois) ; une fois en ligne, l’hébergement coûte environ 5 à 20 €/mois. Vous êtes guidé pas à pas et rien n’est payé sans votre accord.
+                    <strong className="text-ink-soft">Avec vos outils :</strong> vous gardez vos abonnements et votre hébergeur ; BlabIA les orchestre et Claude Code construit dans votre dépôt GitHub, avec votre abonnement Claude.
                   </p>
-                )}
+                ) : (
+                  <div className="pl-8 space-y-1.5">
+                    <p className="text-[13px] text-ink-muted">
+                      <strong className="text-ink-soft">Ce que ça coûte aujourd’hui :</strong> l’adresse de test est gratuite. Pour construire le site, BlabIA utilise votre abonnement Claude
+                      (à partir de 18 €/mois) ; une fois en ligne, l’hébergement coûte environ 5 à 20 €/mois. Vous êtes guidé pas à pas et rien n’est payé sans votre accord.
+                    </p>
+                    <p className="text-[13px] text-ink-muted"><span className="inline-block mr-1.5 px-2 py-0.5 rounded-full bg-await-bg text-await text-[11px] font-extrabold uppercase tracking-wide">En construction</span>Bientôt, un seul abonnement BlabIA « Tout compris » : construction, hébergement et adresse du site, sans autre compte à ouvrir.</p>
+                  </div>
+                ))}
               </section>
             )}
 
@@ -187,8 +245,8 @@ export default function NewProject() {
                     <span className="block text-sm font-bold text-ink-soft mb-1">Description courte <span className="text-ink-faint font-semibold">(affichée dans vos projets)</span></span>
                     <input id="np-desc" value={description} onChange={e => setDescription(e.target.value)} maxLength={200} className={inputCls} />
                   </label>
-                  <LevelSlider label="Humour" value={humorLevel} onChange={setHumorLevel} labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
-                  <QuestionModePicker value={questionMode} onChange={setQuestionMode} />
+                  <LevelSlider label="Humour" value={humorLevel} onChange={v => { setSettingsTouched(true); setHumorLevel(v); }} labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
+                  <QuestionModePicker value={questionMode} onChange={v => { setSettingsTouched(true); setQuestionMode(v); }} />
                   <ChallengerToggle checked={challengerEnabled} onChange={setChallengerEnabled} />
                 </div>
               )}
@@ -200,7 +258,7 @@ export default function NewProject() {
           )}
 
           <div className="flex flex-wrap items-center justify-end gap-2 pt-4">
-            {!ready && <p className="text-sm text-ink-muted mr-auto">Répondez aux quatre questions pour commencer.</p>}
+            {!ready && <p className="text-sm text-ink-muted mr-auto">Répondez aux {askTools ? 'cinq' : 'quatre'} questions pour commencer.</p>}
             <Button variant="secondary" onClick={() => navigate('/dashboard')}>Annuler</Button>
             <Button data-tour="np-submit" type="submit" variant="primary" disabled={loading || !ready} className="min-w-[180px]">
               {loading ? 'Création…' : 'Créer le projet'}

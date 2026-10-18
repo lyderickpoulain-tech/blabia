@@ -58,6 +58,7 @@ export default function ToolsMeetingHint({ projectId }) {
             <ul className="mt-1.5 space-y-0.5 text-xs text-ink-soft">
               {tools.map(t => <li key={t.name}><strong className="text-ink">{t.name}</strong> · {t.role}</li>)}
             </ul>
+            <p className="text-xs text-ink-muted mt-1.5"><span className="inline-block mr-1.5 px-2 py-0.5 rounded-full bg-white text-await text-[10px] font-extrabold uppercase tracking-wide">En construction</span>Bientôt, un seul abonnement BlabIA « Tout compris », sans autre compte à ouvrir.</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 justify-end">

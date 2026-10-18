@@ -12,6 +12,14 @@ const FORMAT_TABS = [
   { id: 'executive', label: 'Synthèse exécutive' },
   { id: 'pv',        label: 'Procès-verbal' },
 ];
+// v5.1 (F4, personas) : livrables prêts à servir, tirés de ce qui a été décidé
+const DELIVERABLE_TABS = [
+  { id: 'checklist',     label: 'Liste de tâches' },
+  { id: 'retroplanning', label: 'Rétroplanning' },
+  { id: 'budget',        label: 'Budget' },
+  { id: 'messages',      label: 'Messages prêts à envoyer' },
+];
+const ALL_TABS = [...FORMAT_TABS, ...DELIVERABLE_TABS];
 
 // exports (v5.1) : { pdfPath, wordPath } pour exporter le compte-rendu en PDF / Word
 // formatsPath : réunion conclue → onglets de formats, générés à la demande puis conservés
@@ -30,6 +38,17 @@ export default function SummaryDisplayModal({ title, date, content, onClose, exp
       setVariants(v => ({ ...v, [id]: data.content }));
     } catch (err) { notifyError(err, 'La mise en forme a échoué.'); setTab('full'); }
     setLoadingFormat(null);
+  };
+
+  // Livrable ou format affiché, en fichier texte (Markdown) : à ouvrir, imprimer ou envoyer
+  const download = () => {
+    const label = ALL_TABS.find(t => t.id === tab)?.label || 'document';
+    const slug = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const url = URL.createObjectURL(new Blob([shown], { type: 'text/markdown;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `${slug(title) || 'reunion'}-${slug(label)}.md`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleCopy = () => {
@@ -56,6 +75,12 @@ export default function SummaryDisplayModal({ title, date, content, onClose, exp
             <h2 className="text-sm font-bold text-gray-900 leading-snug">{title || 'Compte-rendu'}</h2>
             {date && <p className="text-xs text-gray-400 mt-0.5">{date}</p>}
           </div>
+          {tab !== 'full' && typeof shown === 'string' && (
+            <button type="button" onClick={download}
+              className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 transition">
+              Télécharger
+            </button>
+          )}
           {exports && tab === 'full' && <ExportButtons size="sm" pdfPath={exports.pdfPath} wordPath={exports.wordPath} className="shrink-0" />}
           <button
             onClick={handleCopy}
@@ -80,6 +105,14 @@ export default function SummaryDisplayModal({ title, date, content, onClose, exp
             {FORMAT_TABS.map(f => (
               <button key={f.id} type="button" role="tab" aria-selected={tab === f.id} onClick={() => pickFormat(f.id)}
                 className={`h-8 px-3 rounded-full text-xs font-bold border transition ${tab === f.id ? 'bg-action text-white border-action' : 'bg-white text-ink-muted border-line hover:border-action-border'}`}>
+                {f.label}
+              </button>
+            ))}
+            <span className="basis-full h-0" aria-hidden="true" />
+            <span className="self-center text-[11px] font-extrabold uppercase tracking-wider text-ink-faint mr-1">Livrables</span>
+            {DELIVERABLE_TABS.map(f => (
+              <button key={f.id} type="button" role="tab" aria-selected={tab === f.id} onClick={() => pickFormat(f.id)}
+                className={`h-8 px-3 rounded-full text-xs font-bold border transition ${tab === f.id ? 'bg-ai text-white border-ai' : 'bg-white text-ink-muted border-line hover:border-ai-border'}`}>
                 {f.label}
               </button>
             ))}

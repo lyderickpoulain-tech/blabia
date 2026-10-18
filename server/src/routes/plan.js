@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const { computeMilestoneStatus } = require('../utils/milestones');
 const { findProject } = require('../utils/projectHelpers');
 const { addWebsitePlan, addRecommendedPack } = require('../services/websiteStarter');
+const { addPlanTemplate } = require('../services/planTemplates');
 const { validBeforeMilestone } = require('../services/actions');
 
 const router = express.Router();
@@ -399,10 +400,25 @@ router.post('/:id/plan/website', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
     if (project.userId !== req.user.id) return res.status(403).json({ error: 'Action réservée au propriétaire' });
     const created = await addWebsitePlan(project.id, req.user.id);
-    const pack = await addRecommendedPack(project);
+    // v5.1 (F4) : « J'ai déjà mes outils » → pas de pack BlabIA, ses outils habituels servent
+    const pack = req.body?.pack === false ? [] : await addRecommendedPack(project);
     res.status(201).json({ created, pack });
   } catch (err) {
     console.error('[plan/website POST]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── POST /api/projects/:id/plan/template { kind, express } — plan type hors technique (v5.1, F4)
+router.post('/:id/plan/template', async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, false);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.userId !== req.user.id) return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    const created = await addPlanTemplate(project.id, req.user.id, { kind: String(req.body?.kind || ''), express: req.body?.express === true });
+    res.status(201).json({ created });
+  } catch (err) {
+    console.error('[plan/template POST]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
