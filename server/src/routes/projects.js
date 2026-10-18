@@ -6,6 +6,7 @@ const { appendMemory, memoryForPrompt } = require('../utils/projectMemory');
 const authMiddleware = require('../middleware/auth');
 const { sendInvitation } = require('../services/email');
 const anthropic = require('../services/anthropic');
+const { projectKnowledge } = require('../services/projectKnowledge');
 const { getProjectTools, formatProjectToolsForPrompt } = require('../services/tools/toolsStore');
 const { findProject } = require('../utils/projectHelpers');
 const { isQuestionMode, DEFAULT_QUESTION_MODE } = require('../services/questionModes');
@@ -21,7 +22,8 @@ router.use(authMiddleware);
 
 const PROJECT_FIELDS = [
   'id', 'name', 'description', 'brief', 'devDirectory', 'status', 'context',
-  'expertiseLevel', 'humorLevel', 'questionMode', 'challengerEnabled', 'remindersEnabled', 'missionsMonthlyBudgetUSD', 'createdAt', 'updatedAt', 'userId'
+  'expertiseLevel', 'humorLevel', 'questionMode', 'challengerEnabled', 'remindersEnabled', 'missionsMonthlyBudgetUSD', 'createdAt', 'updatedAt', 'userId',
+  'vision', 'visionStatus', 'visionUpdatedAt'
 ];
 
 function clampLevel(v, fallback) {
@@ -859,9 +861,13 @@ RÈGLE IMPORTANTE : calibre le nombre d'étapes selon la complexité :
 - Projet moyen (application simple, campagne marketing) : 4 à 6 étapes
 - Projet complexe (logiciel complet, plateforme multi-fonctions) : 6 à 10 étapes
 
-Ne surcharge JAMAIS un projet simple avec trop d'étapes.
+Ne surcharge JAMAIS un projet simple avec trop d'étapes. Un projet personnel, de loisir ou associatif reste léger, même s'il est ambitieux.
 Chaque étape doit être directement actionnelle pour CE projet spécifique.
 Évite les étapes génériques qui pourraient s'appliquer à n'importe quel projet.
+
+LA DIFFICULTÉ D'ABORD (v5.1, « WorldOfMetal » : la carte interactive, cœur du projet, n'arrivait qu'en cinquième position, après la typographie) : repère la partie la plus difficile ou la plus risquée du projet — celle qui peut le faire échouer ou dont tout le reste dépend (une carte interactive, un calcul, une source de données, un partenaire) — et place TÔT une étape qui la traite concrètement (maquette, prototype, essai), avant les détails (style, textes, publicité, administration).
+N'INVENTE PAS de volet que le brief ne demande pas (publicité, back-office, application mobile, multilingue…). S'il mentionne un volet « à terme », regroupe-le dans une seule étape finale.
+Porteur du projet : ${{ 1: 'il n\'y connaît rien — étapes en mots simples', 2: 'il connaît les bases', 3: 'à l\'aise sans être technicien', 4: 'avancé', 5: 'expert' }[project.expertiseLevel] || 'à l\'aise sans être technicien'}.
 
 Pour chaque étape :
 - title : titre court et spécifique (max 50 chars)
@@ -882,6 +888,62 @@ Retourne UNIQUEMENT du JSON valide sans markdown :
     res.json({ steps: parsed.steps || [] });
   } catch (err) {
     console.error('[generate-timeline]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// « Votre vision » (v5.1, 18/10/2026 — personas : le novice craint « de ne pas avoir une
+// retranscription exacte de sa vision ») : BlabIA écrit ce qu'il a compris, avec les mots du
+// porteur ; celui-ci corrige et valide. La vision validée sert de référence à toutes les réunions.
+const VISION_MAX = 3000;
+
+// POST /api/projects/:id/vision/draft — ce que BlabIA a compris (propriétaire)
+router.post('/:id/vision/draft', async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, ['admin', 'supervisor'].includes(req.user.role));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.userId !== req.user.id) return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    if (!String(project.brief || '').trim()) return res.status(400).json({ error: 'Racontez d’abord votre projet.' });
+    const { text: knowledge } = await projectKnowledge(project);
+    const response = await anthropic.messages.create({
+      model: DEFAULT_MODEL, max_tokens: 700,
+      system: 'Tu reformules le projet d\'une personne pour vérifier que tu l\'as bien compris. Tu écris en français, en la vouvoyant.',
+      messages: [{ role: 'user', content: `Voici tout ce que l'on sait du projet « ${project.name} » :
+${knowledge.slice(0, 30000)}
+
+Écris ce que tu as compris de SA vision, pour qu'elle le corrige :
+- à la deuxième personne (« Vous voulez… »), en reprenant ses propres mots autant que possible ;
+- 5 à 8 phrases courtes, sans titre ni liste : ce que c'est ; pour qui ; ce qui compte pour elle (et ce qu'elle ne veut pas, si elle l'a dit) ; à quoi elle reconnaîtra que c'est réussi ;
+- aucun terme technique, aucun outil, aucun repère interne (R2, D12) ;
+- n'invente rien : ce qui n'est pas dit ne s'écrit pas ;
+- c'est la vision du projet, pas son avancement : ne parle ni des réunions, ni de ce qui reste à trancher.` }],
+    });
+    const vision = anthropic.textOf(response).trim().slice(0, VISION_MAX);
+    if (!vision) return res.status(502).json({ error: 'BlabIA n’a pas pu rédiger votre vision : réessayez.' });
+    const [updated] = await db('Project').where({ id: project.id })
+      .update({ vision, visionStatus: 'draft', visionUpdatedAt: new Date() })
+      .returning(['vision', 'visionStatus', 'visionUpdatedAt']);
+    res.json(updated);
+  } catch (err) {
+    console.error('[projects/:id/vision/draft]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/projects/:id/vision { text, validated } — corriger, valider (propriétaire)
+router.put('/:id/vision', async (req, res) => {
+  const text = String(req.body?.text || '').trim().slice(0, VISION_MAX);
+  if (!text) return res.status(400).json({ error: 'Votre vision est vide.' });
+  try {
+    const project = await findProject(req.params.id, req.user.id, ['admin', 'supervisor'].includes(req.user.role));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.userId !== req.user.id) return res.status(403).json({ error: 'Action réservée au propriétaire' });
+    const [updated] = await db('Project').where({ id: project.id })
+      .update({ vision: text, visionStatus: req.body?.validated === true ? 'validated' : 'draft', visionUpdatedAt: new Date(), updatedAt: new Date() })
+      .returning(['vision', 'visionStatus', 'visionUpdatedAt']);
+    res.json(updated);
+  } catch (err) {
+    console.error('[projects/:id/vision PUT]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

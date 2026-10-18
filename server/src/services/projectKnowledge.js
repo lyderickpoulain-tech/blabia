@@ -59,7 +59,8 @@ async function projectKnowledge(project) {
     return `### Réunion « ${s.task} » — ${fmtDate(s.createdAt)}\n${text || '(pas de compte rendu)'}`;
   }).reverse().join('\n\n');
 
-  const text = `Brief : ${project.brief || 'non défini'}
+  const text = `Brief : ${project.brief || 'non défini'}${project.visionStatus === 'validated' && project.vision ? `
+Sa vision, validée par lui (la référence ; signale tout écart) : ${project.vision}` : ''}
 Réunions du plan (repère — titre — statut) :${milestones.length ? milestones.map((m, i) => `\nR${i + 1} — ${m.title} — ${STATUS[m.status] || 'à venir'}`).join('') : ' aucune'}
 
 DÉCISIONS EN VIGUEUR (registre) :

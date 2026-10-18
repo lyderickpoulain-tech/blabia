@@ -152,7 +152,7 @@ export default function MyTools() {
           <div>
             <h1 className="text-2xl font-extrabold text-ink">Mes outils</h1>
             <p className="text-sm text-ink-muted mt-1">
-              Les outils que vous utilisez ou envisagez, tous projets confondus. Les agents en tiennent compte pour vous conseiller.
+              Les outils que vous utilisez ou envisagez, tous projets confondus. Les assistants en tiennent compte pour vous conseiller.
             </p>
           </div>
           <span className="text-xs font-semibold text-ink-faint pt-2" aria-live="polite">

@@ -31,6 +31,9 @@ const TOUR_NOTES = {
  * @param {number} p.turnCount - tours d'agents depuis le début de la réunion
  * @param {number|null} [p.decisionsLeft] - cartes de décision restantes dans le budget
  */
+// v5.1 (F3, « WorldOfMetal » : une réunion de 164 messages) : au-delà, proposer de conclure
+const LONG_MEETING_TURNS = 30;
+
 function buildOrchestratorPrompt({
   session,
   agentsForSelection,
@@ -108,7 +111,8 @@ ANIMATION : tu es aussi l'animateur VISIBLE de la réunion. Dans "animation", é
 Ne dis JAMAIS que la réunion est close, terminée, ou qu'on « clôt » : seul l'humain conclut (bouton « Conclure »). Pour proposer de conclure : « On peut conclure » ; s'il lui reste une question, dis-le.${pastAnimations.length ? `
 Animations déjà dites dans cette réunion (ne les répète pas, ni leur idée ; si tu n'as rien de neuf à dire, laisse "animation" vide) :
 ${pastAnimations.map(a => `- ${a}`).join('\n')}` : ''}
-TOURNER EN ROND : si les derniers tours redisent un choix déjà acquis sans rien ajouter, choisis l'agent qui traite le point suivant de l'objectif ; s'il n'en reste pas, shouldClose=true.
+TOURNER EN ROND : si les derniers tours redisent un choix déjà acquis sans rien ajouter, choisis l'agent qui traite le point suivant de l'objectif ; s'il n'en reste pas, shouldClose=true.${turnCount >= LONG_MEETING_TURNS ? `
+RÉUNION LONGUE (${turnCount} tours) : l'humain s'épuise. Fais conclure ce qui est acquis (shouldClose=true dès que possible) ; ce qui reste ouvert ira dans une réunion de suite, l'animation le dit en une phrase.` : ''}
 
 Réponds UNIQUEMENT avec ce JSON :
 {"agentIndex": 1, "reason": "...", "shouldClose": false, "offTrack": false, "animation": ""${challengeSection ? ', "challenge": false, "challengeTarget": ""' : ''}${codeSection ? ', "codeQuestion": ""' : ''}}`;

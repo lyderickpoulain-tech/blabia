@@ -1,4 +1,4 @@
-// Préparation d'une réunion par les agents, sans l'humain (v5.1, 15/10/2026).
+// Préparation d'une réunion par les assistants, sans l'humain (v5.1, 15/10/2026).
 // Le serveur la mène seul : on ouvre le flux le temps qu'elle démarre, puis on se
 // déconnecte — l'humain retourne à ses projets et revient quand les conclusions sont prêtes.
 import api from './api';

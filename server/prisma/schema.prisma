@@ -78,6 +78,9 @@ model Project {
   description   String?
   status        String          @default("active") // "active" ou "archived"
   brief             String?   // Brief structuré : objectif, contexte, notes — ajouté migration 20260603000012
+  vision          String?   // v5.1 : « Votre vision » — ce que BlabIA a compris, avec les mots du porteur
+  visionStatus    String?   // draft | validated
+  visionUpdatedAt DateTime?
   devDirectory      String?   // Répertoire de développement local — ajouté migration 20260613000003
   context           String?   // Mémoire cumulée des sessions précédentes
   techStack         Json?     // DEPRECATED v5.0 — migré vers tools (phase 4), conservé en lecture seule

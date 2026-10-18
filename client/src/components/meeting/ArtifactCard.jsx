@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Palette, TriangleAlert, Maximize2, Code2, Download, Check, X } from 'lucide-react';
 
-// v5.0 phase 5 : illustration produite par un agent, à la demande de l'humain.
+// v5.0 phase 5 : illustration produite par un assistant, à la demande de l'humain.
 // artifact : { kind: 'mermaid' | 'html' | 'svg', title, code }
 // Tout aperçu est isolé dans une iframe sandboxée (srcdoc) :
 // - html : sandbox="allow-scripts" SANS allow-same-origin (pas d'accès à BlabIA) ;

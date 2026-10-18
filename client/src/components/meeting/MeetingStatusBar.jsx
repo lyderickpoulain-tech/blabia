@@ -2,7 +2,7 @@ import { CircleHelp, PlayCircle, Flag, Rocket, MessageSquare } from 'lucide-reac
 import { Button } from '../ui';
 import { meetingState } from '../../utils/meetingState';
 
-// Ce qui suit, toujours affiché quand les agents ne parlent pas (v5.1, 18/10/2026 — constats sur
+// Ce qui suit, toujours affiché quand les assistants ne parlent pas (v5.1, 18/10/2026 — constats sur
 // « WorldOfMetal ») : une question vous attend / vos réponses sont prêtes / prête à conclure /
 // à vous. Remplace la bannière « objectif atteint », qui disparaissait au rechargement et
 // s'affichait même quand une question restait ouverte.
@@ -25,17 +25,21 @@ export default function MeetingStatusBar({
     ? <button type="button" onClick={() => onShowQuestion(vigilance)} className="block mt-1 text-[13px] font-bold text-await hover:underline text-left">Un point de vigilance attend votre avis : « J’en tiens compte » ou « Écarter ».</button>
     : null;
 
+  // Maquettes à comparer en dernier, sans réaction de l'humain depuis : c'est à lui de choisir
+  const lastHumanIdx = messages.map(m => m.role).lastIndexOf('human');
+  const proposalsWaiting = messages.some((m, i) => i > lastHumanIdx && m.artifacts?.length > 1);
+
   const view = {
     question: {
       tone: 'bg-await-bg border-await-border', icon: CircleHelp, iconTone: 'text-await',
       title: st.pendingCount > 1 ? `${st.pendingCount} questions vous attendent` : 'Une question vous attend',
-      text: st.closeSuggested ? 'Pour le reste, les agents estiment l’objectif atteint : répondez, puis vous pourrez conclure.' : 'Les agents reprennent dès que vous avez répondu.',
+      text: st.closeSuggested ? 'Pour le reste, les assistants estiment l’objectif atteint : répondez, puis vous pourrez conclure.' : 'Les assistants reprennent dès que vous avez répondu.',
       actions: <Button size="sm" variant="primary" onClick={() => onShowQuestion(st.pending[0])}>Voir la question</Button>,
     },
     answers_ready: {
       tone: 'bg-action-light/60 border-action-border', icon: PlayCircle, iconTone: 'text-action',
       title: 'Vos réponses sont prêtes',
-      text: delegated ? 'Votre bras droit peut terminer la réunion avec elles, ou vous la reprenez vous-même.' : 'Les agents en tiennent compte dès qu’ils reprennent.',
+      text: delegated ? 'Votre bras droit peut terminer la réunion avec elles, ou vous la reprenez vous-même.' : 'Les assistants en tiennent compte dès qu’ils reprennent.',
       actions: <>
         {delegated && <Button size="sm" variant="secondary" onClick={onDelegateResume}>Le bras droit termine la réunion</Button>}
         <Button size="sm" variant="primary" onClick={onResume}>Reprendre les échanges</Button>
@@ -43,14 +47,19 @@ export default function MeetingStatusBar({
     },
     ready_to_close: {
       tone: code ? 'bg-ai-bg border-ai-border' : 'bg-ok-light border-ok-border', icon: Flag, iconTone: code ? 'text-ai' : 'text-ok',
-      title: code ? 'Les agents estiment que les besoins sont clarifiés' : 'Les agents estiment que l’objectif est atteint',
+      title: code ? 'Les assistants estiment que les besoins sont clarifiés' : 'Les assistants estiment que l’objectif est atteint',
       text: st.closeReason,
       actions: <>
         <Button size="sm" variant="ghost" onClick={onResume}>Continuer les échanges</Button>
         <Button size="sm" variant="primary" onClick={onConclude}>{concludeLabel}</Button>
       </>,
     },
-    idle: {
+    idle: proposalsWaiting ? {
+      tone: 'bg-action-light/60 border-action-border', icon: MessageSquare, iconTone: 'text-action',
+      title: 'Des propositions attendent votre avis',
+      text: 'Juste au-dessus : « Celle-ci », « Pas celle-là » (en disant pourquoi) ou « Mélanger ». Les assistants reprennent avec votre réaction.',
+      actions: <Button size="sm" variant="ghost" onClick={onConclude}>Conclure</Button>,
+    } : {
       tone: 'bg-white border-line', icon: MessageSquare, iconTone: 'text-ink-muted',
       title: 'Les échanges sont en pause',
       text: 'À vous : écrivez à l’équipe ci-dessous, relancez les échanges, ou concluez si vous avez ce qu’il vous faut.',

@@ -3,8 +3,8 @@ import api from '../utils/api';
 import { notifyError } from '../utils/notify';
 import useClickOutside from './useClickOutside';
 
-// Agents en cours de réunion : menu « + Agent » (ajout d'un agent du projet, création),
-// suggestions d'agents émises par les agents ([SUGGEST_AGENT]) : invitation ou création.
+// Agents en cours de réunion : menu « + Agent » (ajout d'un assistant du projet, création),
+// suggestions d'assistants émises par les assistants ([SUGGEST_AGENT]) : invitation ou création.
 // Extrait de pages/MeetingRoom.jsx.
 
 const EMPTY_FORM = { open: false, name: '', role: '', creating: false, error: '', scope: 'project' };
@@ -17,7 +17,7 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
   const [addingAgentId,      setAddingAgentId]      = useState(null);
   const [dropdownCreateForm, setDropdownCreateForm] = useState(EMPTY_FORM);
 
-  // Suggestions d'agents reçues pendant la réunion (alimentées par le flux SSE)
+  // Suggestions d'assistants reçues pendant la réunion (alimentées par le flux SSE)
   const [agentSuggestions, setAgentSuggestions] = useState([]);
   const agentSuggestionsRef = useRef([]);
   agentSuggestionsRef.current = agentSuggestions; // évite les closures périmées
@@ -31,7 +31,7 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
       const enabled   = data.filter(a => a.enabled !== false);
       const activeIds = new Set((currentActive || activeAgents).map(a => a.id));
       setAvailableForAdd(enabled.filter(a => !activeIds.has(a.agentId || a.id)));
-    } catch (err) { notifyError(err, 'Impossible de charger les agents disponibles.'); }
+    } catch (err) { notifyError(err, 'Impossible de charger les assistants disponibles.'); }
     setLoadingAvailable(false);
   }, [projectId, activeAgents]);
 
@@ -40,7 +40,7 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
   }, [showAgentDropdown]); // eslint-disable-line react-hooks/exhaustive-deps
   useClickOutside(dropdownRef, showAgentDropdown, () => setShowAgentDropdown(false));
 
-  // Ajouter un agent à la réunion (menu + cartes de suggestion)
+  // Ajouter un assistant à la réunion (menu + cartes de suggestion)
   const handleAddAgent = useCallback(async (agentId) => {
     if (addingAgentId) return null;
     setAddingAgentId(agentId);
@@ -55,14 +55,14 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
       setShowAgentDropdown(false);
       return data.agent;
     } catch (err) {
-      notifyError(err, 'L’agent n’a pas pu rejoindre la réunion.');
+      notifyError(err, 'L’assistant n’a pas pu rejoindre la réunion.');
       return null;
     } finally {
       setAddingAgentId(null);
     }
   }, [addingAgentId, projectId, sessionId, setActiveAgents, setMessages]);
 
-  // Créer un agent depuis le menu « + Agent » et l'ajouter à la réunion
+  // Créer un assistant depuis le menu « + Agent » et l'ajouter à la réunion
   const handleDropdownCreateAgent = useCallback(async () => {
     const { name, role } = dropdownCreateForm;
     if (!name.trim() || !role.trim()) return;
@@ -77,7 +77,7 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
     }
   }, [dropdownCreateForm, projectId, handleAddAgent]);
 
-  // Inviter un agent suggéré : présent dans la bibliothèque du projet → ajouté ; sinon formulaire
+  // Inviter un assistant suggéré : présent dans la bibliothèque du projet → ajouté ; sinon formulaire
   const handleInviteSuggested = useCallback(async (idx) => {
     const s = agentSuggestionsRef.current[idx];
     if (!s || s.inviting) return;
@@ -92,14 +92,14 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
         markSuggestion(idx, { showCreate: true, inviting: false });
       }
     } catch (err) {
-      notifyError(err, 'L’invitation de l’agent a échoué.');
+      notifyError(err, 'L’invitation de l’assistant a échoué.');
       markSuggestion(idx, { inviting: false });
     }
   }, [projectId, handleAddAgent]);
 
   const handleDismissSuggestion = useCallback((idx) => markSuggestion(idx, { dismissed: true }), []);
 
-  // Créer l'agent suggéré puis l'inviter
+  // Créer l'assistant suggéré puis l'inviter
   const handleCreateAndInvite = useCallback(async (idx, form, scope = 'project') => {
     const s = agentSuggestionsRef.current[idx];
     if (!s || s.inviting) return;
@@ -110,7 +110,7 @@ export default function useMeetingAgents({ projectId, sessionId, activeAgents, s
       await handleAddAgent(agent.id);
       markSuggestion(idx, { invited: true, inviting: false, showCreate: false });
     } catch (err) {
-      notifyError(err, 'L’agent n’a pas pu être créé.');
+      notifyError(err, 'L’assistant n’a pas pu être créé.');
       markSuggestion(idx, { inviting: false });
     }
   }, [projectId, handleAddAgent]);

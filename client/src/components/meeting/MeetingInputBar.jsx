@@ -137,7 +137,7 @@ export default function MeetingInputBar({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onFocus={handleTextareaFocus}
-            placeholder={blocked ? 'Écrivez pour interrompre les agents…' : 'Écrivez à l’équipe… (@nom pour s’adresser à un agent · Ctrl+Entrée pour envoyer)'}
+            placeholder={blocked ? 'Écrivez pour interrompre les assistants…' : 'Écrivez à l’équipe… (@nom pour s’adresser à un assistant · Ctrl+Entrée pour envoyer)'}
             className="flex-1 min-w-0 resize-none bg-transparent px-3 py-[11px] text-sm leading-[1.45] text-ink outline-none max-h-[120px]"
           />
           <IconButton label={attachments.length >= 3 ? 'Maximum 3 fichiers' : 'Joindre un fichier (image, PDF, Word, Excel, texte)'}
@@ -148,8 +148,8 @@ export default function MeetingInputBar({
             onClick={() => setShowIllustrate(s => !s)} disabled={blocked} className="text-ai">
             <ImageIcon size={18} />
           </IconButton>
-          <button type="button" onClick={handleSend} aria-label={isStreaming ? 'Envoyer (interrompt les agents)' : 'Envoyer'}
-            title={isStreaming ? 'Envoyer (interrompt les agents)' : 'Envoyer'}
+          <button type="button" onClick={handleSend} aria-label={isStreaming ? 'Envoyer (interrompt les assistants)' : 'Envoyer'}
+            title={isStreaming ? 'Envoyer (interrompt les assistants)' : 'Envoyer'}
             disabled={!isStreaming && !pendingDecisionId && !inputText.trim() && attachments.length === 0}
             className={`w-11 h-11 m-0 shrink-0 rounded-[10px] inline-flex items-center justify-center text-white transition disabled:opacity-40 ${isStreaming ? 'bg-await' : 'bg-action hover:bg-action-dark'}`}>
             <ArrowRight size={18} />

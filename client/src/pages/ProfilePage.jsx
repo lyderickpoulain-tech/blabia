@@ -233,7 +233,7 @@ export default function ProfilePage() {
           {/* Outils habituels (v5.1) : facultatif — sans eux, BlabIA propose son pack recommandé */}
           {user?.role !== 'user' && (
             <Section icon={Wrench} title="Mes outils habituels (facultatif)">
-              <p className="text-sm text-ink-soft">Les outils que vous utilisez déjà (hébergeur, e-mails, organisation…). BlabIA en pré-remplit vos nouveaux projets et les agents en tiennent compte. Sans rien renseigner, BlabIA propose son pack recommandé, avec la mise en ligne automatique.</p>
+              <p className="text-sm text-ink-soft">Les outils que vous utilisez déjà (hébergeur, e-mails, organisation…). BlabIA en pré-remplit vos nouveaux projets et les assistants en tiennent compte. Sans rien renseigner, BlabIA propose son pack recommandé, avec la mise en ligne automatique.</p>
               <Link to="/outils" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-action hover:underline">
                 Voir ou modifier mes outils <ChevronRight size={15} aria-hidden="true" />
               </Link>

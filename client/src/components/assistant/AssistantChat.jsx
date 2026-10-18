@@ -36,7 +36,7 @@ export function MeetingChoices({ meeting, onDelegate, onPrepare, onHold, stacked
   return (
     <div className={`flex flex-wrap gap-2 ${stacked ? 'mt-3' : ''}`}>
       <Button size="sm" variant="primary" onClick={() => onDelegate(meeting)}>Le bras droit tient la réunion</Button>
-      <Button size="sm" variant="secondary" onClick={() => onPrepare(meeting)}>Les agents la préparent</Button>
+      <Button size="sm" variant="secondary" onClick={() => onPrepare(meeting)}>Les assistants la préparent</Button>
       <Button size="sm" variant="ghost" onClick={() => onHold(meeting)}>Vous tenez la réunion</Button>
     </div>
   );

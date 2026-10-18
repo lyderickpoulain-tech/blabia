@@ -1,5 +1,5 @@
 // Iconographie unique du site : icônes contour lucide (trait 1,75), jamais d'émoji.
-// Les émojis encore stockés en base (avatar d'un agent, catégorie d'outil du catalogue
+// Les émojis encore stockés en base (avatar d'un assistant, catégorie d'outil du catalogue
 // serveur) sont traduits ici en icônes.
 import {
   Bot, Search, Lightbulb, Target, Brain, Zap, Library, Compass, PenLine, Scale, Palette, Code2,
@@ -11,7 +11,7 @@ import {
 
 export const ICON_STROKE = 1.75;
 
-// Avatars d'agents : émoji enregistré → icône
+// Avatars d'assistants : émoji enregistré → icône
 const EMOJI_ICON = {
   '🤖': Bot, '🔍': Search, '💡': Lightbulb, '🎯': Target, '🧠': Brain, '⚡': Zap, '📚': Library,
   '♟': Compass, '✍': PenLine, '⚖': Scale, '🎨': Palette, '💻': Code2, '💰': Coins, '📈': TrendingUp,
@@ -54,7 +54,7 @@ export function agentIconFor(agent) {
   return ROLE_ICON.find(([re]) => re.test(text))?.[1] || Bot;
 }
 
-// Choix proposés à la création d'un agent : la valeur enregistrée reste un émoji
+// Choix proposés à la création d'un assistant : la valeur enregistrée reste un émoji
 // (colonne Agent.emoji), affiché partout sous forme d'icône
 export const AGENT_ICON_CHOICES = [
   { emoji: '🤖', Icon: Bot, label: 'Automatique (selon le rôle)' },
@@ -77,7 +77,7 @@ export const AGENT_ICON_CHOICES = [
 
 const AVATAR_SIZES = { xs: ['w-6 h-6', 13], sm: ['w-7 h-7', 15], md: ['w-9 h-9', 18], lg: ['w-10 h-10', 20] };
 
-// Avatar d'agent : pastille ronde + icône. className fixe le fond et la couleur.
+// Avatar d'assistant : pastille ronde + icône. className fixe le fond et la couleur.
 export function AgentAvatar({ agent, size = 'md', className = 'bg-muted-light text-ink-soft', hidden = false }) {
   const Icon = agentIconFor(agent);
   const [box, px] = AVATAR_SIZES[size] || AVATAR_SIZES.md;
@@ -103,11 +103,11 @@ export function ToolCategoryIcon({ id, size = 18, className = '' }) {
 // Texte venu du serveur ou d'une ancienne réunion : émoji de tête retiré
 export const stripLeadingEmoji = text => String(text || '').replace(/^\s*(?:[☀-➿⭐⬆←-⇿\u{1F000}-\u{1FAFF}][️‍]?)+\s*/u, '');
 
-// Choix de l'icône d'un agent (formulaires de création et de modification)
+// Choix de l'icône d'un assistant (formulaires de création et de modification)
 export function AgentIconPicker({ value, onChange, agent }) {
   const current = normalize(value || '🤖');
   return (
-    <div role="radiogroup" aria-label="Icône de l'agent" className="flex flex-wrap gap-1.5">
+    <div role="radiogroup" aria-label="Icône de l'assistant" className="flex flex-wrap gap-1.5">
       {AGENT_ICON_CHOICES.map(({ emoji, Icon, label }) => {
         const on = normalize(emoji) === current;
         const Shown = emoji === '🤖' && agent ? agentIconFor({ ...agent, emoji: '🤖' }) : Icon;

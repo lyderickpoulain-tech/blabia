@@ -82,7 +82,7 @@ export default function MeetingRoom() {
   const levelsDropdownRef                                 = useRef(null);
   const [showLevelsDropdown,    setShowLevelsDropdown]    = useState(false);
 
-  // Agents en cours de réunion : menu « + Agent », suggestions d'agents — hooks/useMeetingAgents.js
+  // Agents en cours de réunion : menu « + Agent », suggestions d'assistants — hooks/useMeetingAgents.js
   const {
     dropdownRef, showAgentDropdown, setShowAgentDropdown, availableForAdd, loadingAvailable, addingAgentId,
     dropdownCreateForm, setDropdownCreateForm, agentSuggestions, setAgentSuggestions,
@@ -301,7 +301,7 @@ export default function MeetingRoom() {
 
   // ── Question confiée à un autre humain (v5.1) ──────────────────────────────
   // « Laisser répondre quelqu'un » / « Laisser répondre @… » : la réunion attend sa réponse ;
-  // la personne reçoit un e-mail et répond depuis la réunion (sa réponse relance les agents).
+  // la personne reçoit un e-mail et répond depuis la réunion (sa réponse relance les assistants).
   const { user: authUser } = useAuth();
   const [participants, setParticipants] = useState([]);
   useEffect(() => {
@@ -340,7 +340,7 @@ export default function MeetingRoom() {
     onContestDelegate: handleContestDelegate,
   };
   // Une question attend un autre humain : la réunion se met à jour seule (sa réponse, puis
-  // les agents qui reprennent chez lui) ; suivi prolongé 3 minutes après la réponse
+  // les assistants qui reprennent chez lui) ; suivi prolongé 3 minutes après la réponse
   const watchUntilRef = useRef(0);
   const awaitingHuman = messages.some(m => m.type === 'decision' && m.status === 'awaiting_human');
   if (awaitingHuman) watchUntilRef.current = Date.now() + 3 * 60 * 1000;
@@ -358,7 +358,7 @@ export default function MeetingRoom() {
     return () => clearInterval(t);
   }, [projectId, sessionId]);
 
-  // Déléguer une décision aux agents
+  // Déléguer une décision aux assistants
   const handleDelegateDecision = useCallback(async (messageId) => {
     try {
       const { data } = await api.post(
@@ -424,7 +424,7 @@ export default function MeetingRoom() {
       .finally(() => setLoading(false));
   }, [projectId, sessionId]);
 
-  // Références courtes (R1, R2…) — même numérotation que celle vue par les agents
+  // Références courtes (R1, R2…) — même numérotation que celle vue par les assistants
   // côté serveur (chat.js), pour afficher/éditer le positionnement des suggestions.
   const meetingRefs = planMilestones
     .slice()
@@ -468,7 +468,7 @@ export default function MeetingRoom() {
       abortControllerRef.current?.abort();
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    // Décision en attente → annuler sans abort (aucun agent ne parle)
+    // Décision en attente → annuler sans abort (aucun assistant ne parle)
     if (!resume && pendingDecisionId) {
       setPendingDecisionId(null);
     }
@@ -615,7 +615,7 @@ export default function MeetingRoom() {
               setAgentSuggestions(prev => [...prev, {
                 name:       ev.name,
                 role:       ev.role,
-                reason:     ev.reason || 'Agent suggéré',
+                reason:     ev.reason || 'Assistant suggéré',
                 dismissed:  false,
                 invited:    false,
                 inviting:   false,
@@ -633,7 +633,7 @@ export default function MeetingRoom() {
               setToolSuggestions(prev => [...prev, ev.tool]);
 
             } else if (ev.type === 'mission') {
-              addMission(ev.mission); // carte « Mission » sous la bulle de l'agent
+              addMission(ev.mission); // carte « Mission » sous la bulle de l'assistant
 
             } else if (ev.type === 'error') {
               setSendError(ev.message || 'Erreur inconnue');
@@ -646,7 +646,7 @@ export default function MeetingRoom() {
     } catch (err) {
       if (err.name === 'AbortError') {
         // Interruption volontaire : plus de texte partiel à conserver (2.1) —
-        // l'agent en cours n'est simplement pas enregistré.
+        // l'assistant en cours n'est simplement pas enregistré.
         const wasDecision = decisionJustEmittedRef.current;
         decisionJustEmittedRef.current = false;
         setStreamingAgent(null);
@@ -733,20 +733,20 @@ export default function MeetingRoom() {
     }
   }, [projectId, sessionId]);
 
-  // Aucune consigne d'agent construite ici : le serveur injecte déjà brief,
+  // Aucune consigne d'assistant construite ici : le serveur injecte déjà brief,
   // mémoire projet, timeline et intention dans le prompt système (voir
   // server/src/services/prompts/agentPrompt.js). Un simple "resume" silencieux
-  // déclenche la première contribution des agents.
+  // déclenche la première contribution des assistants.
   const handleAutoLaunch = useCallback(() => {
     handleSend('', { resume: true });
   }, [handleSend]);
 
-  // Préparation sans l'humain : les agents débattent, puis synthèse + décisions
+  // Préparation sans l'humain : les assistants débattent, puis synthèse + décisions
   // v5.1 (15/10/2026) : elle tourne sur le serveur ; l'humain retourne à ses projets
   const handlePrepare = useCallback(async () => {
     try {
       await launchPreparation(projectId, sessionId);
-      notifySuccess('Les agents préparent la réunion. Vous la retrouverez signalée dans vos projets quand les conclusions seront prêtes.');
+      notifySuccess('Les assistants préparent la réunion. Vous la retrouverez signalée dans vos projets quand les conclusions seront prêtes.');
       navigate('/');
     } catch (err) { notifyError(err, err.message); setPrepRequested(false); }
   }, [projectId, sessionId, navigate]);
@@ -874,9 +874,9 @@ export default function MeetingRoom() {
   // Briefing : toutes les réponses envoyées ensemble, puis une seule reprise
   const submitBriefing = useCallback(async (answersById) => {
     if (briefingSubmitting) return;
-    // Projet exemple (visite guidée) : les agents ne sont pas sollicités
+    // Projet exemple (visite guidée) : les assistants ne sont pas sollicités
     if (project?.isDemo) {
-      setDemoHint('Dans un vrai projet, vos réponses partiraient maintenant aux agents et les échanges commenceraient.');
+      setDemoHint('Dans un vrai projet, vos réponses partiraient maintenant aux assistants et les échanges commenceraient.');
       return;
     }
     setBriefingSubmitting(true);
@@ -906,7 +906,7 @@ export default function MeetingRoom() {
   }, [briefingSubmitting, pendingPrepDecisions, projectId, sessionId, project?.isDemo]);
 
   // Contradicteur : « J'en tiens compte » / « Écarter »
-  // Missions des agents proposées dans cette réunion
+  // Missions des assistants proposées dans cette réunion
   const missionsApi = useMissions(projectId, { sessionId });
   // Mission proposée en réunion : la lancer REPORTE la réunion (reprise au plan une fois le
   // rapport prêt) — pas de mission qui tourne pendant qu'on continue à débattre (v5.1)
@@ -923,7 +923,7 @@ export default function MeetingRoom() {
   const [missionReport, setMissionReport] = useState(null);
 
   const handleVigilance = useCallback(async (messageId, status) => {
-    if (project?.isDemo) { setDemoHint('Dans un vrai projet, votre réponse serait transmise aux agents.'); return; }
+    if (project?.isDemo) { setDemoHint('Dans un vrai projet, votre réponse serait transmise aux assistants.'); return; }
     try {
       const { data } = await api.post(`/projects/${projectId}/sessions/${sessionId}/vigilance`, { messageId, status });
       setMessages(prev => {
@@ -944,7 +944,7 @@ export default function MeetingRoom() {
     }, 0);
   }, []);
 
-  // « Je contredis » : la saisie s'ouvre adressée à l'agent
+  // « Je contredis » : la saisie s'ouvre adressée à l'assistant
   const handleContradict = useCallback((agentName) => {
     setInputText(`@${agentName} je ne suis pas d'accord : `);
     setTimeout(() => {
@@ -955,7 +955,7 @@ export default function MeetingRoom() {
 
   const handleConclude = useCallback(() => {
     if (pendingDecisionCount > 0 && !window.confirm(
-      `${pendingDecisionCount} question${pendingDecisionCount > 1 ? 's sont' : ' est'} encore sans réponse. Les agents attendent vos arbitrages pour avancer. Conclure quand même ?`
+      `${pendingDecisionCount} question${pendingDecisionCount > 1 ? 's sont' : ' est'} encore sans réponse. Les assistants attendent vos arbitrages pour avancer. Conclure quand même ?`
     )) return;
     setShowCloseModal(true);
   }, [pendingDecisionCount]);
@@ -1031,7 +1031,7 @@ export default function MeetingRoom() {
       {project?.isDemo && (
         <div role="status" className="shrink-0 bg-ai-bg border-b border-ai-border px-4 py-1.5 text-[13px] text-center">
           <span className="font-extrabold text-ai">Projet exemple</span>
-          <span className="text-ink-soft"> · {demoHint || 'Les agents ne sont pas sollicités pendant la visite guidée : explorez librement, rien n’est envoyé.'}</span>
+          <span className="text-ink-soft"> · {demoHint || 'Les assistants ne sont pas sollicités pendant la visite guidée : explorez librement, rien n’est envoyé.'}</span>
         </div>
       )}
 
@@ -1096,7 +1096,7 @@ export default function MeetingRoom() {
                   onChooseArtifact={text => handleSend(text)}
                   onPrefill={handlePrefill}
                   onVisualizeChoices={visualMeeting ? (question, choices) => handleSend(
-                    `Trois maquettes à comparer : ${visualTarget}, une maquette par option de la question « ${question} » — ${choices.map((c, i) => `${'ABC'[i]}) ${c}`).join(' ; ')}`,
+                    `Trois maquettes à comparer : une proposition par option de la question « ${question} » (pour ${visualTarget}) — ${choices.map((c, i) => `${'ABC'[i]}) ${c}`).join(' ; ')}`,
                     { artifactRequest: true, artifactCompare: true }) : null}
                 />
               </div>
@@ -1131,7 +1131,7 @@ export default function MeetingRoom() {
                     <span className="w-4 h-4 border-2 border-ai border-t-transparent rounded-full animate-spin shrink-0" aria-hidden="true" />
                     <p className="flex-1 text-sm font-semibold text-ai">{session?.runKind === 'delegate'
                       ? 'Votre bras droit tient la réunion : vous suivez en retrait. Sa note de retour arrivera dans votre conversation avec lui.'
-                      : 'Les agents préparent la réunion. Le briefing s’affichera dès qu’ils auront fini ; vous pouvez revenir plus tard.'}</p>
+                      : 'Les assistants préparent la réunion. Le briefing s’affichera dès qu’ils auront fini ; vous pouvez revenir plus tard.'}</p>
                     <button type="button" onClick={() => (session?.prepRunning
                       ? stopPreparation(projectId, sessionId).then(() => setSession(s => ({ ...s, prepRunning: false }))).catch(err => notifyError(err, 'La préparation n’a pas pu être arrêtée.'))
                       : abortControllerRef.current?.abort())}
@@ -1235,7 +1235,7 @@ export default function MeetingRoom() {
       <ResetMeetingModal busy={resettingSession} onCancel={() => setShowResetModal(false)} onConfirm={handleResetSession} />
     )}
 
-    {/* Rapport d'une mission des agents */}
+    {/* Rapport d'une mission des assistants */}
     {missionReport && (
       <SummaryDisplayModal title={`Mission — ${missionReport.title}`} content={missionReport.report || ''} onClose={() => setMissionReport(null)} />
     )}

@@ -59,9 +59,9 @@ function WebSearchBlock({ webSearch }) {
   );
 }
 
-// Hypothèse explicite d'un agent (consigne du prompt : bulle « Hypothèse : … » ; « sauf avis contraire » pour les anciennes réunions)
+// Hypothèse explicite d'un assistant (consigne du prompt : bulle « Hypothèse : … » ; « sauf avis contraire » pour les anciennes réunions)
 export const HYPOTHESIS_RE = /sauf avis contraire|^\s*hypoth[eè]se\s*:/i;
-// v5.1 (16/10/2026) : avis de l'humain sur une bulle → préférences apprises par les agents
+// v5.1 (16/10/2026) : avis de l'humain sur une bulle → préférences apprises par les assistants
 const FEEDBACK = [
   { kind: 'good',          label: 'Bien vu',             icon: ThumbsUp },
   { kind: 'off_topic',     label: 'À côté de la plaque', icon: Crosshair },
@@ -119,7 +119,7 @@ export default function ConversationFeed({
                     className="w-full h-11 rounded-[10px] border border-ai-border text-ai font-bold text-sm hover:bg-ai-bg disabled:opacity-40">
                     Préparer avant mon arrivée
                   </button>
-                  <p className="text-xs text-ink-faint text-center leading-snug">Les agents débattent entre eux sans vous. Vous arrivez sur un briefing : synthèse et décisions à trancher.</p>
+                  <p className="text-xs text-ink-faint text-center leading-snug">Les assistants débattent entre eux sans vous. Vous arrivez sur un briefing : synthèse et décisions à trancher.</p>
                 </div>
               )}
               <button type="button" onClick={onAutoLaunch} disabled={!session || !project || isStreaming}
@@ -145,7 +145,7 @@ export default function ConversationFeed({
   const decisionsOnly = messages.filter(m => m.type === 'decision');
 
   // v5.1 (test « Gérard ») : un choix visuel se voit avant de se trancher
-  const visualChoices = d => (d.choices || []).filter(c => !/^(autre|laisser|les agents)/i.test(String(c).trim()));
+  const visualChoices = d => (d.choices || []).filter(c => !/^(autre|laisser|les agents|les assistants)/i.test(String(c).trim()));
   const decisionCard = (d) => (
     <div key={d.id} data-card-id={d.id} className="space-y-1.5">
       <DecisionCard message={d} number={decisionsOnly.indexOf(d) + 1} budget={decisionBudget}
@@ -199,7 +199,7 @@ export default function ConversationFeed({
                 if (feedback[msg.id] && !on) return null;
                 return (
                   <button key={f.kind} type="button" onClick={() => onFeedback(msg.id, on ? null : f.kind)} aria-pressed={on}
-                    title={on ? 'Retirer mon avis' : `${f.label} : les agents en tiendront compte`}
+                    title={on ? 'Retirer mon avis' : `${f.label} : les assistants en tiendront compte`}
                     className={`h-7 px-2 inline-flex items-center gap-1 rounded-md text-[11px] font-bold ${on ? (f.kind === 'good' ? 'bg-ok-light text-ok' : 'bg-await-light text-await') : 'text-ink-faint hover:bg-muted-light hover:text-ink-soft'}`}>
                     <f.icon size={12} aria-hidden="true" /> {f.label}
                   </button>
@@ -226,7 +226,7 @@ export default function ConversationFeed({
               onOpen={key => onOpenArtifact?.({ id: key })} onChoose={text => onChooseArtifact?.(text)} onPrefill={text => onPrefill?.(text)} />
           )}
           {msg.interrupted && <p className="text-xs text-await mt-0.5">Interrompu</p>}
-          {/* Mission proposée par l'agent dans ce message (v5.1) */}
+          {/* Mission proposée par l'assistant dans ce message (v5.1) */}
           {msg.missionId && (() => {
             const mission = missions.find(m => m.id === msg.missionId);
             return mission ? (
@@ -265,7 +265,7 @@ export default function ConversationFeed({
             </div>
           ) : v.status !== 'open' && (
             <p className={`text-xs font-bold mt-1.5 ${v.status === 'accepted' ? 'text-ok' : 'text-ink-faint'}`}>
-              {v.status === 'accepted' ? <><Check size={13} className="inline -mt-0.5" aria-hidden="true" /> Pris en compte : les agents l’intègrent</> : 'Écarté : le contradicteur n’y reviendra pas'}
+              {v.status === 'accepted' ? <><Check size={13} className="inline -mt-0.5" aria-hidden="true" /> Pris en compte : les assistants l’intègrent</> : 'Écarté : le contradicteur n’y reviendra pas'}
             </p>
           )}
         </div>
@@ -314,7 +314,7 @@ export default function ConversationFeed({
                 : <Sparkles size={15} className="shrink-0" aria-hidden="true" />}
               <span className="flex-1">
                 {preparing
-                  ? `Les agents préparent la réunion (${prepDebate.length} messages)`
+                  ? `Les assistants préparent la réunion (${prepDebate.length} messages)`
                   : `Briefing · synthèse de la préparation${prepDecisions.length ? ` et ${settledPrep}/${prepDecisions.length} décisions tranchées` : ''}`}
               </span>
               <span>{prepExpanded ? 'Masquer' : 'Revoir'}</span>

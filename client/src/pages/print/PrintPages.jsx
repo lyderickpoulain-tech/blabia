@@ -91,7 +91,7 @@ export function PrintRegistry() {
       {d.rationale && <p className="text-sm text-ink-soft">{d.rationale}</p>}
       {d.rejectedOptions?.length > 0 && <p className="text-xs text-ink-muted">Écarté : {d.rejectedOptions.join(', ')}</p>}
       {d.status === 'reopened' && d.reopenNote && <p className="text-xs text-await">Remise en question : {d.reopenNote}</p>}
-      <p className="text-xs text-ink-faint">{d.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des agents'} · {fmtDate(d.createdAt)}{d.sessionTask ? ` · ${d.sessionTask}` : ''}</p>
+      <p className="text-xs text-ink-faint">{d.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des assistants'} · {fmtDate(d.createdAt)}{d.sessionTask ? ` · ${d.sessionTask}` : ''}</p>
     </li>
   );
   return (

@@ -16,6 +16,7 @@ import { launchPreparation } from '../../utils/preparation';
 import SummaryDisplayModal from '../../components/SummaryDisplayModal';
 import InboxList from '../../components/assistant/InboxList';
 import BriefPrompt from '../../components/project/BriefPrompt';
+import VisionCard from '../../components/project/VisionCard';
 
 // Tableau de bord du projet (refonte UX v5.1) : où en est le projet, quelle
 // est la prochaine étape, qu'est-ce qui attend l'arbitrage de l'humain.
@@ -133,7 +134,7 @@ export default function ProjectDashboard() {
   const [tools, setTools] = useState(null);       // { tools, total }
   const [stats, setStats] = useState(null);       // coût réel de l'IA (/stats)
   const [actions, setActions] = useState([]);     // actions entre les réunions
-  const { missions } = useMissions(project.id);   // missions des agents (proposées → point d'attention)
+  const { missions } = useMissions(project.id);   // missions des assistants (proposées → point d'attention)
   const [showGenerate, setShowGenerate] = useState(false);
   const [devTasks, setDevTasks] = useState(null); // développements Claude Code (si un dépôt GitHub est relié)
 
@@ -230,6 +231,12 @@ export default function ProjectDashboard() {
         <BriefPrompt project={project} onSaved={async () => { await reloadProject(); setShowGenerate(true); }} />
       )}
 
+      {!askBrief && (
+        <VisionCard project={project} canEdit={isOwner && !project.isDemo}
+          hasMeetings={milestones.some(m => m.status === 'done') || (stats?.sessionCount || 0) > 0}
+          onChanged={reloadProject} />
+      )}
+
       {/* Prochaine étape (masquée tant que « Racontez votre projet » est affiché : même demande) */}
       {!askBrief && (
       <Card as="section" data-tour="pd-next" aria-labelledby="next-title" className="p-5 border-action-border flex flex-wrap items-center gap-5">
@@ -290,7 +297,7 @@ export default function ProjectDashboard() {
               <p className="text-xs font-extrabold uppercase tracking-wider text-action">Prochaine étape</p>
               <h2 id="next-title" className="text-xl font-extrabold text-ink">{milestones.length ? 'Toutes les réunions du plan sont tenues' : 'Construire le plan des réunions'}</h2>
               <p className="text-sm text-ink-muted">
-                {project.brief ? 'BlabIA peut proposer une suite de réunions à partir du brief.' : 'Commencez par écrire le brief du projet : il guide les agents et le plan.'}
+                {project.brief ? 'BlabIA peut proposer une suite de réunions à partir du brief.' : 'Commencez par écrire le brief du projet : il guide les assistants et le plan.'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

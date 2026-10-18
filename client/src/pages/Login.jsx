@@ -79,7 +79,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <span className="logo-chip"><img src="/logo.png" alt="BlabIA" className="h-16 mx-auto" /></span>
-          <p className="text-sm text-ink-muted mt-2">Une équipe d'agents IA pour faire avancer vos projets. Vous tranchez.</p>
+          <p className="text-sm text-ink-muted mt-2">Une équipe d'assistants pour faire avancer vos projets. Vous décidez.</p>
         </div>
 
         <div className="bg-white border border-line rounded-2xl shadow-sm p-6 sm:p-8">

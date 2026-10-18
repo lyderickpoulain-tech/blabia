@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Maximize2, ThumbsUp, ThumbsDown, Shuffle } from 'lucide-react';
 
 // Trois maquettes à comparer (v5.1, étape B du test « Gérard ») : on réagit à ce qu'on voit
-// plutôt que de décrire ce qu'on veut. « Celle-ci » part aussitôt aux agents ; « Pas celle-là »
+// plutôt que de décrire ce qu'on veut. « Celle-ci » part aussitôt aux assistants ; « Pas celle-là »
 // et « Mélanger » ouvrent la saisie pour dire pourquoi, avec vos mots.
 // Aperçus sans script (sandbox="") : les maquettes de comparaison n'en ont pas besoin.
 

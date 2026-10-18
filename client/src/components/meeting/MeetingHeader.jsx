@@ -79,7 +79,7 @@ export default function MeetingHeader({
         <ThemeToggle />
         {decisionBudget ? (
           <button type="button" onClick={onShowQuestions} className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-action"
-            title={`Questions posées par les agents / budget de la réunion${pendingDecisionCount ? ` — ${pendingDecisionCount} en attente` : ''}. Au-delà, ils tranchent par hypothèse.`}>
+            title={`Questions posées par les assistants / budget de la réunion${pendingDecisionCount ? ` — ${pendingDecisionCount} en attente` : ''}. Au-delà, ils tranchent par hypothèse.`}>
             <Badge tone={pendingDecisionCount ? 'await' : 'muted'}>
               Questions {questionsUsed}/{decisionBudget}
             </Badge>

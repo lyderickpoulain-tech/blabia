@@ -93,8 +93,8 @@ function IdentitySection({ project, setProject, canEdit }) {
           <RemindersToggle checked={f.remindersEnabled} onChange={v => setF(x => ({ ...x, remindersEnabled: v }))} reminderDay={user?.reminderDay} disabled={!canEdit} />
           <label className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line p-3.5">
             <span className="flex-1 min-w-[220px]">
-              <span className="block text-sm font-extrabold text-ink">Budget mensuel des missions des agents</span>
-              <span className="block text-xs text-ink-muted mt-0.5">Plafond de dépense par mois pour les travaux confiés à des sous-agents (recherche, analyse, rédaction). 0 pour les désactiver.</span>
+              <span className="block text-sm font-extrabold text-ink">Budget mensuel des missions des assistants</span>
+              <span className="block text-xs text-ink-muted mt-0.5">Plafond de dépense par mois pour les travaux confiés à des assistants dédiés (recherche, analyse, rédaction). 0 pour les désactiver.</span>
             </span>
             <span className="inline-flex items-center gap-1.5 text-sm text-ink-soft">
               <input type="number" min="0" max="100" step="0.5" value={f.missionsMonthlyBudgetUSD} aria-label="Budget mensuel des missions (dollars)"
@@ -125,7 +125,7 @@ function BriefSection({ project, setProject, canEdit }) {
     </div>
   );
   return (
-    <Section title="Brief" subtitle="Transmis aux agents au début de chaque réunion. Plus il est précis, moins ils posent de questions.">
+    <Section title="Brief" subtitle="Transmis aux assistants au début de chaque réunion. Plus il est précis, moins ils posent de questions.">
       <form onSubmit={submit} className="space-y-3">
         <fieldset disabled={!canEdit} className="space-y-3">
           {field('objectif', 'Objectif principal', 'Que cherchez-vous à accomplir ?', 3)}
@@ -186,7 +186,7 @@ function MemorySection({ project, canEdit, memoryOpen, setMemoryOpen }) {
   };
 
   return (
-    <Section title="Mémoire du projet" subtitle="Ce que les agents retiennent du projet. Les entrées anciennes sont fondues dans la synthèse au lieu d'être oubliées ; chaque point indique sa source. Le registre des décisions et les actions sont gardés à part.">
+    <Section title="Mémoire du projet" subtitle="Ce que les assistants retiennent du projet. Les entrées anciennes sont fondues dans la synthèse au lieu d'être oubliées ; chaque point indique sa source. Le registre des décisions et les actions sont gardés à part.">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-extrabold text-ink">Synthèse</p>
@@ -445,7 +445,7 @@ export default function ProjectSettings() {
               <ul className="list-disc pl-5 text-xs text-ink-soft space-y-0.5">
                 <li>Le code reste dans le dépôt {project.githubRepo} : les prochains développements partiront du site actuel.</li>
                 <li>Le site en ligne, sa base de données et les outils mis en place (hébergeur, nom de domaine…) restent en service.</li>
-                <li>Les agents recevront une note : un site existe déjà, ils liront son code avant de décider.</li>
+                <li>Les assistants recevront une note : un site existe déjà, ils liront son code avant de décider.</li>
               </ul>
               <p className="text-xs text-ink-muted">Pour repartir d’une page blanche, créez plutôt un nouveau projet « Site web à créer de zéro » : BlabIA lui crée un dépôt neuf.</p>
               {devInfo?.running > 0 && (

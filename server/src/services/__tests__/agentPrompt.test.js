@@ -213,3 +213,29 @@ describe('pas de monologue (agentStreak)', () => {
     expect(agentStreak([])).toEqual({ name: null, turns: 0 });
   });
 });
+
+// F3 (constats sur « WorldOfMetal ») : « proposez-moi 3 typos » sans choix ; comparaisons toujours
+// sur la page d'accueil ; réunion de 164 messages
+describe('prompt agent : choix demandé, comparaison fidèle, réunion longue', () => {
+  it('une demande de choix explicite donne une carte, quel que soit le mode', () => {
+    for (const questionMode of ['delegate', 'balanced', 'control']) {
+      const [shared] = buildAgentSystemPrompt({ ...base, agent: agents[0], questionMode });
+      expect(shared.text).toContain('L\'HUMAIN DEMANDE À CHOISIR');
+    }
+  });
+
+  it('comparaison : planches de style pour la typographie et les couleurs', () => {
+    const [shared] = buildAgentSystemPrompt({ ...base, intention: ['decision'], agent: agents[0], artifactRequest: 'je veux juste voir les polices', artifactCompare: true });
+    const text = buildAgentSystemPrompt({ ...base, agent: agents[0], artifactRequest: 'je veux juste voir les polices', artifactCompare: true }).map(b => b.text).join('\n');
+    expect(text).toContain('PLANCHES DE STYLE');
+    expect(text).toContain('Ne refais pas la page d\'accueil');
+    expect(shared).toBeTruthy();
+  });
+
+  it('orchestrateur : au-delà de 30 tours, faire conclure', () => {
+    const { buildOrchestratorPrompt } = require('../prompts/orchestratorPrompt');
+    const p = turnCount => buildOrchestratorPrompt({ session: { task: 'Maquetter', intention: ['decision'] }, agentsForSelection: agents, turnCount });
+    expect(p(12)).not.toContain('RÉUNION LONGUE');
+    expect(p(31)).toContain('RÉUNION LONGUE (31 tours)');
+  });
+});

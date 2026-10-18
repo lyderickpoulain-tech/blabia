@@ -5,7 +5,7 @@ import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, IconButton, Card } from '../../components/ui';
 
 // Documents de référence du projet (v5.1) : texte extrait au dépôt (sans IA),
-// lu par les agents à chaque réunion quand « Lu en réunion » est activé.
+// lu par les assistants à chaque réunion quand « Lu en réunion » est activé.
 
 const ACCEPT = '.pdf,.docx,.xlsx,.csv,.txt,.md';
 const PROMPT_BUDGET = 40_000; // services/documents.js (PROMPT_TOTAL_CHARS)
@@ -37,7 +37,7 @@ function PreviewModal({ projectId, doc, onClose }) {
           <h2 className="flex-1 min-w-0 text-base font-extrabold text-ink truncate">{doc.name}</h2>
           <IconButton size="sm" label="Fermer" onClick={onClose}><X size={18} aria-hidden="true" /></IconButton>
         </div>
-        <p className="px-5 py-2 text-xs text-ink-muted bg-canvas border-b border-line">Texte extrait du fichier : c'est ce que les agents lisent.</p>
+        <p className="px-5 py-2 text-xs text-ink-muted bg-canvas border-b border-line">Texte extrait du fichier : c'est ce que les assistants lisent.</p>
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {content === null
             ? <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-action border-t-transparent rounded-full animate-spin" /></div>
@@ -85,7 +85,7 @@ export default function ProjectDocuments() {
     try { await api.patch(`/projects/${project.id}/documents/${doc.id}`, body); } catch { setError('Modification impossible.'); load(); }
   };
   const remove = async doc => {
-    if (!confirm(`Supprimer « ${doc.name} » ? Les agents ne le liront plus.`)) return;
+    if (!confirm(`Supprimer « ${doc.name} » ? Les assistants ne le liront plus.`)) return;
     try { await api.delete(`/projects/${project.id}/documents/${doc.id}`); load(); } catch { setError('Suppression impossible.'); }
   };
 
@@ -93,7 +93,7 @@ export default function ProjectDocuments() {
 
   return (
     <>
-      <PageHeader title="Documents" subtitle="Vos documents de référence (cahier des charges, devis, étude, règlement…) : les agents les lisent à chaque réunion et les citent." />
+      <PageHeader title="Documents" subtitle="Vos documents de référence (cahier des charges, devis, étude, règlement…) : les assistants les lisent à chaque réunion et les citent." />
 
       <div className="space-y-5">
         <div data-tour="docs-drop"
@@ -121,7 +121,7 @@ export default function ProjectDocuments() {
           <section data-tour="docs-list" className="space-y-2">
             <p className="text-xs text-ink-muted">
               Lu en réunion : {fmtNum(activeChars)} caractères
-              {activeChars > PROMPT_BUDGET && <span className="text-await font-bold"> · au-delà de {fmtNum(PROMPT_BUDGET)}, les agents lisent le début de chaque document</span>}
+              {activeChars > PROMPT_BUDGET && <span className="text-await font-bold"> · au-delà de {fmtNum(PROMPT_BUDGET)}, les assistants lisent le début de chaque document</span>}
             </p>
             {docs.map(d => (
               <Card key={d.id} className={`p-3.5 flex items-start gap-3 ${d.enabled ? '' : 'opacity-70'}`}>

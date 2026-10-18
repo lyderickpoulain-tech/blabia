@@ -26,8 +26,8 @@ export const DELEGATE = '__delegate__';
 const ASSIGN_ANY = '__assign_any__'; // « Laisser répondre quelqu'un » ; « @<id> » : une personne
 
 // Question soumise à l'humain (refonte UX v5.1, version compacte) :
-// choisir une réponse (ou « Laisser les agents décider »), puis Valider.
-// Le premier choix est la recommandation des agents (consigne du prompt agent).
+// choisir une réponse (ou « Laisser les assistants décider »), puis Valider.
+// Le premier choix est la recommandation des assistants (consigne du prompt agent).
 export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, disabled, number, budget }) {
   const [choice, setChoice]     = useState(null);   // texte choisi | DELEGATE | ASSIGN_ANY | '@<userId>' | 'custom'
   const [customText, setCustomText] = useState('');
@@ -40,7 +40,7 @@ export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, d
   if (message.status === 'answered' || message.status === 'delegated' || message.status === 'deferred') {
     const meta = {
       answered:  { icon: <Check size={14} />,          cls: 'text-ok',     text: `${message.answer}${message.answeredByName && message.answeredBy !== me ? ` (${message.answeredByName})` : ''}` },
-      delegated: { icon: <MessagesSquare size={14} />, cls: 'text-action', text: 'les agents décident' },
+      delegated: { icon: <MessagesSquare size={14} />, cls: 'text-action', text: 'les assistants décident' },
       deferred:  { icon: <Clock size={14} />,          cls: 'text-await',  text: 'reportée' },
     }[message.status];
     return (
@@ -119,7 +119,7 @@ export default function DecisionCard({ message, onAnswer, onDefer, onDelegate, d
           <ChoicePill key={i} selected={choice === c} recommended={i === 0} onClick={() => setChoice(c)}>{c}</ChoicePill>
         ))}
         {onDelegate && (
-          <ChoicePill tone="ai" selected={choice === DELEGATE} onClick={() => setChoice(DELEGATE)}>Laisser les agents décider</ChoicePill>
+          <ChoicePill tone="ai" selected={choice === DELEGATE} onClick={() => setChoice(DELEGATE)}>Laisser les assistants décider</ChoicePill>
         )}
         {!awaiting && others.length > 0 && people?.onAssign && (
           <>

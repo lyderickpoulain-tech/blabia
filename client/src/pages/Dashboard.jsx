@@ -52,7 +52,7 @@ function People({ people }) {
 
 function ProjectCard({ project, archiving, onArchive, onOpen }) {
   const open      = (project.openSessionCount ?? 0) > 0;
-  const prepReady = (project.prepReadyCount ?? 0) > 0; // v5.1 : conclusions préparées par les agents
+  const prepReady = (project.prepReadyCount ?? 0) > 0; // v5.1 : conclusions préparées par les assistants
   const sessions  = project.sessionCount ?? 0;
   const archived  = project.status !== 'active';
   return (
@@ -219,7 +219,7 @@ export default function Dashboard() {
           {projects.length === 0 ? (
             <>
               <p className="text-base font-extrabold text-ink mb-1">Aucun projet pour l'instant</p>
-              <p className="text-sm text-ink-muted mb-4">Décrivez votre idée : BlabIA compose une équipe d'agents et propose un plan de réunions.</p>
+              <p className="text-sm text-ink-muted mb-4">Décrivez votre idée : BlabIA compose une équipe d'assistants et propose un plan de réunions.</p>
               <Button variant="primary" onClick={newProject}>
                 <Plus size={18} aria-hidden="true" /> Créer mon premier projet
               </Button>

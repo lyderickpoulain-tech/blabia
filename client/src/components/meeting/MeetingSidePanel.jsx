@@ -47,12 +47,12 @@ function AgentSuggestion({ suggestion, idx, onInvite, onDismiss, onCreateAndInvi
   const [scope, setScope] = useState('project');
   if (suggestion.invited) return null;
   return (
-    <SuggestionShell kind="Agent à inviter" title={suggestion.name} detail={[suggestion.role, suggestion.reason].filter(Boolean).join(' · ')}>
+    <SuggestionShell kind="Assistant à inviter" title={suggestion.name} detail={[suggestion.role, suggestion.reason].filter(Boolean).join(' · ')}>
       {suggestion.showCreate ? (
         <div className="space-y-1.5 pt-1">
-          <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Nom" aria-label="Nom de l'agent"
+          <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Nom" aria-label="Nom de l'assistant"
             className="w-full h-8 text-xs border border-line rounded-lg px-2 outline-none focus:ring-2 focus:ring-action-border" />
-          <input value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} placeholder="Rôle" aria-label="Rôle de l'agent"
+          <input value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} placeholder="Rôle" aria-label="Rôle de l'assistant"
             className="w-full h-8 text-xs border border-line rounded-lg px-2 outline-none focus:ring-2 focus:ring-action-border" />
           <AgentScopeSelector scope={scope} onChange={setScope} size="xs" />
           <div className="flex gap-3 text-[13px]">
@@ -88,7 +88,7 @@ function AgentAddMenu({ loadingAvailable, availableForAdd, addingAgentId, handle
     <div className="relative" ref={ref}>
       <button type="button" onClick={() => { if (!open) onOpen?.(); setOpen(o => !o); }}
         className="min-h-[32px] inline-flex items-center gap-1 text-[13px] font-bold text-action">
-        <Plus size={14} /> Ajouter un agent
+        <Plus size={14} /> Ajouter un assistant
       </button>
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-line rounded-xl shadow-lg z-20 overflow-hidden">
@@ -97,7 +97,7 @@ function AgentAddMenu({ loadingAvailable, availableForAdd, addingAgentId, handle
           ) : (
             <>
               {availableForAdd.length === 0 ? (
-                <p className="text-xs text-ink-faint text-center py-3 px-3">Tous les agents du projet sont déjà là.</p>
+                <p className="text-xs text-ink-faint text-center py-3 px-3">Tous les assistants du projet sont déjà là.</p>
               ) : (
                 <ul className="py-1 max-h-48 overflow-y-auto">
                   {availableForAdd.map(a => {
@@ -120,10 +120,10 @@ function AgentAddMenu({ loadingAvailable, availableForAdd, addingAgentId, handle
               <div className="border-t border-line">
                 {dropdownCreateForm.open ? (
                   <div className="p-2 space-y-1.5">
-                    <input autoFocus value={dropdownCreateForm.name} placeholder="Nom de l'agent" aria-label="Nom de l'agent"
+                    <input autoFocus value={dropdownCreateForm.name} placeholder="Nom de l'assistant" aria-label="Nom de l'assistant"
                       onChange={e => setDropdownCreateForm(p => ({ ...p, name: e.target.value }))}
                       className="w-full h-8 text-xs border border-line rounded-lg px-2 outline-none focus:ring-2 focus:ring-action-border" />
-                    <input value={dropdownCreateForm.role} placeholder="Rôle" aria-label="Rôle de l'agent"
+                    <input value={dropdownCreateForm.role} placeholder="Rôle" aria-label="Rôle de l'assistant"
                       onChange={e => setDropdownCreateForm(p => ({ ...p, role: e.target.value }))}
                       onKeyDown={e => { if (e.key === 'Enter') handleDropdownCreateAgent(); }}
                       className="w-full h-8 text-xs border border-line rounded-lg px-2 outline-none focus:ring-2 focus:ring-action-border" />
@@ -140,7 +140,7 @@ function AgentAddMenu({ loadingAvailable, availableForAdd, addingAgentId, handle
                 ) : (
                   <button type="button" onClick={() => setDropdownCreateForm(p => ({ ...p, open: true }))}
                     className="w-full text-xs font-semibold text-ink-muted hover:text-action hover:bg-canvas py-2 px-3 text-left">
-                    + Créer un agent…
+                    + Créer un assistant…
                   </button>
                 )}
               </div>
@@ -193,7 +193,7 @@ export default function MeetingSidePanel({
               {d.status === 'answered' ? (
                 <p className="mt-0.5 inline-flex items-start gap-1 font-bold text-ok"><Check size={13} className="mt-0.5 shrink-0" aria-hidden="true" />{d.answer}</p>
               ) : (
-                <p className="mt-0.5 inline-flex items-center gap-1 font-bold text-ai"><Sparkles size={13} aria-hidden="true" />Les agents décident</p>
+                <p className="mt-0.5 inline-flex items-center gap-1 font-bold text-ai"><Sparkles size={13} aria-hidden="true" />Les assistants décident</p>
               )}
             </li>
           ))}

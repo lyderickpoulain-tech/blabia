@@ -477,7 +477,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   <p className="text-xs text-ink-faint">Aucune décision tranchée identifiée dans cette réunion.</p>
                 ) : (
                   <>
-                    <p className="text-xs text-ink-muted">Les agents s'y référeront aux prochaines réunions et ne reposeront plus ces questions. Décochez ce qui n'a pas vraiment été décidé.</p>
+                    <p className="text-xs text-ink-muted">Les assistants s'y référeront aux prochaines réunions et ne reposeront plus ces questions. Décochez ce qui n'a pas vraiment été décidé.</p>
                     <ul className="space-y-1.5">
                       {decisionProposals.map(d => (
                         <li key={d.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 transition ${
@@ -495,7 +495,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                             />
                             <div className="flex items-center gap-2 flex-wrap px-1.5">
                               <Badge tone={d.origin === 'human' ? 'action' : 'ai'} className="!text-[10px] !px-2 !py-0.5">
-                                {d.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des agents'}
+                                {d.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des assistants'}
                               </Badge>
                               {d.rationale && <span className="text-[11px] text-ink-muted">{d.rationale}</span>}
                             </div>
@@ -568,7 +568,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                   <p className="text-xs text-ink-faint">Aucune nouvelle action concrète identifiée pour vous dans cette réunion.</p>
                 ) : (
                   <>
-                    <p className="text-xs text-ink-muted">Ce que vous avez à faire avant la prochaine réunion, dans l'ordre où les mener. L'échéance est facultative. Les agents feront le point dessus en l'ouvrant. Décochez ce qui ne vous concerne pas.</p>
+                    <p className="text-xs text-ink-muted">Ce que vous avez à faire avant la prochaine réunion, dans l'ordre où les mener. L'échéance est facultative. Les assistants feront le point dessus en l'ouvrant. Décochez ce qui ne vous concerne pas.</p>
                     <ul className="space-y-1.5">
                       {actionProposals.map((a, i) => (
                         <li key={a.key} className={`flex items-start gap-2.5 border rounded-xl p-2.5 transition ${a.keep ? 'border-line bg-white' : 'border-line bg-canvas opacity-60'}`}>
@@ -670,7 +670,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                 </Button>
               </div>
               {/* Réunions proposées par BlabIA à la conclusion : décisions restées à prendre, travail
-                  de code (v5.1) — dans la même étape que les suggestions des agents */}
+                  de code (v5.1) — dans la même étape que les suggestions des assistants */}
               {meetingProposals.length > 0 && (
                 <section className="space-y-2">
                   <p className="flex items-center gap-1.5 text-xs font-extrabold text-ink-soft">
@@ -702,7 +702,7 @@ export default function MeetingCloseModal({ session, initialSuggestions, meeting
                 meetingProposals.length === 0 && <p className="text-sm text-ink-faint text-center py-8">Aucune réunion à ajouter au plan.</p>
               ) : (
                 <div className="space-y-2 -mx-4">
-                  {meetingProposals.length > 0 && <p className="px-4 flex items-center gap-1.5 text-xs font-extrabold text-ink-soft"><Lightbulb size={14} className="text-ai" aria-hidden="true" /> Suggérées par les agents pendant la réunion</p>}
+                  {meetingProposals.length > 0 && <p className="px-4 flex items-center gap-1.5 text-xs font-extrabold text-ink-soft"><Lightbulb size={14} className="text-ai" aria-hidden="true" /> Suggérées par les assistants pendant la réunion</p>}
                   {suggestions.map(s => (
                     <MeetingSuggestionCard
                       key={s.id}

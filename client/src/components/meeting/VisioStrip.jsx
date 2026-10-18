@@ -2,8 +2,8 @@ import { Megaphone, UserRound } from 'lucide-react';
 import { AgentAvatar } from '../ui/icons';
 
 // Vue « salle » (v5.1, 16/10/2026, bras droit étape 3) : une vignette par participant, comme
-// en visio — l'animation (ou le bras droit quand il tient la réunion), les agents, et vous.
-// Celui qui parle est entouré : l'agent en train d'écrire (flux direct) ou l'auteur du
+// en visio — l'animation (ou le bras droit quand il tient la réunion), les assistants, et vous.
+// Celui qui parle est entouré : l'assistant en train d'écrire (flux direct) ou l'auteur du
 // dernier message s'il est récent (réunion suivie en retrait, mise à jour périodique).
 const RECENT_MS = 45000;
 

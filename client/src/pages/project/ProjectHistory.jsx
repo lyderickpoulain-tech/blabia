@@ -56,7 +56,7 @@ function SessionItem({ session, projectId, cost, onViewDeliverable, tour, canDel
   const postponed = session.status === 'postponed'; // en attente d'une mission : reprise prévue au plan
   const path = `/projects/${projectId}/meeting/${session.id}`;
 
-  // Suppression (propriétaire) : la réunion et ce que les agents en retiennent
+  // Suppression (propriétaire) : la réunion et ce que les assistants en retiennent
   const [deleting, setDeleting] = useState(false);
   const remove = async () => {
     if (deleting) return;
@@ -64,7 +64,7 @@ function SessionItem({ session, projectId, cost, onViewDeliverable, tour, canDel
     try {
       const { data: scope } = await api.get(`/projects/${projectId}/sessions/${session.id}/deletion`);
       if (scope.devRunning) { notifyError(null, 'Le développement de cette réunion est en cours : attendez qu’il se termine pour la supprimer.'); return; }
-      const parts = ['son compte rendu, retiré de la mémoire du projet (les agents ne s’en serviront plus)'];
+      const parts = ['son compte rendu, retiré de la mémoire du projet (les assistants ne s’en serviront plus)'];
       if (scope.decisions) parts.push(`${scope.decisions} décision${scope.decisions > 1 ? 's' : ''} inscrite${scope.decisions > 1 ? 's' : ''} au registre`);
       if (scope.actions) parts.push(`${scope.actions} action${scope.actions > 1 ? 's' : ''} créée${scope.actions > 1 ? 's' : ''} à sa conclusion`);
       if (!confirm(`Supprimer définitivement la réunion « ${session.task} » ?\n\nSeront aussi supprimés :\n• ${parts.join('\n• ')}\n\nRestent : les développements déjà lancés et le coût de l’IA. Cette suppression est définitive.`)) return;
@@ -89,7 +89,7 @@ function SessionItem({ session, projectId, cost, onViewDeliverable, tour, canDel
       <div className="flex-1 min-w-[200px]">
         <Link to={path} className="text-sm font-bold text-ink hover:text-action">{session.task}</Link>
         <p className="text-xs text-ink-faint mt-0.5">
-          {TYPE_LABEL[type] || 'Réunion'} · {session.agentCount ?? '–'} agents · {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+          {TYPE_LABEL[type] || 'Réunion'} · {session.agentCount ?? '–'} assistants · {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
           {cost > 0 && <span title="Coût réel de l'IA pour cette réunion"> · {formatUSD(cost)}</span>}
         </p>
       </div>

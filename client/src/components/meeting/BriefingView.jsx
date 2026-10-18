@@ -7,7 +7,7 @@ const isCustom = c => /^autre/i.test(c || '');
 
 // Briefing (refonte UX v5.1) : écran d'arrivée après une préparation sans
 // l'humain. Synthèse + décisions qui lui reviennent ; pour chacune, une réponse
-// ou « Laisser les agents décider ». Les réponses, envoyées ensemble, lancent
+// ou « Laisser les assistants décider ». Les réponses, envoyées ensemble, lancent
 // les échanges. `onSubmit(answers)` : { [id]: texte | DELEGATE }.
 export default function BriefingView({ summary, decisions, debateCount, onShowDebate, onSubmit, submitting, decisionBudget, firstNumber = 1 }) {
   const [picked, setPicked] = useState({});         // { [id]: choix | DELEGATE | 'custom' }
@@ -24,7 +24,7 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
           <div className="space-y-1">
             <p className="text-xs font-extrabold uppercase tracking-wider text-ai">Briefing · votre arrivée</p>
             <h2 className="text-2xl font-extrabold text-ink leading-tight">
-              Les agents ont préparé la réunion. {decisions.length} décision{decisions.length > 1 ? 's vous reviennent' : ' vous revient'}.
+              Les assistants ont préparé la réunion. {decisions.length} décision{decisions.length > 1 ? 's vous reviennent' : ' vous revient'}.
             </h2>
             <p className="text-[15px] text-ink-muted">Lisez la synthèse, choisissez une réponse pour chaque point, puis validez pour lancer les échanges.</p>
           </div>
@@ -37,7 +37,7 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
                 </h3>
                 {debateCount > 0 && (
                   <button type="button" onClick={onShowDebate} className="min-h-[32px] text-[13px] font-bold text-ai hover:underline">
-                    Voir le débat des agents ({debateCount} messages)
+                    Voir le débat des assistants ({debateCount} messages)
                   </button>
                 )}
               </div>
@@ -68,7 +68,7 @@ export default function BriefingView({ summary, decisions, debateCount, onShowDe
                       <ChoicePill key={j} selected={picked[d.id] === c} recommended={j === 0} onClick={() => setPicked(p => ({ ...p, [d.id]: c }))}>{c}</ChoicePill>
                     ))}
                     <ChoicePill tone="ai" data-tour={i === 0 ? 'mr-delegate' : undefined} selected={picked[d.id] === DELEGATE} onClick={() => setPicked(p => ({ ...p, [d.id]: DELEGATE }))}>
-                      Laisser les agents décider
+                      Laisser les assistants décider
                     </ChoicePill>
                   </div>
                   {picked[d.id] === 'custom' && (

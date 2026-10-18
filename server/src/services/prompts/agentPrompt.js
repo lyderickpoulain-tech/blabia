@@ -258,7 +258,10 @@ function buildAgentSystemPrompt({
   const artifactSection = artifactRequest && artifactCompare
     ? `
 TROIS MAQUETTES À COMPARER, DEMANDÉES PAR L'HUMAIN : « ${artifactRequest} »
-Produis dans ce tour TROIS maquettes HTML de la même page, nettement différentes (ambiance, couleurs, typographie, disposition), pour que l'humain réagisse : « celle-ci », « pas celle-là », « mélanger ».
+Produis dans ce tour TROIS propositions HTML de CE QUI EST DEMANDÉ, nettement différentes, pour que l'humain réagisse : « celle-ci », « pas celle-là », « mélanger ».
+- La demande porte sur une page (accueil, fiche…) : trois maquettes de cette page (ambiance, couleurs, typographie, disposition).
+- Elle porte sur la typographie, les couleurs ou l'ambiance : trois PLANCHES DE STYLE, pas des pages — pour chacune, la police en grand (titre, sous-titre, paragraphe), la palette en pastilles nommées, et un petit exemple réel (un titre et un bouton du site). Ne refais pas la page d'accueil.
+- Une maquette par option quand la demande cite des options : respecte-les.
 - Pour chacune, sur une ligne juste avant son bloc : [ARTIFACT_TITLE: A — deux ou trois mots qui la résument] (puis B, puis C).
 - Chaque bloc \`\`\`html est autonome et COMPACT (2 500 caractères au plus) : une balise <style> courte, aucune ressource externe, aucun script, de vrais textes du projet (pas de lorem ipsum), lisible sur téléphone.
 - Respecte les décisions déjà prises (registre) ; ce qui n'est pas tranché varie d'une maquette à l'autre.
@@ -295,7 +298,10 @@ POINT D'AVANCEMENT : seulement s'il y a du nouveau. Si aucun agent n'a encore pa
   const toolSuggestionsNote = intention[0] === 'stack' && toolReview?.toolSuggestionsText
     ? `\nOUTILS DÉJÀ PROPOSÉS DANS CETTE RÉUNION — ne les repropose pas :\n${toolReview.toolSuggestionsText}\n`
     : '';
-  const briefSection    = project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '';
+  const briefSection    = (project.brief   ? `\nBrief du projet :\n${project.brief}\n`                       : '')
+    // v5.1 : « Votre vision », validée par l'humain — la référence (personas : peur d'être mal retranscrit)
+    + (project.visionStatus === 'validated' && project.vision
+      ? `\nSA VISION, VALIDÉE PAR LUI (la référence de tout le projet : si une proposition s'en écarte, dis-le-lui clairement) :\n${project.vision}\n` : '');
   // v5.1 : dépôt GitHub relié (développements lancés depuis BlabIA) — ne pas en redemander l'adresse
   const repoSection     = project.githubRepo
     ? `\nDÉPÔT DU CODE : GitHub ${project.githubRepo} (https://github.com/${project.githubRepo}). Les prompts des réunions Claude Code y sont réalisés par Claude Code, seul, dans GitHub ; ne demande pas l'adresse du dépôt. Les fichiers « blabia-* » y servent à BlabIA, l'outil qui anime cette réunion : le projet s'appelle « ${project.name} », pas BlabIA.\n${codeReadable
@@ -377,6 +383,7 @@ MISE EN FORME possible dans tes bulles, avec parcimonie : gras sur un mot clé, 
 
 QUESTIONS À L'HUMAIN — il est l'initiateur et l'arbitre :
 ${QUESTION_RULES[questionMode] || QUESTION_RULES.balanced} : une bulle qui commence par « Hypothèse : », puis ce que tu retiens et pourquoi, en une phrase naturelle (ex. « Hypothèse : on ouvre au printemps, ça laisse le temps de trouver le local. »). L'humain peut la contester d'un clic.
+- L'HUMAIN DEMANDE À CHOISIR (« proposez-moi 3 polices », « je veux choisir les couleurs ») : réponds par une carte qui lui donne ces options, nommées concrètement, quel que soit le mode de questions ; ne tranche pas à sa place et ne passe pas à un autre sujet (v5.1 : en « WorldOfMetal », « proposez-moi 3 typos » n'a jamais donné de choix).
 - Avant de poser une carte, regroupe : rassemble en une seule fois toutes les questions qui bloquent vraiment (jusqu'à 3 cartes dans le même message) plutôt que d'en poser une à chaque tour.
 - Le budget de cartes restant pour cette réunion est indiqué à la fin de ce prompt.
 Format d'une carte (JSON valide, une seule ligne par carte) :
@@ -386,7 +393,7 @@ RÈGLE ABSOLUE : Si l'humain a répondu à une de tes questions précédentes (m
 Si et seulement si une compétence précise et indispensable à l'objectif "${session.task}" est clairement absente parmi les agents présents (${activeAgents.map(a => `${a.name} — ${a.role}`).join('; ')}), tu peux suggérer UN expert en ajoutant : [SUGGEST_AGENT: NomAgent, description concise du rôle]. N'utilise ce marqueur que si l'apport de cet expert serait décisif pour atteindre le livrable attendu et qu'aucun agent présent ne couvre cette compétence.
 Si un sujet mérite une réunion séparée (étape manquante, décision à traiter à part, tâche technique distincte) ET qu'il sert l'objectif du projet tel que l'humain l'a posé (pas un élargissement), ajoute EXACTEMENT ce format (JSON valide, une seule ligne) :
 [SUGGEST_MEETING:{"title":"Titre court","objective":"Objectif en une phrase","type":"decision|claude_code|stack","reason":"Pourquoi cette réunion est nécessaire","after":"<référence de la réunion existante après laquelle l'insérer, ex. R3, ou null pour la fin>"}]
-Utilise les références des réunions du projet listées plus haut pour positionner ta suggestion et vérifier qu'elle ne fait pas doublon avec une réunion déjà prévue.
+Utilise les références des réunions du projet listées plus haut pour positionner ta suggestion et vérifier qu'elle ne fait pas doublon avec une réunion déjà prévue. N'invente pas de volet que le brief ne demande pas (publicité, back-office, application mobile…).
 Si un point demande un travail approfondi qui dépasse la réunion (recherche documentaire, comparatif chiffré, analyse détaillée d'un document, premier jet d'un texte), propose UNE mission à un sous-agent plutôt que de survoler le sujet, avec EXACTEMENT ce format (JSON valide, une seule ligne) :
 [MISSION:{"title":"Titre court","objective":"Ce qu'il faut trouver ou produire, précisément","deliverable":"Forme du résultat (tableau, liste, texte…)","kind":"research|analysis|writing"}]
 Une mission met la réunion en PAUSE : si l'humain la valide, la réunion est REPORTÉE et reprendra, dans une nouvelle réunion du plan, une fois le rapport prêt. Ne la propose donc QUE si la réunion ne peut pas conclure sans ce travail ; sinon avance par hypothèse explicite ou par une carte de décision. 1 mission par réunion au plus ; jamais pour du code (propose plutôt une réunion Claude Code), ni pour ce qu'une hypothèse ou une carte de décision suffit à régler, ni pour une mission déjà listée.

@@ -9,7 +9,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { launchPreparation } from '../../utils/preparation';
 
 // « À trancher » (v5.1, 16/10/2026) : tout ce qui attend l'humain, au même endroit, et les
-// questions des agents auxquelles il répond ICI, sans rouvrir chaque réunion.
+// questions des assistants auxquelles il répond ICI, sans rouvrir chaque réunion.
 
 const isCustom = c => /^autre/i.test(c || '');
 
@@ -54,7 +54,7 @@ function QuestionItem({ projectId, item, onDone }) {
       )}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="primary" disabled={!value || busy} onClick={() => answer('answered', value)}>Répondre</Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => answer('delegated')}>Les agents décident</Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => answer('delegated')}>Les assistants décident</Button>
         <Link to={`/projects/${projectId}/meeting/${item.sessionId}`} className="text-[13px] font-bold ml-auto">Voir dans la réunion</Link>
       </div>
     </div>
@@ -127,7 +127,7 @@ function SimpleItem({ projectId, item }) {
   // Construit seulement pour le type de l'élément (les champs diffèrent d'un type à l'autre)
   const build = {
     delegation_note: () => ({ text: <>Votre bras droit a tenu « {item.sessionTask} »{item.takenOver ? ' (vous avez repris la main)' : ''} : {item.headline}</>, to: `${p}/meeting/${item.sessionId}`, cta: 'Voir la réunion' }),
-    prep_ready: () => ({ text: <>Réunion préparée par les agents : « {item.sessionTask} ». Leurs conclusions vous attendent.</>, to: `${p}/meeting/${item.sessionId}`, cta: 'Voir les conclusions' }),
+    prep_ready: () => ({ text: <>Réunion préparée par les assistants : « {item.sessionTask} ». Leurs conclusions vous attendent.</>, to: `${p}/meeting/${item.sessionId}`, cta: 'Voir les conclusions' }),
     mission_proposed: () => ({ text: <>Mission proposée par {item.agentName} : « {item.title} »</>, to: `${p}/actions`, cta: 'Valider ou écarter' }),
     decision_reopened: () => ({ text: <>Décision remise en question : {item.statement}</>, to: `${p}/decisions`, cta: 'Voir' }),
     actions_late: () => ({ text: <>{item.count} action{item.count > 1 ? 's' : ''} en retard : {item.titles.join(' ; ')}</>, to: `${p}/actions`, cta: 'Voir' }),
@@ -153,7 +153,7 @@ export default function InboxList({ project, inbox, onChanged, limit = null, com
       {inbox.running?.map(r => (
         <div key={r.sessionId} className="flex flex-wrap items-center gap-2 bg-ai-bg border border-ai-border rounded-2xl px-4 py-3">
           <Radio size={16} className="text-ai shrink-0" aria-hidden="true" />
-          <p className="flex-1 min-w-[200px] text-sm font-semibold text-ai">{r.kind === 'delegate' ? 'Votre bras droit tient' : 'Les agents préparent'} « {r.task} ». Il revient vers vous à la fin.</p>
+          <p className="flex-1 min-w-[200px] text-sm font-semibold text-ai">{r.kind === 'delegate' ? 'Votre bras droit tient' : 'Les assistants préparent'} « {r.task} ». Il revient vers vous à la fin.</p>
           <Link to={`/projects/${project.id}/meeting/${r.sessionId}`} className="text-[13px] font-bold">Suivre en direct</Link>
         </div>
       ))}

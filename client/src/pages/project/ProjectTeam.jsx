@@ -5,7 +5,7 @@ import { useProject, PageHeader } from '../../components/project/ProjectShell';
 import { Button, Card } from '../../components/ui';
 import { AgentAvatar, AgentIconPicker } from '../../components/ui/icons';
 
-// Équipe : les agents qui travaillent sur le projet (refonte UX v5.1).
+// Équipe : les assistants qui travaillent sur le projet (refonte UX v5.1).
 // L'ordre de l'équipe est l'ordre proposé au démarrage des réunions.
 export default function ProjectTeam() {
   const { project } = useProject();
@@ -20,7 +20,7 @@ export default function ProjectTeam() {
 
   const load = () => api.get(`/projects/${project.id}/agents`)
     .then(({ data }) => setAgents(data))
-    .catch(() => setError('Impossible de charger les agents du projet.'));
+    .catch(() => setError('Impossible de charger les assistants du projet.'));
   useEffect(() => { load(); }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const team      = (agents || []).filter(a => a.enabled);
@@ -98,8 +98,8 @@ export default function ProjectTeam() {
 
   return (
     <>
-      <PageHeader title="Équipe" subtitle="Les agents qui travaillent sur ce projet. Leur ordre est celui proposé au démarrage des réunions.">
-        <Button variant="primary" onClick={() => setShowCreate(v => !v)}><Plus size={16} /> Créer un agent</Button>
+      <PageHeader title="Équipe" subtitle="Les assistants qui travaillent sur ce projet. Leur ordre est celui proposé au démarrage des réunions.">
+        <Button variant="primary" onClick={() => setShowCreate(v => !v)}><Plus size={16} /> Créer un assistant</Button>
       </PageHeader>
 
       {error && <p role="alert" className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
@@ -116,7 +116,7 @@ export default function ProjectTeam() {
             className="w-full h-11 text-sm border border-line rounded-lg px-3 outline-none focus:ring-2 focus:ring-action-border" />
           <label className="sr-only" htmlFor="agent-prompt">Consignes</label>
           <textarea id="agent-prompt" value={form.systemPrompt} onChange={e => setForm(f => ({ ...f, systemPrompt: e.target.value }))} rows={3}
-            placeholder="Consignes : comment cet agent raisonne, ce qu'il surveille, son style…"
+            placeholder="Consignes : comment cet assistant raisonne, ce qu'il surveille, son style…"
             className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-action-border resize-none" />
           <div>
             <p className="text-xs font-bold text-ink-soft mb-1.5">Icône</p>
@@ -139,7 +139,7 @@ export default function ProjectTeam() {
             <h2 id="team-in" className="text-sm font-extrabold text-ink mb-2">Dans l'équipe · {team.length}</h2>
             <Card className="overflow-hidden">
               {team.length === 0
-                ? <p className="text-sm text-ink-faint px-4 py-6 text-center">Aucun agent. Ajoutez-en depuis la liste ci-dessous.</p>
+                ? <p className="text-sm text-ink-faint px-4 py-6 text-center">Aucun assistant. Ajoutez-en depuis la liste ci-dessous.</p>
                 : <ul className="divide-y divide-line">{team.map(a => <AgentLine key={a.id} agent={a} inTeam />)}</ul>}
             </Card>
           </section>

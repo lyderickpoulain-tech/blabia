@@ -26,7 +26,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export const isOverdueAction = a => a.status !== 'done' && a.dueDate && String(a.dueDate).slice(0, 10) < today();
 const fmtDue = d => new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
-// Confier une action à un agent : mission menée par un sous-agent (recherche, analyse,
+// Confier une action à un assistant : mission menée par un assistant dédié (recherche, analyse,
 // rédaction), avec un niveau (légère / standard / approfondie) ; le rapport rejoint les documents.
 const KINDS = [
   { id: 'research', label: 'Recherche', re: /^(v[ée]rifier|rechercher|trouver|comparer|identifier|lister|s.informer|chercher)/i },
@@ -50,9 +50,9 @@ function MissionLauncher({ action, agents, budget, onLaunch, onCancel }) {
   };
   return (
     <form onSubmit={submit} className="mt-2 space-y-2 rounded-xl border border-ai-border bg-ai-bg p-3">
-      <p className="text-xs font-extrabold text-ai uppercase tracking-wider">Confier à un agent</p>
+      <p className="text-xs font-extrabold text-ai uppercase tracking-wider">Confier à un assistant</p>
       <div className="flex flex-wrap gap-2">
-        <label className="text-xs text-ink-soft flex flex-col gap-1 flex-1 min-w-[160px]">Agent
+        <label className="text-xs text-ink-soft flex flex-col gap-1 flex-1 min-w-[160px]">Assistant
           <select value={agentName} onChange={e => setAgentName(e.target.value)} className={inputCls}>
             {agents.map(a => <option key={a.agentId || a.id} value={a.name}>{a.name} — {a.role}</option>)}
           </select>
@@ -75,13 +75,13 @@ function MissionLauncher({ action, agents, budget, onLaunch, onCancel }) {
           ))}
         </div>
       </fieldset>
-      <label className="text-xs text-ink-soft flex flex-col gap-1">Ce que l’agent doit faire
+      <label className="text-xs text-ink-soft flex flex-col gap-1">Ce que l’assistant doit faire
         <textarea value={objective} onChange={e => setObjective(e.target.value)} rows={3} className={`${inputCls} h-auto py-2 resize-y`} />
       </label>
       <label className="text-xs text-ink-soft flex flex-col gap-1">Ce que vous attendez en retour (facultatif)
         <input value={deliverable} onChange={e => setDeliverable(e.target.value)} placeholder="Ex. : une note d’une page avec les risques et une recommandation" className={inputCls} />
       </label>
-      <p className="text-[11px] text-ink-muted">L’agent travaille seul, sans vous poser de question ; il signale ses hypothèses. Le rapport rejoint les documents du projet ; vous cochez l’action une fois satisfait.{left !== null ? ` Reste ce mois-ci pour les missions : ${formatUSD(Math.max(0, left))}.` : ''}</p>
+      <p className="text-[11px] text-ink-muted">L’assistant travaille seul, sans vous poser de question ; il signale ses hypothèses. Le rapport rejoint les documents du projet ; vous cochez l’action une fois satisfait.{left !== null ? ` Reste ce mois-ci pour les missions : ${formatUSD(Math.max(0, left))}.` : ''}</p>
       <div className="flex gap-2">
         <Button size="sm" type="submit" variant="primary" disabled={busy || !agentName || !objective.trim()}><Bot size={14} aria-hidden="true" /> {busy ? 'Lancement…' : 'Lancer la mission'}</Button>
         <Button size="sm" variant="ghost" onClick={onCancel}>Annuler</Button>
@@ -161,11 +161,11 @@ function ActionItem({ action, rank, onToggle, onSave, onDelete, onMove, agents, 
               </span>
             )}
           </p>
-          {/* Traiter l'action autrement qu'à la main : mission d'un agent, ou réunion */}
+          {/* Traiter l'action autrement qu'à la main : mission d'un assistant, ou réunion */}
           {!done && onDelegate && !delegating && !missionActive && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               <Button size="sm" variant="ghost" className="!h-8 !text-ai hover:!bg-ai-bg" onClick={() => setDelegating(true)} disabled={!agents?.length}>
-                <Bot size={14} aria-hidden="true" /> {mission?.status === 'failed' ? 'Relancer une mission' : 'Confier à un agent'}
+                <Bot size={14} aria-hidden="true" /> {mission?.status === 'failed' ? 'Relancer une mission' : 'Confier à un assistant'}
               </Button>
               <Button size="sm" variant="ghost" className="!h-8" onClick={() => onMeeting(action)}>
                 <Users size={14} aria-hidden="true" /> Traiter en réunion
@@ -248,7 +248,7 @@ export default function ProjectActions() {
   };
   // Traiter en réunion : nouvelle réunion préremplie avec l'action comme objectif
   const toMeeting = action => navigate(`/projects/${project.id}/meeting/new`, {
-    // actionId : la réunion est liée à l'action (rapport de mission transmis aux agents, action cochée à la conclusion)
+    // actionId : la réunion est liée à l'action (rapport de mission transmis aux assistants, action cochée à la conclusion)
     state: { milestoneTitle: [action.title, action.description].filter(Boolean).join(' — '), milestoneType: 'decision', actionId: action.id, actionTitle: action.title },
   });
   const openReport = id => setReport(missionsApi.missions.find(m => m.id === id) || null);
@@ -280,7 +280,7 @@ export default function ProjectActions() {
   return (
     <>
       <SubTabs group="follow" />
-      <PageHeader title="Actions" subtitle="Ce que vous avez à faire entre deux réunions, dans l'ordre où les mener. BlabIA les propose à la conclusion ; les agents commencent la réunion suivante par un point d'avancement.">
+      <PageHeader title="Actions" subtitle="Ce que vous avez à faire entre deux réunions, dans l'ordre où les mener. BlabIA les propose à la conclusion ; les assistants commencent la réunion suivante par un point d'avancement.">
         <ExportButtons pdfPath={`/projects/${project.id}/imprimer/registre`} wordPath={`/projects/${project.id}/export/registry/word`} />
         {!adding && <Button variant="secondary" onClick={() => setAdding(true)}><Plus size={16} aria-hidden="true" /> Ajouter une action</Button>}
       </PageHeader>
@@ -371,10 +371,10 @@ export default function ProjectActions() {
           </section>
         )}
 
-        {/* Missions des agents (v5.1) : travaux approfondis menés par des sous-agents */}
+        {/* Missions des assistants (v5.1) : travaux approfondis menés par des assistants dédiés */}
         <section data-tour="mission-list" className="space-y-2 pt-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <SectionLabel className="!text-ai">Missions des agents · {shownMissions.length}</SectionLabel>
+            <SectionLabel className="!text-ai">Missions des assistants · {shownMissions.length}</SectionLabel>
             {missionsApi.budget && (
               <span className="text-xs text-ink-faint">
                 Ce mois : {formatUSD(missionsApi.budget.spentUSD + missionsApi.budget.reservedUSD)} sur {formatUSD(missionsApi.budget.monthlyUSD)}
@@ -382,7 +382,7 @@ export default function ProjectActions() {
             )}
           </div>
           {shownMissions.length === 0 ? (
-            <p className="text-xs text-ink-faint">Aucune mission. En réunion, un agent peut proposer de confier un travail approfondi (recherche, analyse, rédaction) à un sous-agent ; vous la validez, avec un plafond de coût.</p>
+            <p className="text-xs text-ink-faint">Aucune mission. En réunion, un assistant peut proposer de confier un travail approfondi (recherche, analyse, rédaction) à un assistant dédié ; vous la validez, avec un plafond de coût.</p>
           ) : (
             <ul className="space-y-2">
               {shownMissions.map(m => (

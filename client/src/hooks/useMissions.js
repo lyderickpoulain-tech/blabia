@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../utils/api';
 import { notifyError, notifySuccess } from '../utils/notify';
 
-// Missions des agents d'un projet (ou d'une réunion) : chargement, actions, et
+// Missions des assistants d'un projet (ou d'une réunion) : chargement, actions, et
 // actualisation automatique tant qu'une mission est en attente ou en cours.
 export default function useMissions(projectId, { sessionId } = {}) {
   const [missions, setMissions] = useState([]);
@@ -49,7 +49,7 @@ export default function useMissions(projectId, { sessionId } = {}) {
     reject:  m => call(m, 'reject'),
     cancel:  m => call(m, 'cancel'),
     // v5.1 : compte rendu prêt — intégré au projet ou non ; la mission disparaît ensuite
-    integrate: m => call(m, 'outcome', { outcome: 'integrated' }, 'Compte rendu intégré au projet : les agents s’en serviront.'),
+    integrate: m => call(m, 'outcome', { outcome: 'integrated' }, 'Compte rendu intégré au projet : les assistants s’en serviront.'),
     discard:   m => call(m, 'outcome', { outcome: 'discarded' }, 'Compte rendu écarté : il n’est pas intégré au projet.'),
   };
 }

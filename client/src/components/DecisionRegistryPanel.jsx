@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import { Button, IconButton, Badge, Card, SectionLabel, AutoTextarea } from './ui';
 
-// Registre des décisions du projet : ce qui est tranché (les agents ne le
+// Registre des décisions du projet : ce qui est tranché (les assistants ne le
 // redemandent pas) ; l'humain peut modifier, remettre en question ou supprimer.
 
 const fmtDate = d => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -94,7 +94,7 @@ function DecisionItem({ decision, onPatch, onDelete, projectId, onReload }) {
             )}
             <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-faint pt-0.5">
               <Badge tone={decision.origin === 'human' ? 'action' : 'ai'} className="!text-[10px] !px-2 !py-0.5">
-                {decision.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des agents'}
+                {decision.origin === 'human' ? 'Votre arbitrage' : 'Hypothèse des assistants'}
               </Badge>
               <span>{fmtDate(decision.createdAt)}</span>
               {decision.sessionTask && <span className="truncate max-w-[240px]">· {decision.sessionTask}</span>}
@@ -119,7 +119,7 @@ function DecisionItem({ decision, onPatch, onDelete, projectId, onReload }) {
       {mode === 'reopen' && (
         <div className="space-y-2">
           <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} autoFocus aria-label="Motif de la remise en question"
-            placeholder="Pourquoi la remettre en question ? (les agents en tiendront compte)"
+            placeholder="Pourquoi la remettre en question ? (les assistants en tiendront compte)"
             className="w-full text-sm text-ink border border-await-border rounded-[10px] px-3 py-2 outline-none focus:ring-2 focus:ring-await-border resize-none bg-white" />
           <div className="flex gap-2">
             <Button size="sm" variant="await" disabled={busy} onClick={() => run(() => onPatch(decision.id, { status: 'reopened', reopenNote: note }))}>

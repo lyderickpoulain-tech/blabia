@@ -144,7 +144,7 @@ export default function StartMeeting() {
   // Réunion du plan précédée d'actions encore ouvertes : elle ne peut pas se tenir (v5.1)
   const [blockingActions,   setBlockingActions]   = useState([]);
 
-  // Chargement initial des agents du projet
+  // Chargement initial des assistants du projet
   useEffect(() => {
     setAgentsLoading(true);
     api.get(`/projects/${projectId}/agents`)
@@ -153,7 +153,7 @@ export default function StartMeeting() {
         setAvailableAgents(enabled);
         setSelectedAgentIds(new Set(enabled.slice(0, 2).map(a => a.agentId || a.id)));
       })
-      .catch(err => notifyError(err, 'Impossible de charger les agents du projet.'))
+      .catch(err => notifyError(err, 'Impossible de charger les assistants du projet.'))
       .finally(() => setAgentsLoading(false));
   }, [projectId]);
 
@@ -213,7 +213,7 @@ export default function StartMeeting() {
         if (!touched.current.model) setModel(data.recommended.model);
         if (!touched.current.web) setWebSearchEnabled(data.recommended.webSearch);
       }
-    } catch (err) { notifyError(err, 'La suggestion d’agents a échoué.'); }
+    } catch (err) { notifyError(err, 'La suggestion d’assistants a échoué.'); }
     setSuggestingAgents(false);
   };
 
@@ -232,7 +232,7 @@ export default function StartMeeting() {
       setSelectedAgentIds(prev => new Set([...prev, agent.id]));
       setSuggestionReasons(prev => ({ ...prev, [agent.id]: newAgentSuggestion.reason }));
       setNewAgentSuggestion(null);
-    } catch (err) { notifyError(err, 'L’agent suggéré n’a pas pu être créé.'); }
+    } catch (err) { notifyError(err, 'L’assistant suggéré n’a pas pu être créé.'); }
     setCreatingSuggested(false);
   };
 
@@ -294,13 +294,13 @@ export default function StartMeeting() {
         ...(actionId ? { todoId: actionId } : {}),
       });
 
-      // Préparation par les agents (au moins 2) : elle tourne sur le serveur, l'humain ne
+      // Préparation par les assistants (au moins 2) : elle tourne sur le serveur, l'humain ne
       // rentre pas dans la conversation — retour à « Mes projets », où la réunion préparée
       // se signale quand ses conclusions sont prêtes (v5.1, 15/10/2026)
       if (autoPrepare && activeAgents.length >= 2) {
         try {
           await launchPreparation(projectId, data.session.id);
-          notifySuccess(`Les agents préparent « ${task.trim()} ». Vous la retrouverez signalée dans vos projets quand les conclusions seront prêtes.`);
+          notifySuccess(`Les assistants préparent « ${task.trim()} ». Vous la retrouverez signalée dans vos projets quand les conclusions seront prêtes.`);
           navigate('/');
         } catch (err) {
           notifyError(err, err.message);
@@ -324,14 +324,14 @@ export default function StartMeeting() {
     <div className="max-w-3xl">
       <PageHeader
         title="Nouvelle réunion"
-        subtitle={milestoneTitle ? `Étape du plan : ${milestoneTitle}` : 'Fixez l’objectif, choisissez les agents, puis lancez.'}
+        subtitle={milestoneTitle ? `Étape du plan : ${milestoneTitle}` : 'Fixez l’objectif, choisissez les assistants, puis lancez.'}
       />
 
       <div className="space-y-4">
 
         {actionId && (
           <p className="text-sm text-ink-soft bg-ai-bg border border-ai-border rounded-xl px-4 py-3">
-            Réunion liée à l’action <strong>« {actionTitle} »</strong> : les agents reçoivent l’action et, s’il existe, le rapport complet de la mission qui l’a préparée. L’action sera cochée « faite » quand vous conclurez la réunion.
+            Réunion liée à l’action <strong>« {actionTitle} »</strong> : les assistants reçoivent l’action et, s’il existe, le rapport complet de la mission qui l’a préparée. L’action sera cochée « faite » quand vous conclurez la réunion.
           </p>
         )}
 
@@ -366,7 +366,7 @@ export default function StartMeeting() {
         </Step>
 
         {/* ── 3. Agents invités ───────────────────────────────────────────── */}
-        <Step n={3} title="Agents invités"
+        <Step n={3} title="Assistants invités"
           hint={`${selectedAgentIds.size} sélectionné${selectedAgentIds.size > 1 ? 's' : ''} · 1 minimum, 2 pour la préparation`}
           aside={
             <Button size="sm" variant="secondary" onClick={() => handleSuggestAgents()}
@@ -427,10 +427,10 @@ export default function StartMeeting() {
                 </div>
               )}
 
-              {/* Créer un agent */}
+              {/* Créer un assistant */}
               {newAgentForm.open ? (
                 <div className="border border-line bg-canvas rounded-xl p-4 space-y-2">
-                  <input autoFocus type="text" placeholder="Nom de l'agent" aria-label="Nom de l'agent" value={newAgentForm.name}
+                  <input autoFocus type="text" placeholder="Nom de l'assistant" aria-label="Nom de l'assistant" value={newAgentForm.name}
                     onChange={e => setNewAgentForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
                   <input type="text" placeholder="Rôle / spécialité" aria-label="Rôle" value={newAgentForm.role}
                     onChange={e => setNewAgentForm(p => ({ ...p, role: e.target.value }))} className={inputCls} />
@@ -450,7 +450,7 @@ export default function StartMeeting() {
               ) : (
                 <button type="button" onClick={() => setNewAgentForm(p => ({ ...p, open: true }))}
                   className="w-full h-11 inline-flex items-center justify-center gap-1.5 border-2 border-dashed border-line hover:border-action-border rounded-xl text-sm font-semibold text-ink-faint hover:text-action transition">
-                  <Plus size={16} aria-hidden="true" /> Créer un agent
+                  <Plus size={16} aria-hidden="true" /> Créer un assistant
                 </button>
               )}
             </div>
@@ -467,8 +467,8 @@ export default function StartMeeting() {
               <span className="flex-1">
                 <span className="block text-sm font-extrabold text-ink">Préparer avant mon arrivée</span>
                 <span className="block text-xs text-ink-muted mt-0.5">
-                  Les agents débattent d'abord entre eux ; vous arrivez sur un briefing avec les seules décisions qui vous reviennent.
-                  {!prepPossible && ' Invitez au moins 2 agents.'}
+                  Les assistants débattent d'abord entre eux ; vous arrivez sur un briefing avec les seules décisions qui vous reviennent.
+                  {!prepPossible && ' Invitez au moins 2 assistants.'}
                 </span>
               </span>
               <input type="checkbox" checked={autoPrepare && prepPossible} disabled={!prepPossible}
@@ -530,14 +530,14 @@ export default function StartMeeting() {
                         Recherche web
                         {recommended && <Badge tone="ok" className="!text-[10px] !px-2 !py-0.5">{recommended.webSearch ? 'Recommandée' : 'Non recommandée'}</Badge>}
                       </p>
-                      <p className="text-xs text-ink-faint mt-0.5">{recommended?.webReason || 'Les agents pourront chercher des informations en temps réel.'}</p>
+                      <p className="text-xs text-ink-faint mt-0.5">{recommended?.webReason || 'Les assistants pourront chercher des informations en temps réel.'}</p>
                     </div>
                   </div>
                   <Toggle checked={webSearchEnabled} onChange={chooseWeb} label="Recherche web" />
                 </div>
                 {webSearchEnabled && (
                   <p className="text-xs text-await bg-await-bg border border-await-border rounded-[10px] px-3 py-2 mt-3">
-                    Chaque recherche est facturée en plus par Anthropic. À activer seulement si les agents ont besoin d'informations récentes.
+                    Chaque recherche est facturée en plus par Anthropic. À activer seulement si les assistants ont besoin d'informations récentes.
                   </p>
                 )}
               </div>
@@ -561,7 +561,7 @@ export default function StartMeeting() {
         <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
           {!canStart && !starting && (
             <p className="text-xs text-ink-faint">
-              {blockingActions.length ? 'Menez d’abord les actions prévues avant cette réunion.' : !task.trim() ? 'Renseignez l’objectif pour lancer.' : 'Invitez au moins un agent.'}
+              {blockingActions.length ? 'Menez d’abord les actions prévues avant cette réunion.' : !task.trim() ? 'Renseignez l’objectif pour lancer.' : 'Invitez au moins un assistant.'}
             </p>
           )}
           <Button variant="primary" onClick={handleStart} disabled={!canStart} className="min-w-[220px]">

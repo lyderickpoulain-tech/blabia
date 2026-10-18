@@ -32,7 +32,7 @@ export default function Layout({ children, wide = false }) {
 
   const links = [
     { to: '/dashboard', label: 'Projets',   icon: FolderKanban },
-    { to: '/agents',    label: 'Agents',    icon: Bot },
+    { to: '/agents',    label: 'Assistants', icon: Bot },
     ...(isAdmin ? [{ to: '/admin/users', label: 'Administration', icon: Shield }] : []),
   ];
 

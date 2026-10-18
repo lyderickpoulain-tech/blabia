@@ -4,7 +4,7 @@ import { Badge, Button } from './ui';
 import { formatUSD } from '../utils/cost';
 import { MISSION_LEVELS, levelById } from '../utils/missionLevels';
 
-// Mission confiée par un agent à un sous-agent (v5.1) : proposée en réunion,
+// Mission confiée par un assistant à un sous-agent (v5.1) : proposée en réunion,
 // validée par l'humain avec un niveau (légère / standard / approfondie, le plafond en
 // découle), menée en arrière-plan, rapport versé aux
 // documents du projet. Utilisée dans le fil de réunion et sur la page Actions.

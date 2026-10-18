@@ -6,7 +6,7 @@ import { launchPreparation } from '../utils/preparation';
 import { notifyError, notifySuccess } from '../utils/notify';
 
 // Confier une réunion du plan au bras droit (v5.1, 16/10/2026, étape 2) : le cadre (ce qu'il
-// peut trancher, ce qui vous est réservé), les agents convoqués, puis la réunion tourne sur le
+// peut trancher, ce qui vous est réservé), les assistants convoqués, puis la réunion tourne sur le
 // serveur sans vous. Sur les boutons, l'acteur est toujours nommé (« le bras droit », « vous »).
 
 const DEFAULT_CAN = ['Les détails d’organisation et de mise en forme', 'Entre deux options équivalentes, au même coût'];
@@ -63,7 +63,7 @@ export default function DelegateMeetingModal({ project, milestone, onClose, onLa
         setAgents(list);
         setSelected((sugg.existingSelected || []).map(s => s.agentId).slice(0, 4));
         setRecommended(sugg.recommended || null);
-      } catch (err) { if (alive) { setAgents([]); notifyError(err, 'Les agents n’ont pas pu être proposés.'); } }
+      } catch (err) { if (alive) { setAgents([]); notifyError(err, 'Les assistants n’ont pas pu être proposés.'); } }
     })();
     return () => { alive = false; };
   }, [project.id, milestone]);
@@ -101,7 +101,7 @@ export default function DelegateMeetingModal({ project, milestone, onClose, onLa
           <div className="flex-1 min-w-0">
             <p className="text-xs font-extrabold uppercase tracking-wider text-ai">Confier au bras droit</p>
             <h2 id="dlg-title" className="text-xl font-extrabold text-ink leading-snug mt-0.5">{milestone.ref ? `${milestone.ref} · ` : ''}{milestone.title}</h2>
-            <p className="text-sm text-ink-muted mt-1">Le bras droit tient la réunion à votre place : il convoque les agents, anime, tranche dans le cadre ci-dessous et vous rend une note de retour.</p>
+            <p className="text-sm text-ink-muted mt-1">Le bras droit tient la réunion à votre place : il convoque les assistants, anime, tranche dans le cadre ci-dessous et vous rend une note de retour.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Fermer" className="w-10 h-10 inline-flex items-center justify-center rounded-[10px] text-ink-muted hover:bg-muted-light"><X size={18} /></button>
         </div>
@@ -113,9 +113,9 @@ export default function DelegateMeetingModal({ project, milestone, onClose, onLa
           </div>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-extrabold text-ink">Agents convoqués</h3>
+            <h3 className="text-sm font-extrabold text-ink">Assistants convoqués</h3>
             {agents === null ? (
-              <p className="text-sm text-ink-muted">Le bras droit choisit les agents utiles…</p>
+              <p className="text-sm text-ink-muted">Le bras droit choisit les assistants utiles…</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {agents.map(a => {

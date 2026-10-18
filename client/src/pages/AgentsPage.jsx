@@ -62,7 +62,7 @@ function AgentForm({ initial = {}, onSave, onCancel }) {
         <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={5}
           placeholder="Ex : Tu es un expert en droit des affaires. Tu analyses les aspects légaux, identifies les risques juridiques et proposes des solutions conformes à la réglementation en vigueur."
           className={`${inputCls} resize-y`} />
-        <span className="block text-[11px] text-ink-faint mt-1">Ce qui guide le comportement de l'agent en réunion. Commencez par « Tu es… ».</span>
+        <span className="block text-[11px] text-ink-faint mt-1">Ce qui guide le comportement de l'assistant en réunion. Commencez par « Tu es… ».</span>
       </label>
 
       <div>
@@ -96,7 +96,7 @@ function Modal({ title, onClose, children, size = 'max-w-lg' }) {
   );
 }
 
-// ── Carte d'agent ──────────────────────────────────────────────────────────────
+// ── Carte d'assistant ──────────────────────────────────────────────────────────────
 function AgentCard({ agent, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const isDefault = agent.isDefault;
@@ -147,7 +147,7 @@ export default function AgentsPage() {
   useEffect(() => {
     api.get('/agents')
       .then(({ data }) => setAgents(data))
-      .catch(err => notifyError(err, 'Impossible de charger les agents.'))
+      .catch(err => notifyError(err, 'Impossible de charger les assistants.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -183,11 +183,11 @@ export default function AgentsPage() {
     <Layout wide>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-2xl font-extrabold text-ink">Agents</h1>
-          <p className="text-sm text-ink-muted mt-1">Votre bibliothèque d'agents, à inviter dans les équipes de vos projets.</p>
+          <h1 className="text-2xl font-extrabold text-ink">Assistants</h1>
+          <p className="text-sm text-ink-muted mt-1">Votre bibliothèque d'assistants, à inviter dans les équipes de vos projets.</p>
         </div>
         <Button variant="primary" onClick={() => setShowCreate(true)}>
-          <Plus size={18} aria-hidden="true" /> Créer un agent
+          <Plus size={18} aria-hidden="true" /> Créer un assistant
         </Button>
       </div>
 
@@ -198,7 +198,7 @@ export default function AgentsPage() {
       ) : (
         <div className="space-y-8">
           <section>
-            <SectionLabel className="mb-3">Mes agents · {personalAgents.length}</SectionLabel>
+            <SectionLabel className="mb-3">Mes assistants · {personalAgents.length}</SectionLabel>
             {personalAgents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
                 {personalAgents.map(agent => (
@@ -208,9 +208,9 @@ export default function AgentsPage() {
             ) : (
               <Card className="p-6 text-center">
                 <Bot size={28} className="mx-auto text-ink-faint mb-2" aria-hidden="true" />
-                <p className="text-sm font-extrabold text-ink mb-1">Aucun agent personnalisé</p>
+                <p className="text-sm font-extrabold text-ink mb-1">Aucun assistant personnalisé</p>
                 <p className="text-xs text-ink-muted mb-4">Un expert qui manque à vos réunions ? Créez-le une fois, invitez-le partout.</p>
-                <Button size="sm" variant="primary" onClick={() => setShowCreate(true)}>Créer mon premier agent</Button>
+                <Button size="sm" variant="primary" onClick={() => setShowCreate(true)}>Créer mon premier assistant</Button>
               </Card>
             )}
           </section>
@@ -225,19 +225,19 @@ export default function AgentsPage() {
       )}
 
       {showCreate && (
-        <Modal title="Nouvel agent" onClose={() => setShowCreate(false)}>
+        <Modal title="Nouvel assistant" onClose={() => setShowCreate(false)}>
           <AgentForm onSave={handleCreate} onCancel={() => setShowCreate(false)} />
         </Modal>
       )}
 
       {editingAgent && (
-        <Modal title="Modifier l'agent" onClose={() => setEditingAgent(null)}>
+        <Modal title="Modifier l'assistant" onClose={() => setEditingAgent(null)}>
           <AgentForm initial={editingAgent} onSave={handleEdit} onCancel={() => setEditingAgent(null)} />
         </Modal>
       )}
 
       {deletingAgent && (
-        <Modal title="Supprimer l'agent" size="max-w-sm" onClose={deleting ? null : () => setDeletingAgent(null)}>
+        <Modal title="Supprimer l'assistant" size="max-w-sm" onClose={deleting ? null : () => setDeletingAgent(null)}>
           <p className="text-sm text-ink-soft mb-1">
             Supprimer <strong className="text-ink">{deletingAgent.name}</strong> ? Il ne sera plus disponible pour les nouvelles réunions.
           </p>

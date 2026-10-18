@@ -40,7 +40,7 @@ export default function NewProjectChoiceModal({ onClose }) {
           </span>
           <span>
             <span className="block text-sm font-extrabold text-ink">Créer mon projet</span>
-            <span className="block text-xs text-ink-muted mt-0.5">Vous décrivez votre idée ; BlabIA compose l’équipe d’agents.</span>
+            <span className="block text-xs text-ink-muted mt-0.5">Vous décrivez votre idée ; BlabIA compose l’équipe d’assistants.</span>
           </span>
         </button>
 
@@ -52,7 +52,7 @@ export default function NewProjectChoiceModal({ onClose }) {
             <span className="block text-sm font-extrabold text-ink">{creating ? 'Création du projet de démo…' : 'Créer un projet de démo'}</span>
             <span className="block text-xs text-ink-muted mt-0.5">
               Un salon de thé déjà avancé : plan, réunions, décisions, actions, documents, missions.
-              Pour essayer BlabIA sans partir de zéro ; les agents y sont actifs, avec le coût habituel.
+              Pour essayer BlabIA sans partir de zéro ; les assistants y sont actifs, avec le coût habituel.
             </span>
           </span>
         </button>

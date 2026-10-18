@@ -162,7 +162,7 @@ export default function ProjectTimelinePanel({ projectId, refreshKey = 0 }) {
               <div>
                 <p className="text-sm font-bold text-action-dark">Démarrer une réunion</p>
                 <p className="text-sm text-ink-soft mt-0.5 leading-snug">
-                  Lancer une réunion d'agents pour explorer la tâche et préparer l'implémentation
+                  Lancer une réunion d'assistants pour explorer la tâche et préparer l'implémentation
                 </p>
               </div>
             </button>
