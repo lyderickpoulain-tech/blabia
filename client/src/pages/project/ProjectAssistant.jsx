@@ -32,6 +32,7 @@ export default function ProjectAssistant() {
   const startMeeting = async (m, prepare) => {
     try {
       const s = await quickStartMeeting(project, m, { prepare });
+      if (s.alreadyOpen) { notifySuccess(`« ${m.title} » est déjà ouverte : vous la rejoignez.`); navigate(`/projects/${project.id}/meeting/${s.id}`); return; }
       if (prepare) { await launchPreparation(project.id, s.id); notifySuccess(`Les assistants préparent « ${m.title} ».`); refreshInbox(); return; }
       navigate(`/projects/${project.id}/meeting/${s.id}`, { state: { autoStart: true } });
     } catch (err) { notifyError(err, quickStartError(err)); }

@@ -325,7 +325,7 @@ export default function ProjectSettings() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [modal, setModal] = useState(null); // 'reset' | 'delete'
-  const [deleteMilestones, setDeleteMilestones] = useState(false);
+  const [deleteMilestones, setDeleteMilestones] = useState(true); // v5.1 : repartir d'un nouveau plan par défaut
   // Projet relié à un dépôt : développements en attente (pull request ouverte, échec) et en cours
   const [devInfo, setDevInfo] = useState(null); // { pending, running }
   const [abandonDevs, setAbandonDevs] = useState(true);
@@ -363,10 +363,11 @@ export default function ProjectSettings() {
       const { data } = await api.delete(`/projects/${project.id}/memory`, {
         params: { deleteMilestones, ...(project.githubRepo && devInfo?.pending && abandonDevs ? { abandonDevs: true } : {}) },
       });
-      setProject(p => ({ ...p, context: null }));
+      setProject(p => ({ ...p, context: null, vision: null, visionStatus: null }));
       setModal(null);
-      setDeleteMilestones(false);
       refreshCounts();
+      // Nouveau plan : retour au tableau de bord, où BlabIA le propose aussitôt (v5.1)
+      if (deleteMilestones) { navigate(`/projects/${project.id}`, { state: { proposePlan: true } }); setBusy(false); return; }
       setNotice(`Mémoire du projet réinitialisée.${data?.abandonedDevs ? ` ${data.abandonedDevs} développement${data.abandonedDevs > 1 ? 's' : ''} en attente abandonné${data.abandonedDevs > 1 ? 's' : ''} sur GitHub.` : ''}`);
     } catch { setNotice('Erreur lors de la réinitialisation.'); }
     setBusy(false);
@@ -437,10 +438,17 @@ export default function ProjectSettings() {
             <li>Conserver le brief, les documents de référence, les outils et l’équipe</li>
             <li>{deleteMilestones ? 'Supprimer les réunions du plan' : 'Remettre les réunions du plan à « à tenir »'}</li>
           </ul>
-          <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
-            <input type="checkbox" checked={deleteMilestones} onChange={e => setDeleteMilestones(e.target.checked)} className="mt-1 accent-await" />
-            <span>Supprimer aussi le plan des réunions<span className="block text-xs text-ink-faint">Il devra être reconstruit.</span></span>
-          </label>
+          <fieldset className="space-y-1.5">
+            <legend className="text-sm font-bold text-ink mb-1">Et le plan des réunions ?</legend>
+            <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+              <input type="radio" name="reset-plan" checked={deleteMilestones} onChange={() => setDeleteMilestones(true)} className="mt-1 accent-await" />
+              <span><strong className="text-ink">Repartir d’un nouveau plan</strong><span className="block text-xs text-ink-faint">BlabIA vous en propose un aussitôt, à partir du brief.</span></span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+              <input type="radio" name="reset-plan" checked={!deleteMilestones} onChange={() => setDeleteMilestones(false)} className="mt-1 accent-await" />
+              <span><strong className="text-ink">Garder le plan actuel</strong><span className="block text-xs text-ink-faint">Ses réunions redeviennent « à tenir ».</span></span>
+            </label>
+          </fieldset>
           {project.githubRepo && (
             <div className="rounded-xl border border-await-border bg-await-bg px-3.5 py-3 space-y-2">
               <p className="text-sm font-bold text-await flex items-center gap-1.5"><Github size={15} aria-hidden="true" /> Le site lui-même n’est pas réinitialisé</p>

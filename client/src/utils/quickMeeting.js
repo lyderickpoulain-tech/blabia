@@ -17,13 +17,28 @@ export async function quickStartMeeting(project, milestone, { prepare = false, d
   const activeAgents = ids.map(id => byId[id]).map(a => ({
     id: a.agentId || a.id, name: a.name, role: a.role, systemPrompt: a.systemPrompt || `Tu es ${a.name}. ${a.role}.`, emoji: a.emoji || '',
   }));
-  const { data } = await api.post(`/projects/${project.id}/sessions`, {
-    task: milestone.title, intention: [milestone.type || 'decision'], activeAgents, mode: 'meeting', milestoneId,
-    ...(sugg.recommended?.model ? { model: sugg.recommended.model } : {}),
-    webSearchEnabled: sugg.recommended?.webSearch === true,
-    ...(delegation ? { delegation } : {}),
-  });
-  return data.session;
+  try {
+    const { data } = await api.post(`/projects/${project.id}/sessions`, {
+      task: milestone.title, intention: [milestone.type || 'decision'], activeAgents, mode: 'meeting', milestoneId,
+      ...(sugg.recommended?.model ? { model: sugg.recommended.model } : {}),
+      webSearchEnabled: sugg.recommended?.webSearch === true,
+      ...(delegation ? { delegation } : {}),
+    });
+    return data.session;
+  } catch (err) {
+    // v5.1 (retour du 18/10) : réunion déjà ouverte — on la rejoint ; confiée au bras droit, il la reprend
+    const openId = await joinOpenMeeting(project.id, err, delegation);
+    if (!openId) throw err;
+    return { id: openId, alreadyOpen: true };
+  }
+}
+
+// Erreur « réunion déjà ouverte » → son identifiant (et passation au bras droit si demandé)
+export async function joinOpenMeeting(projectId, err, delegation = null) {
+  const openId = err.response?.status === 409 && err.response.data?.openSessionId;
+  if (!openId) return null;
+  if (delegation) await api.post(`/projects/${projectId}/sessions/${openId}/handover`, { delegation });
+  return openId;
 }
 
 // Message lisible quand la réunion ne peut pas se tenir (actions à mener avant)

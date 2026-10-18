@@ -11,7 +11,7 @@ export function meetingState(messages = []) {
   let lastAgent = -1, lastHuman = -1, lastAnswer = -1, lastClose = -1, closeReason = '';
   messages.forEach((m, i) => {
     if (m.type === 'close_suggestion') { lastClose = i; closeReason = m.content || ''; }
-    else if (m.type === 'decision_answer') lastAnswer = i;
+    else if (m.type === 'decision_answer') { if (m.kind !== 'vigilance_dismissed') lastAnswer = i; } // un point de vigilance écarté ne relance rien
     else if (m.role === 'human') lastHuman = i;
     else if (m.role === 'agent') lastAgent = i;
   });

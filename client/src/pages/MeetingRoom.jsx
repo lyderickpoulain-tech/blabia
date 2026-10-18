@@ -220,11 +220,13 @@ export default function MeetingRoom() {
     if (!initialScrollDone.current) return;
     const feed = feedRef.current;
     if (!feed) return;
-    const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 100;
+    // v5.1 (retour du 18/10) : on suit tant que l'humain n'a pas lui-même remonté la conversation
+    // (molette, doigt, clavier) — la distance au bas, elle, sautait quand plusieurs bulles arrivaient
+    const following = !userScrolledUpRef.current;
     // v5.1 (test « Gérard ») : une question qui attend une réponse est toujours amenée à l'écran
     const last = messages[messages.length - 1];
     const questionWaiting = last?.type === 'decision' && last.status === 'pending' && !isStreaming;
-    if (atBottom || questionWaiting) {
+    if (following || questionWaiting) {
       feed.scrollTo({ top: feed.scrollHeight, behavior: isStreaming ? 'instant' : 'smooth' });
       setShowNewMessage(false);
     } else {
@@ -232,13 +234,22 @@ export default function MeetingRoom() {
     }
   }, [messages, streamingAgent, agentSuggestions, meetingSuggestions, isStreaming]);
 
-  // Masquer le bouton quand l'utilisateur scrolle jusqu'en bas manuellement
+  // Masquer le bouton quand l'utilisateur scrolle jusqu'en bas manuellement ; revenu en bas,
+  // la conversation se remet à suivre
+  const userScrolledUpRef = useRef(false);
   const handleFeedScroll = useCallback(() => {
     const feed = feedRef.current;
     if (!feed) return;
-    if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 100) {
+    if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40) {
+      userScrolledUpRef.current = false;
       setShowNewMessage(false);
     }
+  }, []);
+  // Geste de l'humain vers le haut : il lit plus haut, on cesse de suivre
+  const handleUserScrollIntent = useCallback((e) => {
+    if (e.type === 'wheel' && e.deltaY >= 0) return;
+    if (e.type === 'keydown' && !['ArrowUp', 'PageUp', 'Home'].includes(e.key)) return;
+    userScrolledUpRef.current = true;
   }, []);
 
   // Menus de l'en-tête : fermeture au clic extérieur
@@ -1062,7 +1073,7 @@ export default function MeetingRoom() {
                 <VisioStrip agents={activeAgents} agentColors={AGENT_COLORS} messages={messages} streamingAgent={streamingAgent} delegateRunning={delegateRunning} />
               )}
 
-              <div ref={feedRef} role="log" aria-label="Fil de la réunion" className="flex-1 min-h-0 overflow-y-auto" onScroll={handleFeedScroll}>
+              <div ref={feedRef} role="log" aria-label="Fil de la réunion" className="flex-1 min-h-0 overflow-y-auto" onScroll={handleFeedScroll} onWheel={handleUserScrollIntent} onTouchMove={handleUserScrollIntent} onKeyDown={handleUserScrollIntent}>
                 <ConversationFeed
                   messages={messages}
                   activeAgents={activeAgents}
@@ -1104,7 +1115,7 @@ export default function MeetingRoom() {
               {showNewMessage && (
                 <div className="shrink-0 flex justify-center py-1">
                   <button type="button"
-                    onClick={() => { feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' }); setShowNewMessage(false); }}
+                    onClick={() => { userScrolledUpRef.current = false; feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' }); setShowNewMessage(false); }}
                     className="h-8 px-3 rounded-full bg-action text-white text-xs font-bold shadow">
                     Nouveaux messages ↓
                   </button>

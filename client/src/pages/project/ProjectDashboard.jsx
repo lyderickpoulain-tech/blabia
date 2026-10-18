@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, Sparkles, AlertTriangle, ListOrdered, ScrollText, ListChecks, Wrench, History, Send, X, Check, GitPullRequest, Flag, RotateCcw, Inbox } from 'lucide-react';
 import api from '../../utils/api';
 import { useProject } from '../../components/project/ProjectShell';
@@ -136,6 +136,13 @@ export default function ProjectDashboard() {
   const [actions, setActions] = useState([]);     // actions entre les réunions
   const { missions } = useMissions(project.id);   // missions des assistants (proposées → point d'attention)
   const [showGenerate, setShowGenerate] = useState(false);
+  // Après une réinitialisation « Repartir d'un nouveau plan » : la proposition s'ouvre aussitôt
+  const location = useLocation();
+  useEffect(() => {
+    if (!location.state?.proposePlan) return;
+    navigate(location.pathname, { replace: true, state: {} });
+    if (project.brief) setShowGenerate(true);
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
   const [devTasks, setDevTasks] = useState(null); // développements Claude Code (si un dépôt GitHub est relié)
 
   const loadStats = () => api.get(`/projects/${project.id}/stats`).then(({ data }) => setStats(data)).catch(err => notifyError(err, 'Coût de l’IA indisponible.'));
@@ -195,6 +202,7 @@ export default function ProjectDashboard() {
     setStarting(prepare ? 'prepare' : 'start');
     try {
       const s = await quickStartMeeting(project, next, { prepare });
+      if (s.alreadyOpen) { notifySuccess(`« ${next.title} » est déjà ouverte : vous la rejoignez.`); navigate(`/projects/${project.id}/meeting/${s.id}`); return; }
       if (prepare) {
         await launchPreparation(project.id, s.id);
         notifySuccess(`Les assistants préparent « ${next.title} ». Votre bras droit vous préviendra quand leurs conclusions seront prêtes.`);

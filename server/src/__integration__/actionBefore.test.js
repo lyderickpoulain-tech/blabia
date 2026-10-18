@@ -10,6 +10,7 @@ const harness = require('./harness');
 const sysText = p => (Array.isArray(p.system) ? p.system.map(b => b.text).join('\n') : String(p.system || ''));
 
 describe.skipIf(!harness.enabled)('actions à mener avant une réunion', () => {
+  let openR1;
   let h, owner, pid, otherPid, r1, r2, todo, extractionPrompt;
   const agents = [{ id: 'a1', name: 'Léa', role: 'R', systemPrompt: '' }];
   const startMeeting = milestoneId => h.request('POST', `/api/projects/${pid}/sessions`, { token: owner.token, body: { task: 'Réunion', intention: ['decision'], activeAgents: agents, milestoneId } });
@@ -48,14 +49,19 @@ describe.skipIf(!harness.enabled)('actions à mener avant une réunion', () => {
     const blocked = await startMeeting(r2.id);
     expect(blocked.status).toBe(409);
     expect(blocked.body).toMatchObject({ kind: 'blocked', blockingActions: [{ title: 'Faire relire le bail par un juriste' }] });
-    expect((await startMeeting(r1.id)).status).toBe(201);
-    // Faite : la réunion peut se tenir
+    const r1Start = await startMeeting(r1.id);
+    expect(r1Start.status).toBe(201);
+    openR1 = r1Start.body.session;
+    // Faite : la réunion peut se tenir (puis abandonnée : une seule réunion ouverte par étape, v5.1)
     await h.request('PATCH', `/api/projects/${pid}/todos/${todo.id}`, { token: owner.token, body: { status: 'done' } });
-    expect((await startMeeting(r2.id)).status).toBe(201);
+    const r2Start = await startMeeting(r2.id);
+    expect(r2Start.status).toBe(201);
+    await h.request('PATCH', `/api/projects/${pid}/sessions/${r2Start.body.session.id}/status`, { token: owner.token, body: { status: 'abandoned' } });
   });
 
   it('conclusion : « avant R2 » proposé par BlabIA (repère inconnu ignoré), puis enregistré', async () => {
-    const s = (await startMeeting(r1.id)).body.session;
+    const s = openR1; // la réunion R1 déjà ouverte (une étape ne se rouvre pas en double)
+    expect((await startMeeting(r1.id)).body).toMatchObject({ kind: 'already_open', openSessionId: openR1.id });
     await h.db('Session').where({ id: s.id }).update({ messages: JSON.stringify([{ id: 'm1', role: 'human', content: 'Il faut l’accord de la banque avant de signer.', timestamp: new Date().toISOString() }]) });
     const gen = (await h.request('POST', `/api/projects/${pid}/sessions/${s.id}/generate-deliverable`, { token: owner.token, body: {} })).body;
     expect(extractionPrompt).toContain('R2 « Signer le bail »');
@@ -65,7 +71,9 @@ describe.skipIf(!harness.enabled)('actions à mener avant une réunion', () => {
     expect(created.find(a => a.title === 'Obtenir l’accord de la banque')).toBeTruthy();
     const row = await h.db('TodoItem').where({ projectId: pid, title: 'Obtenir l’accord de la banque' }).first();
     expect(row.beforeMilestoneId).toBe(r2.id);
-    expect((await startMeeting(r2.id)).status).toBe(409);
+    const again = await startMeeting(r2.id);
+    expect(again.status).toBe(409);
+    expect(again.body.kind).toBe('blocked');
   });
 
   it('réunion supprimée : l’action reste, sans condition', async () => {

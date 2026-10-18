@@ -3,6 +3,7 @@ import { X, Plus } from 'lucide-react';
 import api from '../utils/api';
 import { Button, Badge } from './ui';
 import { launchPreparation } from '../utils/preparation';
+import { joinOpenMeeting } from '../utils/quickMeeting';
 import { notifyError, notifySuccess } from '../utils/notify';
 
 // Confier une réunion du plan au bras droit (v5.1, 16/10/2026, étape 2) : le cadre (ce qu'il
@@ -78,14 +79,24 @@ export default function DelegateMeetingModal({ project, milestone, onClose, onLa
       const activeAgents = agents.filter(a => selected.includes(a.agentId || a.id)).map(a => ({
         id: a.agentId || a.id, name: a.name, role: a.role, systemPrompt: a.systemPrompt || `Tu es ${a.name}. ${a.role}.`, emoji: a.emoji || '',
       }));
-      const { data } = await api.post(`/projects/${project.id}/sessions`, {
-        task: milestone.title, intention: [milestone.type || 'decision'], activeAgents, mode: 'meeting',
-        milestoneId: milestone.milestoneId || milestone.id,
-        ...(recommended?.model ? { model: recommended.model } : {}),
-        webSearchEnabled: recommended?.webSearch === true,
-        delegation: { canDecide, reserved, notifyEmail, stopOnBlock },
-      });
-      await launchPreparation(project.id, data.session.id, { delegate: true });
+      const delegation = { canDecide, reserved, notifyEmail, stopOnBlock };
+      let sessionId;
+      try {
+        const { data } = await api.post(`/projects/${project.id}/sessions`, {
+          task: milestone.title, intention: [milestone.type || 'decision'], activeAgents, mode: 'meeting',
+          milestoneId: milestone.milestoneId || milestone.id,
+          ...(recommended?.model ? { model: recommended.model } : {}),
+          webSearchEnabled: recommended?.webSearch === true,
+          delegation,
+        });
+        sessionId = data.session.id;
+      } catch (err) {
+        // Réunion déjà ouverte (v5.1) : le bras droit la reprend là où elle en est
+        sessionId = await joinOpenMeeting(project.id, err, delegation);
+        if (!sessionId) throw err;
+      }
+      const data = { session: { id: sessionId } };
+      await launchPreparation(project.id, sessionId, { delegate: true });
       notifySuccess(`Votre bras droit tient « ${milestone.title} ». Sa note de retour arrivera dans votre conversation${notifyEmail ? ', et par e-mail' : ''}.`);
       onLaunched?.(data.session);
     } catch (err) {

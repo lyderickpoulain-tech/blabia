@@ -458,6 +458,17 @@ Corrigé pendant la répétition :
 - **Bras droit** : plus d'auto-correction inutile (« je dois corriger ma réponse précédente ») quand le projet a simplement avancé ; réponse d'abord.
 Non répété (environnement de dev sans application GitHub) : lecture du code du dépôt, développements Claude Code et mise en ligne.
 
+### D43. Retours de l'utilisateur sur sa réunion 3 (WorldOfMetal) — fait le 18/10/2026
+(Réunions tenues de 10 h 21 à 10 h 49, avant le déploiement de F3, F4 et D42.)
+- **Réunion lancée deux fois** : la carte « réunion » du bras droit permettait de recréer une réunion du plan déjà ouverte. Désormais `POST /sessions` répond 409 `already_open` (`openSessionId`) ; tous les départs (lancement rapide, fenêtre de délégation, « Personnaliser ») rejoignent la réunion ouverte, ou la confient au bras droit par **passation** (`POST /sessions/:id/handover`, délégation `handover` : il la reprend là où elle en est et la termine).
+- **« Personnaliser »** : bouton « Le bras droit tient la réunion », avec les assistants et réglages choisis.
+- **Aucune question en réunion technique** : les règles du produit (ce que voit le visiteur, ce qui est publié ou caché, les limites) restent à l'humain même en réunion technique ; l'orchestrateur écrit « CARTE : … » dans la raison et l'assistant pose alors une carte. Essai réel : « Quels visuels afficher pour chaque groupe ? ».
+- **Point de vigilance écarté** : ne relance plus rien (`kind: vigilance_dismissed`) — la barre restait sur « vos réponses sont prêtes » au lieu de « prête à conclure ».
+- **Défilement** : la conversation suit tant que l'humain n'a pas remonté lui-même (molette, doigt, clavier) ; « Nouveaux messages » remet le suivi.
+- **Réinitialisation** : choix explicite « Repartir d'un nouveau plan » (par défaut, la proposition de plan s'ouvre aussitôt sur le tableau de bord) ou « Garder le plan actuel ».
+- **Bras droit, illustration des choix** : « montre-moi la typographie et les couleurs » → planche HTML (proposition `artifact`), ce qui n'est pas décidé apparaît « pas encore choisi ». Essai réel : Cinzel et Inter, couleurs « pas encore choisi ».
+- Tests : `openMeeting.test.js`, `meetingState.test.js`, `actionBefore.test.js` adapté.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

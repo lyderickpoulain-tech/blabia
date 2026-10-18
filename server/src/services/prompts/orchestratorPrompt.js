@@ -66,7 +66,7 @@ function buildOrchestratorPrompt({
   // v5.1 : en « Équilibré » ou « Je veux tout trancher », l'humain doit être consulté
   const askAfter = { balanced: 4, control: 2 }[questionMode];
   const askNote = askAfter && decisionsAsked === 0 && turnCount >= askAfter && decisionsLeft !== 0
-    ? `\nAucune question n'a encore été soumise à l'humain après ${turnCount} tours, alors qu'il veut ${questionMode === 'control' ? 'tout trancher' : 'trancher ce qui lui revient'}. Choisis l'agent le mieux placé pour lui soumettre, par une carte de décision, le choix qui lui appartient dans ce qui vient d'être discuté (préférence, budget, priorité, périmètre), et écris-le dans "reason".`
+    ? `\nAucune question n'a encore été soumise à l'humain après ${turnCount} tours, alors qu'il veut ${questionMode === 'control' ? 'tout trancher' : 'trancher ce qui lui revient'}. Choisis l'agent le mieux placé pour lui soumettre, par une carte de décision, le choix qui lui appartient dans ce qui vient d'être discuté (préférence, budget, priorité, périmètre, règle du produit : ce que le visiteur voit, ce qui est publié ou caché, les limites), et écris dans "reason" : « CARTE : » suivi de ce choix.`
     : '';
 
   // v5.1 (« WorldOfMetal ») : 14 messages sur 33 consacrés à la configuration du nom de domaine

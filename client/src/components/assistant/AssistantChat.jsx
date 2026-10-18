@@ -9,6 +9,7 @@ import DelegateMeetingModal from '../DelegateMeetingModal';
 import { quickStartMeeting, quickStartError } from '../../utils/quickMeeting';
 import { launchPreparation } from '../../utils/preparation';
 import { useProject } from '../project/ProjectShell';
+import ArtifactCard from '../meeting/ArtifactCard';
 
 // Conversation avec le bras droit (v5.1) : page « Bras droit » et panneau toujours disponible
 // (BrasDroitDock). Sur un bouton, l'acteur est toujours nommé (« le bras droit », « vous ») :
@@ -235,6 +236,7 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
   const startMeeting = async (m, prepare) => {
     try {
       const s = await quickStartMeeting(project, m, { prepare });
+      if (s.alreadyOpen) { notifySuccess(`« ${m.title} » est déjà ouverte : vous la rejoignez.`); navigate(`/projects/${project.id}/meeting/${s.id}`); return; }
       if (prepare) {
         await launchPreparation(project.id, s.id);
         notifySuccess(`Les assistants préparent « ${m.title} ». Je vous préviens quand c’est prêt.`);
@@ -310,6 +312,9 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
               )}
               {m.proposal?.kind === 'delegation_report' ? (
                 <DelegationReport projectId={project.id} report={m.proposal} onOpen={openReport} />
+              ) : m.proposal?.kind === 'artifact' ? (
+                // Illustration des choix faits (polices, couleurs…), à la demande (v5.1, retour du 18/10)
+                <div className="border border-ai-border rounded-xl overflow-hidden bg-white"><ArtifactCard artifact={m.proposal.artifact} /></div>
               ) : m.proposal?.kind === 'delegate' && !project.isDemo ? (
                 <DelegateCard projectId={project.id} proposal={m.proposal} onFallback={choices} />
               ) : m.proposal?.kind === 'reorder' && !project.isDemo ? (

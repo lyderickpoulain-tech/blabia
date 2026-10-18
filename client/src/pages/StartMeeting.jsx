@@ -11,6 +11,7 @@ import { notifyError, notifySuccess } from '../utils/notify';
 import ToolsMeetingHint from '../components/project/ToolsMeetingHint';
 import { AgentAvatar } from '../components/ui/icons';
 import { launchPreparation } from '../utils/preparation';
+import { joinOpenMeeting } from '../utils/quickMeeting';
 
 // v5.0 : decision | claude_code | stack (phase 4)
 const DELIVERABLES = [
@@ -264,10 +265,11 @@ export default function StartMeeting() {
     setCreatingAgent(false);
   };
 
-  const handleStart = async () => {
+  // byDelegate : la réunion est confiée au bras droit dès sa création (v5.1, retour du 18/10)
+  const handleStart = async (byDelegate = false) => {
     if (!task.trim() || selectedAgentIds.size === 0 || starting) return;
     setError('');
-    setStarting(true);
+    setStarting(byDelegate ? 'delegate' : 'start');
     try {
       const activeAgents = availableAgents
         .filter(a => selectedAgentIds.has(a.agentId || a.id))
@@ -292,7 +294,25 @@ export default function StartMeeting() {
         ...(challenger ? {} : { challengerEnabled: false }), // sinon : réglage du projet
         ...(milestoneId ? { milestoneId } : {}),
         ...(actionId ? { todoId: actionId } : {}),
+        ...(byDelegate ? { delegation: {} } : {}),
+      }).catch(async err => {
+        // Réunion déjà ouverte : on la rejoint, ou le bras droit la reprend
+        const openId = await joinOpenMeeting(projectId, err, byDelegate ? {} : null);
+        if (!openId) throw err;
+        return { data: { session: { id: openId }, alreadyOpen: true } };
       });
+
+      if (byDelegate) {
+        await launchPreparation(projectId, data.session.id, { delegate: true });
+        notifySuccess(`Votre bras droit tient « ${task.trim()} ». Il revient vers vous à la fin.`);
+        navigate(`/projects/${projectId}/bras-droit`);
+        return;
+      }
+      if (data.alreadyOpen) {
+        notifySuccess('Cette réunion est déjà ouverte : vous la rejoignez.');
+        navigate(`/projects/${projectId}/meeting/${data.session.id}`);
+        return;
+      }
 
       // Préparation par les assistants (au moins 2) : elle tourne sur le serveur, l'humain ne
       // rentre pas dans la conversation — retour à « Mes projets », où la réunion préparée
@@ -564,8 +584,11 @@ export default function StartMeeting() {
               {blockingActions.length ? 'Menez d’abord les actions prévues avant cette réunion.' : !task.trim() ? 'Renseignez l’objectif pour lancer.' : 'Invitez au moins un assistant.'}
             </p>
           )}
-          <Button variant="primary" onClick={handleStart} disabled={!canStart} className="min-w-[220px]">
-            {starting
+          <Button variant="secondary" onClick={() => handleStart(true)} disabled={!canStart}>
+            {starting === 'delegate' ? 'Le bras droit démarre…' : 'Le bras droit tient la réunion'}
+          </Button>
+          <Button variant="primary" onClick={() => handleStart(false)} disabled={!canStart} className="min-w-[220px]">
+            {starting === 'start'
               ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Démarrage…</>
               : <><Play size={16} aria-hidden="true" /> {autoPrepare && prepPossible ? 'Lancer la préparation' : 'Démarrer la réunion'}</>}
           </Button>

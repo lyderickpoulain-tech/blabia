@@ -59,6 +59,12 @@ router.post('/', async (req, res) => {
   try {
     const project = await getProject(projectId, req.user.id, isAdmin);
     if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    // v5.1 (retour du 18/10 : « Modèle de données » lancée deux fois) — une réunion du plan déjà
+    // ouverte ne se recrée pas : on la rejoint, ou on la confie au bras droit (passation)
+    if (milestoneId) {
+      const open = await db('Session').where({ projectId, milestoneId: String(milestoneId), status: 'open' }).orderBy('createdAt', 'desc').first('id');
+      if (open) return res.status(409).json({ kind: 'already_open', openSessionId: open.id, error: 'Cette réunion est déjà ouverte : rejoignez-la.' });
+    }
     // Réunion du plan précédée d'actions encore ouvertes : elle ne se tient pas (v5.1)
     if (milestoneId) {
       const blocking = await require('../../services/actions').blockingActions(String(milestoneId), projectId);
@@ -316,6 +322,28 @@ router.patch('/:sessionId', async (req, res) => {
   } catch (err) {
     console.error('[sessions/patch]', err.message);
     return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── POST /:sessionId/handover — confier au bras droit une réunion déjà commencée (v5.1) ──
+// Il la reprend là où elle en est et la termine dans le cadre par défaut (services/delegation.js).
+router.post('/:sessionId/handover', async (req, res) => {
+  const { projectId, sessionId } = req.params;
+  const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
+  try {
+    const project = await getProject(projectId, req.user.id, isAdmin);
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [session] = await db('Session').where({ id: sessionId, projectId }).limit(1);
+    if (!session) return res.status(404).json({ error: 'Session introuvable' });
+    if (session.status !== 'open') return res.status(409).json({ error: 'Cette réunion est déjà conclue.' });
+    if (require('../../services/preparation').isRunning(sessionId)) return res.status(409).json({ error: 'Des assistants travaillent déjà sur cette réunion.' });
+    const { sanitizeDelegation } = require('../../services/delegation');
+    const delegation = { ...sanitizeDelegation(req.body?.delegation || {}, req.user.id), handover: true };
+    await db('Session').where({ id: sessionId }).update({ delegation: JSON.stringify(delegation) });
+    res.json({ delegation });
+  } catch (err) {
+    console.error('[sessions/handover]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 

@@ -101,6 +101,8 @@ router.post('/:sessionId/vigilance', async (req, res) => {
     // Message technique pour les agents (masqué dans le fil, comme les réponses aux questions)
     const systemMessage = {
       id: randomUUID(), role: 'system', type: 'decision_answer', timestamp: new Date().toISOString(),
+      // v5.1 (retour du 18/10) : écarté, il ne relance rien (la réunion restait « prête à conclure »)
+      ...(status === 'accepted' ? {} : { kind: 'vigilance_dismissed' }),
       content: status === 'accepted'
         ? `📌 Point de vigilance pris en compte par l'humain : « ${target} ». Les agents intègrent cette remarque dans la suite.`
         : `📌 Point de vigilance écarté par l'humain : « ${target} ». Le sujet est clos, n'y revenez pas.`,

@@ -69,6 +69,7 @@ const QUESTION_RULES = {
   delegate: `- L'humain DÉLÈGUE : pose une carte UNIQUEMENT si plusieurs options ont des conséquences réellement différentes pour le projet ET qu'aucune information disponible (brief, mémoire, échanges) ne permet de trancher.
 - Sinon, fais une HYPOTHÈSE et avance`,
   balanced: `- Ce qui APPARTIENT à l'humain se tranche par une carte : ses goûts et préférences, son budget, ses priorités, le périmètre, et tout choix qui engage la suite (difficile à défaire, structurant pour les réunions suivantes). Dès qu'un tel choix se présente, soumets-le-lui : une réunion de décision en compte normalement 2 à 4. Ne le remplace pas par une hypothèse.
+- Les RÈGLES DU PRODUIT lui appartiennent aussi, même dans une réunion technique : ce que le visiteur voit ou ne voit pas, ce qui est publié ou caché et à quelle condition, les limites (combien, jusqu'où). Seule la façon de les réaliser est technique (v5.1 : une réunion « modèle de données » a fixé « un groupe reste invisible tant qu'il n'est pas vérifié » sans le lui demander).
 - Pour le reste (détails, choix faciles à défaire, points que le brief ou la mémoire règlent déjà), fais une HYPOTHÈSE et avance`,
   control: `- L'humain VEUT TOUT TRANCHER : tout choix qui a plusieurs options raisonnables passe par une carte, même s'il te semble évident ; donne ta recommandation en premier choix.
 - Seuls les détails sans conséquence passent par une HYPOTHÈSE`,
@@ -343,7 +344,7 @@ ${resumeText}
     : '';
 
   const intentionText = intention.length > 0 ? intention.join(', ') : 'non défini';
-  const reasonLine     = reason ? `\nRaison de ta prise de parole : ${reason}\n` : '';
+  const reasonLine     = reason ? `\nRaison de ta prise de parole : ${reason}\n${/^CARTE\s*:/i.test(reason) ? 'L\'animation te demande de soumettre ce choix à l\'humain : pose une carte de décision dans ce tour.\n' : ''}` : '';
   const intentionInstruction = INTENTION_INSTRUCTIONS[intention[0]] || '';
 
   const priorDecisionsNote = priorDecisionQuestions.length > 0

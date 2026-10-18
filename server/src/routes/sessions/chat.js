@@ -312,7 +312,8 @@ router.post('/:sessionId/chat', async (req, res) => {
       if (!['pending', 'failed'].includes(d.status) && !resumable) {
         return res.status(409).json({ error: openCards(msgs).length ? 'Des questions vous attendent encore dans cette réunion.' : 'Le bras droit a déjà tenu cette réunion.' });
       }
-      if (!resumable && msgs.length > 0) return res.status(400).json({ error: 'Le bras droit tient une réunion depuis son début.' });
+      // Passation (v5.1) : une réunion déjà commencée, confiée en cours de route, est reprise où elle en est
+      if (!resumable && msgs.length > 0 && !d.handover) return res.status(400).json({ error: 'Le bras droit tient une réunion depuis son début.' });
       if (resumable) await delegation.setStatus(sessionId, { resumes: (d.resumes || 0) + 1 });
     }
 

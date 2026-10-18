@@ -40,3 +40,11 @@ describe('orchestrateur : seul l’humain conclut', () => {
     expect(p(2)).toContain('2 questions attendent la réponse de l\'humain');
   });
 });
+
+describe('point de vigilance écarté (retour du 18/10)', () => {
+  it('ne relance rien : la réunion reste prête à conclure', () => {
+    const dismissed = { role: 'system', type: 'decision_answer', kind: 'vigilance_dismissed', content: 'Point écarté' };
+    expect(meetingState([agent(), close, dismissed]).state).toBe('ready_to_close');
+    expect(meetingState([agent(), close, { ...dismissed, kind: undefined }]).state).toBe('answers_ready');
+  });
+});

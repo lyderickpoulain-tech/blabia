@@ -10,6 +10,9 @@ const { POSTURE } = require('../services/prompts/posture');
 const { parseJsonField } = require('../utils/parseJsonField');
 const { buildInbox, inboxForPrompt } = require('../services/inbox');
 const { appendMemory } = require('../utils/projectMemory');
+const { parseAgentOutput, detectArtifactRequest } = require('../services/markers');
+// v5.1 (retour du 18/10) : « tu peux m'afficher le choix de typographie et de couleurs ? »
+const ILLUSTRATION_RE = /\b(affich|montr|illustr|présent|visualis|aperçu|à quoi (ça|cela) ressembl)\w*[\s\S]{0,80}\b(typo|typographie|polices?|couleurs?|palette|charte|style|ambiance|maquette|page)/i;
 
 // Bras droit (v5.1, 16/10/2026, étape 1) : l'interlocuteur principal de l'humain sur un projet,
 // en tête-à-tête. Il connaît tout le projet (services/projectKnowledge.js), cite ses sources,
@@ -189,18 +192,25 @@ router.post('/:id/assistant', async (req, res) => {
     if (turns.length && turns[turns.length - 1].role === 'user') turns[turns.length - 1].content += `\n\n${message}`;
     else turns.push({ role: 'user', content: message });
 
+    const illustrate = ILLUSTRATION_RE.test(message) || detectArtifactRequest(message);
     const response = await anthropic.messages.create({
-      model: DEFAULT_MODEL, max_tokens: 1200, // 900 + la ligne [EVOLVE:…] éventuelle
+      model: DEFAULT_MODEL, max_tokens: illustrate ? 5000 : 1200, // 900 + la ligne [EVOLVE:…] éventuelle ; illustration : son code
       // Connaissance du projet en cache : relue à 10 % du prix d'un message à l'autre
       // + ce qui attend l'humain, hors cache (change d'un message à l'autre)
       system: [
         { type: 'text', text: buildSystem(project, knowledgeText), cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: inboxForPrompt(await buildInbox(project, req.user.id)) || 'Rien n’attend l’humain pour l’instant.' },
+        { type: 'text', text: (inboxForPrompt(await buildInbox(project, req.user.id)) || 'Rien n’attend l’humain pour l’instant.')
+          + (illustrate ? `\n\nILLUSTRATION DEMANDÉE : en plus d'une réponse courte, produis UNE planche HTML autonome (bloc \`\`\`html, styles dans une balise <style>, aucune ressource externe, aucun script, 3 000 caractères au plus) qui MONTRE ce qui a été décidé : polices en grand (titre, sous-titre, paragraphe), couleurs en pastilles nommées avec leur code si décidé, et un petit exemple réel du site. Ce qui n'a pas été décidé apparaît comme « pas encore choisi » : n'invente rien. Juste avant le bloc, une ligne [ARTIFACT_TITLE: Titre court].` : '') },
       ],
       messages: turns,
     });
-    const raw = response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
-    const { content, sources, proposal } = parseReply(raw, milestones);
+    let raw = response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    // Illustration : extraite du texte et portée par la carte du message
+    const artifact = illustrate ? parseAgentOutput(raw).artifact : null;
+    if (artifact) raw = raw.replace(/```(html|svg|mermaid)[^\S\n]*\n[\s\S]*?(```|$)/gi, '').replace(/\[ARTIFACT_TITLE:[^\]\n]*\]/g, '').trim();
+    const parsedReply = parseReply(raw, milestones);
+    const { content, sources } = parsedReply;
+    const proposal = artifact ? { kind: 'artifact', artifact } : parsedReply.proposal;
     const [reply] = await db('AssistantMessage').insert({
       id: randomUUID(), projectId: project.id, userId: req.user.id, role: 'assistant',
       content: content || 'Je n’ai pas pu formuler de réponse : reformulez votre question ?',
