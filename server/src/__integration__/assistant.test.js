@@ -108,6 +108,50 @@ describe.skipIf(!harness.enabled)('bras droit', () => {
     expect(await h.db('Milestone').where({ projectId: pid, title: 'Choisir l’appli' })).toHaveLength(0);
   });
 
+  // v5.1 (F2, constats sur « WorldOfMetal ») : « occupe-toi de… », ordre du plan, réunions en cours, niveau
+  it('« occupe-toi de la prochaine réunion » : carte de prise en charge, puis lancée', async () => {
+    const plan = await h.db('Milestone').where({ projectId: pid }).orderBy('displayOrder');
+    const ref = `R${plan.findIndex(m => m.title === 'Valider la liste') + 1}`;
+    h.ai.responder = () => ({ text: `Je m'en occupe : je tiens la réunion sur la liste maintenant et je reviens vers vous.\n[DELEGATE:${ref}]` });
+    const reply = (await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: 'Occupe-toi de la prochaine réunion' } })).body.reply;
+    expect(reply.content).not.toContain('[DELEGATE');
+    expect(reply.proposal).toMatchObject({ kind: 'delegate', status: 'pending', title: 'Valider la liste' });
+    const r = await h.request('POST', `/api/projects/${pid}/assistant/${reply.id}/delegated`, { token: owner.token, body: { sessionId: 'abc' } });
+    expect(r.body.message.proposal).toMatchObject({ kind: 'delegate', status: 'started', sessionId: 'abc' });
+    // Une réunion déjà tenue ne se délègue pas
+    h.ai.responder = () => ({ text: 'Elle est déjà tenue.\n[DELEGATE:R1]' });
+    expect((await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: 'Occupe-toi de la première' } })).body.reply.proposal).toBeNull();
+  });
+
+  it('« maquetter avant le schéma » : déplacement proposé, appliqué après accord', async () => {
+    const before = (await h.db('Milestone').where({ projectId: pid }).orderBy('displayOrder')).map(m => m.title);
+    const last = before.length, prev = before.length - 1;
+    h.ai.responder = () => ({ text: `C'est raisonnable.\n[REORDER:R${last}->R${prev}]` });
+    const reply = (await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: 'Je préfère tenir la dernière avant l’avant-dernière' } })).body.reply;
+    expect(reply.proposal).toMatchObject({ kind: 'reorder', move: { title: before[last - 1] }, before: { title: before[prev - 1] } });
+    const r = await h.request('POST', `/api/projects/${pid}/assistant/${reply.id}/reorder`, { token: owner.token, body: { accept: true } });
+    expect(r.body.message.proposal.status).toBe('applied');
+    const after = (await h.db('Milestone').where({ projectId: pid }).orderBy('displayOrder')).map(m => m.title);
+    expect(after).toEqual([...before.slice(0, prev - 1), before[last - 1], before[prev - 1]]);
+    expect((await h.request('POST', `/api/projects/${pid}/assistant/${reply.id}/reorder`, { token: owner.token, body: { accept: true } })).status).toBe(409);
+  });
+
+  it('il voit les réunions en cours (et sa note de retour) et parle au niveau de l’humain', async () => {
+    await h.db('Project').where({ id: pid }).update({ expertiseLevel: 1 });
+    await h.db('Session').insert({ id: crypto.randomUUID(), projectId: pid, task: 'Cartographier les régions', status: 'open', mode: 'meeting', createdAt: new Date(),
+      messages: JSON.stringify([{ id: 'm1', role: 'agent', agentName: 'Chercheur', content: 'Huit régions.', type: 'message' },
+        { id: 'c1', role: 'system', type: 'decision', question: 'Lancer une région à un seul groupe ?', status: 'pending' }]),
+      delegation: JSON.stringify({ status: 'done', note: { headline: 'Huit régions, une vingtaine de groupes.' } }) });
+    h.ai.responder = () => ({ text: 'La cartographie est tenue, une question vous attend.' });
+    const calls = h.ai.calls.length;
+    await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: 'On en est où de la réunion ?' } });
+    const sys = h.ai.calls[calls].system[0].text;
+    expect(sys).toContain('Réunion EN COURS « Cartographier les régions »');
+    expect(sys).toContain('ta note de retour : Huit régions, une vingtaine de groupes.');
+    expect(sys).toContain('Question ouverte : Lancer une région à un seul groupe ?');
+    expect(sys).toContain('TON INTERLOCUTEUR : Il n\'y connaît rien');
+  });
+
   it('marqueur malformé : pas de carte, texte nettoyé', async () => {
     h.ai.responder = () => ({ text: 'Bonne idée.\n[EVOLVE:{"summary": "coupé' });
     const r = await h.request('POST', `/api/projects/${pid}/assistant`, { token: owner.token, body: { message: 'Et un podcast ?' } });

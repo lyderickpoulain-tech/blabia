@@ -23,12 +23,23 @@ const MAX_INPUT = 4000;
 
 const SOURCES_RE = /\[SOURCES:\s*(\[[\s\S]*?\])\s*\]/;
 const MEETING_RE = /\[MEETING:\s*(R\d{1,3})\s*\]/i;
+const DELEGATE_RE = /\[DELEGATE:\s*(R\d{1,3})\s*\]/i;
+const REORDER_RE = /\[REORDER:\s*(R\d{1,3})\s*(?:->|→|AVANT|BEFORE)\s*(R\d{1,3})\s*\]/i;
+// v5.1 (F2) : le bras droit parle au niveau de l'humain (« enregistrements AAAA » à un débutant)
+const LEVEL_LINE = {
+  1: 'Il n\'y connaît rien : mots de tous les jours, aucun terme technique (pas de DNS, d\'enregistrement, de schéma de données…). Parle de ce que ça change pour lui, de ce que ça coûte, de ce qu\'il aura à faire.',
+  2: 'Il connaît les bases sans être du métier : mots courants, un terme technique seulement s\'il est utile et expliqué.',
+  3: 'Il est à l\'aise sans être technicien : vocabulaire courant, détails techniques seulement s\'ils changent la décision.',
+  4: 'C\'est un pair : termes techniques directs, justification courte.',
+  5: 'C\'est un expert : dense et précis.',
+};
 const EVOLVE_TAG = '[EVOLVE:';
 const EVOLVE_TYPES = ['decision', 'claude_code', 'stack'];
 const MAX_EVOLVE_MEETINGS = 4;
 
 function buildSystem(project, knowledgeText) {
   return `Tu es le bras droit de l'humain sur le projet « ${project.name} » : son interlocuteur principal, en tête-à-tête. Tu connais tout le projet, tu vérifies avant d'affirmer, et tu l'aides à avancer : répondre, faire le point, recommander la prochaine étape, proposer une réunion.
+TON INTERLOCUTEUR : ${LEVEL_LINE[project.expertiseLevel] || LEVEL_LINE[3]}
 
 CE QUE TU SAIS DU PROJET :
 ${knowledgeText}
@@ -39,6 +50,9 @@ COMMENT TU PARLES : comme un bras droit à l'oral, en vouvoyant l'humain. Désig
 
 SOURCES : à la toute fin de ta réponse, une ligne [SOURCES:["Réunion « Titre », 9 oct.","Registre : …","Document « … »"]] avec une à trois sources réellement utilisées, en étiquettes courtes. Aucune ligne si ta réponse ne s'appuie pas sur le projet.
 RÉUNION : si la meilleure suite est une réunion du plan À VENIR, ajoute à la fin [MEETING:R6] (son repère dans le plan ci-dessus), une seule. L'humain choisira de la faire préparer par les agents ou de la tenir.
+TU T'EN OCCUPES : si l'humain te demande de tenir une réunion à sa place (« occupe-toi de la prochaine réunion », « tiens-la pour moi »), ne lui propose pas de boutons : ajoute à la fin [DELEGATE:R6] (la réunion À VENIR concernée) et dis en une phrase que tu la tiens maintenant, dans son cadre habituel (tu tranches les détails, tu lui gardes le budget et les choix structurants), et que tu reviens vers lui à la fin. Une réunion déjà EN COURS ne se délègue pas : dis-le-lui.
+ORDRE DU PLAN : si l'humain veut tenir une réunion avant une autre (« maquetter avant le schéma »), et que c'est raisonnable, ajoute à la fin [REORDER:R5->R4] (déplacer R5 juste avant R4) : il confirmera d'un clic. Ne lui dis pas « c'est à vous de décider de l'ordre ».
+RÉUNIONS EN COURS : elles figurent dans « RÉUNIONS EN COURS » ci-dessus, avec ta note de retour si tu les as tenues. Ne dis jamais qu'une réunion n'a rien produit parce qu'elle n'a pas encore de compte rendu : regarde son état.
 FAIRE ÉVOLUER LE PROJET : quand l'humain veut élargir ou changer son projet (« et si je vendais mes vinyles sur mon site ? », « je vais créer une appli », une nouvelle cible, un nouveau volet), dis en clair ce que ça change, ce que ça coûte et ce qui l'attend, puis ajoute à la fin, sur une ligne :
 [EVOLVE:{"summary":"une phrase : ce qui change","brief":"une à deux phrases à ajouter au brief","meetings":[{"title":"titre clair, sans jargon","type":"decision","why":"ce que la réunion tranchera ou produira"}],"after":"R3","technical":true}]
 - meetings : 1 à 4 réunions nouvelles, sans doublon avec le plan ; type « decision » (choisir, trancher), « claude_code » (construire ou modifier le site ou l'appli), « stack » (choisir et mettre en place des outils). Une réunion à venir qui couvre déjà le sujet ne se recrée pas : cite-la.
@@ -101,8 +115,23 @@ function parseReply(text, milestones) {
     const ms = milestones[idx];
     if (ms && ms.status !== 'done') proposal = { ref: `R${idx + 1}`, milestoneId: ms.id, title: ms.title, type: ms.type };
   }
+  // v5.1 (F2) : prendre en charge une réunion à venir ; déplacer une réunion dans le plan
+  const dm = text.match(DELEGATE_RE);
+  if (dm) {
+    const idx = Number(dm[1].slice(1)) - 1;
+    const ms = milestones[idx];
+    if (ms && ms.status !== 'done') proposal = { kind: 'delegate', status: 'pending', ref: `R${idx + 1}`, milestoneId: ms.id, title: ms.title, type: ms.type };
+  }
+  const rm = text.match(REORDER_RE);
+  if (rm && !dm) {
+    const a = milestones[Number(rm[1].slice(1)) - 1];
+    const b = milestones[Number(rm[2].slice(1)) - 1];
+    if (a && b && a.id !== b.id && a.status !== 'done') {
+      proposal = { kind: 'reorder', status: 'pending', move: { milestoneId: a.id, title: a.title }, before: { milestoneId: b.id, title: b.title } };
+    }
+  }
   if (evolution) proposal = evolution; // l'évolution prime : une seule carte par réponse
-  const content = text.replace(SOURCES_RE, '').replace(MEETING_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  const content = text.replace(SOURCES_RE, '').replace(MEETING_RE, '').replace(DELEGATE_RE, '').replace(REORDER_RE, '').replace(/\n{3,}/g, '\n\n').trim();
   return { content, sources, proposal };
 }
 
@@ -243,6 +272,56 @@ router.post('/:id/assistant/:messageId/evolution', async (req, res) => {
   } catch (err) {
     console.error('[assistant evolution]', err.message);
     res.status(500).json({ error: 'L’évolution n’a pas pu être appliquée.' });
+  }
+});
+
+// POST /api/projects/:id/assistant/:messageId/delegated { sessionId } — la réunion que le bras
+// droit a prise en charge est lancée (par le client, comme depuis la fenêtre de délégation)
+router.post('/:id/assistant/:messageId/delegated', async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [msg] = await db('AssistantMessage').where({ id: req.params.messageId, projectId: project.id, userId: req.user.id, role: 'assistant' }).limit(1);
+    const proposal = msg ? parseJsonField(msg.proposal, null) : null;
+    if (proposal?.kind !== 'delegate') return res.status(404).json({ error: 'Proposition introuvable' });
+    const failed = req.body?.failed ? String(req.body.failed).slice(0, 300) : null;
+    const next = { ...proposal, status: failed ? 'failed' : 'started', sessionId: req.body?.sessionId || null, ...(failed ? { error: failed } : {}) };
+    await db('AssistantMessage').where({ id: msg.id }).update({ proposal: JSON.stringify(next) });
+    const [updated] = await db('AssistantMessage').where({ id: msg.id }).limit(1);
+    res.json({ message: shape(updated) });
+  } catch (err) {
+    console.error('[assistant delegated]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/projects/:id/assistant/:messageId/reorder { accept } — déplacer une réunion juste
+// avant une autre, sur proposition du bras droit (v5.1, F2)
+router.post('/:id/assistant/:messageId/reorder', async (req, res) => {
+  const accept = req.body?.accept === true;
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    const [msg] = await db('AssistantMessage').where({ id: req.params.messageId, projectId: project.id, userId: req.user.id, role: 'assistant' }).limit(1);
+    const proposal = msg ? parseJsonField(msg.proposal, null) : null;
+    if (proposal?.kind !== 'reorder') return res.status(404).json({ error: 'Proposition introuvable' });
+    if (proposal.status !== 'pending') return res.status(409).json({ error: 'Cette proposition a déjà été traitée.' });
+    if (accept) {
+      const plan = await db('Milestone').where({ projectId: project.id }).orderBy('displayOrder', 'asc').select('id');
+      const ids = plan.map(m => m.id).filter(id => id !== proposal.move.milestoneId);
+      const at = ids.indexOf(proposal.before.milestoneId);
+      if (at < 0 || !plan.some(m => m.id === proposal.move.milestoneId)) return res.status(409).json({ error: 'Le plan a changé : ces réunions n’existent plus.' });
+      ids.splice(at, 0, proposal.move.milestoneId);
+      await db.transaction(async trx => {
+        for (const [i, id] of ids.entries()) await trx('Milestone').where({ id }).update({ displayOrder: i });
+      });
+    }
+    await db('AssistantMessage').where({ id: msg.id }).update({ proposal: JSON.stringify({ ...proposal, status: accept ? 'applied' : 'declined' }) });
+    const [updated] = await db('AssistantMessage').where({ id: msg.id }).limit(1);
+    res.json({ message: shape(updated) });
+  } catch (err) {
+    console.error('[assistant reorder]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 

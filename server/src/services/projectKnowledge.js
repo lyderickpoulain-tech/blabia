@@ -8,6 +8,8 @@ const { listDecisions, formatRegistryForPrompt } = require('./decisions');
 const { listActions } = require('./actions');
 const { listDocuments, formatDocumentsForPrompt } = require('./documents');
 const { getProjectTools } = require('./tools/toolsStore');
+const { meetingState, openCards } = require('./meetingState');
+const { parseJsonField } = require('../utils/parseJsonField');
 
 const REPORTS_CHARS = 40000; // comptes rendus : les plus récents en entier, les plus anciens tronqués
 const REPORT_CHARS = 4000;
@@ -18,6 +20,29 @@ async function projectKnowledge(project) {
   const milestones = await db('Milestone').where({ projectId: project.id }).orderBy('displayOrder');
   const sessions = await db('Session').where({ projectId: project.id, status: 'accepted' })
     .orderBy('createdAt', 'asc').select('id', 'task', 'summary', 'createdAt');
+  // v5.1 (F2, constats sur « WorldOfMetal ») : le bras droit ne voyait que les réunions
+  // conclues — il a renié la note de retour d'une réunion qu'il venait de tenir
+  const openSessions = await db('Session').where({ projectId: project.id, status: 'open' })
+    .orderBy('createdAt', 'asc').select('id', 'task', 'messages', 'delegation', 'createdAt');
+  const STATE_LABEL = {
+    question: 'des questions attendent l\'humain', answers_ready: 'l\'humain a répondu, elle peut reprendre',
+    ready_to_close: 'prête à conclure (l\'humain doit cliquer « Conclure »)', idle: 'en pause', empty: 'pas encore commencée',
+  };
+  const openText = openSessions.map(s => {
+    const msgs = parseJsonField(s.messages, []);
+    const st = meetingState(msgs);
+    const d = parseJsonField(s.delegation, null);
+    const lines = [`### Réunion EN COURS « ${s.task} » (ouverte le ${fmtDate(s.createdAt)}) — ${STATE_LABEL[st.state] || st.state}`];
+    if (d) {
+      const status = { pending: 'confiée au bras droit, pas encore lancée', running: 'tenue en ce moment par toi (bras droit)', done: 'tenue par toi (bras droit), terminée', stopped: 'tenue par toi, interrompue', failed: 'confiée à toi, échec' }[d.status] || d.status;
+      lines.push(`Délégation : ${status}${d.note?.headline ? ` — ta note de retour : ${d.note.headline}` : ''}`);
+    }
+    const qs = openCards(msgs).map(c => `- Question ouverte : ${c.question}`);
+    if (qs.length) lines.push(...qs);
+    const recent = msgs.filter(m => m.role === 'agent' && m.content).slice(-4).map(m => `- ${m.agentName} : ${String(m.content).replace(/\s+/g, ' ').slice(0, 220)}`);
+    if (recent.length) lines.push('Derniers échanges :', ...recent);
+    return lines.join('\n');
+  }).join('\n\n');
   const registry = formatRegistryForPrompt(await listDecisions(project.id));
   const actions = await listActions(project.id);
   const documentsText = formatDocumentsForPrompt(await listDocuments(project.id, { withContent: true }));
@@ -48,6 +73,9 @@ ${toolsText || '(aucun outil retenu)'}
 
 COMPTES RENDUS DES RÉUNIONS TENUES (dans l'ordre) :
 ${reports || '(aucune réunion tenue)'}
+
+RÉUNIONS EN COURS (pas encore conclues ; leurs résultats ne sont pas encore au registre) :
+${openText || '(aucune)'}
 
 Mémoire du projet :
 ${memoryForPrompt(project) || 'aucune'}

@@ -423,6 +423,15 @@ Constats : questions en attente alors que l'animation disait « on clôt » ; r�
 - Tests : `meetingState.test.js`, `__integration__/meetingFlow.test.js`, `delegation.test.js` (reprise par le bras droit).
 - **Suite (F2, F3)** : bras droit (réunions en cours, « occupe-toi de… », réordonner le plan, niveau), « Je veux tout trancher », comparaison fidèle à la demande (polices, couleurs), plan proportionné et difficulté d'abord.
 
+### D39. Le bras droit (étape F2, constats sur « WorldOfMetal ») — fait le 18/10/2026
+Constats : il reniait la note d'une réunion qu'il venait de tenir (il ne voyait que les réunions conclues), répondait « bouton ci-dessous » à « occupe-toi de la prochaine réunion », « c'est à vous de décider de l'ordre » à « maquetter avant le schéma », et parlait d'« enregistrements AAAA » à un débutant.
+- **Réunions en cours** dans sa connaissance du projet (`services/projectKnowledge.js`) : état (`meetingState`), délégation et sa note de retour, questions ouvertes, derniers échanges ; consigne : une réunion sans compte rendu n'est pas une réunion sans résultat.
+- **« Occupe-toi de… »** : marqueur `[DELEGATE:R6]` → la réunion est créée avec le cadre par défaut et confiée aussitôt (client : `quickStartMeeting(…, { delegation: {} })` + `launchPreparation`), carte « Je tiens « … » à votre place » avec « Suivre en direct » ; échec → les trois choix habituels. Une réunion déjà en cours ne se délègue pas (il le dit).
+- **Ordre du plan** : marqueur `[REORDER:R5->R4]` → carte « Changer l'ordre du plan » (« D'accord » / « Pas maintenant »), `POST /assistant/:messageId/reorder`.
+- **Niveau** de l'interlocuteur dans son prompt.
+- Page du bras droit : la prochaine réunion déjà ouverte se rejoint (« Rejoindre la réunion ») au lieu d'être recréée.
+- Essais réels (base de dev) : réunion en cours reconnue et expliquée ; changement d'ordre proposé et justifié. Tests : `__integration__/assistant.test.js`.
+
 ### C. Code
 1. ✅ Modèle centralisé dans `server/src/services/models.js` (`DEFAULT_MODEL`, `MEETING_MODELS`, servis au client par `GET /api/models`). Orchestrateur sur un modèle léger (`ORCHESTRATOR_MODEL` = Haiku 5.5, réflexion désactivée : ~0,0001 $ par tour au lieu de ~0,003 $). Les commandes rapides et l'analyse des besoins restent sur Sonnet (contenu lu par l'humain).
 2. ✅ Mise en cache des prompts : le prompt d'agent est rendu en deux blocs (`services/prompts/agentPrompt.js`) — bloc commun à la réunion marqué `cache_control` (projet, brief, plan, registre, mémoire, règles ; ~1 800 tokens), puis bloc du tour (rôle, raison, budget, questions déjà posées…). Mesuré : le 2ᵉ agent relit le bloc commun (appel 0,0020 $ au lieu de 0,0082 $). Ne rien mettre de variable dans le bloc commun (tests `agentPrompt.test.js`).

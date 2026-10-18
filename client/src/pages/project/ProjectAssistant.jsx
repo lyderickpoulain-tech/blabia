@@ -40,6 +40,8 @@ export default function ProjectAssistant() {
   const milestones = [...(plan?.milestones || [])].sort((a, b) => a.displayOrder - b.displayOrder);
   const nextIdx = milestones.findIndex(m => m.status !== 'done');
   const next = nextIdx >= 0 ? milestones[nextIdx] : null;
+  const linked = next && plan?.milestoneSessions?.[next.id];
+  const openSession = linked?.status === 'open' ? linked : null;
 
   return (
     <div className="flex flex-wrap gap-5 items-start">
@@ -64,8 +66,14 @@ export default function ProjectAssistant() {
             <>
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-ink-faint mt-2">R{nextIdx + 1}</p>
               <p className="text-[15px] font-extrabold text-ink">{next.title}</p>
-              {!project.isDemo && <MeetingChoices meeting={{ ...next, ref: `R${nextIdx + 1}` }} stacked
-                onDelegate={m => setDelegating(m)} onPrepare={m => startMeeting(m, true)} onHold={m => startMeeting(m, false)} />}
+              {/* v5.1 (F2) : réunion déjà ouverte — on la rejoint, on ne la recrée pas */}
+              {!project.isDemo && (openSession ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-sm text-ink-muted">Cette réunion est en cours.</p>
+                  <Button size="sm" variant="primary" onClick={() => navigate(`/projects/${project.id}/meeting/${openSession.id}`)}>Rejoindre la réunion</Button>
+                </div>
+              ) : <MeetingChoices meeting={{ ...next, ref: `R${nextIdx + 1}` }} stacked
+                onDelegate={m => setDelegating(m)} onPrepare={m => startMeeting(m, true)} onHold={m => startMeeting(m, false)} />)}
             </>
           ) : <p className="text-sm text-ink-muted mt-2">{milestones.length ? 'Toutes les réunions du plan sont tenues.' : 'Pas encore de plan.'} <Link to={`/projects/${project.id}`}>Tableau de bord</Link></p>}
         </Card>

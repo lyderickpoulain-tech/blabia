@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Send, Sparkles } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Send, Sparkles, Radio, ArrowUpDown } from 'lucide-react';
 import api from '../../utils/api';
 import { Button } from '../ui';
 import Markdown from '../Markdown';
@@ -55,6 +55,56 @@ function Proposal({ proposal, ...choices }) {
 }
 
 const MEETING_KIND = { decision: 'Décider', claude_code: 'Construire', stack: 'Outils' };
+
+// « Occupe-toi de la prochaine réunion » (v5.1, F2) : le bras droit la tient aussitôt
+function DelegateCard({ projectId, proposal, onFallback }) {
+  if (proposal.status === 'started') {
+    return (
+      <div className="border border-ai-border bg-white rounded-xl px-3.5 py-3 flex flex-wrap items-center gap-2">
+        <Radio size={16} className="text-ai shrink-0" aria-hidden="true" />
+        <p className="flex-1 min-w-[200px] text-sm text-ink-soft">Je tiens « <strong className="text-ink">{proposal.title}</strong> » à votre place. Je reviens vers vous à la fin.</p>
+        {proposal.sessionId && <Link to={`/projects/${projectId}/meeting/${proposal.sessionId}`} className="text-[13px] font-bold">Suivre en direct</Link>}
+      </div>
+    );
+  }
+  if (proposal.status === 'failed') {
+    return (
+      <div className="border border-await-border bg-await-bg rounded-xl px-3.5 py-3 space-y-2">
+        <p className="text-sm font-bold text-await">Je n’ai pas pu lancer « {proposal.title} »{proposal.error ? ` : ${proposal.error}` : '.'}</p>
+        <MeetingChoices meeting={proposal} {...onFallback} />
+      </div>
+    );
+  }
+  return <p className="text-sm font-semibold text-ai flex items-center gap-2"><span className="w-4 h-4 border-2 border-ai border-t-transparent rounded-full animate-spin" aria-hidden="true" /> Je lance la réunion…</p>;
+}
+
+// Déplacer une réunion dans le plan, sur proposition du bras droit (v5.1, F2)
+function ReorderCard({ projectId, messageId, proposal, onDecided }) {
+  const [busy, setBusy] = useState(false);
+  const decide = async accept => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/assistant/${messageId}/reorder`, { accept });
+      onDecided(data.message, accept);
+      if (accept) notifySuccess(`« ${proposal.move.title} » passe avant « ${proposal.before.title} ».`);
+    } catch (err) { notifyError(err, 'Le plan n’a pas pu être modifié.'); }
+    setBusy(false);
+  };
+  return (
+    <div className="border border-ai-border bg-white rounded-xl px-3.5 py-3 space-y-2.5">
+      <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai flex items-center gap-1.5"><ArrowUpDown size={13} aria-hidden="true" /> Changer l’ordre du plan</p>
+      <p className="text-sm text-ink-soft">Tenir « <strong className="text-ink">{proposal.move.title}</strong> » juste avant « <strong className="text-ink">{proposal.before.title}</strong> ».</p>
+      {proposal.status === 'pending' ? (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="primary" disabled={busy} onClick={() => decide(true)}>D’accord, changer l’ordre</Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => decide(false)}>Pas maintenant</Button>
+        </div>
+      ) : (
+        <p className={`text-xs font-bold ${proposal.status === 'applied' ? 'text-ok' : 'text-ink-muted'}`}>{proposal.status === 'applied' ? 'Fait : le plan est à jour.' : 'Vous avez gardé l’ordre actuel.'}</p>
+      )}
+    </div>
+  );
+}
 
 // Le projet évolue (v5.1, étape C du test « Gérard ») : ce que propose le bras droit, appliqué
 // seulement sur l'accord de l'humain (brief, réunions insérées dans le plan, site ou appli)
@@ -172,6 +222,7 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
     try {
       const { data } = await api.post(`/projects/${project.id}/assistant`, { message });
       setMessages(prev => [...prev.filter(m => m.id !== temp.id), data.human, data.reply]);
+      if (data.reply.proposal?.kind === 'delegate' && data.reply.proposal.status === 'pending') startDelegation(data.reply);
     } catch (err) {
       notifyError(err, 'Le bras droit n’a pas pu répondre.');
       setMessages(prev => prev.filter(m => m.id !== temp.id));
@@ -205,6 +256,23 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
     setMessages(prev => prev.map(x => (x.id === updated.id ? updated : x)));
     if (accepted) { projectCtx?.reloadProject?.(); onChanged?.(); }
   };
+
+  // « Occupe-toi de… » : la réunion est créée avec le cadre par défaut et confiée au bras droit
+  const startDelegation = async reply => {
+    const p = reply.proposal;
+    let patch;
+    try {
+      const s = await quickStartMeeting(project, p, { delegation: {} });
+      await launchPreparation(project.id, s.id, { delegate: true });
+      patch = { sessionId: s.id };
+      onChanged?.();
+    } catch (err) { patch = { failed: quickStartError(err) }; }
+    try {
+      const { data } = await api.post(`/projects/${project.id}/assistant/${reply.id}/delegated`, patch);
+      setMessages(prev => prev.map(x => (x.id === data.message.id ? data.message : x)));
+    } catch { setMessages(prev => prev.map(x => (x.id === reply.id ? { ...x, proposal: { ...p, status: patch.failed ? 'failed' : 'started', ...patch } } : x))); }
+  };
+  const proposalDecided = updated => setMessages(prev => prev.map(x => (x.id === updated.id ? updated : x)));
 
   const pad = compact ? 'p-3.5 space-y-3' : 'p-5 space-y-4';
   return (
@@ -242,6 +310,10 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
               )}
               {m.proposal?.kind === 'delegation_report' ? (
                 <DelegationReport projectId={project.id} report={m.proposal} onOpen={openReport} />
+              ) : m.proposal?.kind === 'delegate' && !project.isDemo ? (
+                <DelegateCard projectId={project.id} proposal={m.proposal} onFallback={choices} />
+              ) : m.proposal?.kind === 'reorder' && !project.isDemo ? (
+                <ReorderCard projectId={project.id} messageId={m.id} proposal={m.proposal} onDecided={proposalDecided} />
               ) : m.proposal?.kind === 'evolution' ? (
                 <EvolutionProposal projectId={project.id} messageId={m.id} proposal={m.proposal} onDecided={evolutionDecided} />
               ) : m.proposal && !project.isDemo && (
