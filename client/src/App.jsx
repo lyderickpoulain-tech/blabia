@@ -2,11 +2,19 @@ import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Suspense, lazy, useEffect } from 'react';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
+import { useAuth } from './contexts/AuthContext';
 import { TourProvider } from './tour/TourContext';
 import PageLoader from './components/PageLoader';
 import Toaster from './components/Toaster';
 
 // Ancienne vue des tâches (/projects/:id/plan, retirée) → actions entre les réunions
+// v6 phase 4 : une page en mode avancé, une autre sinon (par défaut, retour à « Mon projet ») ;
+// rien n'est supprimé, les pages v5.1 restent derrière le mode avancé
+function AdvancedOr({ advanced, simple = <Navigate to=".." relative="path" replace /> }) {
+  const { user } = useAuth();
+  return user?.advancedMode ? advanced : simple;
+}
+
 function LegacyPlanRedirect() {
   const { id } = useParams();
   return <Navigate to={`/projects/${id}/actions`} replace />;
@@ -22,6 +30,7 @@ const ProjectHome      = lazy(() => import('./pages/project/ProjectHome'));     
 const ProjectAssistant = lazy(() => import('./pages/project/ProjectAssistant')); // v5.1 : bras droit
 const ProjectInbox     = lazy(() => import('./pages/project/ProjectInbox'));     // v5.1 : « À trancher »
 const ProjectPlan      = lazy(() => import('./pages/project/ProjectPlan'));
+const ProjectMeetings  = lazy(() => import('./pages/project/ProjectMeetings')); // v6 : réunions sans le mode avancé
 const ProjectHistory   = lazy(() => import('./pages/project/ProjectHistory'));
 const ProjectDecisions = lazy(() => import('./pages/project/ProjectDecisions'));
 const ProjectActions   = lazy(() => import('./pages/project/ProjectActions'));
@@ -63,17 +72,17 @@ export default function App() {
           <ProtectedRoute><ProjectShell /></ProtectedRoute>
         }>
           <Route index element={<ProjectHome />} />
-          <Route path="tableau-de-bord" element={<ProjectDashboard />} />
+          <Route path="tableau-de-bord" element={<AdvancedOr advanced={<ProjectDashboard />} />} />
           <Route path="bras-droit" element={<ProjectAssistant />} />
-          <Route path="a-trancher" element={<ProjectInbox />} />
-          <Route path="reunions" element={<ProjectPlan />} />
-          <Route path="historique" element={<ProjectHistory />} />
-          <Route path="decisions" element={<ProjectDecisions />} />
-          <Route path="actions" element={<ProjectActions />} />
+          <Route path="a-trancher" element={<AdvancedOr advanced={<ProjectInbox />} />} />
+          <Route path="reunions" element={<AdvancedOr advanced={<ProjectPlan />} simple={<ProjectMeetings />} />} />
+          <Route path="historique" element={<AdvancedOr advanced={<ProjectHistory />} simple={<ProjectMeetings />} />} />
+          <Route path="decisions" element={<AdvancedOr advanced={<ProjectDecisions />} />} />
+          <Route path="actions" element={<AdvancedOr advanced={<ProjectActions />} />} />
           <Route path="documents" element={<ProjectDocuments />} />
-          <Route path="developpements" element={<ProjectDev />} />
-          <Route path="outils" element={<ProjectTools />} />
-          <Route path="equipe" element={<ProjectTeam />} />
+          <Route path="developpements" element={<AdvancedOr advanced={<ProjectDev />} />} />
+          <Route path="outils" element={<AdvancedOr advanced={<ProjectTools />} />} />
+          <Route path="equipe" element={<AdvancedOr advanced={<ProjectTeam />} />} />
           <Route path="parametres" element={<ProjectSettings />} />
           <Route path="meeting/new" element={<StartMeeting />} />
         </Route>

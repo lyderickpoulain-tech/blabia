@@ -26,9 +26,10 @@ describe.skipIf(!harness.enabled)('projet de démo pré-rempli', () => {
     expect(p.isDemo).toBe(false);
     expect(p.name).toMatch(/^Projet de démo — Salon de thé/);
     const count = async t => Number((await h.db(t).where({ projectId: pid }).count('* as n'))[0].n);
+    // v6 phase 4 : + la réunion de revue de la première version (en cours)
     expect({ réunions: await count('Session'), plan: await count('Milestone'), décisions: await count('Decision'),
       actions: await count('TodoItem'), documents: await count('ProjectDocument'), missions: await count('AgentMission') })
-      .toEqual({ réunions: 2, plan: 4, décisions: 4, actions: 3, documents: 2, missions: 2 });
+      .toEqual({ réunions: 3, plan: 4, décisions: 4, actions: 3, documents: 2, missions: 2 });
     const calls = h.ai.calls.length;
     const qc = await h.request('POST', `/api/projects/${pid}/quick-command`, { token: member.token, body: { input: 'résume' } });
     expect(qc.status).toBe(200); // pas de blocage « projet exemple »

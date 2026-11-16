@@ -6,6 +6,7 @@ import PhaseStepper from './PhaseStepper';
 import QuestionModePicker from '../QuestionModePicker';
 import ThemeToggle from '../ThemeToggle';
 import LevelSlider, { EXPERTISE_LABELS, HUMOR_LABELS, HUMOR_ICONS } from '../LevelSlider';
+import { useAuth } from '../../contexts/AuthContext';
 
 // En-tête de réunion sur une ligne (refonte UX v5.1) : retour, objectif
 // (modifiable), quatre temps, compteur de questions, réglages, panneau, conclure.
@@ -23,6 +24,8 @@ export default function MeetingHeader({
   visio = false, onToggleVisio = null, // v5.1 : vue « salle » (vignettes des participants)
 }) {
   const [showSettings, setShowSettings] = useState(false);
+  const { user } = useAuth();
+  const advanced = !!user?.advancedMode; // v6 phase 4 : réglages, jetons et compteur de questions
   const settingsRef = useRef(null);
 
   useEffect(() => {
@@ -77,7 +80,7 @@ export default function MeetingHeader({
 
       <div className="flex items-center gap-1 ml-auto">
         <ThemeToggle />
-        {decisionBudget ? (
+        {advanced && decisionBudget ? (
           <button type="button" onClick={onShowQuestions} className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-action"
             title={`Questions posées par les assistants / budget de la réunion${pendingDecisionCount ? ` — ${pendingDecisionCount} en attente` : ''}. Au-delà, ils tranchent par hypothèse.`}>
             <Badge tone={pendingDecisionCount ? 'await' : 'muted'}>
@@ -86,7 +89,7 @@ export default function MeetingHeader({
           </button>
         ) : null}
 
-        <div className="relative" ref={settingsRef}>
+        {advanced && <div className="relative" ref={settingsRef}>
           <IconButton label="Réglages de la réunion" active={showSettings} onClick={() => setShowSettings(v => !v)} aria-expanded={showSettings}>
             <SlidersHorizontal size={18} />
           </IconButton>
@@ -127,7 +130,7 @@ export default function MeetingHeader({
               )}
             </div>
           )}
-        </div>
+        </div>}
 
         {onToggleVisio && (
           <IconButton label={visio ? 'Masquer la vue salle' : 'Vue salle : les participants en vignettes'} active={visio} onClick={onToggleVisio} aria-pressed={visio}>

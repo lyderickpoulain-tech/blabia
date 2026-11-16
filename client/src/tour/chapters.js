@@ -47,18 +47,32 @@ export const CHAPTERS = [
     ],
   },
   {
+    id: 'team', label: 'L’avis de l’équipe', roles: ['admin', 'member', 'user'],
+    steps: [
+      { path: ctx => `/projects/${ctx.demoId}/meeting/${ctx.reviewId}`, target: 'rr-feed', placement: 'right',
+        title: 'Une réunion courte, sur votre projet',
+        body: 'Elle commence par votre avis, avec vos mots. Deux ou trois assistants, choisis selon votre projet, répondent chacun par une proposition concrète : le texte à écrire, le chiffre à corriger. Ils ne vous posent pas de questions.' },
+      { target: 'rr-input', placement: 'top',
+        title: 'Vous répondez',
+        body: 'D’accord, pas d’accord, une autre idée : l’équipe reprend la parole après chacun de vos messages. La version relue reste affichée à côté.' },
+      { target: 'rr-conclude', placement: 'top',
+        title: 'Vous terminez',
+        body: 'La version suivante s’écrit avec ce que vous avez retenu. Sur « Mon projet », vous voyez ce qui change, puis vous la gardez, la corrigez ou la refusez.' },
+    ],
+  },
+  {
     id: 'shared', label: 'Vos projets partagés', roles: ['user'],
     steps: [
       { path: () => '/dashboard', target: 'project-card-demo', placement: 'bottom',
         title: 'Les projets partagés avec vous',
         body: 'Chaque projet auquel vous êtes invité apparaît ici, avec son avancement. Celui-ci est un exemple créé pour la visite.' },
-      { path: demo('/tableau-de-bord'), target: 'pd-next',
-        title: 'Le tableau de bord du projet',
-        body: 'Le propriétaire gère le brief, l’équipe d’assistants et le plan. Vous, vous participez aux réunions et suivez les décisions.' },
+      { path: demo(''), target: 'pw-version',
+        title: 'Le projet, en grand',
+        body: 'La version en cours du projet. Vous pouvez commenter chaque partie ; le propriétaire décide des versions suivantes.' },
     ],
   },
   {
-    id: 'dashboard', label: 'Le tableau de bord', roles: ['admin', 'member', 'user'],
+    id: 'dashboard', label: 'Le tableau de bord', roles: ['admin', 'member', 'user'], advanced: true,
     steps: [
       { path: demo('/tableau-de-bord'), target: 'shell-nav', placement: 'right',
         title: 'Tout le projet, à gauche',
@@ -84,7 +98,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'plan', label: 'Le plan des réunions', roles: ['admin', 'member'],
+    id: 'plan', label: 'Le plan des réunions', roles: ['admin', 'member'], advanced: true,
     steps: [
       { path: demo('/reunions'), target: 'plan-list', placement: 'right',
         title: 'Le plan',
@@ -101,7 +115,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'meeting', label: 'En réunion', roles: ['admin', 'member', 'user'],
+    id: 'meeting', label: 'En réunion (mode avancé)', roles: ['admin', 'member', 'user'], advanced: true,
     steps: [
       { path: ctx => `/projects/${ctx.demoId}/meeting/${ctx.meetingId}`, target: 'mr-phases', placement: 'bottom',
         title: 'Les temps de la réunion',
@@ -127,7 +141,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    id: 'close', label: 'Décisions, actions et historique', roles: ['admin', 'member', 'user'],
+    id: 'close', label: 'Décisions, actions et historique', roles: ['admin', 'member', 'user'], advanced: true,
     steps: [
       { path: demo('/historique'), target: 'hist-first',
         title: 'Les réunions tenues',
@@ -167,7 +181,9 @@ export const CHAPTERS = [
 
 export const roleKind = role => (role === 'admin' || role === 'supervisor') ? 'admin' : role === 'user' ? 'user' : 'member';
 
-export const chaptersFor = role => CHAPTERS.filter(c => c.roles.includes(roleKind(role)));
+// v6 phase 4 : les chapitres du parcours v5.1 (tableau de bord, plan, salle complète, registre)
+// ne sont proposés qu'en mode avancé
+export const chaptersFor = (role, advanced = false) => CHAPTERS.filter(c => c.roles.includes(roleKind(role)) && (!c.advanced || advanced));
 
 // Chapitres qui n'ont pas besoin du projet exemple au démarrage
 export const NEEDS_DEMO_AT_START = id => !['create', 'admin'].includes(id);

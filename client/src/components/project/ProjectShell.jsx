@@ -21,17 +21,21 @@ import BrasDroitDock from '../assistant/BrasDroitDock';
 const ProjectContext = createContext(null);
 export const useProject = () => useContext(ProjectContext);
 
+// v6 phase 4 : sans le mode avancé, le menu se réduit à Mon projet, Réunions, Documents,
+// Paramètres (ce qui attend le porteur s'affiche sur « Mon projet ») ; le reste passe derrière
+// le mode avancé, rien n'est supprimé.
+const advanced = (p, c, u) => !!u?.advancedMode;
 const NAV = [
   { to: '',           end: true, label: 'Mon projet', icon: BookOpen }, // v6 : la version du projet (ProjectHome)
-  { to: 'tableau-de-bord', label: 'Tableau de bord', icon: LayoutDashboard, show: (p, c, u) => !!u?.advancedMode },
-  { to: 'a-trancher', label: 'À trancher',  icon: Inbox,      badge: 'inbox' },
+  { to: 'tableau-de-bord', label: 'Tableau de bord', icon: LayoutDashboard, show: advanced },
+  { to: 'a-trancher', label: 'À trancher',  icon: Inbox,      badge: 'inbox', show: advanced },
   { to: 'reunions',   label: 'Réunions',    icon: ListOrdered, also: ['historique'] },
-  { to: 'decisions',  label: 'Décisions et actions', icon: ScrollText, also: ['actions'] },
+  { to: 'decisions',  label: 'Décisions et actions', icon: ScrollText, also: ['actions'], show: advanced },
   { to: 'documents',  label: 'Documents',   icon: FileText },
   // v5.1 (test « Gérard ») : « Outils » n'a de sens que pour un site ou une appli, ou si des outils ont été retenus
-  { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools', show: (p, c) => !!(p.hasTechnicalStack || p.githubRepo || c.toolsCount) },
-  { to: 'developpements', label: 'Développements', icon: GitPullRequest, show: p => !!p.githubRepo, badge: 'dev' }, // dépôt GitHub choisi (Paramètres)
-  { to: 'equipe',     label: 'Équipe',      icon: Users },
+  { to: 'outils',     label: 'Outils',      icon: Wrench,     badge: 'tools', show: (p, c, u) => !!u?.advancedMode && !!(p.hasTechnicalStack || p.githubRepo || c.toolsCount) },
+  { to: 'developpements', label: 'Développements', icon: GitPullRequest, show: (p, c, u) => !!u?.advancedMode && !!p.githubRepo, badge: 'dev' }, // dépôt GitHub choisi (Paramètres)
+  { to: 'equipe',     label: 'Équipe',      icon: Users, show: advanced },
   { to: 'parametres', label: 'Paramètres',  icon: Settings },
 ];
 
@@ -149,7 +153,7 @@ export default function ProjectShell() {
             </nav>
           </aside>
 
-          <main className="flex-1 min-w-0 basis-[560px]">
+          <main className="flex-1 min-w-0 basis-[560px] pb-28">{/* v6 : de la place sous le bouton du bras droit */}
             {/* Pages du projet chargées à la demande : la barre latérale reste affichée */}
             <Suspense fallback={<PageLoader inline />}>
               <Outlet />

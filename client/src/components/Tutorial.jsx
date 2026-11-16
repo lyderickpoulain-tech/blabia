@@ -3,6 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Workflow, Map as MapIcon, ArrowRight, ArrowLeft, X, Check, Play } from 'lucide-react';
 import { Button, IconButton, Badge } from './ui';
 import { chaptersFor, roleKind } from '../tour/chapters';
+import { useAuth } from '../contexts/AuthContext';
+
+// v6 phase 4 : le détail, raccourci et centré sur « Mon projet » ; celui du parcours v5.1 n'est
+// affiché qu'en mode avancé
+const DETAILS = [
+  '« Mon projet » montre la version en cours, en grand. Ce qui n’a pas pu être vérifié est marqué « à vérifier », sans être retiré. À côté : vos idées et où elles se trouvent, ce que BlabIA a supposé (« Changer »), « Ce sera fini quand… » avec ce qui est atteint et ce qui manque, et les versions précédentes.',
+  'Pour faire avancer votre projet : « Que voulez-vous changer ? » (le bras droit fait la retouche), « Commenter cette partie » sous chaque partie, ou « Demander l’avis de l’équipe ». Chaque nouvelle version vous est d’abord proposée : vous voyez ce qui change, puis « Garder cette version », « Corriger » ou « Refuser ».',
+  '« La suite » propose une ou deux prochaines étapes : une retouche d’un clic, l’avis de l’équipe, ou ce que vous seul pouvez faire. Quand tout ce que vous avez fixé est atteint : « Recevoir le dossier final », en PDF ou en Word. Chaque version se télécharge aussi à tout moment.',
+  'Votre bras droit, en bas à droite de chaque page, connaît tout votre projet : posez-lui vos questions, demandez-lui un changement.',
+  'Les assistants sont des intelligences artificielles. Ils proposent et rédigent ; ils ne décident rien à votre place et ne dépensent rien. Ils peuvent se tromper : vérifiez ce qui est marqué « à vérifier ».',
+  'Mode avancé (Mon profil) : pour les habitués, il rouvre tous les réglages — création détaillée, tableau de bord, plan des réunions, modèles, outils. Désactivé par défaut.',
+];
 
 // Guide de prise en main (v5.1) : introduction courte (accueil + principe), puis
 // les chapitres de la visite guidée, qui se déroule sur les vraies pages avec un
@@ -51,7 +63,9 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
   const kind = roleKind(role);
   const [screen, setScreen] = useState(initialScreen);
   const idx = SCREENS.indexOf(screen);
-  const chapters = chaptersFor(role);
+  const { user } = useAuth();
+  const advanced = !!user?.advancedMode;
+  const chapters = chaptersFor(role, advanced);
   const todo = chapters.filter(c => !tourProgress?.[c.id]);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const [showDetails, setShowDetails] = useState(false); // tout le détail, replié (test « Gérard »)
@@ -119,6 +133,15 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                 className="w-full min-h-[40px] text-sm font-bold text-action hover:underline">{showDetails ? 'Masquer le détail' : 'Tout savoir sur BlabIA'}</button>
               {showDetails && (<>
               <ul className="space-y-1.5">
+                {DETAILS.map(t => (
+                  <li key={t} className="flex gap-2 text-sm text-ink-soft leading-snug">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-action shrink-0" aria-hidden="true" />{t}
+                  </li>
+                ))}
+              </ul>
+              {advanced && <>
+              <p className="text-xs font-extrabold uppercase tracking-wider text-ink-faint">En mode avancé</p>
+              <ul className="space-y-1.5">
                 {[
                   '« Mon projet » montre la version en cours de votre projet, en grand : vos idées et où elles se trouvent, ce que BlabIA a supposé (changez-le d’un clic), « Ce sera fini quand… » et les versions précédentes. Sous chaque partie, « Commenter cette partie » ; puis « Préparer la version suivante ». « Faire avancer votre projet » : « Que voulez-vous changer ? » (le bras droit fait la retouche) ou « Demander l’avis de l’équipe » (une réunion, qui s’ouvre sur votre avis et se termine par « Terminer et préparer la version suivante »). Chaque version suivante est d’abord proposée : les parties modifiées sont signalées, « Comparer avec la version en cours » montre l’ancienne, puis « Garder cette version », « Corriger » ou « Refuser ». Votre bras droit connaît la version en cours : demandez-lui un changement, il propose la retouche, que vous lancez d’un clic. « Ce sera fini quand… » dit, à chaque version, ce qui est atteint et ce qu’il manque ; « La suite » propose une ou deux prochaines étapes (une retouche d’un clic, l’avis de l’équipe, ou ce que vous seul pouvez faire). Quand tout est atteint : « Recevoir le dossier final », en PDF ou en Word. Chaque version se télécharge aussi à tout moment. Un projet commencé avant cette nouveauté se transforme d’un clic : « Créer mon projet à partir de l’historique ».',
                   'Mode avancé (Mon profil) : il rouvre tous les réglages — création détaillée, tableau de bord, modèles, outils, clé personnelle. Désactivé par défaut.',
@@ -151,6 +174,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                   </li>
                 ))}
               </ul>
+              </>}
               <div>
                 <p className="text-xs font-extrabold uppercase tracking-wider text-ink-faint text-center mb-2">Une couleur, un sens</p>
                 <ColorLegend />
@@ -170,7 +194,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
               <p className="text-sm text-ink-soft text-center">
                 Ou faites la <strong>visite guidée</strong>, sur un projet exemple (un salon de thé à Lyon) : sans coût, l’exemple est supprimé à la fin.
               </p>
-              {kind !== 'user' && (
+              {kind !== 'user' && advanced && (
                 <p className="text-xs text-ink-muted text-center">
                   Pour essayer ensuite avec des assistants actifs : « Nouveau projet » → <strong>« Créer un projet de démo »</strong> (le même salon de thé, conservé, avec le coût habituel).
                 </p>

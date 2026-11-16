@@ -273,6 +273,7 @@ async function seedSalonProject(user, { isDemo, name, description }) {
     ]);
 
     await seedDemoWork(trx, projectId, user.id, new Date(now - 6 * day));
+    await seedDemoReview(trx, projectId, await pickAgents(trx), new Date(now - 1 * day));
     return { id: projectId, created: true };
   });
 }
@@ -341,6 +342,27 @@ async function seedDemoWork(trx, projectId, userId, createdAt) {
     ['Ouverture', 'du mardi au dimanche, de 9 h à 19 h'],
     ['Nombre de places', '30'],
   ].map(([statement, value], k) => ({ id: randomUUID(), workId, statement, value, displayOrder: k, createdAt })));
+}
+
+// v6 phase 4 : une réunion de revue de la première version, en cours (la visite guidée montre la
+// salle ; l'IA n'est jamais appelée sur un projet exemple)
+async function seedDemoReview(trx, projectId, agents, createdAt) {
+  const at = k => new Date(createdAt.getTime() + k * 60000).toISOString();
+  const [a, b, c] = agents;
+  const msg = (k, role, agentName, content) => ({ id: randomUUID(), role, agentName, content, type: role === 'system' ? 'animator' : 'message', pinned: false, timestamp: at(k) });
+  await trx('Session').insert({
+    id: randomUUID(), projectId, task: 'Avis de l\'équipe sur la première version',
+    messages: JSON.stringify([
+      msg(0, 'system', 'Animation', 'L\'équipe a lu la première version de votre projet. Avant qu\'elle donne son avis : qu\'en pensez-vous ? Écrivez librement ce qui vous plaît, ce qui manque ou ce qui ne va pas.'),
+      msg(1, 'human', null, 'Le dossier me plaît. Il manque mes ateliers de dégustation, et le budget me paraît serré pour la déco.'),
+      msg(2, 'agent', a.name, 'Pour vos ateliers, je propose de les placer dans « Le plan de lancement » : un atelier le premier samedi du mois dès l\'ouverture, 8 personnes, 25 € la place. Ils font venir une clientèle qui revient.'),
+      msg(3, 'agent', b.name, 'Sur la déco : le poste est à 6 000 €. Je propose de le passer à 9 000 € en prenant 3 000 € sur l\'imprévu, qui reste à 4 000 €. Le total ne bouge pas.'),
+      msg(4, 'agent', c.name, 'D\'accord avec les ateliers. J\'ajoute une idée : un thé du mois choisi avec les participants de l\'atelier, mis en avant en boutique.'),
+    ]),
+    activeAgents: JSON.stringify(agents.map(x => ({ id: x.id, name: x.name, role: x.role, emoji: x.emoji, systemPrompt: x.systemPrompt, joinedAt: createdAt.toISOString() }))),
+    status: 'open', mode: 'meeting', model: 'claude-sonnet-5-5', intention: JSON.stringify([]),
+    webSearchEnabled: false, questionMode: 'delegate', challengerEnabled: false, reviewOfVersion: 1, createdAt,
+  });
 }
 
 // Supprime le(s) projet(s) exemple de l'utilisateur (fin de visite)

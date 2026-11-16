@@ -48,10 +48,12 @@ export function TourProvider({ children }) {
   const ensureDemo = useCallback(async () => {
     const { data } = await api.post('/projects/demo');
     const { data: sessions } = await api.get(`/projects/${data.id}/sessions`);
-    const open = (sessions || []).find(s => s.status === 'open');
-    const past = (sessions || []).find(s => s.status === 'accepted');
+    const v51 = (sessions || []).filter(s => s.reviewOfVersion == null);
+    const open = v51.find(s => s.status === 'open');
+    const past = v51.find(s => s.status === 'accepted');
+    const review = (sessions || []).find(s => s.reviewOfVersion != null); // v6 : réunion de revue
     if (data.created) notifyDemoChanged();
-    return { demoId: data.id, meetingId: open?.id || null, pastMeetingId: past?.id || null };
+    return { demoId: data.id, meetingId: open?.id || null, pastMeetingId: past?.id || null, reviewId: review?.id || null };
   }, []);
 
   const start = useCallback(async (chapterIds) => {
@@ -113,8 +115,8 @@ export function TourProvider({ children }) {
   }, [ensureDemo]);
 
   // Navigation vers la page de l'étape
-  const ctx = useMemo(() => ({ demoId: tour?.demoId, meetingId: tour?.meetingId, pastMeetingId: tour?.pastMeetingId }),
-    [tour?.demoId, tour?.meetingId, tour?.pastMeetingId]);
+  const ctx = useMemo(() => ({ demoId: tour?.demoId, meetingId: tour?.meetingId, pastMeetingId: tour?.pastMeetingId, reviewId: tour?.reviewId }),
+    [tour?.demoId, tour?.meetingId, tour?.pastMeetingId, tour?.reviewId]);
   const targetPath = chapter ? stepPath(chapter, tour.stepIdx, ctx) : null;
   useEffect(() => {
     if (targetPath && location.pathname !== targetPath) navigate(targetPath);

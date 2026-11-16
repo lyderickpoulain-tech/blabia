@@ -17,6 +17,10 @@ const SCREENS = [
   'client/src/components/work/WorkDocument.jsx',
   'client/src/pages/ReviewRoom.jsx',   // phase 2 : réunion de revue
   'client/src/pages/MeetingRoute.jsx',
+  'client/src/pages/project/ProjectMeetings.jsx', // phase 4 : réunions sans le mode avancé
+  'client/src/components/Layout.jsx',
+  'client/src/pages/Dashboard.jsx',
+  'client/src/components/NewProjectChoiceModal.jsx',
 ];
 // Messages renvoyés à l'écran par le serveur v6
 const SERVER = ['server/src/routes/work.js', 'server/src/services/work/builder.js', 'server/src/services/work/review.js'];

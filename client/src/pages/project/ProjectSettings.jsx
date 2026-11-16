@@ -57,7 +57,7 @@ function parseBriefFields(brief) {
   return { objectif, contexte, notes };
 }
 
-function IdentitySection({ project, setProject, canEdit }) {
+function IdentitySection({ project, setProject, canEdit, simple = false }) {
   const [f, setF] = useState({
     name: project.name, description: project.description || '',
     expertiseLevel: project.expertiseLevel || 3, humorLevel: project.humorLevel || 2,
@@ -69,11 +69,11 @@ function IdentitySection({ project, setProject, canEdit }) {
   const { user } = useAuth();
   const [st, run] = useSave();
   const submit = e => { e.preventDefault(); run(async () => {
-    const { data } = await api.patch(`/projects/${project.id}`, f);
+    const { data } = await api.patch(`/projects/${project.id}`, simple ? { name: f.name, description: f.description } : f);
     setProject(p => ({ ...p, ...data }));
   }); };
   return (
-    <Section title="Projet et réglages par défaut" subtitle="Les niveaux s'appliquent aux nouvelles réunions ; chaque réunion peut les ajuster.">
+    <Section title={simple ? 'Votre projet' : 'Projet et réglages par défaut'} subtitle={simple ? 'Son nom et sa description, tels qu’ils apparaissent dans vos projets.' : 'Les niveaux s\'appliquent aux nouvelles réunions ; chaque réunion peut les ajuster.'}>
       <form onSubmit={submit} className="space-y-4">
         <fieldset disabled={!canEdit} className="space-y-4">
           <div>
@@ -84,6 +84,7 @@ function IdentitySection({ project, setProject, canEdit }) {
             <label htmlFor="p-desc" className="block text-sm font-bold text-ink-soft mb-1">Description</label>
             <textarea id="p-desc" rows={2} value={f.description} onChange={e => setF(v => ({ ...v, description: e.target.value }))} className={`${inputCls} py-2 resize-none`} />
           </div>
+          {!simple && <>
           <div className="grid gap-4 md:grid-cols-2">
             <LevelSlider label="Maîtrise du sujet" value={f.expertiseLevel} onChange={v => setF(x => ({ ...x, expertiseLevel: v }))} labels={EXPERTISE_LABELS} />
             <LevelSlider label="Humour" value={f.humorLevel} onChange={v => setF(x => ({ ...x, humorLevel: v }))} labels={HUMOR_LABELS} icons={HUMOR_ICONS} />
@@ -102,6 +103,7 @@ function IdentitySection({ project, setProject, canEdit }) {
                 className={`${inputCls} h-10 !w-24 text-right`} /> $
             </span>
           </label>
+          </>}
         </fieldset>
         {canEdit && <SaveRow {...st} disabled={!f.name.trim()} />}
       </form>
@@ -345,6 +347,8 @@ export default function ProjectSettings() {
   };
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const { user } = useAuth();
+  const advanced = !!user?.advancedMode; // v6 phase 4 : réglages des réunions, mémoire, développement
 
   const archive = async () => {
     const label = project.status === 'active' ? 'archiver' : 'réactiver';
@@ -383,16 +387,16 @@ export default function ProjectSettings() {
 
   return (
     <>
-      <PageHeader title="Paramètres" subtitle="Identité du projet, réglages par défaut, membres et actions sensibles." />
+      <PageHeader title="Paramètres" subtitle={advanced ? 'Identité du projet, réglages par défaut, membres et actions sensibles.' : 'Le nom du projet, les personnes qui y ont accès, archiver ou supprimer.'} />
       {notice && <p role="status" className="mb-4 text-sm font-semibold text-ink-soft bg-white border border-line rounded-lg px-3 py-2">{notice}</p>}
 
       <div className="space-y-4">
-        <IdentitySection project={project} setProject={setProject} canEdit={canManage} />
-        <BriefSection project={project} setProject={setProject} canEdit={canManage} />
-        <DevDirectorySection project={project} setProject={setProject} canEdit={canManage} />
+        <IdentitySection project={project} setProject={setProject} canEdit={canManage} simple={!advanced} />
+        {advanced && <BriefSection project={project} setProject={setProject} canEdit={canManage} />}
+        {advanced && <DevDirectorySection project={project} setProject={setProject} canEdit={canManage} />}
 
         {/* Développements depuis BlabIA (v5.1) : configuration sur la page Développements */}
-        {isOwner && (
+        {advanced && isOwner && (
           <div data-tour="settings-dev">
           <Section title="Développement avec Claude Code" subtitle="Lancer les prompts de vos réunions Claude Code directement depuis BlabIA, sans copier-coller : Claude Code travaille dans le dépôt GitHub du projet, avec votre abonnement Claude.">
             <div className="flex flex-wrap items-center gap-3">
@@ -405,7 +409,7 @@ export default function ProjectSettings() {
           </div>
         )}
 
-        <MemorySection project={project} canEdit={canManage} memoryOpen={memoryOpen} setMemoryOpen={setMemoryOpen} />
+        {advanced && <MemorySection project={project} canEdit={canManage} memoryOpen={memoryOpen} setMemoryOpen={setMemoryOpen} />}
 
         {canManage && <MembersSection project={project} />}
 
@@ -416,10 +420,10 @@ export default function ProjectSettings() {
               <p className="text-sm text-ink-soft flex-1 min-w-[220px]">{project.status === 'active' ? 'Archiver le projet : il sort de votre liste active.' : 'Le projet est archivé.'}</p>
               <Button variant="secondary" onClick={archive} disabled={archiving}><Archive size={15} /> {project.status === 'active' ? 'Archiver' : 'Réactiver'}</Button>
             </div>
-            <div className="flex flex-wrap items-center gap-3 justify-between">
+            {advanced && <div className="flex flex-wrap items-center gap-3 justify-between">
               <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Réinitialiser la mémoire : repartir de zéro avec le même brief (réunions tenues, décisions, actions, vision et conversation avec le bras droit effacées).</p>
               <Button variant="await" onClick={openReset}><RotateCcw size={15} /> Réinitialiser</Button>
-            </div>
+            </div>}
             <div className="flex flex-wrap items-center gap-3 justify-between">
               <p className="text-sm text-ink-soft flex-1 min-w-[220px]">Supprimer le projet et toutes ses données. Irréversible.</p>
               <Button variant="danger" onClick={() => setModal('delete')}><Trash2 size={15} /> Supprimer</Button>

@@ -8,6 +8,7 @@ import api from '../utils/api';
 import { notifyError } from '../utils/notify';
 import { useTour } from '../tour/TourContext';
 import NewProjectChoiceModal from '../components/NewProjectChoiceModal';
+import { useAuth } from '../contexts/AuthContext';
 
 const STATUS_TABS = [
   { key: 'active',   label: 'Actifs' },
@@ -50,7 +51,7 @@ function People({ people }) {
   );
 }
 
-function ProjectCard({ project, archiving, onArchive, onOpen }) {
+function ProjectCard({ project, archiving, onArchive, onOpen, showCost }) {
   const open      = (project.openSessionCount ?? 0) > 0;
   const prepReady = (project.prepReadyCount ?? 0) > 0; // v5.1 : conclusions préparées par les assistants
   const sessions  = project.sessionCount ?? 0;
@@ -82,11 +83,13 @@ function ProjectCard({ project, archiving, onArchive, onOpen }) {
         <span className="inline-flex items-center gap-1"><MessagesSquare size={13} aria-hidden="true" /> {sessions} réunion{sessions !== 1 ? 's' : ''}</span>
         <span className="inline-flex items-center gap-1"><CalendarDays size={13} aria-hidden="true" /> {formatDate(project.createdAt)}</span>
         {project.createdBy && <span className="inline-flex items-center gap-1"><UserRound size={13} aria-hidden="true" /> Créé par {project.createdBy}</span>}
-        <span className="inline-flex items-center gap-1" title={project.legacyCostUSD > 0
-            ? `Coût de l'IA : ${formatUSD(project.realCostUSD)} réels + ${formatUSD(project.legacyCostUSD)} estimés avant le suivi`
-            : 'Coût réel de l’IA pour ce projet'}>
-          <Coins size={13} aria-hidden="true" /> {formatUSD(projectCost(project))}
-        </span>
+        {showCost && (
+          <span className="inline-flex items-center gap-1" title={project.legacyCostUSD > 0
+              ? `Coût de l'IA : ${formatUSD(project.realCostUSD)} réels + ${formatUSD(project.legacyCostUSD)} estimés avant le suivi`
+              : 'Coût réel de l’IA pour ce projet'}>
+            <Coins size={13} aria-hidden="true" /> {formatUSD(projectCost(project))}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line">
@@ -111,8 +114,11 @@ export default function Dashboard() {
   const [choosing, setChoosing] = useState(false);
   const navigate = useNavigate();
   const tour = useTour();
-  // « Nouveau projet » : choix projet de démo / formulaire (direct pendant la visite guidée)
-  const newProject = () => (tour?.active ? navigate('/projects/new') : setChoosing(true));
+  const { user } = useAuth();
+  const advanced = !!user?.advancedMode;
+  // « Nouveau projet » : la création en une question ; en mode avancé, choix projet de démo /
+  // formulaire (direct pendant la visite guidée)
+  const newProject = () => (tour?.active || !advanced ? navigate('/projects/new') : setChoosing(true));
 
   useEffect(() => {
     const load = () => api.get('/projects')
@@ -168,7 +174,7 @@ export default function Dashboard() {
           <h1 className="text-2xl font-extrabold text-ink">Mes projets</h1>
           <p className="text-sm text-ink-muted mt-1">
             {counts.active} actif{counts.active !== 1 ? 's' : ''}
-            {totalCost > 0 && <> · {formatUSD(totalCost)} de coût IA au total</>}
+            {advanced && totalCost > 0 && <> · {formatUSD(totalCost)} de coût IA au total</>}
           </p>
         </div>
         <Button data-tour="new-project" variant="primary" onClick={newProject}>
@@ -207,7 +213,7 @@ export default function Dashboard() {
       ) : filtered.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(project => (
-            <ProjectCard key={project.id} project={project}
+            <ProjectCard showCost={advanced} key={project.id} project={project}
               archiving={archiving === project.id}
               onArchive={() => handleArchive(project)}
               onOpen={() => openProject(project)} />

@@ -255,7 +255,7 @@ export default function ProfilePage() {
             </form>
           </Section>
 
-          <ReminderSettings />
+          {user?.advancedMode && <ReminderSettings />}{/* v6 : rappel des actions v5.1, en mode avancé */}
           <AdvancedModeSettings />
           {/* v6 : clé API, GitHub et outils seulement en mode avancé */}
           {user?.role !== 'user' && user?.advancedMode && <ApiKeySettings />}
