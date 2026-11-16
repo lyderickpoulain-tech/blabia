@@ -40,11 +40,33 @@ function parseIdeas(block) {
   }).filter(Boolean);
 }
 
+// « - C2 :: pas encore — ce qui manque » / « - C1 :: atteint — où »
+function parseCriteriaStatus(block) {
+  return bullets(block).map(l => {
+    const m = l.match(/^C(\d+)\s*::\s*(.*)$/i);
+    if (!m) return null;
+    const rest = m[2].trim();
+    const met = /^atteint/i.test(rest);
+    const note = rest.replace(/^(atteint|pas encore|non atteint)\s*[—–-]?\s*/i, '').trim().slice(0, 300) || null;
+    return { ref: `C${m[1]}`, met, note };
+  }).filter(Boolean);
+}
+
+// « - retouche :: Ajoutez … » / « - equipe :: … » / « - vous :: … » ; « aucune » → []
+const STEP_KINDS = { retouche: 'retouche', equipe: 'equipe', 'équipe': 'equipe', vous: 'vous' };
+function parseNextSteps(block) {
+  return bullets(block).map(l => {
+    const m = l.match(/^([a-zé]+)\s*::\s*(.+)$/i);
+    const kind = m && STEP_KINDS[m[1].toLowerCase()];
+    return kind ? { kind, text: m[2].trim().slice(0, 400) } : null;
+  }).filter(Boolean).slice(0, 2);
+}
+
 function parseBuilderOutput(text) {
   const raw = String(text || '');
   let content = tag(raw, 'ouvrage');
   if (!content) {
-    content = raw.replace(/<(nom|gabarit|resume|suppositions|idees|fini_quand)>[\s\S]*?(<\/\1>|$)/gi, '').trim();
+    content = raw.replace(/<(nom|gabarit|resume|suppositions|idees|fini_quand|etat_fini|prochaines_etapes)>[\s\S]*?(<\/\1>|$)/gi, '').trim();
   }
   return {
     name: tag(raw, 'nom').replace(/\s+/g, ' ').slice(0, 120),
@@ -53,6 +75,8 @@ function parseBuilderOutput(text) {
     content,
     assumptions: parseAssumptions(tag(raw, 'suppositions')),
     ideas: parseIdeas(tag(raw, 'idees')),
+    criteriaStatus: parseCriteriaStatus(tag(raw, 'etat_fini')),
+    nextSteps: parseNextSteps(tag(raw, 'prochaines_etapes')),
     criteria: bullets(tag(raw, 'fini_quand')).map(t => t.replace(/^ce sera fini quand\s*/i, '').trim()).filter(Boolean).slice(0, 6),
   };
 }
@@ -74,4 +98,4 @@ function splitSections(markdown) {
 
 const normalize = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-module.exports = { parseBuilderOutput, parseAssumptions, parseIdeas, splitSections, normalize };
+module.exports = { parseBuilderOutput, parseAssumptions, parseIdeas, parseCriteriaStatus, parseNextSteps, splitSections, normalize };

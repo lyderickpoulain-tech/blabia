@@ -88,3 +88,18 @@ describe('réponse du constructeur (v6)', () => {
     expect(() => registerGenre({ id: 'incomplet' })).toThrow();
   });
 });
+
+describe('v6 phase 3 : état des phrases « Ce sera fini quand… » et prochaines étapes', () => {
+  it('lit l’état de chaque phrase et les prochaines étapes', async () => {
+    const { parseCriteriaStatus, parseNextSteps } = await import('../work/builderOutput.js');
+    expect(parseCriteriaStatus('- C1 :: atteint — partie A\n- C2 :: pas encore — il manque 3 jeux\n- n’importe quoi')).toEqual([
+      { ref: 'C1', met: true, note: 'partie A' },
+      { ref: 'C2', met: false, note: 'il manque 3 jeux' },
+    ]);
+    expect(parseNextSteps('- retouche :: Ajoutez 3 jeux\n- équipe :: Trouver un nom\n- vous :: Appeler la salle')).toEqual([
+      { kind: 'retouche', text: 'Ajoutez 3 jeux' },
+      { kind: 'equipe', text: 'Trouver un nom' },
+    ]);
+    expect(parseNextSteps('aucune')).toEqual([]);
+  });
+});

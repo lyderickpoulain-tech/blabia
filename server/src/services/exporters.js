@@ -124,6 +124,24 @@ async function registryDocx({ project, decisions, actions }) {
   return Packer.toBuffer(new Document({ creator: 'BlabIA', title: `Décisions et actions — ${project.name}`, sections: [{ children }] }));
 }
 
+// v6 phase 3 : le dossier du projet (une version), en Word. Les dessins (blocs svg, html,
+// mermaid) ne passent pas dans Word : une mention renvoie à la version en ligne ou au PDF.
+function workDocx({ project, version, criteria = [], delivered = false }) {
+  const label = version.number === 1 ? 'Première version' : `Version ${version.number}`;
+  const content = String(version.content || '')
+    .replace(/```(svg|html|mermaid)[^\n]*\n[\s\S]*?(```|$)/gi, '_(Illustration : à voir dans la version en ligne ou dans le PDF.)_')
+    .replace(/\(\s*à vérifier\s*\)/gi, '(à vérifier)');
+  const children = [
+    ...title(project.name, `${label}${delivered ? ' — dossier final' : ''} · ${fmtDate(version.createdAt)}`),
+    ...(criteria.length ? [
+      new Paragraph({ heading: HeadingLevel.HEADING_2, children: inlineRuns('Ce sera fini quand…'), spacing: { before: 240, after: 120 } }),
+      ...criteria.map(c => p(`${c.status === 'met' ? '✓' : '○'} ${c.text}${c.status !== 'met' && c.note ? ` — ${c.note}` : ''}`, { run: { color: c.status === 'met' ? INK : AWAIT }, para: { spacing: { after: 60 } } })),
+    ] : []),
+    ...markdownToDocx(content),
+  ];
+  return Packer.toBuffer(new Document({ creator: 'BlabIA', title: project.name, sections: [{ children }] }));
+}
+
 // Nom de fichier sûr + en-tête Content-Disposition (UTF-8)
 function attachment(res, name, buffer) {
   const safe = String(name).replace(/[\\/:*?"<>|\n\r]+/g, ' ').trim().slice(0, 120) || 'export';
@@ -132,4 +150,4 @@ function attachment(res, name, buffer) {
   res.send(buffer);
 }
 
-module.exports = { markdownToDocx, sessionDocx, registryDocx, attachment };
+module.exports = { markdownToDocx, sessionDocx, registryDocx, workDocx, attachment };

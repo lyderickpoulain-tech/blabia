@@ -30,6 +30,16 @@ async function projectOr404(req, res) {
   return project;
 }
 
+// Phase 3 : ce que la proposition change dans « Ce sera fini quand… » (rien si le porteur a
+// corrigé la liste depuis : la sienne fait foi)
+function criteriaChanges(criteria, parsed) {
+  const now = criteria.map(c => c.text);
+  if (!parsed.criteria?.length || (parsed.baseCriteria && parsed.baseCriteria.join('\n') !== now.join('\n'))) return null;
+  const added = parsed.criteria.filter(t => !now.includes(t));
+  const removed = now.filter(t => !parsed.criteria.includes(t));
+  return added.length || removed.length ? { added, removed } : null;
+}
+
 // État complet de l'ouvrage, pour l'écran « Mon projet »
 async function serialize(project) {
   const work = await builder.workOf(project.id);
@@ -46,24 +56,32 @@ async function serialize(project) {
     review.openReviewOf(project.id),
   ]);
   const presence = new Map(parseJsonField(current?.ideasPresence, []).map(p => [p.ideaId, p]));
+  const criteria = parseJsonField(work.criteria, []);
   return {
     exists: true,
     genre: work.genre,
     template: work.template,
     templateLabel: work.template ? getGenre(work.genre).templates[work.template]?.label || null : null,
     build: { status: stale ? 'failed' : work.buildStatus, stage: stale ? null : work.buildStage, error: stale ? 'L’écriture a été interrompue. Vous pouvez réessayer.' : work.buildError, startedAt: work.buildStartedAt },
-    current: current ? { number: current.number, content: current.content, changeSummary: current.changeSummary, sources: parseJsonField(current.sources, []), createdAt: current.createdAt } : null,
+    current: current ? {
+      number: current.number, content: current.content, changeSummary: current.changeSummary, sources: parseJsonField(current.sources, []), createdAt: current.createdAt,
+      nextSteps: parseJsonField(current.nextSteps, []),
+    } : null,
     versions,
     assumptions,
     ideas: ideas.map(i => ({ ...i, presence: presence.get(i.id) || null })),
     comments,
-    criteria: parseJsonField(work.criteria, []),
+    criteria,
+    // Phase 3 : tout ce que le porteur a fixé est atteint → la livraison est proposée
+    allMet: criteria.length > 0 && criteria.every(c => c.status === 'met'),
+    delivered: work.deliveredAt ? { at: work.deliveredAt, version: work.deliveredVersion, current: work.deliveredVersion === work.currentVersion } : null,
     pending,
     // Phase 2 : version suivante proposée, en attente de la réponse du porteur
     proposal: proposal ? {
       id: proposal.id, origin: proposal.origin, number: proposal.baseVersion + 1, baseVersion: proposal.baseVersion,
       content: proposal.content, changeSummary: proposal.changeSummary, sources: parseJsonField(proposal.sources, []),
       sessionId: proposal.sessionId, createdAt: proposal.createdAt,
+      criteriaChanges: criteriaChanges(criteria, parseJsonField(proposal.parsed, {})),
     } : null,
     openReview: openReview ? { id: openReview.id, task: openReview.task } : null,
   };
@@ -203,6 +221,33 @@ router.post('/:id/sessions/:sid/review/conclude', async (req, res) => {
   } catch (err) { sendError(res, err, 'review conclude'); }
 });
 
+// ── Livraison (phase 3) ──────────────────────────────────────────────────────
+// Le porteur reçoit le dossier final : la version en cours est marquée livrée
+router.post('/:id/work/deliver', async (req, res) => {
+  try {
+    const ctx = await workOr404(req, res); if (!ctx) return;
+    if (!ctx.work.currentVersion) return res.status(409).json({ error: 'La première version n’est pas encore prête.' });
+    if (ctx.work.buildStatus === 'building' && !builder.isStale(ctx.work)) return res.status(409).json({ error: 'Une version est en cours d’écriture.' });
+    if (await builder.openProposal(ctx.work.id)) return res.status(409).json({ error: 'Une proposition de version attend d’abord votre réponse.' });
+    await db('Work').where({ id: ctx.work.id }).update({ deliveredAt: new Date(), deliveredVersion: ctx.work.currentVersion, updatedAt: new Date() });
+    res.json(await serialize(ctx.project));
+  } catch (err) { sendError(res, err, 'deliver'); }
+});
+
+// Le dossier en Word (version en cours, ou ?version=n)
+router.get('/:id/work/export/word', async (req, res) => {
+  try {
+    const ctx = await workOr404(req, res); if (!ctx) return;
+    const n = Number.parseInt(req.query.version, 10) || ctx.work.currentVersion;
+    const version = await db('WorkVersion').where({ workId: ctx.work.id, number: n }).first();
+    if (!version) return res.status(404).json({ error: 'Version introuvable' });
+    const { workDocx, attachment } = require('../services/exporters');
+    const criteria = n === ctx.work.currentVersion ? parseJsonField(ctx.work.criteria, []) : [];
+    const label = n === 1 ? 'première version' : `version ${n}`;
+    attachment(res, `${ctx.project.name} — ${label}`, await workDocx({ project: ctx.project, version, criteria, delivered: ctx.work.deliveredVersion === n }));
+  } catch (err) { sendError(res, err, 'export word'); }
+});
+
 async function workOr404(req, res) {
   const project = await projectOr404(req, res); if (!project) return null;
   const work = await builder.workOf(project.id);
@@ -255,7 +300,7 @@ router.put('/:id/work/criteria', async (req, res) => {
     const { randomUUID } = require('crypto');
     const previous = new Map(parseJsonField(ctx.work.criteria, []).map(c => [c.text, c]));
     const texts = (Array.isArray(req.body?.criteria) ? req.body.criteria : []).map(t => String(t || '').trim().slice(0, 300)).filter(Boolean).slice(0, 8);
-    const criteria = texts.map(text => previous.get(text) || { id: randomUUID(), text, status: 'open' });
+    const criteria = texts.map(text => previous.get(text) || { id: randomUUID(), text, status: 'open', byOwner: true });
     await db('Work').where({ id: ctx.work.id }).update({ criteria: JSON.stringify(criteria), updatedAt: new Date() });
     res.json(await serialize(ctx.project));
   } catch (err) { sendError(res, err, 'criteria'); }

@@ -28,8 +28,18 @@ Si une illustration est prévue : un bloc \`\`\`svg (dessin simple, sans script,
 - Une ligne par idée du porteur (voir les consignes sur les idées).
 </idees>
 <fini_quand>
-- Trois à cinq phrases « Ce sera fini quand… », tirées du récit, vérifiables (« il y a 5 jeux par tranche d'âge »).
-</fini_quand>`;
+- Trois à cinq phrases « Ce sera fini quand… », tirées du récit, vérifiables EN LISANT LE DOSSIER SEUL (« il y a 5 jeux par tranche d'âge », « chaque jeu a son prix »). Jamais une action à faire hors du dossier (essayer le jeu, confirmer les prix en magasin, vérifier sur place) : celles-là vont dans <prochaines_etapes>, en « vous ».
+</fini_quand>
+<etat_fini>
+- Une ligne par phrase « Ce sera fini quand… », dans l'ordre (C1, C2…) : « - C1 :: atteint — où, en quelques mots » ou « - C2 :: pas encore — ce qui manque, en quelques mots ». Sois honnête : « atteint » seulement si cette version le contient vraiment, entièrement ; un point simplement marqué « à vérifier » ne l'empêche pas.
+</etat_fini>
+<prochaines_etapes>
+- Une ou deux lignes au plus : ce qui ferait le plus avancer le projet vers « fini », déduit de ce qui manque (phrases pas encore atteintes, points « à vérifier » qui comptent, idées du porteur pas encore placées). Chaque ligne commence par son genre :
+  - « retouche :: … » : un changement que tu pourrais faire toi-même dès la prochaine version, écrit comme le porteur le demanderait (« Ajoutez … ») ;
+  - « equipe :: … » : un point où l'avis de plusieurs assistants aiderait (un choix à mûrir, des idées à trouver) ;
+  - « vous :: … » : ce que seul le porteur peut faire, hors de ce dossier (vérifier un prix en magasin, appeler une salle, tester le jeu en famille).
+- Seulement « aucune » si tout est atteint.
+</prochaines_etapes>`;
 
 function templatesBlock() {
   const lines = [];
@@ -55,7 +65,7 @@ function firstVersionPrompt({ story, history }) {
   const user = [
     `RÉCIT DU PORTEUR (ses mots) :\n${story}`,
     history ? `CE QUI A DÉJÀ ÉTÉ DÉCIDÉ OU DIT DANS CE PROJET (réunions passées ; ses décisions priment sur tes suppositions) :\n${history}` : null,
-    `Écris maintenant la PREMIÈRE VERSION complète de l'ouvrage.
+    `Écris maintenant la PREMIÈRE VERSION complète de l'ouvrage. <etat_fini> porte sur les phrases de ton <fini_quand>, dans le même ordre.
 IDÉES : relève chaque idée, envie ou demande distincte du porteur, avec ses mots (courte citation), une par ligne, sous la forme :
 - + « ses mots » :: Titre de la partie où elle se trouve
 (ou « :: pas encore — raison en quelques mots » si elle n'y est vraiment pas).`,
@@ -83,12 +93,14 @@ function nextVersionPrompt({ story, current, assumptions, comments, ideas, crite
 
 CE QUE TU REPRENDS DE LA RÉUNION : tout ce que le porteur a demandé ; les propositions des assistants qu'il a approuvées, ou qu'il n'a pas contestées si elles servent son projet sans contredire ni ses mots ni ses idées. Tu ne reprends jamais ce qu'il a refusé. Une idée nouvelle du porteur dite en réunion est une idée à relever.` : null,
     `IDÉES DU PORTEUR DÉJÀ RELEVÉES :\n${ideaLines}`,
-    criteria.length ? `CE SERA FINI QUAND :\n${criteria.map(c => `- ${c.text}`).join('\n')}` : null,
-    `Écris la VERSION SUIVANTE, complète (pas seulement les changements) : applique chaque supposition changée et chaque commentaire${meeting ? ', et ce que tu reprends de la réunion' : ''}, garde le reste tel quel sauf ce qui en dépend.
+    criteria.length ? `CE SERA FINI QUAND (fixé avec le porteur) :\n${criteria.map(c => `- ${c.text}${c.byOwner ? ' (écrite par le porteur)' : ''}`).join('\n')}` : null,
+    `Écris la VERSION SUIVANTE, complète (pas seulement les changements) : applique chaque supposition changée et chaque commentaire${meeting ? ', et ce que tu reprends de la réunion' : ''}. Une partie que rien ne touche se recopie MOT POUR MOT (le porteur voit quelles parties ont changé : ne reformule pas ce qui ne change pas) ; ne change que ce qui en dépend.
 <resume> : ce qui a changé, en deux à cinq phrases, en nommant les parties concernées${meeting ? ' ; puis, en une phrase, ce que tu n\'as pas repris de la réunion et pourquoi, s\'il y a lieu' : ''}.
 <suppositions> : la liste complète à jour ; une valeur choisie par le porteur se recopie mot pour mot.
 <idees> : une ligne par idée déjà relevée, sous la forme « - I3 :: Titre de la partie » (ou « :: pas encore — raison ») ; puis une ligne « - + « ses mots » :: Titre » pour chaque idée nouvelle tirée de ses commentaires.
-<fini_quand> : recopie la liste telle quelle.
+<fini_quand> : recopie la liste telle quelle, avec deux seules exceptions : une phrase que les choix du porteur ont rendue fausse (il a changé son projet : « 49 cases » alors qu'il veut un petit plateau) se réécrit au plus près de ce qu'il veut maintenant ; une phrase qui demande une action hors du dossier (« aura été essayé », « aura été confirmé ») se réécrit en ce que le dossier peut contenir, et l'action passe dans <prochaines_etapes> en « vous ». Une phrase marquée (écrite par le porteur) ne change jamais. Si tu changes la liste, dis-le en une phrase dans <resume>.
+<etat_fini> : une ligne par phrase de TA liste <fini_quand> ci-dessus (C1 = la première, etc.), pour CETTE version.
+<prochaines_etapes> : une ou deux, déduites de ce qui manque encore après cette version (seulement « aucune » si tout est atteint).
 <nom> et <gabarit> : recopie ceux du projet.`,
   ].filter(Boolean).join('\n\n');
   return { system: SYSTEM, user };

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Printer, X, Check } from 'lucide-react';
 import api from '../../utils/api';
 import Markdown from '../../components/Markdown';
+import WorkDocument from '../../components/work/WorkDocument';
 
 // Pages d'impression (v5.1) : export PDF par « Imprimer → Enregistrer en PDF ».
 // Ouvertes dans un nouvel onglet ; l'impression se lance dès que le contenu est prêt.
@@ -11,12 +12,12 @@ const fmtDate = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', m
 const TYPE_LABEL = { decision: 'Relevé de décisions', claude_code: 'Prompt Claude Code', stack: 'Ajout d’un service' };
 const intentionOf = s => { const i = s?.intention; if (Array.isArray(i)) return i[0]; try { return JSON.parse(i || '[]')[0]; } catch { return null; } };
 
-function PrintFrame({ ready, error, children }) {
+function PrintFrame({ ready, error, children, delay = 400 }) {
   useEffect(() => {
     if (!ready) return;
-    const t = setTimeout(() => window.print(), 400); // laisse le rendu se terminer
+    const t = setTimeout(() => window.print(), delay); // laisse le rendu se terminer
     return () => clearTimeout(t);
-  }, [ready]);
+  }, [ready, delay]);
   return (
     <div className="min-h-screen bg-white text-ink">
       <div className="print:hidden sticky top-0 bg-canvas border-b border-line px-4 py-2 flex items-center gap-2 text-sm">
@@ -66,6 +67,51 @@ export function PrintSession() {
               <pre className="whitespace-pre-wrap text-xs font-mono border border-line rounded-lg p-3">{s.deliverable}</pre>
             </section>
           )}
+        </>
+      )}
+    </PrintFrame>
+  );
+}
+
+// v6 phase 3 : le dossier du projet (version en cours, ou ?version=n), dessins compris
+export function PrintWork() {
+  const { id } = useParams();
+  const n = new URLSearchParams(window.location.search).get('version');
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    Promise.all([api.get(`/projects/${id}`), api.get(`/projects/${id}/work`)])
+      .then(async ([p, w]) => {
+        const number = Number(n) || w.data.current?.number;
+        const version = number === w.data.current?.number ? w.data.current : (await api.get(`/projects/${id}/work/versions/${number}`)).data;
+        setData({ project: p.data, work: w.data, version });
+        document.title = p.data.name;
+      })
+      .catch(() => setError('Projet introuvable.'));
+  }, [id, n]);
+  const v = data?.version;
+  const isCurrent = v && v.number === data.work.current?.number;
+  const finalVersion = v && data.work.delivered?.version === v.number;
+  return (
+    <PrintFrame ready={!!data} error={error} delay={1500}>
+      {v && (
+        <>
+          <Header title={data.project.name}
+            sub={`${v.number === 1 ? 'Première version' : `Version ${v.number}`}${finalVersion ? ' — dossier final' : ''} · ${fmtDate(v.createdAt)}`} />
+          {isCurrent && data.work.criteria.length > 0 && (
+            <section className="mb-6 break-inside-avoid">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink-muted mb-2">Ce sera fini quand…</h2>
+              <ul className="space-y-1">
+                {data.work.criteria.map(c => (
+                  <li key={c.id} className="text-sm flex gap-2">
+                    {c.status === 'met' ? <Check size={15} className="text-ok mt-0.5 shrink-0" aria-hidden="true" /> : <span className="w-3 h-3 mt-1 rounded-full border-2 border-await shrink-0" aria-hidden="true" />}
+                    <span>{c.text}{c.status !== 'met' && c.note ? <span className="text-ink-muted"> — {c.note}</span> : null}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <WorkDocument content={v.content} readOnly />
         </>
       )}
     </PrintFrame>

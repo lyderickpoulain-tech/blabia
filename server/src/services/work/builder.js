@@ -11,7 +11,10 @@ const { firstVersionPrompt, nextVersionPrompt } = require('../prompts/builderPro
 const { parseBuilderOutput, normalize } = require('./builderOutput');
 const { getGenre } = require('./genres');
 
-const MAX_TOKENS = 16000;
+// Un dossier long (liste de 25 jeux avec liens, 10 projets détaillés) dépasse 18 000 jetons de
+// sortie, réflexion comprise : coupé, il perdait idées, suppositions et état des phrases (rejeu de
+// la phase 3). 32 000 laisse la marge ; une réponse encore coupée n'est jamais enregistrée.
+const MAX_TOKENS = 32000;
 const MAX_PAUSES = 3;          // relances après pause_turn (recherche longue)
 const WEB_SEARCH_MAX_USES = 5;
 const STALE_MS = 15 * 60 * 1000; // construction interrompue (redémarrage du serveur) au-delà
@@ -45,6 +48,7 @@ async function callBuilder({ system, user }, { model = BUILDER_MODEL } = {}) {
     messages = [...messages, { role: 'assistant', content: response.content }];
   }
   if (response?.stop_reason === 'refusal') throw new BuildError('La version n’a pas pu être écrite pour ce projet.', 422);
+  if (response?.stop_reason === 'max_tokens') throw new BuildError('La version était trop longue et a été coupée. Vous pouvez réessayer.', 502);
   return { text: texts.join(''), sources: [...sources.values()].slice(0, 30), model: response?.model || model, durationMs: Date.now() - started, truncated: response?.stop_reason === 'max_tokens' };
 }
 
@@ -128,17 +132,36 @@ async function saveVersion(trx, work, parsed, { author, userId, call, ideasById,
     else await trx('WorkAssumption').where({ id: a.id }).update({ state: 'retired' });
   }
 
+  // « Ce sera fini quand… » : la liste de la réponse (première version ; ensuite, elle suit le
+  // projet quand le porteur l'a changé), puis l'état de chaque phrase (C1 = sa première phrase).
+  // Liste corrigée par le porteur depuis l'écriture de la proposition : la sienne fait foi.
+  const before = Array.isArray(work.criteria) ? work.criteria : JSON.parse(work.criteria || '[]');
+  const ownerEdited = parsed.baseCriteria && parsed.baseCriteria.join('\n') !== before.map(c => c.text).join('\n');
+  const proposed = (parsed.criteria || []).length && !ownerEdited ? parsed.criteria : null;
+  const byText = new Map(before.map(c => [c.text, c]));
+  const criteria = proposed
+    ? proposed.map(text => byText.get(text) || { id: randomUUID(), text, status: 'open' })
+    : before;
+  const status = new Map();
+  if (!ownerEdited) {
+    for (const c of parsed.criteriaStatus || []) {
+      const id = criteria[Number(String(c.ref).slice(1)) - 1]?.id;
+      if (id) status.set(id, { criterionId: id, met: !!c.met, note: c.note || null });
+    }
+  }
+  const updatedCriteria = criteria.map(c => (status.has(c.id)
+    ? { ...c, status: status.get(c.id).met ? 'met' : 'open', note: status.get(c.id).note, checkedIn: number }
+    : c));
+
   await trx('WorkVersion').insert({
     id: randomUUID(), workId: work.id, number, genre: work.genre, content: parsed.content,
     author: author === 'history' ? 'builder' : author, changeSummary: parsed.summary || null,
     ideasPresence: JSON.stringify(presence), sources: JSON.stringify(call.sources),
     model: call.model, durationMs: call.durationMs, createdBy: userId || null,
+    criteriaStatus: JSON.stringify([...status.values()]), nextSteps: JSON.stringify(parsed.nextSteps || []),
   });
 
-  const workPatch = { currentVersion: number, template, buildStatus: 'idle', buildStage: null, buildError: null, updatedAt: new Date() };
-  if (number === 1 && parsed.criteria.length) {
-    workPatch.criteria = JSON.stringify(parsed.criteria.map(text => ({ id: randomUUID(), text, status: 'open' })));
-  }
+  const workPatch = { currentVersion: number, template, buildStatus: 'idle', buildStage: null, buildError: null, criteria: JSON.stringify(updatedCriteria), updatedAt: new Date() };
   await trx('Work').where({ id: work.id }).update(workPatch);
   return number;
 }
@@ -221,6 +244,7 @@ async function runProposal(work, { projectId, userId, model, origin, sessionId, 
     const { content, summary, ...rest } = parsed;
     rest.ideas = rest.ideas.map(i => (i.ref && refs.has(i.ref) ? { ...i, ideaId: refs.get(i.ref) } : i));
     rest.asOf = startedAt.toISOString();
+    rest.baseCriteria = criteria.map(c => c.text); // la liste au moment de l'écriture
     await db.transaction(async trx => {
       await trx('WorkProposal').insert({
         id: randomUUID(), workId: work.id, baseVersion: work.currentVersion, origin, sessionId: sessionId || null,
@@ -247,7 +271,7 @@ async function acceptProposal(projectId, proposalId, userId) {
   return db.transaction(async trx => {
     const fresh = await trx('Work').where({ id: work.id }).forUpdate().first();
     if (fresh.currentVersion !== proposal.baseVersion) throw new BuildError('Le projet a changé depuis cette proposition.', 409);
-    const number = await saveVersion(trx, fresh, { ...parsed, content: proposal.content, summary: proposal.changeSummary, criteria: [] }, {
+    const number = await saveVersion(trx, fresh, { ...parsed, content: proposal.content, summary: proposal.changeSummary }, {
       author: 'builder', userId,
       call: { sources: json(proposal.sources, []), model: proposal.model, durationMs: proposal.durationMs },
       ideasById: new Map(),

@@ -315,18 +315,25 @@ async function seedDemoWork(trx, projectId, userId, createdAt) {
     { id: randomUUID(), text: 'rentable dès la deuxième année', present: true, where: 'Les chiffres du lancement' },
     { id: randomUUID(), text: 'des ateliers de dégustation', present: false, where: 'à placer dans le plan de lancement' },
   ];
+  // v6 phase 3 : état de chaque phrase « Ce sera fini quand… » à cette version
+  const criteria = [
+    ['le budget de lancement est chiffré, poste par poste', 'met', null],
+    ['le local est choisi', 'open', 'deux adresses restent à visiter'],
+    ['la date d’ouverture est fixée', 'open', 'elle dépend du local'],
+  ].map(([text, status, note]) => ({ id: randomUUID(), text, status, note, checkedIn: 1 }));
   await trx('Work').insert({
     id: workId, projectId, genre: 'dossier', template: 'commerce', currentVersion: 1, createdAt, updatedAt: createdAt,
-    criteria: JSON.stringify([
-      'le budget de lancement est chiffré, poste par poste',
-      'le local est choisi',
-      'la date d’ouverture est fixée',
-    ].map(text => ({ id: randomUUID(), text, status: 'open' }))),
+    criteria: JSON.stringify(criteria),
   });
   await trx('WorkVersion').insert({
     id: randomUUID(), workId, number: 1, content: DEMO_WORK, author: 'builder', createdBy: userId, createdAt,
     changeSummary: 'Première version : l’offre, les chiffres du lancement et le plan jusqu’à l’ouverture.',
     ideasPresence: JSON.stringify(ideas.map(i => ({ ideaId: i.id, present: i.present, where: i.where }))),
+    criteriaStatus: JSON.stringify(criteria.map(c => ({ criterionId: c.id, met: c.status === 'met', note: c.note }))),
+    nextSteps: JSON.stringify([
+      { kind: 'vous', text: 'Visitez les deux locaux de la Croix-Rousse et notez le loyer demandé.' },
+      { kind: 'retouche', text: 'Ajoutez les ateliers de dégustation au plan de lancement.' },
+    ]),
   });
   await trx('WorkIdea').insert(ideas.map((i, k) => ({ id: i.id, workId, text: i.text, source: 'recit', displayOrder: k, createdAt })));
   await trx('WorkAssumption').insert([

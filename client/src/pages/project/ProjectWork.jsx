@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Check, Clock, History, Lightbulb, ListChecks, Pencil, RotateCcw, Sparkles, TriangleAlert, Users, Wand2, X } from 'lucide-react';
+import { ArrowRight, Check, Clock, Gift, History, Lightbulb, ListChecks, Pencil, RotateCcw, Sparkles, TriangleAlert, Users, Wand2, X } from 'lucide-react';
+import ExportButtons from '../../components/ExportButtons';
 import { Badge, Button, Card, SectionLabel } from '../../components/ui';
 import WorkDocument, { countVerify, splitSections } from '../../components/work/WorkDocument';
 import api from '../../utils/api';
@@ -137,8 +138,21 @@ function Criteria({ criteria, onSave }) {
         </div>
       ) : (
         <>
-          <ul className="mt-3 space-y-1.5">
-            {criteria.map(c => <li key={c.id} className="text-sm text-ink flex gap-2"><span className="w-1.5 h-1.5 rounded-full bg-action mt-[0.5em] shrink-0" aria-hidden="true" />{c.text}</li>)}
+          {criteria.length > 0 && (
+            <p className="text-xs text-ink-muted mt-1">{criteria.filter(c => c.status === 'met').length} sur {criteria.length} atteint{criteria.filter(c => c.status === 'met').length > 1 ? 's' : ''}</p>
+          )}
+          <ul className="mt-3 space-y-2">
+            {criteria.map(c => (
+              <li key={c.id} className="text-sm flex gap-2">
+                {c.status === 'met'
+                  ? <Check size={16} className="text-ok mt-0.5 shrink-0" aria-label="Atteint" />
+                  : <span className="w-3.5 h-3.5 mt-[3px] rounded-full border-2 border-await shrink-0" aria-label="Pas encore" />}
+                <span>
+                  <span className={c.status === 'met' ? 'text-ink' : 'text-ink font-semibold'}>{c.text}</span>
+                  {c.status !== 'met' && c.note && <span className="block text-xs text-await">Il manque : {c.note}</span>}
+                </span>
+              </li>
+            ))}
             {!criteria.length && <li className="text-sm text-ink-muted">Rien pour l’instant.</li>}
           </ul>
           <button type="button" onClick={() => { setText(criteria.map(c => c.text).join('\n')); setEditing(true); }}
@@ -186,6 +200,15 @@ function ProposalBar({ proposal, changes, showingCurrent, onToggle, onAccept, on
         {touched && <> Parties touchées : {touched}.</>}
         {removed && <> {changes.removed.length > 1 ? 'Parties retirées' : 'Partie retirée'} : {removed}.</>}
       </p>
+      {proposal.criteriaChanges && (
+        <div className="mt-2 text-xs text-ink-soft">
+          <p className="font-bold text-ink">« Ce sera fini quand… » suit votre projet :</p>
+          <ul className="mt-1 space-y-0.5">
+            {proposal.criteriaChanges.removed.map(t => <li key={`-${t}`} className="line-through text-ink-muted">{t}</li>)}
+            {proposal.criteriaChanges.added.map(t => <li key={`+${t}`}>{t}</li>)}
+          </ul>
+        </div>
+      )}
       {correcting ? (
         <div className="mt-3 space-y-2">
           <label htmlFor="proposal-correct" className="text-sm font-bold text-ink">Qu’est-ce qui ne va pas ?</label>
@@ -208,6 +231,51 @@ function ProposalBar({ proposal, changes, showingCurrent, onToggle, onAccept, on
           </button>
         </div>
       )}
+    </Card>
+  );
+}
+
+// Phase 3 : la ou les deux prochaines étapes, déduites de ce qui manque, chacune avec son geste
+function NextSteps({ steps, onRetouch, onReview, openReview, busy, isDemo }) {
+  if (!steps?.length) return null;
+  return (
+    <Card className="p-4 border-action/30" data-tour="pw-next">
+      <SectionLabel className="flex items-center gap-1.5"><ArrowRight size={14} aria-hidden="true" /> La suite</SectionLabel>
+      <ul className="mt-3 space-y-3">
+        {steps.map((s, i) => (
+          <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <p className="text-[15px] text-ink flex-1 min-w-[220px]">{s.text}</p>
+            {s.kind === 'retouche' && (
+              <Button size="sm" variant="primary" disabled={busy || isDemo} onClick={() => onRetouch(s.text)}><Wand2 size={15} aria-hidden="true" /> Faire cette retouche</Button>
+            )}
+            {s.kind === 'equipe' && (openReview
+              ? <Link to={openReview.to} className="text-sm font-bold text-action hover:underline">Reprendre la réunion en cours</Link>
+              : <Button size="sm" variant="secondary" disabled={busy || isDemo} onClick={onReview}><Users size={15} aria-hidden="true" /> Demander l’avis de l’équipe</Button>)}
+            {s.kind === 'vous' && <span className="text-xs font-bold text-await">À faire de votre côté</span>}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+// Phase 3 : tout ce que le porteur a fixé est atteint → le dossier final ; livré → téléchargements
+function Delivery({ work, pid, onDeliver, busy, isDemo }) {
+  const delivered = work.delivered?.current;
+  if (!work.allMet && !delivered) return null;
+  return (
+    <Card className="p-5 border-ok-border bg-ok-light/50" data-tour="pw-delivery">
+      <h2 className="text-lg font-extrabold text-ink flex items-center gap-2"><Gift size={18} className="text-ok" aria-hidden="true" />
+        {delivered ? 'Votre dossier final est prêt' : 'Tout ce que vous aviez fixé est atteint'}</h2>
+      <p className="text-sm text-ink-soft mt-1">
+        {delivered
+          ? `Livré le ${new Date(work.delivered.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}. Vous pouvez encore le faire évoluer : une nouvelle version vous sera proposée comme d’habitude.`
+          : 'Votre projet peut être livré : vous recevez le dossier complet, à imprimer ou à partager.'}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {!delivered && <Button variant="primary" onClick={onDeliver} disabled={busy || isDemo}><Gift size={16} aria-hidden="true" /> Recevoir le dossier final</Button>}
+        {delivered && <ExportButtons size="md" pdfPath={`/projects/${pid}/imprimer/projet`} wordPath={`/projects/${pid}/work/export/word`} />}
+      </div>
     </Card>
   );
 }
@@ -339,6 +407,15 @@ export default function ProjectWork({ initial, onReload }) {
           onCorrect={text => answer('correct', { text })} />
       )}
 
+      {current && !building && !viewing && !proposal && (
+        <>
+          <Delivery work={work} pid={pid} busy={busy} isDemo={isDemo}
+            onDeliver={async () => { setBusy(true); await act(() => api.post(`/projects/${pid}/work/deliver`), 'Le dossier n’a pas pu être livré'); setBusy(false); }} />
+          {!work.allMet && <NextSteps steps={current.nextSteps} busy={busy} isDemo={isDemo} onRetouch={retouch} onReview={review}
+            openReview={work.openReview ? { to: `/projects/${pid}/meeting/${work.openReview.id}` } : null} />}
+        </>
+      )}
+
       {pendingCount > 0 && !building && !viewing && !proposal && (
         <Card className="p-4 border-action/30 bg-action-light/50 flex flex-wrap items-center gap-3">
           <p className="text-sm text-ink flex-1 min-w-[220px]">
@@ -358,6 +435,9 @@ export default function ProjectWork({ initial, onReload }) {
               <Badge tone={viewing ? 'muted' : 'ai'}>{versionLabel(shown.number)}{viewing ? ' (ancienne)' : onProposal ? ' (proposée)' : proposal ? ' (en cours)' : ''}</Badge>
               {verify > 0 && <Badge tone="await"><TriangleAlert size={12} aria-hidden="true" /> {verify} point{verify > 1 ? 's' : ''} à vérifier</Badge>}
               {viewing && <Button size="sm" variant="secondary" onClick={() => setViewing(null)}>Revenir à la version en cours</Button>}
+              {!onProposal && (
+                <ExportButtons className="ml-auto" pdfPath={`/projects/${pid}/imprimer/projet?version=${shown.number}`} wordPath={`/projects/${pid}/work/export/word?version=${shown.number}`} />
+              )}
             </div>
             {shown.changeSummary && !onProposal && <p className="text-[15px] text-ink-soft">{shown.changeSummary}</p>}
             <WorkDocument

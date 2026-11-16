@@ -38,6 +38,7 @@ const StartMeeting     = lazy(() => import('./pages/StartMeeting'));
 const MeetingRoute     = lazy(() => import('./pages/MeetingRoute')); // v6 : salle de revue ou salle v5.1
 const PrintSession     = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintSession })));
 const PrintRegistry    = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintRegistry })));
+const PrintWork        = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintWork }))); // v6 : le dossier en PDF
 
 export default function App() {
   useEffect(() => {
@@ -83,6 +84,9 @@ export default function App() {
         } />
         <Route path="/projects/:id/imprimer/reunion/:sid" element={
           <ProtectedRoute><PrintSession /></ProtectedRoute>
+        } />
+        <Route path="/projects/:id/imprimer/projet" element={
+          <ProtectedRoute><PrintWork /></ProtectedRoute>
         } />
         <Route path="/projects/:id/imprimer/registre" element={
           <ProtectedRoute><PrintRegistry /></ProtectedRoute>

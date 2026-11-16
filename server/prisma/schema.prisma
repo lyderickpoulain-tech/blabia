@@ -452,6 +452,8 @@ model Work {
   buildError     String?
   buildStartedAt DateTime?
   buildRequest   Json?    // v6 phase 2 : dernière écriture demandée { kind, origin, sessionId, correctedId } (« Réessayer »)
+  deliveredAt    DateTime? // v6 phase 3 : dossier final livré au porteur
+  deliveredVersion Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now())
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -472,6 +474,8 @@ model WorkVersion {
   changeSummary String?
   ideasPresence Json     @default("[]") // [{ ideaId, present, where }]
   sources       Json     @default("[]") // sources web citées [{ url, title }]
+  criteriaStatus Json    @default("[]") // v6 phase 3 : [{ criterionId, met, note }] — « Ce sera fini quand… » à cette version
+  nextSteps     Json     @default("[]") // v6 phase 3 : [{ kind: equipe|retouche|vous, text }]
   model         String?
   durationMs    Int?
   createdBy     String?
