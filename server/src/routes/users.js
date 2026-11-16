@@ -14,7 +14,7 @@ const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 router.get('/me', async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'reminderDay', 'createdAt',
+      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'reminderDay', 'createdAt', 'advancedMode',
         'anthropicApiKey', 'anthropicKeyLast4', 'anthropicKeyStatus', 'anthropicKeyError', 'anthropicKeyCheckedAt')
       .where({ id: req.user.id })
       .limit(1);
@@ -132,6 +132,18 @@ router.patch('/me/reminders', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[users/me/reminders PATCH]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /api/users/me/advanced-mode { enabled } — v6 : le mode avancé rouvre ce que la v6 masque
+router.patch('/me/advanced-mode', async (req, res) => {
+  if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'enabled : true ou false' });
+  try {
+    const [row] = await db('User').where({ id: req.user.id }).update({ advancedMode: req.body.enabled }).returning(['advancedMode']);
+    res.json(row);
+  } catch (err) {
+    console.error('[users/me/advanced-mode PATCH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

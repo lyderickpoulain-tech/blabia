@@ -272,8 +272,68 @@ async function seedSalonProject(user, { isDemo, name, description }) {
         deliverable: 'Liste avec montants et démarches', status: 'proposed', budgetUSD: 0.6, createdAt: new Date(now - 5 * day) },
     ]);
 
+    await seedDemoWork(trx, projectId, user.id, new Date(now - 6 * day));
     return { id: projectId, created: true };
   });
+}
+
+// v6 : la première version du projet (« Mon projet »), écrite d'avance pour la visite
+const DEMO_WORK = `## L’offre et la clientèle
+Un salon de thé cosy de 30 places, doublé d’une boutique de thés en vrac, dans le quartier de la Croix-Rousse à Lyon. Pour les actifs de 25 à 45 ans du quartier, qui cherchent un lieu calme pour une pause, et pour les amateurs de thé qui veulent acheter au poids.
+
+## Ce qui vous distingue
+- Une carte courte de 25 thés, renouvelée à chaque saison.
+- Des pâtisseries de deux artisans du quartier (à vérifier : leur accord de principe).
+- La boutique : on goûte avant d’acheter.
+
+## Les chiffres du lancement
+| Poste | Montant |
+|---|---|
+| Travaux et aménagement | 30 000 € |
+| Stock de départ (thés, vaisselle) | 8 000 € |
+| Trésorerie des six premiers mois | 12 000 € |
+| **Total** | **50 000 €** |
+
+Financement : 25 000 € d’apport et un prêt de 25 000 € (en négociation). Rentable la deuxième année avec 60 clients par jour en moyenne et un ticket moyen de 9 € (à vérifier).
+
+## Le plan de lancement
+1. Trouver le local (de novembre à janvier).
+2. Signer le bail et lancer les travaux (février et mars).
+3. Choisir les fournisseurs de thé et de pâtisseries (mars).
+4. Ouvrir au printemps 2027.
+
+## Les démarches
+- Immatriculation de l’entreprise.
+- Formation obligatoire à l’hygiène alimentaire (deux jours).
+- Licence de restaurant, seulement si vous servez de l’alcool.`;
+
+async function seedDemoWork(trx, projectId, userId, createdAt) {
+  const workId = randomUUID();
+  const ideas = [
+    { id: randomUUID(), text: 'un salon de thé cosy', present: true, where: 'L’offre et la clientèle' },
+    { id: randomUUID(), text: 'une boutique de thés en vrac', present: true, where: 'Ce qui vous distingue' },
+    { id: randomUUID(), text: 'rentable dès la deuxième année', present: true, where: 'Les chiffres du lancement' },
+    { id: randomUUID(), text: 'des ateliers de dégustation', present: false, where: 'à placer dans le plan de lancement' },
+  ];
+  await trx('Work').insert({
+    id: workId, projectId, genre: 'dossier', template: 'commerce', currentVersion: 1, createdAt, updatedAt: createdAt,
+    criteria: JSON.stringify([
+      'le budget de lancement est chiffré, poste par poste',
+      'le local est choisi',
+      'la date d’ouverture est fixée',
+    ].map(text => ({ id: randomUUID(), text, status: 'open' }))),
+  });
+  await trx('WorkVersion').insert({
+    id: randomUUID(), workId, number: 1, content: DEMO_WORK, author: 'builder', createdBy: userId, createdAt,
+    changeSummary: 'Première version : l’offre, les chiffres du lancement et le plan jusqu’à l’ouverture.',
+    ideasPresence: JSON.stringify(ideas.map(i => ({ ideaId: i.id, present: i.present, where: i.where }))),
+  });
+  await trx('WorkIdea').insert(ideas.map((i, k) => ({ id: i.id, workId, text: i.text, source: 'recit', displayOrder: k, createdAt })));
+  await trx('WorkAssumption').insert([
+    ['Surface du salon', '60 à 80 m²'],
+    ['Ouverture', 'du mardi au dimanche, de 9 h à 19 h'],
+    ['Nombre de places', '30'],
+  ].map(([statement, value], k) => ({ id: randomUUID(), workId, statement, value, displayOrder: k, createdAt })));
 }
 
 // Supprime le(s) projet(s) exemple de l'utilisateur (fin de visite)

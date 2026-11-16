@@ -23,7 +23,7 @@ const currentModel = id => LEGACY_MODELS[id] || id;
 // facturée et comptée dans max_tokens. Réglage centralisé dans services/anthropic.js :
 // effort « low » par défaut (le plus pertinent dans l'étude pour les réunions, comptes rendus
 // et extractions), marge ajoutée à max_tokens pour que la réflexion ne tronque pas la réponse.
-const THINKING_MODELS = new Set(['claude-sonnet-5-5', 'claude-opus-5-5']);
+const THINKING_MODELS = new Set(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-1']);
 const DEFAULT_EFFORT = 'low';
 const THINKING_HEADROOM = 2000;
 
@@ -33,9 +33,18 @@ const THINKING_HEADROOM = 2000;
 const ORCHESTRATOR_MODEL  = 'claude-haiku-5-5';
 const ORCHESTRATOR_PARAMS = { thinking: { type: 'disabled' } };
 
+// v6 : le constructeur écrit l'ouvrage (première version complète dès le récit, puis chaque
+// version suivante) — modèle fort, sortie longue. Provisoire en attendant la comparaison
+// Sonnet 5.5 / Opus 5.5 / Fable 5.1 sur les trois projets de référence (feuille de route, v6).
+// Fable 5.1 : réflexion toujours active (jamais de paramètre thinking), 5 fois le prix de Sonnet.
+const BUILDER_MODEL  = process.env.BUILDER_MODEL || 'claude-opus-5-5';
+const BUILDER_EFFORT = 'medium';
+const BUILDER_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-1'];
+
 const isMeetingModel = id => MEETING_MODELS.some(m => m.id === id);
 
 module.exports = {
   MEETING_MODELS, DEFAULT_MODEL, ORCHESTRATOR_MODEL, ORCHESTRATOR_PARAMS, isMeetingModel,
   LEGACY_MODELS, currentModel, THINKING_MODELS, DEFAULT_EFFORT, THINKING_HEADROOM,
+  BUILDER_MODEL, BUILDER_EFFORT, BUILDER_MODELS,
 };

@@ -187,8 +187,10 @@ const SIZE_VARIANTS = {
   },
 };
 
-export default function Markdown({ children, size = 'default' }) {
-  const components = SIZE_VARIANTS[size] || SIZE_VARIANTS.default;
+// components : surcharges ponctuelles (v6, « Mon projet » : mentions « à vérifier », dessins)
+export default function Markdown({ children, size = 'default', components: overrides }) {
+  const base = SIZE_VARIANTS[size] || SIZE_VARIANTS.default;
+  const components = overrides ? { ...base, ...overrides } : base;
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={components}>
       {children}

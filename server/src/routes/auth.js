@@ -54,7 +54,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     res.json({
       token: makeToken(user),
-      user: { id: user.id, email: user.email, role: user.role, username: user.username, tutorialSeenAt: user.tutorialSeenAt, tourProgress: user.tourProgress, reminderDay: user.reminderDay }
+      user: { id: user.id, email: user.email, role: user.role, username: user.username, tutorialSeenAt: user.tutorialSeenAt, tourProgress: user.tourProgress, reminderDay: user.reminderDay, advancedMode: !!user.advancedMode }
     });
   } catch (err) {
     console.error('[auth/login]', err.message);
@@ -141,7 +141,7 @@ router.post('/register', registerLimiter, async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const [user] = await db('User')
-      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'reminderDay', 'createdAt')
+      .select('id', 'email', 'role', 'username', 'tutorialSeenAt', 'tourProgress', 'reminderDay', 'createdAt', 'advancedMode')
       .where({ id: req.user.id })
       .limit(1);
 

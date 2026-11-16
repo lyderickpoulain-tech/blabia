@@ -101,13 +101,13 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
 
           {screen === 'principle' && (
             <div className="space-y-4">
-              {/* La promesse, en quatre temps (v5.1, test « Gérard ») ; tout le détail est replié */}
+              {/* La promesse, en quatre temps (v6 « l'ouvrage d'abord » : le résultat d'abord) ; tout le détail est replié */}
               <ol className="space-y-3">
                 {[
-                  ['Vous décrivez votre projet', 'Avec vos mots, comme à quelqu’un de confiance.'],
-                  ['Une équipe d’assistants en discute avec vous, en réunions courtes', 'Ils proposent des idées concrètes et vous posent seulement les questions qui comptent.'],
-                  ['Vous décidez', 'D’un clic, sur ce qu’on vous montre : vous dites ce qui vous plaît et ce qui ne vous plaît pas.'],
-                  ['BlabIA fait le reste', 'Construire votre site, rédiger vos documents, faire les recherches, suivre ce qui reste à faire. Votre bras droit vous prévient quand il a du nouveau.'],
+                  ['Vous racontez votre projet', 'Une seule question, avec vos mots, comme à quelqu’un de confiance.'],
+                  ['BlabIA en fait aussitôt une première version', 'Complète, en deux ou trois minutes, sans vous poser de question. Ce qu’il a dû supposer est affiché à côté ; ce qui n’est pas vérifié est marqué « à vérifier ».'],
+                  ['Vous corrigez', 'Changez une supposition ou commentez une partie : la version suivante en tient compte. Chacune de vos idées est suivie, et rien n’est écarté sans votre accord.'],
+                  ['Une équipe d’assistants peut l’améliorer avec vous', 'En réunion courte, quand vous voulez leur avis. Votre bras droit, en bas à droite, répond à tout moment.'],
                 ].map(([t, d], i) => (
                   <li key={t} className="flex gap-3">
                     <span className="w-8 h-8 rounded-full bg-action-light text-action text-sm font-extrabold inline-flex items-center justify-center shrink-0" aria-hidden="true">{i + 1}</span>
@@ -120,6 +120,8 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
               {showDetails && (<>
               <ul className="space-y-1.5">
                 {[
+                  '« Mon projet » montre la version en cours de votre projet, en grand : vos idées et où elles se trouvent, ce que BlabIA a supposé (changez-le d’un clic), « Ce sera fini quand… » et les versions précédentes. Sous chaque partie, « Commenter cette partie » ; puis « Préparer la version suivante ». Un projet commencé avant cette nouveauté se transforme d’un clic : « Créer mon projet à partir de l’historique ».',
+                  'Mode avancé (Mon profil) : il rouvre tous les réglages — création détaillée, tableau de bord, modèles, outils, clé personnelle. Désactivé par défaut.',
                   'Un projet décrit votre objectif : le brief et vos documents de référence, que les assistants lisent avant chaque réunion.',
                   'Le plan enchaîne les réunions à tenir, dans l’ordre.',
                   'Chaque réunion fait avancer une étape ; vous tranchez les décisions qui vous reviennent.',

@@ -1,6 +1,6 @@
 import { Suspense, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { LayoutDashboard, ListOrdered, ScrollText, FileText, Wrench, Users, Settings, GitPullRequest, Inbox } from 'lucide-react';
+import { BookOpen, LayoutDashboard, ListOrdered, ScrollText, FileText, Wrench, Users, Settings, GitPullRequest, Inbox } from 'lucide-react';
 import Layout from '../Layout';
 import PageLoader from '../PageLoader';
 import { Badge } from '../ui';
@@ -22,7 +22,8 @@ const ProjectContext = createContext(null);
 export const useProject = () => useContext(ProjectContext);
 
 const NAV = [
-  { to: '',           end: true, label: 'Tableau de bord', icon: LayoutDashboard },
+  { to: '',           end: true, label: 'Mon projet', icon: BookOpen }, // v6 : la version du projet (ProjectHome)
+  { to: 'tableau-de-bord', label: 'Tableau de bord', icon: LayoutDashboard, show: (p, c, u) => !!u?.advancedMode },
   { to: 'a-trancher', label: 'À trancher',  icon: Inbox,      badge: 'inbox' },
   { to: 'reunions',   label: 'Réunions',    icon: ListOrdered, also: ['historique'] },
   { to: 'decisions',  label: 'Décisions et actions', icon: ScrollText, also: ['actions'] },
@@ -125,7 +126,7 @@ export default function ProjectShell() {
               {project.isDemo && <Badge tone="ai" className="mt-1">Projet exemple</Badge>}
             </div>
             <nav data-tour="shell-nav" className="flex md:flex-col gap-1 overflow-x-auto pb-1 md:pb-0">
-              {NAV.filter(item => !item.show || item.show(project, counts)).map(item => {
+              {NAV.filter(item => !item.show || item.show(project, counts, user)).map(item => {
                 const badge = item.badge ? badgeOf(item.badge) : 0;
                 return (
                   <NavLink key={item.label} to={item.to} end={item.end}

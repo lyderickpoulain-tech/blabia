@@ -7,6 +7,8 @@ const PRICES = {
   // Claude 5 (migration du 11/10/2026)
   'claude-sonnet-5-5': { input: 2, cacheWrite5m: 2.5,  cacheWrite1h: 4,  cacheRead: 0.20, output: 10 },
   'claude-opus-5-5':   { input: 4, cacheWrite5m: 5,    cacheWrite1h: 8,  cacheRead: 0.20, output: 20 },
+  // v6 : candidat du constructeur (comparaison), relevé du 16/11/2026
+  'claude-fable-5-1':  { input: 10, cacheWrite5m: 12.5, cacheWrite1h: 20, cacheRead: 0.25, output: 50 },
   // Anciens modèles (coûts passés, réunions antérieures)
   'claude-sonnet-4-6': { input: 3, cacheWrite5m: 3.75, cacheWrite1h: 6,  cacheRead: 0.30, output: 15 },
   'claude-opus-4-8':   { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.50, output: 25 },

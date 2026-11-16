@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, Globe, Store, CalendarHeart, Users, Sparkles } from 'lucide-react';
 import Layout from '../components/Layout';
 import { Button, Card } from '../components/ui';
@@ -10,6 +10,8 @@ import { useTour } from '../tour/TourContext';
 import QuestionModePicker from '../components/QuestionModePicker';
 import ChallengerToggle from '../components/ChallengerToggle';
 import LevelSlider, { HUMOR_LABELS, HUMOR_ICONS } from '../components/LevelSlider';
+import NewProjectStory from './NewProjectStory';
+import { useAuth } from '../contexts/AuthContext';
 
 // Création d'un projet (v5.1, refonte 17/10/2026 après le test « Gérard ») : on raconte son
 // projet, sans « brief » ni réglages à comprendre. Le genre du projet fixe ce qui s'affiche
@@ -46,7 +48,7 @@ function Question({ number, title, hint, children, tour }) {
   );
 }
 
-export default function NewProject() {
+function NewProjectDetailed() {
   const [kind, setKind] = useState(null);
   const [story, setStory] = useState('');
   const [name, setName] = useState('');
@@ -268,4 +270,12 @@ export default function NewProject() {
       </div>
     </Layout>
   );
+}
+
+// v6 : création en une question pour tous ; la création détaillée v5.1 (genre, niveau, plan
+// type, réglages) reste accessible en mode avancé
+export default function NewProject() {
+  const [params] = useSearchParams();
+  const { user } = useAuth();
+  return user?.advancedMode && params.get('detail') ? <NewProjectDetailed /> : <NewProjectStory />;
 }

@@ -16,6 +16,7 @@ const { ensureDemoProject, createTestProject, deleteDemoProjects } = require('..
 const { DEFAULT_MODEL } = require('../services/models');
 const { buildWebSearchTool } = require('../services/webSearchTool');
 const { listDocuments, formatDocumentsForPrompt } = require('../services/documents');
+const { attachDefaultAgents } = require('../services/projectFactory');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -192,23 +193,7 @@ router.post('/', async (req, res) => {
       .returning(PROJECT_FIELDS);
 
     // ── Auto-initialiser ProjectAgent avec tous les agents par défaut ──────
-    const defaultAgents = await db('Agent')
-      .select(['id'])
-      .where({ isDefault: true })
-      .orderBy('createdAt', 'asc');
-
-    if (defaultAgents.length > 0) {
-      await db('ProjectAgent').insert(
-        defaultAgents.map((a, i) => ({
-          id: randomUUID(),
-          projectId: project.id,
-          agentId: a.id,
-          enabled: true,
-          displayOrder: i,
-          source: 'manual'
-        }))
-      );
-    }
+    await attachDefaultAgents(project.id);
 
     res.status(201).json({ ...project, sessionCount: 0 });
   } catch (err) {

@@ -65,7 +65,8 @@ function Frame({ artifact, doc, className }) {
   );
 }
 
-export default function ArtifactCard({ artifact, tall = false }) {
+// hideCode (v6, « Mon projet ») : pas de « Voir le code » hors mode avancé
+export default function ArtifactCard({ artifact, tall = false, hideCode = false }) {
   const { doc, svg, error } = useArtifactDocument(artifact);
   const [showCode, setShowCode]     = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -111,11 +112,11 @@ export default function ArtifactCard({ artifact, tall = false }) {
 
       <div className="flex flex-wrap gap-3 px-3 py-2 border-t border-gray-100 text-xs">
         {doc && <button onClick={() => setFullscreen(true)} className="text-blabia-blue hover:underline inline-flex items-center gap-1"><Maximize2 size={13} aria-hidden="true" /> Plein écran</button>}
-        <button onClick={() => setShowCode(s => !s)} className="text-gray-600 hover:underline"><span className="inline-flex items-center gap-1"><Code2 size={13} aria-hidden="true" /> {showCode ? 'Masquer le code' : 'Voir le code'}</span></button>
+        {!hideCode && <button onClick={() => setShowCode(s => !s)} className="text-gray-600 hover:underline"><span className="inline-flex items-center gap-1"><Code2 size={13} aria-hidden="true" /> {showCode ? 'Masquer le code' : 'Voir le code'}</span></button>}
         <button onClick={download} className="text-gray-600 hover:underline inline-flex items-center gap-1"><Download size={13} aria-hidden="true" /> Télécharger</button>
       </div>
 
-      {showCode && (
+      {showCode && !hideCode && (
         <div className="relative border-t border-gray-100">
           <button onClick={copyCode} className="absolute top-2 right-2 text-[10px] bg-white/90 border border-gray-200 rounded px-1.5 py-0.5 text-gray-600">
             {copied ? <span className="inline-flex items-center gap-1"><Check size={11} aria-hidden="true" /> Copié</span> : 'Copier'}

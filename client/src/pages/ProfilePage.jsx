@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, AtSign, Shield, Bell, Send, Github, Check, Wrench, ChevronRight, KeyRound } from 'lucide-react';
+import { Mail, AtSign, Shield, Bell, Send, Github, Check, Wrench, ChevronRight, KeyRound, SlidersHorizontal } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
@@ -56,6 +56,33 @@ function ReminderSettings() {
       </div>
       <p className="text-xs text-ink-faint mt-2">Un e-mail par semaine avec les actions en retard, de la semaine et les prochaines, pour les projets où vous avez activé le rappel (page Actions ou Paramètres du projet).</p>
       {status && <p className="text-xs font-bold text-ink-soft mt-1" role="status">{status}</p>}
+    </Section>
+  );
+}
+
+// v6 : le mode avancé rouvre tout ce que la v6 garde hors de vue (réglages des réunions,
+// outils, développements, coûts…). Désactivé par défaut, réglé par personne.
+function AdvancedModeSettings() {
+  const { user, patchUser } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const on = !!user?.advancedMode;
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.patch('/users/me/advanced-mode', { enabled: !on });
+      patchUser?.({ advancedMode: data.advancedMode });
+    } catch (err) { notifyError(err, 'Le réglage n’a pas pu être enregistré'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Section icon={SlidersHorizontal} title="Mode avancé">
+      <p className="text-sm text-ink-soft">
+        {on ? 'Activé : vous voyez tous les réglages, les outils et le détail des réunions.' : 'Désactivé : BlabIA s’occupe des réglages pour vous.'}
+      </p>
+      <label className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-ink cursor-pointer">
+        <input type="checkbox" checked={on} onChange={toggle} disabled={busy} className="w-4 h-4 accent-action" />
+        Afficher les réglages avancés
+      </label>
     </Section>
   );
 }
@@ -229,10 +256,12 @@ export default function ProfilePage() {
           </Section>
 
           <ReminderSettings />
-          {user?.role !== 'user' && <ApiKeySettings />}
-          {user?.role !== 'user' && <GitHubSettings />}
+          <AdvancedModeSettings />
+          {/* v6 : clé API, GitHub et outils seulement en mode avancé */}
+          {user?.role !== 'user' && user?.advancedMode && <ApiKeySettings />}
+          {user?.role !== 'user' && user?.advancedMode && <GitHubSettings />}
           {/* Outils habituels (v5.1) : facultatif — sans eux, BlabIA propose son pack recommandé */}
-          {user?.role !== 'user' && (
+          {user?.role !== 'user' && user?.advancedMode && (
             <Section icon={Wrench} title="Mes outils habituels (facultatif)">
               <p className="text-sm text-ink-soft">Les outils que vous utilisez déjà (hébergeur, e-mails, organisation…). BlabIA en pré-remplit vos nouveaux projets et les assistants en tiennent compte. Sans rien renseigner, BlabIA propose son pack recommandé, avec la mise en ligne automatique.</p>
               <Link to="/outils" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-action hover:underline">

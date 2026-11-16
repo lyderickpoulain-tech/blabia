@@ -30,6 +30,7 @@ model User {
   anthropicKeyStatus    String?   // ok | invalid | no_credit (services/userKeys.js)
   anthropicKeyError     String?
   anthropicKeyCheckedAt DateTime?
+  advancedMode          Boolean   @default(false) // v6 : mode avancé (rouvre ce que la v6 masque), réglé dans le profil
   createdAt        DateTime        @default(now())
   projects           Project[]
   invitations        Invitation[]
@@ -44,6 +45,7 @@ model User {
   documents          ProjectDocument[]
   approvedMissions   AgentMission[]
   devTasks           DevTask[]
+  workComments       WorkComment[]
 }
 
 model Agent {
@@ -110,6 +112,7 @@ model Project {
   userId        String
   user          User            @relation(fields: [userId], references: [id])
   sessions      Session[]
+  work          Work?
   members       ProjectMember[]
   presences     ProjectPresence[]
   agentFeedbacks AgentFeedback[]
@@ -432,4 +435,88 @@ model DevTask {
   creator           User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+}
+
+// v6 « l'ouvrage d'abord » (services/work/) : le résultat du projet, versionné, au centre.
+model Work {
+  id             String   @id @default(uuid())
+  projectId      String   @unique
+  genre          String   @default("dossier") // registre des genres (services/work/genres.js)
+  template       String?  // gabarit du genre (jeu, evenement, liste…)
+  currentVersion Int      @default(0)
+  criteria       Json     @default("[]") // « Ce sera fini quand… » [{ id, text, status }]
+  buildStatus    String   @default("idle") // idle | building | failed
+  buildStage     String?
+  buildError     String?
+  buildStartedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions       WorkVersion[]
+  assumptions    WorkAssumption[]
+  ideas          WorkIdea[]
+  comments       WorkComment[]
+}
+
+model WorkVersion {
+  id            String   @id @default(uuid())
+  workId        String
+  number        Int
+  genre         String   @default("dossier")
+  content       String   // Markdown
+  author        String   @default("builder") // builder | human | assistant
+  changeSummary String?
+  ideasPresence Json     @default("[]") // [{ ideaId, present, where }]
+  sources       Json     @default("[]") // sources web citées [{ url, title }]
+  model         String?
+  durationMs    Int?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  work          Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([workId, number])
+}
+
+model WorkAssumption {
+  id           String    @id @default(uuid())
+  workId       String
+  statement    String
+  value        String
+  state        String    @default("assumed") // assumed | changed (à prendre en compte) | applied | retired
+  displayOrder Int       @default(0)
+  changedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  work         Work      @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId])
+}
+
+model WorkIdea {
+  id           String   @id @default(uuid())
+  workId       String
+  text         String   // avec les mots du porteur
+  source       String   @default("recit") // recit | commentaire | supposition | historique
+  sourceRef    String?
+  state        String   @default("active") // active | set_aside (par le porteur seulement)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  work         Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId])
+}
+
+model WorkComment {
+  id                 String   @id @default(uuid())
+  workId             String
+  versionNumber      Int
+  section            String?  // titre de la partie commentée (null = l'ensemble)
+  content            String
+  userId             String?
+  status             String   @default("open") // open | addressed
+  addressedInVersion Int?
+  createdAt          DateTime @default(now())
+  work               Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workId])
 }
