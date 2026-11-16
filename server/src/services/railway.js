@@ -11,6 +11,7 @@
 // API : https://docs.railway.com/integrations/oauth et https://docs.railway.com/integrations/api
 const crypto = require('crypto');
 const db = require('../utils/db');
+const secretBox = require('../utils/secretBox');
 
 const AUTH_URL = 'https://backboard.railway.com/oauth/auth';
 const TOKEN_URL = 'https://backboard.railway.com/oauth/token';
@@ -33,22 +34,9 @@ class RailwayError extends Error {
   constructor(message, kind = 'api') { super(message); this.kind = kind; }
 }
 
-// ── Jeton de renouvellement chiffré (AES-256-GCM, clé dérivée de JWT_SECRET) ──
-const key = () => crypto.createHash('sha256').update(`railway:${process.env.JWT_SECRET || ''}`).digest();
-function encrypt(text) {
-  const iv = crypto.randomBytes(12);
-  const c = crypto.createCipheriv('aes-256-gcm', key(), iv);
-  const data = Buffer.concat([c.update(String(text), 'utf8'), c.final()]);
-  return [iv, c.getAuthTag(), data].map(b => b.toString('base64url')).join('.');
-}
-function decrypt(blob) {
-  try {
-    const [iv, tag, data] = String(blob || '').split('.').map(s => Buffer.from(s, 'base64url'));
-    const d = crypto.createDecipheriv('aes-256-gcm', key(), iv);
-    d.setAuthTag(tag);
-    return Buffer.concat([d.update(data), d.final()]).toString('utf8');
-  } catch { return null; }
-}
+// ── Jeton de renouvellement chiffré (utils/secretBox.js, usage « railway ») ──
+const encrypt = text => secretBox.seal('railway', text);
+const decrypt = blob => secretBox.open('railway', blob);
 
 // ── État signé du retour d'autorisation (utilisateur + projet) ───────────────
 function signState(userId, projectId) {
@@ -104,7 +92,8 @@ async function accessToken(userId) {
   const cached = accessCache.get(userId);
   if (cached && cached.until > Date.now()) return cached.token;
   const [u] = await db('User').where({ id: userId }).select('railwayRefreshToken').limit(1);
-  const refresh = decrypt(u?.railwayRefreshToken);
+  const refresh = await secretBox.openFresh('railway', u?.railwayRefreshToken,
+    blob => db('User').where({ id: userId }).update({ railwayRefreshToken: blob }));
   if (!refresh) throw new RailwayError('Compte Railway non connecté.', 'auth');
   try {
     const data = await tokenRequest({ grant_type: 'refresh_token', refresh_token: refresh });

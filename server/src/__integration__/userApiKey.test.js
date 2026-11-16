@@ -115,4 +115,29 @@ describe.skipIf(!harness.enabled)('clé API du porteur de projet', () => {
     await ask(owner.token);
     expect(h.ai.keys.at(-1)).toBe(BLABIA);
   });
+
+  // v6 : clé de chiffrement dédiée (SECRETS_ENCRYPTION_KEY), indépendante de JWT_SECRET
+  it('clé chiffrée à l’ancienne : lue en repli et rechiffrée à la première lecture', async () => {
+    const { seal } = require('../utils/secretBox');
+    const u = await h.createUser('member', 'ancienne-cle@test.local');
+    await h.db('User').where({ id: u.id }).update({ anthropicApiKey: seal('anthropic-key', KEY), anthropicKeyLast4: 'aaaa', anthropicKeyStatus: 'ok' });
+    const p = (await h.request('POST', '/api/projects', { token: u.token, body: { name: 'Projet ancien chiffrement' } })).body.id;
+    process.env.SECRETS_ENCRYPTION_KEY = 'cle-dediee-de-test';
+    try {
+      await h.request('POST', `/api/projects/${p}/assistant`, { token: u.token, body: { message: 'Bonjour' } });
+      expect(h.ai.keys.at(-1)).toBe(KEY);
+      const stored = await h.db('User').where({ id: u.id }).first();
+      expect(stored.anthropicApiKey.startsWith('v2.')).toBe(true);
+    } finally { delete process.env.SECRETS_ENCRYPTION_KEY; }
+  });
+
+  it('clé illisible (secret changé) : relais par BlabIA et clé à ressaisir', async () => {
+    const u = await h.createUser('member', 'cle-illisible@test.local');
+    await h.db('User').where({ id: u.id }).update({ anthropicApiKey: 'aaaa.bbbb.cccc', anthropicKeyLast4: 'aaaa', anthropicKeyStatus: 'ok' });
+    const p = (await h.request('POST', '/api/projects', { token: u.token, body: { name: 'Projet clé illisible' } })).body.id;
+    await h.request('POST', `/api/projects/${p}/assistant`, { token: u.token, body: { message: 'Bonjour' } });
+    expect(h.ai.keys.at(-1)).toBe(BLABIA);
+    const me = await h.request('GET', '/api/users/me', { token: u.token });
+    expect(me.body.anthropicKey).toMatchObject({ configured: true, status: 'unreadable' });
+  });
 });

@@ -1,8 +1,17 @@
 # BlabIA
 
-Plateforme de réunions virtuelles entre un humain et des agents IA orchestrés, au service d'un objectif de projet. Usage personnel : on privilégie la simplicité et la robustesse à la généricité.
+« Vous décrivez votre projet, une équipe d'assistants en discute avec vous, vous décidez, BlabIA fait le reste. » La cible est quelqu'un qui a une idée, aucune compétence technique, et qui ne veut ni comptes à ouvrir ni réglages à comprendre. Devant l'utilisateur, on dit « assistants » (pas « agents »), on vouvoie, aucun émoji.
 
-**Feuille de route en cours** : `docs/feuille-de-route-v5.1.md` (état, refonte UX validée, reste à faire) — à lire en début de session.
+## v6 « l'ouvrage d'abord » (en cours depuis le 15/11/2026)
+
+Source de vérité : `prompt-claude-code-blabia-v6.md` (racine du dépôt), qui prime sur ce fichier, sur `docs/passation-fable.md` et sur la feuille de route. Une phase par session, arrêt et compte rendu au porteur à la fin de chaque phase. Le suivi est dans `docs/feuille-de-route-v5.1.md`, section « v6 ».
+
+- **Le résultat d'abord** : chaque projet a un ouvrage (un dossier versionné) produit dès le récit du projet, sans question ; les réunions l'améliorent et finissent par une nouvelle version ; ce que le porteur n'a pas dit devient une supposition modifiable, pas une question ; ses idées sont suivies une à une ; l'ouvrage est toujours complet, l'incertain marqué « à vérifier », jamais retiré.
+- **Règle du minimum de technique (passe avant toutes les autres)** : sans le mode avancé, l'utilisateur ne voit jamais un nom d'outil ou de marque technique (GitHub, Claude Code, Railway, API, dépôt), un nom de modèle, des jetons, un coût en dollars, un réglage à faire avant d'obtenir un résultat, un mot anglais, un sigle ou un repère interne (R2, V0), ni un choix dont il ne mesure pas les conséquences. Ce qui quitte l'interface passe derrière le mode avancé (réglé par personne) : rien n'est supprimé.
+- **Périmètre** : la v6 porte sur les projets libres (le résultat est un dossier). Construire et mettre en ligne un site formera plus tard l'extension « BlabIA + » ; le parcours technique v5.1 reste en l'état, derrière le mode avancé, et n'évolue pas. Le cœur (ouvrage, versions, suppositions, idées, réunions, livraison) n'importe rien de ce qui est propre au technique (`github`, `githubWorkflows`, `devTasks`, `devTools`, `railway`, `repoOverview`, `codeContext`, `websiteStarter`, `services/tools/`).
+- **Avec le porteur** (non développeur) : comptes rendus en français courant ; un choix technique se fait et se dit en une phrase ; ne lui soumettre que ce qui touche à ce que voit l'utilisateur, à l'argent ou à ses données, sous forme de recommandation (oui / non) ; ses gestes donnés pas à pas, regroupés en fin de phase ; ne jamais lui demander de coller un secret dans la conversation.
+
+Historique v5 / v5.1 : `docs/feuille-de-route-v5.1.md` et `docs/passation-fable.md`.
 
 ## Architecture
 
@@ -18,7 +27,8 @@ server/prisma/   schema.prisma + migrations SQL
 - **Requêtes** : via **knex** (`server/src/utils/db.js`).
 - **Migrations** : via **Prisma** (`server/prisma/schema.prisma` + `prisma migrate deploy` au démarrage, cf. `Dockerfile`). Prisma ne sert qu'aux migrations — aucune requête applicative ne passe par le client Prisma.
 - **Déploiement** : Railway.
-- **Poste de dev** : Windows ARM64 — aucune dépendance native (JS pur uniquement).
+- **Poste de dev** : Windows ARM64 — aucune dépendance native (JS pur uniquement). Le contrôle d'applications de Windows bloque les modules natifs récents non reconnus : `vite` et `rolldown` (outils de test du serveur) sont figés par `overrides` dans `server/package.json` ; ne les monter qu'après avoir vérifié que `npx vitest run` démarre.
+- **Secrets enregistrés** (clé API Anthropic, jeton Railway des utilisateurs) : chiffrés par `server/src/utils/secretBox.js` avec `SECRETS_ENCRYPTION_KEY`, indépendante de `JWT_SECRET` (ancien format lu en repli et rechiffré à la première lecture). Ne jamais changer `SECRETS_ENCRYPTION_KEY` : les secrets deviendraient illisibles (à ressaisir par chacun).
 
 ## Glossaire
 
@@ -50,7 +60,7 @@ server/prisma/   schema.prisma + migrations SQL
 - **Chaque fonctionnalité visible met à jour, dans le même développement** : le guide (`client/src/components/Tutorial.jsx`, écran « Le principe »), la visite guidée (`client/src/tour/chapters.js`) et, si la fonctionnalité s'y prête, le projet exemple (`server/src/services/demoProject.js`) ; ainsi que la feuille de route (`docs/feuille-de-route-v5.1.md`).
 - **Icônes : uniquement lucide-react, en contour** (trait 1,75 pour les icônes décoratives), jamais d'émoji dans l'interface. Avatars d'agents, catégories d'outils et types de réunion : `client/src/components/ui/icons.jsx` et `MeetingTypeIcon` (`components/meeting/MilestoneDrawers.jsx`).
 - **`server/.env` désigne la base de PRODUCTION.** Jamais de commande Prisma (`migrate`, `db push`, `reset`…) sans `DATABASE_URL` explicite vers une base de test : utiliser `npm run db:migrate:test` (refuse toute base dont le nom ne contient pas « test »). Les migrations de prod s'appliquent seules au démarrage sur Railway.
-- **Sauvegarde avant migration** : « Mettre en ligne » dans BlabIA sauvegarde la base (chiffrée) avant la fusion ; un déploiement manuel commence par un `pg_dump` (procédure dans la feuille de route, § Déploiement). Claude Code ne fusionne et ne déploie jamais lui-même.
+- **Sauvegarde avant migration** : chaque envoi sur `main` lance `.github/workflows/sauvegarde-base.yml` (sauvegarde chiffrée de la prod, 90 jours) ; Railway attend sa réussite avant de déployer (« Wait for CI »). Vérifier qu'elle a réussi (onglet Actions) avant de considérer une migration comme protégée. « Mettre en ligne » dans BlabIA sauvegarde aussi avant la fusion. Claude Code ne fusionne et ne déploie jamais lui-même.
 - **Tests** : unitaires `cd server && npx vitest run` ; intégration `TEST_DATABASE_URL=… npm run test:integration` (base de test locale uniquement). Les modules qui ouvrent la base ne se chargent pas au début d'un fichier de test d'intégration (après `harness.start()` seulement).
 - **Modèles Claude** : définis dans `server/src/services/models.js` ; tout appel passe par `server/src/services/anthropic.js` (réglages Claude 5, journal des coûts) ; lire le texte d'une réponse avec `anthropic.textOf(response)`, jamais `content[0].text`.
 

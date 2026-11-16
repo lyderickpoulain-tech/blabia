@@ -1,9 +1,9 @@
 // Documents de référence du projet (v5.1) — table ProjectDocument.
-// Le texte est extrait UNE fois au dépôt (sans IA : pdf-parse, mammoth, xlsx) ;
+// Le texte est extrait UNE fois au dépôt (sans IA : pdf-parse, mammoth, read-excel-file) ;
 // les documents actifs sont transmis aux agents dans le bloc commun du prompt
 // (mis en cache : relus à 10 % du prix à chaque tour).
 const mammoth = require('mammoth');
-const XLSX = require('xlsx');
+const { xlsxToText } = require('../utils/spreadsheet');
 const pdfParse = require('pdf-parse/lib/pdf-parse.js'); // chemin direct : l'entrée du paquet lit un fichier de test au chargement
 const db = require('../utils/db');
 
@@ -29,8 +29,13 @@ async function extractText({ buffer, mimetype = '', originalname = '' }) {
   } else if (e === 'docx' || mimetype.includes('wordprocessingml')) {
     text = (await mammoth.extractRawText({ buffer })).value;
   } else if (e === 'xlsx' || mimetype.includes('spreadsheetml')) {
-    const wb = XLSX.read(buffer, { type: 'buffer' });
-    text = wb.SheetNames.map(n => `--- Feuille : ${n} ---\n${XLSX.utils.sheet_to_csv(wb.Sheets[n])}`).join('\n');
+    try {
+      text = await xlsxToText(buffer);
+    } catch {
+      const err = new Error('Classeur illisible : fichier protégé par mot de passe ou endommagé ?');
+      err.status = 400;
+      throw err;
+    }
   } else if (['csv', 'txt', 'md'].includes(e) || mimetype.startsWith('text/')) {
     text = buffer.toString('utf-8');
   } else {

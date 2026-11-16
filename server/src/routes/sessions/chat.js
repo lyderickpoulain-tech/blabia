@@ -7,7 +7,7 @@ const anthropic      = require('../../services/anthropic');
 const { findProject: getProject } = require('../../utils/projectHelpers');
 const multer  = require('multer');
 const mammoth = require('mammoth');
-const XLSX    = require('xlsx');
+const { xlsxToText } = require('../../utils/spreadsheet');
 const {
   MODEL,
   areSimilar,
@@ -227,11 +227,7 @@ router.post('/:sessionId/extract-file', upload.single('file'), async (req, res) 
       const result = await mammoth.extractRawText({ buffer });
       extractedText = result.value || '';
     } else if (mimetype.includes('spreadsheetml') || originalname.toLowerCase().endsWith('.xlsx')) {
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      workbook.SheetNames.forEach(name => {
-        extractedText += `\n--- Feuille : ${name} ---\n`;
-        extractedText += XLSX.utils.sheet_to_csv(workbook.Sheets[name]);
-      });
+      extractedText = await xlsxToText(buffer);
     } else if (originalname.toLowerCase().endsWith('.csv') || mimetype === 'text/csv') {
       extractedText = buffer.toString('utf-8');
     } else {

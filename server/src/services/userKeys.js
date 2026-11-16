@@ -5,7 +5,7 @@
 // Claude.ai et Claude Code ; un service comme BlabIA doit passer par une clé API.
 const Anthropic = require('@anthropic-ai/sdk');
 const db = require('../utils/db');
-const { seal, open } = require('../utils/secretBox');
+const { seal, openFresh } = require('../utils/secretBox');
 
 const PURPOSE = 'anthropic-key';
 const KEY_RE = /^sk-ant-[A-Za-z0-9_-]{20,}$/;
@@ -35,8 +35,16 @@ async function keyOf(userId) {
   if (hit && Date.now() - hit.at < CACHE_MS) return hit;
   const u = await db('User').where({ id: userId })
     .select('anthropicApiKey', 'anthropicKeyStatus', 'anthropicKeyCheckedAt').first();
+  const apiKey = u?.anthropicApiKey
+    ? await openFresh(PURPOSE, u.anthropicApiKey, blob => db('User').where({ id: userId }).update({ anthropicApiKey: blob }))
+    : null;
+  // Clé enregistrée mais illisible (secret de chiffrement changé) : la personne doit la ressaisir
+  if (u?.anthropicApiKey && !apiKey && u.anthropicKeyStatus !== 'unreadable') {
+    await markKey(userId, 'unreadable', 'Clé illisible après un changement de sécurité de BlabIA : à renseigner de nouveau.');
+    u.anthropicKeyStatus = 'unreadable';
+  }
   const entry = {
-    apiKey: u?.anthropicApiKey ? open(PURPOSE, u.anthropicApiKey) : null,
+    apiKey,
     status: u?.anthropicKeyStatus || null,
     checkedAt: u?.anthropicKeyCheckedAt ? new Date(u.anthropicKeyCheckedAt).getTime() : 0,
     at: Date.now(),
@@ -72,7 +80,7 @@ function classify(err) {
 }
 
 async function markKey(userId, status, error = null) {
-  const persistent = status === 'ok' || status === 'invalid' || status === 'no_credit';
+  const persistent = ['ok', 'invalid', 'no_credit', 'unreadable'].includes(status);
   if (!persistent) return;
   await db('User').where({ id: userId }).update({
     anthropicKeyStatus: status, anthropicKeyError: error ? String(error).slice(0, 300) : null, anthropicKeyCheckedAt: new Date(),

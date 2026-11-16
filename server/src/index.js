@@ -79,6 +79,8 @@ if (isProd) {
 if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`BlabIA server démarré sur le port ${PORT} (mode: ${isProd ? 'production' : 'développement'})`);
+    // v6 : clés API et jetons enregistrés chiffrés par une clé dédiée (utils/secretBox.js)
+    if (isProd && !process.env.SECRETS_ENCRYPTION_KEY) console.warn('[secretBox] SECRETS_ENCRYPTION_KEY absente : secrets encore chiffrés avec JWT_SECRET (illisibles si ce secret change).');
     // Rappels hebdomadaires des actions (services/reminders.js) : vérification horaire
     require('./services/reminders').startReminderScheduler();
     // Missions des agents en attente : reprise au démarrage puis toutes les 5 minutes

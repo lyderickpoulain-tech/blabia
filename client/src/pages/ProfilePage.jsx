@@ -66,6 +66,7 @@ const KEY_STATUS = {
   ok:        { tone: 'text-ok',    text: 'Active : l’IA de vos projets est facturée sur votre compte Anthropic.' },
   no_credit: { tone: 'text-await', text: 'Crédit épuisé sur votre compte Anthropic : BlabIA a pris le relais. Nouvel essai toutes les heures.' },
   invalid:   { tone: 'text-await', text: 'Anthropic refuse cette clé (révoquée ?) : BlabIA a pris le relais. Remplacez-la pour l’utiliser de nouveau.' },
+  unreadable: { tone: 'text-await', text: 'BlabIA a renforcé la sécurité de ses données : renseignez de nouveau votre clé pour l’utiliser. En attendant, BlabIA a pris le relais.' },
 };
 function ApiKeySettings() {
   const [key, setKey] = useState(null);
