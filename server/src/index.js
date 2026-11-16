@@ -41,6 +41,7 @@ app.use('/api/export',                       require('./routes/export'));
 app.use('/api/users',                        require('./routes/users'));
 app.use('/api/models',                       require('./routes/models'));
 app.use('/api/projects',                     require('./routes/work')); // v6 : ouvrage, création en une question
+app.use('/api',                              require('./routes/site')); // BlabIA + : construction du site, aperçu
 app.use('/api/projects',                     require('./routes/projects'));
 app.use('/api/projects/:projectId/sessions', require('./routes/sessions'));
 app.use('/api/projects',                     require('./routes/plan'));

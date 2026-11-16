@@ -1,0 +1,185 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createRequire } from 'module';
+
+// BlabIA + : construction du site par un agent hébergé (Managed Agents), retouche, aperçu.
+// Le service d'agents d'Anthropic est simulé (setClient) : aucun appel réel, aucun coût.
+const require = createRequire(import.meta.url);
+const harness = require('./harness');
+
+const DOSSIER = `<nom>Le Pétrin Sonore</nom>
+<gabarit>site</gabarit>
+<resume>Le dossier du site.</resume>
+<ouvrage>
+## Le site en bref
+Un boulanger de Rennes partage ses disques préférés.
+
+## Les pages
+Accueil, Concerts, Contact.
+</ouvrage>
+<suppositions>
+- Nom du site :: Le Pétrin Sonore
+</suppositions>
+<idees>
+- + « mes disques préférés » :: Le site en bref
+</idees>
+<fini_quand>
+- les pages sont décrites
+</fini_quand>
+<etat_fini>
+- C1 :: atteint — Les pages
+</etat_fini>
+<prochaines_etapes>
+- aucune
+</prochaines_etapes>`;
+
+function fakeAgents() {
+  const f = {
+    envCreates: 0, agentCreates: 0, uploads: [], sessions: [], sent: [], archived: [],
+    outputs: () => ({ 'index.html': '<!doctype html><title>Le Pétrin Sonore</title><h1>Accueil</h1><a href="concerts.html">Concerts</a>', 'concerts.html': '<h1>Concerts</h1>', 'style.css': 'body{color:#333}', 'RAPPORT.md': 'Pages faites : accueil, concerts.', 'verifier.py': 'print(1)', 'dossier.md': null, '../evil.html': '<script>x</script>' }),
+  };
+  f.client = {
+    files: { upload: async ({ file }) => { const id = `file_up_${f.uploads.length + 1}`; f.uploads.push({ id, name: file.name }); return { id }; } },
+    beta: {
+      environments: { create: async () => { f.envCreates++; return { id: 'env_test' }; } },
+      agents: { create: async p => { f.agentCreates++; f.agent = p; return { id: 'agent_test', version: 1 }; } },
+      sessions: {
+        create: async p => { const id = `sesn_${f.sessions.length + 1}`; f.sessions.push({ id, ...p }); return { id }; },
+        events: {
+          stream: async () => (async function* () {
+            f.streams = (f.streams || 0) + 1;
+            if (f.cutStreams > 0) { f.cutStreams--; yield { type: 'agent.tool_use', id: 't0', name: 'bash', evaluated_permission: 'allow' }; return; } // flux coupé en cours de route
+            yield { type: 'agent.tool_use', id: 't1', name: 'write', evaluated_permission: 'allow' };
+            yield { type: 'agent.tool_use', id: 't2', name: 'web_fetch', evaluated_permission: 'ask' };
+            yield { type: 'session.status_idle', stop_reason: { type: 'end_turn' } };
+          })(),
+          send: async (id, p) => { f.sent.push({ id, ...p }); },
+        },
+        retrieve: async () => { f.retrieves = (f.retrieves || 0) + 1; return { status: f.statuses?.shift() || 'idle', usage: { list_cost: { amount: '81', currency: 'USD' }, input_tokens: 12000, output_tokens: 4000 } }; },
+        archive: async id => { f.archived.push(id); },
+      },
+      files: {
+        list: () => (async function* () {
+          for (const [name, body] of Object.entries(f.outputs())) yield { id: `out_${name}`, filename: name, size_bytes: body ? body.length : 10 };
+        })(),
+        download: async id => {
+          const name = id.replace(/^out_/, '');
+          const body = f.outputs()[name];
+          if (body == null) throw Object.assign(new Error('not downloadable'), { status: 400 });
+          return { arrayBuffer: async () => Buffer.from(body) };
+        },
+      },
+    },
+  };
+  return f;
+}
+
+describe.skipIf(!harness.enabled)('BlabIA + : le site construit par un agent', () => {
+  let h, owner, pid, fake, site;
+  const getSite = () => h.request('GET', `/api/projects/${pid}/site`, { token: owner.token }).then(r => r.body);
+  async function waitSite() {
+    for (let i = 0; i < 200; i++) {
+      const s = await getSite();
+      if (s.last?.status !== 'building') return s;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    throw new Error('construction trop longue');
+  }
+
+  beforeAll(async () => {
+    h = await harness.start();
+    await h.reset();
+    owner = await h.createUser('member', 'porteur-site@test.local');
+    h.ai.responder = () => ({ text: DOSSIER });
+    site = require('../services/plus/siteBuilder');
+    fake = fakeAgents();
+    site.setClient(fake.client);
+    pid = (await h.request('POST', '/api/projects/from-story', { token: owner.token, body: { story: 'Je suis boulanger à Rennes et je voudrais un site pour mes disques préférés.' } })).body.id;
+    for (let i = 0; i < 100; i++) {
+      const w = (await h.request('GET', `/api/projects/${pid}/work`, { token: owner.token })).body;
+      if (w.current) break;
+      await new Promise(r => setTimeout(r, 50));
+    }
+  });
+  afterAll(async () => { site?.setClient(null); h.ai.responder = null; await h?.stop(); });
+
+  it('« Construire mon site » : session plafonnée, dossier fourni, site conservé, coût journalisé', async () => {
+    expect((await getSite()).last).toBeNull();
+    expect((await h.request('POST', `/api/projects/${pid}/site/build`, { token: owner.token })).status).toBe(202);
+    const s = await waitSite();
+    expect(s.last).toMatchObject({ status: 'ready', kind: 'build', report: 'Pages faites : accueil, concerts.' });
+    expect(s.last.previewPath).toMatch(/^\/api\/apercu\/[0-9a-f]{48}\/$/);
+    const session = fake.sessions[0];
+    expect(session.budget).toEqual({ type: 'limit', max_list_cost: { amount: '200', currency: 'USD' } });
+    expect(session.resources[0]).toMatchObject({ type: 'file', mount_path: '/workspace/dossier.md' });
+    expect(fake.agent.model).toBe('claude-sonnet-5-5');
+    expect(fake.agent.system).toMatch(/À PLAT/);
+    expect(fake.agent.system).toMatch(/N'invente rien/);
+    expect(fake.agent.system).toMatch(/Référencement/);
+    expect(fake.agent.tools[0].configs).toEqual(expect.arrayContaining([{ name: 'web_fetch', enabled: false }]));
+    // Un outil hors du bac à sable de l'agent est refusé
+    expect(fake.sent.find(e => e.events[0].type === 'user.tool_confirmation').events[0]).toMatchObject({ tool_use_id: 't2', result: 'deny' });
+    // Fichiers : le site, sans le rapport, sans le script de vérification, sans nom dangereux
+    const files = await h.db('SiteFile').join('SiteBuild', 'SiteBuild.id', 'SiteFile.buildId').where({ 'SiteBuild.projectId': pid }).pluck('path');
+    expect(files.sort()).toEqual(['concerts.html', 'index.html', 'style.css']);
+    expect(fake.archived).toEqual(['sesn_1']);
+    const log = await h.db('UsageLog').where({ projectId: pid, kind: 'site/build' }).first();
+    expect(Number(log.costUSD)).toBeCloseTo(0.81);
+  });
+
+  it('aperçu : servi dans un bac à sable, sans connexion, par son jeton seul', async () => {
+    const { last } = await getSite();
+    const token = last.previewPath.split('/')[3];
+    const r = await h.request('GET', `/api/apercu/${token}/`);
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toMatch(/text\/html/);
+    expect(r.headers['content-security-policy']).toMatch(/^sandbox /);
+    expect(r.headers['content-security-policy']).toMatch(/connect-src 'none'/);
+    expect(r.headers['x-robots-tag']).toMatch(/noindex/);
+    expect((await h.request('GET', `/api/apercu/${token}/style.css`)).headers['content-type']).toMatch(/text\/css/);
+    expect((await h.request('GET', `/api/apercu/${token}/absent.html`)).status).toBe(404);
+    expect((await h.request('GET', `/api/apercu/${'0'.repeat(48)}/`)).status).toBe(404);
+  });
+
+  it('retouche : repart du site existant, nouvel aperçu ; une seule construction à la fois', async () => {
+    expect((await h.request('POST', `/api/projects/${pid}/site/retouch`, { token: owner.token, body: { text: '' } })).status).toBe(400);
+    const before = (await getSite()).ready;
+    expect((await h.request('POST', `/api/projects/${pid}/site/retouch`, { token: owner.token, body: { text: 'Mettez le fond en brun.' } })).status).toBe(202);
+    expect((await h.request('POST', `/api/projects/${pid}/site/build`, { token: owner.token })).status).toBe(409);
+    const s = await waitSite();
+    expect(s.last).toMatchObject({ status: 'ready', kind: 'retouch', request: 'Mettez le fond en brun.' });
+    expect(s.last.previewPath).not.toBe(before.previewPath);
+    const session = fake.sessions[1];
+    expect(session.resources.map(r => r.mount_path)).toEqual(expect.arrayContaining(['/workspace/dossier.md', '/workspace/site/index.html', '/workspace/site/style.css']));
+    const message = fake.sent.filter(e => e.id === 'sesn_2' && e.events[0].type === 'user.message')[0].events[0].content[0].text;
+    expect(message).toContain('Mettez le fond en brun.');
+    expect(fake.envCreates).toBe(1); // environnement et agent créés une seule fois
+    expect(fake.agentCreates).toBe(1);
+  });
+
+  it('un site incomplet n’est pas enregistré : échec lisible, l’aperçu précédent reste', async () => {
+    const outputs = fake.outputs;
+    fake.outputs = () => ({ 'style.css': 'body{}', 'RAPPORT.md': 'Plafond atteint.' });
+    await h.request('POST', `/api/projects/${pid}/site/retouch`, { token: owner.token, body: { text: 'Ajoutez une page.' } });
+    const s = await waitSite();
+    fake.outputs = outputs;
+    expect(s.last.status).toBe('failed');
+    expect(s.last.error).toMatch(/incomplet/);
+    expect(s.ready.kind).toBe('retouch');
+  });
+
+  it('flux coupé avant la fin : BlabIA relit l’état de la session et se reconnecte', async () => {
+    fake.cutStreams = 1; fake.statuses = ['running']; fake.streams = 0;
+    await h.request('POST', `/api/projects/${pid}/site/retouch`, { token: owner.token, body: { text: 'Agrandissez le titre.' } });
+    const s = await waitSite();
+    expect(s.last).toMatchObject({ status: 'ready', request: 'Agrandissez le titre.' });
+    expect(fake.streams).toBe(2); // reconnecté après la coupure
+    expect(fake.sent.filter(e => e.events[0].type === 'user.message' && e.events[0].content[0].text.includes('Agrandissez')).length).toBe(1); // demande envoyée une seule fois
+  });
+
+  it('seul un projet qui décrit un site se construit', async () => {
+    h.ai.responder = () => ({ text: DOSSIER.replace('<gabarit>site</gabarit>', '<gabarit>jeu</gabarit>') });
+    const other = (await h.request('POST', '/api/projects/from-story', { token: owner.token, body: { story: 'Un jeu de société sur les volcans, pour jouer en famille.' } })).body.id;
+    for (let i = 0; i < 100; i++) { if ((await h.request('GET', `/api/projects/${other}/work`, { token: owner.token })).body.current) break; await new Promise(r => setTimeout(r, 50)); }
+    expect((await h.request('POST', `/api/projects/${other}/site/build`, { token: owner.token })).status).toBe(400);
+  });
+});

@@ -21,6 +21,7 @@ const PUBLIC = [
   'POST /api/reminders/run', // protégée par CRON_SECRET (testé à part)
   'GET /api/github/callback', // retour de GitHub : utilisateur reconnu par l'état signé (testé à part)
   'GET /api/railway/callback', // retour de Railway : utilisateur reconnu par l'état signé (testé à part)
+  'GET /api/apercu/:token/:file?', // BlabIA + : aperçu du site, accès par jeton aléatoire, bac à sable (site.test.js)
 ];
 
 // Toutes les routes : montages de index.js + routeurs (récursivement, routeurs imbriqués compris)

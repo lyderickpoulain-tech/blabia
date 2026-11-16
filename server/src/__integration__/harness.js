@@ -57,7 +57,7 @@ async function start() {
     });
     const text = await res.text();
     let json; try { json = JSON.parse(text); } catch { json = text; }
-    return { status: res.status, body: json, text };
+    return { status: res.status, body: json, text, headers: Object.fromEntries(res.headers) };
   }
   async function createUser(role, email) {
     const { randomUUID } = require('crypto');

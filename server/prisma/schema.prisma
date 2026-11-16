@@ -126,6 +126,7 @@ model Project {
   documents     ProjectDocument[]
   missions      AgentMission[]
   devTasks      DevTask[]
+  siteBuilds    SiteBuild[]
 }
 
 model ProjectAgent {
@@ -462,6 +463,7 @@ model Work {
   ideas          WorkIdea[]
   comments       WorkComment[]
   proposals      WorkProposal[]
+  siteBuilds     SiteBuild[]
 }
 
 model WorkVersion {
@@ -552,4 +554,51 @@ model WorkComment {
   user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([workId])
+}
+
+// BlabIA + : réglages internes (agent et environnement de construction chez Anthropic)
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now())
+}
+
+// BlabIA + : une construction ou une retouche du site, à partir d'une version du dossier
+model SiteBuild {
+  id           String     @id @default(uuid())
+  projectId    String
+  workId       String
+  baseVersion  Int
+  kind         String     @default("build") // build | retouch
+  request      String?
+  parentId     String?    // construction de départ d'une retouche
+  status       String     @default("building") // building | ready | failed
+  stage        String?
+  model        String?
+  agentSession String?
+  costUSD      Decimal?   @db.Decimal(10, 4)
+  durationMs   Int?
+  report       String?    // rapport de l'agent au porteur
+  error        String?
+  previewToken String     @unique
+  createdBy    String?
+  createdAt    DateTime   @default(now())
+  finishedAt   DateTime?
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  work         Work       @relation(fields: [workId], references: [id], onDelete: Cascade)
+  files        SiteFile[]
+
+  @@index([projectId, createdAt])
+}
+
+model SiteFile {
+  id          String    @id @default(uuid())
+  buildId     String
+  path        String
+  contentType String
+  size        Int
+  content     Bytes
+  build       SiteBuild @relation(fields: [buildId], references: [id], onDelete: Cascade)
+
+  @@unique([buildId, path])
 }

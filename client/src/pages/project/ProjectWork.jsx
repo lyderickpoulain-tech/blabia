@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, Clock, Gift, History, Lightbulb, ListChecks, Pencil, RotateCcw, Sparkles, TriangleAlert, Users, Wand2, X } from 'lucide-react';
 import ExportButtons from '../../components/ExportButtons';
+import SiteCard from '../../components/site/SiteCard';
 import { Badge, Button, Card, SectionLabel } from '../../components/ui';
 import WorkDocument, { countVerify, splitSections } from '../../components/work/WorkDocument';
 import api from '../../utils/api';
@@ -406,6 +407,9 @@ export default function ProjectWork({ initial, onReload }) {
           onRefuse={() => answer('refuse')}
           onCorrect={text => answer('correct', { text })} />
       )}
+
+      {/* BlabIA + : le dossier décrit un site → le construire, le voir, le retoucher */}
+      {work.template === 'site' && current && !viewing && <SiteCard projectId={pid} dossierVersion={current.number} isDemo={isDemo} />}
 
       {current && !building && !viewing && !proposal && (
         <>
