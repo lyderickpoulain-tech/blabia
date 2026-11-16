@@ -9,6 +9,7 @@ const { runWithUsage } = require('../services/usage');
 const { createProjectFromStory } = require('../services/projectFactory');
 const builder = require('../services/work/builder');
 const { getGenre } = require('../services/work/genres');
+const review = require('../services/work/review');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -18,7 +19,7 @@ const STORY_MIN = 15;
 const STORY_MAX = 8000;
 
 const sendError = (res, err, where) => {
-  if (err instanceof builder.BuildError) return res.status(err.status).json({ error: err.message });
+  if (err instanceof builder.BuildError || err instanceof review.ReviewError) return res.status(err.status).json({ error: err.message });
   console.error(`[work ${where}]`, err.message);
   return res.status(500).json({ error: 'Erreur serveur' });
 };
@@ -34,13 +35,15 @@ async function serialize(project) {
   const work = await builder.workOf(project.id);
   if (!work) return { exists: false, versionCount: 0 };
   const stale = builder.isStale(work);
-  const [current, versions, assumptions, ideas, comments, pending] = await Promise.all([
+  const [current, versions, assumptions, ideas, comments, pending, proposal, openReview] = await Promise.all([
     work.currentVersion ? db('WorkVersion').where({ workId: work.id, number: work.currentVersion }).first() : null,
     db('WorkVersion').where({ workId: work.id }).orderBy('number', 'desc').select('number', 'changeSummary', 'author', 'createdAt'),
     db('WorkAssumption').where({ workId: work.id }).whereNot({ state: 'retired' }).orderBy('displayOrder').select('id', 'statement', 'value', 'state'),
     db('WorkIdea').where({ workId: work.id }).orderBy('displayOrder').select('id', 'text', 'source', 'state'),
     db('WorkComment').where({ workId: work.id }).orderBy('createdAt').select('id', 'versionNumber', 'section', 'content', 'status', 'addressedInVersion', 'createdAt'),
     builder.pendingChanges(work.id),
+    builder.openProposal(work.id),
+    review.openReviewOf(project.id),
   ]);
   const presence = new Map(parseJsonField(current?.ideasPresence, []).map(p => [p.ideaId, p]));
   return {
@@ -56,6 +59,13 @@ async function serialize(project) {
     comments,
     criteria: parseJsonField(work.criteria, []),
     pending,
+    // Phase 2 : version suivante proposée, en attente de la réponse du porteur
+    proposal: proposal ? {
+      id: proposal.id, origin: proposal.origin, number: proposal.baseVersion + 1, baseVersion: proposal.baseVersion,
+      content: proposal.content, changeSummary: proposal.changeSummary, sources: parseJsonField(proposal.sources, []),
+      sessionId: proposal.sessionId, createdAt: proposal.createdAt,
+    } : null,
+    openReview: openReview ? { id: openReview.id, task: openReview.task } : null,
   };
 }
 
@@ -112,6 +122,85 @@ router.post('/:id/work/next', async (req, res) => {
     await builder.startNextVersion(project.id, req.user.id);
     res.status(202).json(await serialize(project));
   } catch (err) { sendError(res, err, 'next'); }
+});
+
+// « Réessayer » après un échec : la même écriture (première version ou proposition)
+router.post('/:id/work/retry', async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
+    await builder.retryBuild(project.id, req.user.id);
+    res.status(202).json(await serialize(project));
+  } catch (err) { sendError(res, err, 'retry'); }
+});
+
+// Retouche, sans réunion : le porteur écrit ce qu'il veut changer, le bras droit la fait
+// (une proposition de version suivante)
+router.post('/:id/work/retouch', async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
+    const text = String(req.body?.text || '').trim().slice(0, 3000);
+    if (!text) return res.status(400).json({ error: 'Écrivez ce que vous voulez changer.' });
+    await builder.startRetouch(project.id, req.user.id, text);
+    res.status(202).json(await serialize(project));
+  } catch (err) { sendError(res, err, 'retouch'); }
+});
+
+// Réponse du porteur à une proposition : accept (elle devient la version suivante), refuse
+// (rien ne change), correct { text } (réécrite avec sa correction)
+router.post('/:id/work/proposals/:pid/:answer', async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    const { pid, answer } = req.params;
+    if (answer === 'accept') await builder.acceptProposal(project.id, pid, req.user.id);
+    else if (answer === 'refuse') await builder.refuseProposal(project.id, pid);
+    else if (answer === 'correct') {
+      if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
+      const text = String(req.body?.text || '').trim().slice(0, 3000);
+      if (!text) return res.status(400).json({ error: 'Écrivez ce qu’il faut corriger.' });
+      await builder.correctProposal(project.id, pid, req.user.id, text);
+    } else return res.status(404).json({ error: 'Réponse inconnue' });
+    res.json(await serialize(project));
+  } catch (err) { sendError(res, err, 'proposal'); }
+});
+
+// ── Réunion de revue (phase 2) ───────────────────────────────────────────────
+// « Demander l'avis de l'équipe » : ouvre la réunion (ou rejoint celle qui est ouverte)
+router.post('/:id/work/review', async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple : créez votre projet pour réunir l’équipe.' });
+    const sessionId = await review.startReview(project, req.user.id);
+    res.status(201).json({ sessionId });
+  } catch (err) { sendError(res, err, 'review'); }
+});
+
+router.get('/:id/sessions/:sid/review', async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    res.json(await review.reviewState(project, req.params.sid));
+  } catch (err) { sendError(res, err, 'review GET'); }
+});
+
+// Le porteur parle (text vide : il écoute l'équipe d'abord) ; l'équipe répond en arrière-plan
+router.post('/:id/sessions/:sid/review/message', async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
+    await review.speak(project, req.params.sid, req.user.id, req.body?.text);
+    res.status(202).json(await review.reviewState(project, req.params.sid));
+  } catch (err) { sendError(res, err, 'review message'); }
+});
+
+// Le porteur termine la réunion : la version suivante s'écrit (proposition)
+router.post('/:id/sessions/:sid/review/conclude', async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
+    await review.conclude(project, req.params.sid, req.user.id);
+    res.status(202).json(await serialize(project));
+  } catch (err) { sendError(res, err, 'review conclude'); }
 });
 
 async function workOr404(req, res) {

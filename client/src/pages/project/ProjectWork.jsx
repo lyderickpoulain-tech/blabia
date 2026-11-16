@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Clock, History, Lightbulb, ListChecks, Pencil, RotateCcw, Sparkles, TriangleAlert } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Check, Clock, History, Lightbulb, ListChecks, Pencil, RotateCcw, Sparkles, TriangleAlert, Users, Wand2, X } from 'lucide-react';
 import { Badge, Button, Card, SectionLabel } from '../../components/ui';
-import WorkDocument, { countVerify } from '../../components/work/WorkDocument';
+import WorkDocument, { countVerify, splitSections } from '../../components/work/WorkDocument';
 import api from '../../utils/api';
 import { notifyError } from '../../utils/notify';
 import { useProject } from '../../components/project/ProjectShell';
@@ -11,6 +12,10 @@ import { useProject } from '../../components/project/ProjectShell';
 // l'applique), « Ce sera fini quand… », les versions précédentes.
 // Mots de l'écran : « Votre projet », « Ce que j'ai supposé », « Première version »,
 // « Version 2 » — jamais « ouvrage », « pari », « V0 ».
+// Phase 2 : deux gestes pour faire avancer le projet — écrire ce qu'on veut changer (le bras
+// droit fait la retouche) ou demander l'avis de l'équipe (une réunion). Chaque version
+// suivante est d'abord PROPOSÉE : le porteur voit ce qui change, puis la garde, la corrige
+// ou la refuse.
 
 export const versionLabel = n => (n === 1 ? 'Première version' : `Version ${n}`);
 const POLL_MS = 3000;
@@ -22,9 +27,9 @@ const STAGES = {
     saving:  'Je range la version et vos idées.',
   },
   next: {
-    reading: 'Je relis la version en cours et vos changements.',
-    writing: 'J’écris la version suivante avec vos changements.',
-    saving:  'Je range la nouvelle version.',
+    reading: 'Je relis la version en cours et ce que vous voulez changer.',
+    writing: 'J’écris la version suivante, complète.',
+    saving:  'Je prépare la comparaison avec la version en cours.',
   },
 };
 
@@ -144,11 +149,110 @@ function Criteria({ criteria, onSave }) {
   );
 }
 
+// Parties changées entre deux versions : titre → « Modifiée » | « Nouvelle » ; parties retirées
+export function sectionChanges(before, after) {
+  const old = new Map(splitSections(before).map(s => [s.title || '', s.body]));
+  const next = splitSections(after);
+  const marks = new Map();
+  for (const s of next) {
+    const key = s.title || '';
+    if (!old.has(key)) marks.set(key, 'Nouvelle');
+    else if (old.get(key).trim() !== s.body.trim()) marks.set(key, 'Modifiée');
+  }
+  const kept = new Set(next.map(s => s.title || ''));
+  const removed = [...old.keys()].filter(k => k && !kept.has(k));
+  return { marks, removed };
+}
+
+const ORIGIN = {
+  review: 'Écrite avec ce qui s’est dit en réunion.',
+  retouch: 'Écrite avec la retouche que vous avez demandée.',
+  changes: 'Écrite avec vos changements.',
+};
+
+function ProposalBar({ proposal, changes, showingCurrent, onToggle, onAccept, onRefuse, onCorrect, busy }) {
+  const [correcting, setCorrecting] = useState(false);
+  const [text, setText] = useState('');
+  const quoted = keys => keys.map(k => `« ${k || 'Introduction'} »`).join(', ');
+  const touched = quoted([...changes.marks.keys()]);
+  const removed = quoted(changes.removed);
+  return (
+    <Card className="p-5 border-ai/40 bg-ai-light/40" data-tour="pw-proposal">
+      <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai">Proposition · {versionLabel(proposal.number)}</p>
+      <h2 className="text-lg font-extrabold text-ink mt-0.5">Voici ce qui change</h2>
+      {proposal.changeSummary && <p className="text-[15px] text-ink-soft mt-1 whitespace-pre-wrap">{proposal.changeSummary}</p>}
+      <p className="text-xs text-ink-muted mt-2">
+        {ORIGIN[proposal.origin] || ORIGIN.changes}
+        {touched && <> Parties touchées : {touched}.</>}
+        {removed && <> {changes.removed.length > 1 ? 'Parties retirées' : 'Partie retirée'} : {removed}.</>}
+      </p>
+      {correcting ? (
+        <div className="mt-3 space-y-2">
+          <label htmlFor="proposal-correct" className="text-sm font-bold text-ink">Qu’est-ce qui ne va pas ?</label>
+          <textarea id="proposal-correct" value={text} onChange={e => setText(e.target.value)} rows={3} autoFocus
+            placeholder="Avec vos mots : ce qu’il faut changer dans cette proposition."
+            className="w-full px-3 py-2 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action" />
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" size="sm" disabled={!text.trim() || busy} onClick={() => onCorrect(text.trim())}>Corriger la proposition</Button>
+            <Button variant="ghost" size="sm" onClick={() => setCorrecting(false)}>Annuler</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button variant="primary" onClick={onAccept} disabled={busy}><Check size={16} aria-hidden="true" /> Garder cette version</Button>
+          <Button variant="secondary" onClick={() => setCorrecting(true)} disabled={busy}><Pencil size={15} aria-hidden="true" /> Corriger</Button>
+          <Button variant="ghost" onClick={onRefuse} disabled={busy}><X size={15} aria-hidden="true" /> Refuser</Button>
+          <span className="flex-1" />
+          <button type="button" onClick={onToggle} className="text-sm font-semibold text-action hover:underline">
+            {showingCurrent ? 'Voir la proposition' : 'Comparer avec la version en cours'}
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Les deux gestes : la retouche (le bras droit la fait) et l'avis de l'équipe (une réunion)
+function MoveForward({ openReview, onRetouch, onReview, busy, isDemo }) {
+  const [text, setText] = useState('');
+  const off = busy || isDemo;
+  return (
+    <Card className="p-4 space-y-3" data-tour="pw-forward">
+      <SectionLabel>Faire avancer votre projet</SectionLabel>
+      <div>
+        <label htmlFor="retouch" className="text-sm font-bold text-ink">Que voulez-vous changer ?</label>
+        <textarea id="retouch" value={text} onChange={e => setText(e.target.value)} rows={2}
+          placeholder="Par exemple : ajoutez une partie sur le budget."
+          className="mt-1 w-full px-3 py-2 border border-line rounded-[10px] text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action" />
+        <Button variant="primary" size="sm" className="mt-1.5" disabled={!text.trim() || off}
+          onClick={async () => { if (await onRetouch(text.trim())) setText(''); }}>
+          <Wand2 size={15} aria-hidden="true" /> Faire la retouche
+        </Button>
+      </div>
+      <div className="border-t border-line pt-3">
+        {openReview ? (
+          <Link to={openReview.to} className="inline-flex items-center gap-2 text-sm font-bold text-action hover:underline">
+            <Users size={15} aria-hidden="true" /> Reprendre la réunion en cours
+          </Link>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={onReview} disabled={off} data-tour="pw-review">
+            <Users size={15} aria-hidden="true" /> Demander l’avis de l’équipe
+          </Button>
+        )}
+        <p className="text-xs text-ink-muted mt-1">Deux ou trois assistants relisent cette version avec vous ; à la fin, la version suivante vous est proposée.</p>
+        {isDemo && <p className="text-xs text-await font-semibold mt-1">Projet exemple : créez votre projet pour faire travailler l’équipe.</p>}
+      </div>
+    </Card>
+  );
+}
+
 export default function ProjectWork({ initial, onReload }) {
   const { project, reloadProject } = useProject();
   const [work, setWork] = useState(initial);
   const [viewing, setViewing] = useState(null); // version précédente affichée { number, content, changeSummary }
   const [busy, setBusy] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false); // proposition en attente : voir la version en cours
+  const navigate = useNavigate();
   const pid = project.id;
   const wasBuilding = useRef(initial?.build?.status === 'building');
 
@@ -166,8 +270,8 @@ export default function ProjectWork({ initial, onReload }) {
   }, [work?.build?.status, load, reloadProject]);
 
   const act = async (fn, message) => {
-    try { const { data } = await fn(); if (data?.exists !== undefined) setWork(data); else await load(); }
-    catch (err) { notifyError(err, message); }
+    try { const { data } = await fn(); if (data?.exists !== undefined) setWork(data); else await load(); return true; }
+    catch (err) { notifyError(err, message); return false; }
   };
 
   if (!work) return null;
@@ -175,15 +279,36 @@ export default function ProjectWork({ initial, onReload }) {
   const failed = work.build?.status === 'failed';
   const current = work.current;
   const pendingCount = (work.pending?.assumptions || 0) + (work.pending?.comments || 0);
-  const shown = viewing || current;
+  const proposal = !building ? work.proposal : null;
+  const onProposal = !!proposal && !viewing && !showCurrent;
+  const shown = viewing || (onProposal ? proposal : current);
   const verify = countVerify(shown?.content);
+  const changes = proposal && current ? sectionChanges(current.content, proposal.content) : { marks: new Map(), removed: [] };
+  const isDemo = !!project.isDemo;
 
   const nextVersion = async () => {
     setBusy(true);
     await act(() => api.post(`/projects/${pid}/work/next`), 'La version suivante n’a pas pu démarrer');
     setBusy(false);
   };
-  const retry = () => act(() => api.post(`/projects/${pid}/work/${current ? 'next' : 'first'}`, {}), 'Le nouvel essai n’a pas pu démarrer').then(onReload);
+  const retry = () => act(() => api.post(`/projects/${pid}/work/retry`), 'Le nouvel essai n’a pas pu démarrer').then(onReload);
+  const answer = async (kind, body) => {
+    setBusy(true);
+    const ok = await act(() => api.post(`/projects/${pid}/work/proposals/${proposal.id}/${kind}`, body), 'Votre réponse n’a pas pu être enregistrée');
+    if (ok) { setShowCurrent(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    setBusy(false);
+  };
+  const retouch = async text => {
+    setBusy(true);
+    const ok = await act(() => api.post(`/projects/${pid}/work/retouch`, { text }), 'La retouche n’a pas pu démarrer');
+    setBusy(false);
+    return ok;
+  };
+  const review = async () => {
+    setBusy(true);
+    try { const { data } = await api.post(`/projects/${pid}/work/review`); navigate(`/projects/${pid}/meeting/${data.sessionId}`); }
+    catch (err) { notifyError(err, 'La réunion n’a pas pu s’ouvrir'); setBusy(false); }
+  };
   const showVersion = async n => {
     if (n === current?.number) { setViewing(null); return; }
     try { const { data } = await api.get(`/projects/${pid}/work/versions/${n}`); setViewing(data); window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -206,7 +331,15 @@ export default function ProjectWork({ initial, onReload }) {
         </Card>
       )}
 
-      {pendingCount > 0 && !building && !viewing && (
+      {proposal && !viewing && (
+        <ProposalBar proposal={proposal} changes={changes} showingCurrent={showCurrent} busy={busy}
+          onToggle={() => setShowCurrent(v => !v)}
+          onAccept={() => answer('accept')}
+          onRefuse={() => answer('refuse')}
+          onCorrect={text => answer('correct', { text })} />
+      )}
+
+      {pendingCount > 0 && !building && !viewing && !proposal && (
         <Card className="p-4 border-action/30 bg-action-light/50 flex flex-wrap items-center gap-3">
           <p className="text-sm text-ink flex-1 min-w-[220px]">
             Vos changements ({[
@@ -222,15 +355,16 @@ export default function ProjectWork({ initial, onReload }) {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
           <div className="space-y-4 min-w-0" data-tour="pw-version">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={viewing ? 'muted' : 'ai'}>{versionLabel(shown.number)}{viewing ? ' (ancienne)' : ''}</Badge>
+              <Badge tone={viewing ? 'muted' : 'ai'}>{versionLabel(shown.number)}{viewing ? ' (ancienne)' : onProposal ? ' (proposée)' : proposal ? ' (en cours)' : ''}</Badge>
               {verify > 0 && <Badge tone="await"><TriangleAlert size={12} aria-hidden="true" /> {verify} point{verify > 1 ? 's' : ''} à vérifier</Badge>}
               {viewing && <Button size="sm" variant="secondary" onClick={() => setViewing(null)}>Revenir à la version en cours</Button>}
             </div>
-            {shown.changeSummary && <p className="text-[15px] text-ink-soft">{shown.changeSummary}</p>}
+            {shown.changeSummary && !onProposal && <p className="text-[15px] text-ink-soft">{shown.changeSummary}</p>}
             <WorkDocument
               content={shown.content}
-              comments={viewing ? [] : work.comments}
-              readOnly={!!viewing || building}
+              comments={viewing || onProposal ? [] : work.comments}
+              marks={onProposal ? changes.marks : null}
+              readOnly={!!viewing || building || onProposal}
               onComment={(section, content) => act(() => api.post(`/projects/${pid}/work/comments`, { section, content }), 'Votre remarque n’a pas pu être enregistrée')}
               onDeleteComment={id => act(() => api.delete(`/projects/${pid}/work/comments/${id}`), 'La remarque n’a pas pu être retirée')}
             />
@@ -245,6 +379,10 @@ export default function ProjectWork({ initial, onReload }) {
           </div>
 
           <aside className="space-y-4" aria-label="Autour de votre projet">
+            {!viewing && !proposal && !building && (
+              <MoveForward busy={busy} isDemo={isDemo} onRetouch={retouch} onReview={review}
+                openReview={work.openReview ? { to: `/projects/${pid}/meeting/${work.openReview.id}` } : null} />
+            )}
             <Ideas ideas={work.ideas} onToggle={i => act(() => api.patch(`/projects/${pid}/work/ideas/${i.id}`, { state: i.state === 'set_aside' ? 'active' : 'set_aside' }), 'L’idée n’a pas pu être mise à jour')} />
 
             {work.assumptions.length > 0 && (

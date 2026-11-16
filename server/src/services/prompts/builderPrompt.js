@@ -63,8 +63,10 @@ IDÉES : relève chaque idée, envie ou demande distincte du porteur, avec ses m
   return { system: SYSTEM, user };
 }
 
-// Version suivante : version en cours + ce que le porteur a changé ou commenté
-function nextVersionPrompt({ story, current, assumptions, comments, ideas, criteria }) {
+// Version suivante : version en cours + ce que le porteur a changé ou commenté.
+// Phase 2 : + ce qui s'est dit en réunion (meeting) ; + la proposition que le porteur vient
+// de corriger (corrected : on repart d'elle, sa correction figure parmi les commentaires).
+function nextVersionPrompt({ story, current, assumptions, comments, ideas, criteria, meeting = null, corrected = null }) {
   const assumptionLines = assumptions.map(a => a.state === 'changed'
     ? `- ${a.statement} :: ${a.value}   ← CHANGÉ PAR LE PORTEUR : à appliquer partout`
     : `- ${a.statement} :: ${a.value}`).join('\n') || '(aucune)';
@@ -72,13 +74,18 @@ function nextVersionPrompt({ story, current, assumptions, comments, ideas, crite
   const ideaLines = ideas.map(i => `- ${i.ref} « ${i.text} »`).join('\n') || '(aucune)';
   const user = [
     `RÉCIT DU PORTEUR (ses mots) :\n${story}`,
-    `VERSION EN COURS (n° ${current.number}) :\n${current.content}`,
+    corrected
+      ? `TEXTE DE DÉPART : la proposition de version suivante que le porteur vient de CORRIGER (sa correction est dans les commentaires ci-dessous ; repars de ce texte) :\n${corrected}`
+      : `VERSION EN COURS (n° ${current.number}) :\n${current.content}`,
     `SUPPOSITIONS ACTUELLES :\n${assumptionLines}`,
     `COMMENTAIRES DU PORTEUR À PRENDRE EN COMPTE :\n${commentLines}`,
+    meeting ? `CE QUI S'EST DIT EN RÉUNION SUR CETTE VERSION (« Porteur » = le porteur du projet ; les autres sont des assistants) :\n${meeting}
+
+CE QUE TU REPRENDS DE LA RÉUNION : tout ce que le porteur a demandé ; les propositions des assistants qu'il a approuvées, ou qu'il n'a pas contestées si elles servent son projet sans contredire ni ses mots ni ses idées. Tu ne reprends jamais ce qu'il a refusé. Une idée nouvelle du porteur dite en réunion est une idée à relever.` : null,
     `IDÉES DU PORTEUR DÉJÀ RELEVÉES :\n${ideaLines}`,
     criteria.length ? `CE SERA FINI QUAND :\n${criteria.map(c => `- ${c.text}`).join('\n')}` : null,
-    `Écris la VERSION SUIVANTE, complète (pas seulement les changements) : applique chaque supposition changée et chaque commentaire, garde le reste tel quel sauf ce qui en dépend.
-<resume> : ce qui a changé, en deux à quatre phrases.
+    `Écris la VERSION SUIVANTE, complète (pas seulement les changements) : applique chaque supposition changée et chaque commentaire${meeting ? ', et ce que tu reprends de la réunion' : ''}, garde le reste tel quel sauf ce qui en dépend.
+<resume> : ce qui a changé, en deux à cinq phrases, en nommant les parties concernées${meeting ? ' ; puis, en une phrase, ce que tu n\'as pas repris de la réunion et pourquoi, s\'il y a lieu' : ''}.
 <suppositions> : la liste complète à jour ; une valeur choisie par le porteur se recopie mot pour mot.
 <idees> : une ligne par idée déjà relevée, sous la forme « - I3 :: Titre de la partie » (ou « :: pas encore — raison ») ; puis une ligne « - + « ses mots » :: Titre » pour chaque idée nouvelle tirée de ses commentaires.
 <fini_quand> : recopie la liste telle quelle.

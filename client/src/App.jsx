@@ -35,7 +35,7 @@ const ProfilePage      = lazy(() => import('./pages/ProfilePage'));
 const AgentsPage       = lazy(() => import('./pages/AgentsPage'));
 const MyTools          = lazy(() => import('./pages/MyTools'));
 const StartMeeting     = lazy(() => import('./pages/StartMeeting'));
-const MeetingRoom      = lazy(() => import('./pages/MeetingRoom'));
+const MeetingRoute     = lazy(() => import('./pages/MeetingRoute')); // v6 : salle de revue ou salle v5.1
 const PrintSession     = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintSession })));
 const PrintRegistry    = lazy(() => import('./pages/print/PrintPages').then(m => ({ default: m.PrintRegistry })));
 
@@ -79,7 +79,7 @@ export default function App() {
         {/* Ancienne vue des tâches (retirée) : remplacée par les actions entre les réunions */}
         <Route path="/projects/:id/plan" element={<LegacyPlanRedirect />} />
         <Route path="/projects/:id/meeting/:sid" element={
-          <ProtectedRoute><MeetingRoom /></ProtectedRoute>
+          <ProtectedRoute><MeetingRoute /></ProtectedRoute>
         } />
         <Route path="/projects/:id/imprimer/reunion/:sid" element={
           <ProtectedRoute><PrintSession /></ProtectedRoute>

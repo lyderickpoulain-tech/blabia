@@ -28,6 +28,10 @@ const SOURCES_RE = /\[SOURCES:\s*(\[[\s\S]*?\])\s*\]/;
 const MEETING_RE = /\[MEETING:\s*(R\d{1,3})\s*\]/i;
 const DELEGATE_RE = /\[DELEGATE:\s*(R\d{1,3})\s*\]/i;
 const REORDER_RE = /\[REORDER:\s*(R\d{1,3})\s*(?:->|→|AVANT|BEFORE)\s*(R\d{1,3})\s*\]/i;
+// v6 phase 2 : retouche du projet par le bras droit, sans réunion (confirmée d'un clic)
+const RETOUCH_RE = /\[RETOUCHE:\s*([^\]]{3,1500})\]/i;
+const RETOUCH_SECTION = `
+RETOUCHE DU PROJET : quand l'humain veut changer quelque chose dans son projet (« ajoute… », « remplace… », « il manque… »), tu peux faire la retouche toi-même : dis en une phrase ce que tu vas changer, puis ajoute à la fin [RETOUCHE: sa demande, reformulée clairement avec ses mots]. Il confirmera d'un clic ; la version suivante lui sera proposée sur « Mon projet », il la gardera ou non. Ne dis jamais que c'est déjà fait.`;
 // v5.1 (F2) : le bras droit parle au niveau de l'humain (« enregistrements AAAA » à un débutant)
 const LEVEL_LINE = {
   1: 'Il n\'y connaît rien : mots de tous les jours, aucun terme technique (pas de DNS, d\'enregistrement, de schéma de données…). Parle de ce que ça change pour lui, de ce que ça coûte, de ce qu\'il aura à faire.',
@@ -40,7 +44,7 @@ const EVOLVE_TAG = '[EVOLVE:';
 const EVOLVE_TYPES = ['decision', 'claude_code', 'stack'];
 const MAX_EVOLVE_MEETINGS = 4;
 
-function buildSystem(project, knowledgeText) {
+function buildSystem(project, knowledgeText, hasWork = false) {
   return `Tu es le bras droit de l'humain sur le projet « ${project.name} » : son interlocuteur principal, en tête-à-tête. Tu connais tout le projet, tu vérifies avant d'affirmer, et tu l'aides à avancer : répondre, faire le point, recommander la prochaine étape, proposer une réunion.
 TON INTERLOCUTEUR : ${LEVEL_LINE[project.expertiseLevel] || LEVEL_LINE[3]}
 
@@ -62,7 +66,7 @@ FAIRE ÉVOLUER LE PROJET : quand l'humain veut élargir ou changer son projet (�
 - meetings : 1 à 4 réunions nouvelles, sans doublon avec le plan ; type « decision » (choisir, trancher), « claude_code » (construire ou modifier le site ou l'appli), « stack » (choisir et mettre en place des outils). Une réunion à venir qui couvre déjà le sujet ne se recrée pas : cite-la.
 - after : repère de la réunion après laquelle les insérer (null = à la fin du plan) ; respecte l'ordre logique : on décide avant de construire, et ce qui complète le site vient après la réunion qui construit sa base. technical : true seulement si le projet devient un site ou une appli à construire.
 - Une seule proposition par réponse, seulement pour une vraie évolution (pas pour une simple question). Elle ne s'applique qu'après l'accord de l'humain (bouton sous ta réponse) : ne dis jamais que c'est fait.
-TU NE MODIFIES RIEN toi-même (décisions, actions, plan) : tu proposes, l'humain décide. Une question hors du projet : réponds brièvement si c'est utile, sans rien inventer.`;
+TU NE MODIFIES RIEN toi-même (décisions, actions, plan) : tu proposes, l'humain décide. Une question hors du projet : réponds brièvement si c'est utile, sans rien inventer.${hasWork ? RETOUCH_SECTION : ''}`;
 }
 
 // Extrait [EVOLVE:{…}] (JSON avec tableaux imbriqués : accolades comptées, chaînes respectées)
@@ -134,8 +138,10 @@ function parseReply(text, milestones) {
       proposal = { kind: 'reorder', status: 'pending', move: { milestoneId: a.id, title: a.title }, before: { milestoneId: b.id, title: b.title } };
     }
   }
+  const rt = text.match(RETOUCH_RE);
+  if (rt && !proposal) proposal = { kind: 'retouch', status: 'pending', text: rt[1].trim() };
   if (evolution) proposal = evolution; // l'évolution prime : une seule carte par réponse
-  const content = text.replace(SOURCES_RE, '').replace(MEETING_RE, '').replace(DELEGATE_RE, '').replace(REORDER_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  const content = text.replace(RETOUCH_RE, '').replace(SOURCES_RE, '').replace(MEETING_RE, '').replace(DELEGATE_RE, '').replace(REORDER_RE, '').replace(/\n{3,}/g, '\n\n').trim();
   return { content, sources, proposal };
 }
 
@@ -180,7 +186,7 @@ router.post('/:id/assistant', async (req, res) => {
       id: randomUUID(), projectId: project.id, userId: req.user.id, role: 'human', content: message, createdAt: new Date(),
     }).returning('*');
 
-    const { text: knowledgeText, milestones } = await projectKnowledge(project);
+    const { text: knowledgeText, milestones, hasWork } = await projectKnowledge(project);
     // Conversation : alternance stricte, en commençant par l'humain
     const turns = [];
     for (const r of previous.reverse()) {
@@ -198,7 +204,7 @@ router.post('/:id/assistant', async (req, res) => {
       // Connaissance du projet en cache : relue à 10 % du prix d'un message à l'autre
       // + ce qui attend l'humain, hors cache (change d'un message à l'autre)
       system: [
-        { type: 'text', text: buildSystem(project, knowledgeText), cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: buildSystem(project, knowledgeText, hasWork), cache_control: { type: 'ephemeral' } },
         { type: 'text', text: (inboxForPrompt(await buildInbox(project, req.user.id)) || 'Rien n’attend l’humain pour l’instant.')
           + (illustrate ? `\n\nILLUSTRATION DEMANDÉE : en plus d'une réponse courte, produis UNE planche HTML autonome (bloc \`\`\`html, styles dans une balise <style>, aucune ressource externe, aucun script, 3 000 caractères au plus) qui MONTRE ce qui a été décidé : polices en grand (titre, sous-titre, paragraphe), couleurs en pastilles nommées avec leur code si décidé, et un petit exemple réel du site. Ce qui n'a pas été décidé apparaît comme « pas encore choisi » : n'invente rien. Juste avant le bloc, une ligne [ARTIFACT_TITLE: Titre court].` : '') },
       ],
@@ -220,6 +226,29 @@ router.post('/:id/assistant', async (req, res) => {
   } catch (err) {
     console.error('[assistant POST]', err.message);
     res.status(500).json({ error: 'Le bras droit n’a pas pu répondre.' });
+  }
+});
+
+// POST /api/projects/:id/assistant/:messageId/retouch — l'humain confirme la retouche proposée
+// par le bras droit (v6 phase 2) : la version suivante s'écrit, proposée sur « Mon projet »
+router.post('/:id/assistant/:messageId/retouch', async (req, res) => {
+  try {
+    const project = await findProject(req.params.id, req.user.id, isAdminOf(req));
+    if (!project) return res.status(404).json({ error: 'Projet introuvable' });
+    if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
+    const row = await db('AssistantMessage').where({ id: req.params.messageId, projectId: project.id, userId: req.user.id }).first();
+    const proposal = parseJsonField(row?.proposal, null);
+    if (proposal?.kind !== 'retouch' || proposal.status !== 'pending') return res.status(404).json({ error: 'Retouche introuvable ou déjà faite' });
+    const builder = require('../services/work/builder');
+    try { await builder.startRetouch(project.id, req.user.id, proposal.text); } catch (err) {
+      if (err instanceof builder.BuildError) return res.status(err.status).json({ error: err.message });
+      throw err;
+    }
+    const [updated] = await db('AssistantMessage').where({ id: row.id }).update({ proposal: JSON.stringify({ ...proposal, status: 'started' }) }).returning('*');
+    res.json({ message: shape(updated) });
+  } catch (err) {
+    console.error('[assistant retouch]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 

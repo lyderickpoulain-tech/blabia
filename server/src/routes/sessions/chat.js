@@ -275,6 +275,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     if (['accepted', 'abandoned', 'postponed'].includes(s.status)) {
       return res.status(400).json({ error: 'Session déjà close' });
     }
+    // v6 : une réunion de revue de l'ouvrage a son propre déroulé (services/work/review.js)
+    if (s.reviewOfVersion != null) return res.status(400).json({ error: 'Cette réunion se tient depuis « Mon projet ».' });
     session = s;
 
     const storedAgents = parseJsonField(s.activeAgents, []);

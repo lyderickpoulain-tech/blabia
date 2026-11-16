@@ -106,8 +106,8 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
                 {[
                   ['Vous racontez votre projet', 'Une seule question, avec vos mots, comme à quelqu’un de confiance.'],
                   ['BlabIA en fait aussitôt une première version', 'Complète, en deux ou trois minutes, sans vous poser de question. Ce qu’il a dû supposer est affiché à côté ; ce qui n’est pas vérifié est marqué « à vérifier ».'],
-                  ['Vous corrigez', 'Changez une supposition ou commentez une partie : la version suivante en tient compte. Chacune de vos idées est suivie, et rien n’est écarté sans votre accord.'],
-                  ['Une équipe d’assistants peut l’améliorer avec vous', 'En réunion courte, quand vous voulez leur avis. Votre bras droit, en bas à droite, répond à tout moment.'],
+                  ['Vous corrigez', 'Écrivez ce que vous voulez changer, changez une supposition ou commentez une partie. La version suivante vous est d’abord proposée : vous voyez ce qui change, puis vous la gardez, la corrigez ou la refusez. Chacune de vos idées est suivie, et rien n’est écarté sans votre accord.'],
+                  ['Une équipe d’assistants l’améliore avec vous', '« Demander l’avis de l’équipe » : une réunion courte qui commence par votre avis, où deux ou trois assistants relisent la version et proposent du concret. À la fin, la version suivante vous est proposée. Votre bras droit, en bas à droite, répond à tout moment et peut faire une retouche.'],
                 ].map(([t, d], i) => (
                   <li key={t} className="flex gap-3">
                     <span className="w-8 h-8 rounded-full bg-action-light text-action text-sm font-extrabold inline-flex items-center justify-center shrink-0" aria-hidden="true">{i + 1}</span>
@@ -120,7 +120,7 @@ export default function Tutorial({ role, tourProgress = {}, initialScreen = 'wel
               {showDetails && (<>
               <ul className="space-y-1.5">
                 {[
-                  '« Mon projet » montre la version en cours de votre projet, en grand : vos idées et où elles se trouvent, ce que BlabIA a supposé (changez-le d’un clic), « Ce sera fini quand… » et les versions précédentes. Sous chaque partie, « Commenter cette partie » ; puis « Préparer la version suivante ». Un projet commencé avant cette nouveauté se transforme d’un clic : « Créer mon projet à partir de l’historique ».',
+                  '« Mon projet » montre la version en cours de votre projet, en grand : vos idées et où elles se trouvent, ce que BlabIA a supposé (changez-le d’un clic), « Ce sera fini quand… » et les versions précédentes. Sous chaque partie, « Commenter cette partie » ; puis « Préparer la version suivante ». « Faire avancer votre projet » : « Que voulez-vous changer ? » (le bras droit fait la retouche) ou « Demander l’avis de l’équipe » (une réunion, qui s’ouvre sur votre avis et se termine par « Terminer et préparer la version suivante »). Chaque version suivante est d’abord proposée : les parties modifiées sont signalées, « Comparer avec la version en cours » montre l’ancienne, puis « Garder cette version », « Corriger » ou « Refuser ». Votre bras droit connaît la version en cours : demandez-lui un changement, il propose la retouche, que vous lancez d’un clic. Un projet commencé avant cette nouveauté se transforme d’un clic : « Créer mon projet à partir de l’historique ».',
                   'Mode avancé (Mon profil) : il rouvre tous les réglages — création détaillée, tableau de bord, modèles, outils, clé personnelle. Désactivé par défaut.',
                   'Un projet décrit votre objectif : le brief et vos documents de référence, que les assistants lisent avant chaque réunion.',
                   'Le plan enchaîne les réunions à tenir, dans l’ordre.',

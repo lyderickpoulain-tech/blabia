@@ -71,7 +71,8 @@ function CommentBox({ onSave, onCancel }) {
   );
 }
 
-export default function WorkDocument({ content, comments = [], onComment, onDeleteComment, readOnly = false }) {
+// marks (proposition de version suivante) : titre de partie → « Modifiée » | « Nouvelle »
+export default function WorkDocument({ content, comments = [], onComment, onDeleteComment, readOnly = false, marks = null }) {
   const [open, setOpen] = useState(null); // titre de la partie en cours de commentaire
   const sections = splitSections(content);
   return (
@@ -79,8 +80,10 @@ export default function WorkDocument({ content, comments = [], onComment, onDele
       {sections.map((s, i) => {
         const key = s.title || `intro-${i}`;
         const mine = comments.filter(c => c.status === 'open' && (c.section || null) === (s.title || null));
+        const mark = marks?.get(s.title || '');
         return (
-          <Card key={key} as="section" className="p-5 sm:p-6" aria-label={s.title || 'Introduction'}>
+          <Card key={key} as="section" className={`p-5 sm:p-6 ${mark ? 'border-ai/50 ring-1 ring-ai/20' : ''}`} aria-label={s.title || 'Introduction'}>
+            {mark && <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai mb-1">{mark === 'Nouvelle' ? 'Nouvelle partie' : 'Partie modifiée'}</p>}
             {s.title && <h2 className="text-lg font-extrabold text-ink mb-3">{s.title}</h2>}
             <Markdown components={COMPONENTS}>{markVerify(s.body)}</Markdown>
             {mine.map(c => (

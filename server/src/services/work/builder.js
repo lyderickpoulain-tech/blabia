@@ -63,10 +63,10 @@ async function ensureWork(projectId) {
 }
 
 // Réserve la construction (une seule à la fois par projet)
-async function claimBuild(work, stage) {
+async function claimBuild(work, stage, request = null) {
   const n = await db('Work').where({ id: work.id })
     .andWhere(q => q.whereNot({ buildStatus: 'building' }).orWhere('buildStartedAt', '<', new Date(Date.now() - STALE_MS)))
-    .update({ buildStatus: 'building', buildStage: stage, buildError: null, buildStartedAt: new Date(), updatedAt: new Date() });
+    .update({ buildStatus: 'building', buildStage: stage, buildError: null, buildStartedAt: new Date(), buildRequest: request ? JSON.stringify(request) : null, updatedAt: new Date() });
   if (!n) throw new BuildError('Une version est déjà en cours d’écriture.', 409);
 }
 
@@ -79,7 +79,11 @@ async function fail(workId, err) {
 }
 
 // ── Enregistrement d'une version ─────────────────────────────────────────────
-async function saveVersion(trx, work, parsed, { author, userId, call, ideasById }) {
+// asOf (proposition acceptée) : moment où elle a été écrite ; une supposition changée par
+// le porteur après ce moment n'y est pas encore appliquée et reste « changée »
+const changedSince = (a, asOf) => a.state === 'changed' && !!asOf && !!a.changedAt && new Date(a.changedAt) > asOf;
+
+async function saveVersion(trx, work, parsed, { author, userId, call, ideasById, asOf = null, ideaSource = 'commentaire' }) {
   const number = work.currentVersion + 1;
   const genre = getGenre(work.genre);
   const template = genre.templates[parsed.template] ? parsed.template : (work.template || genre.defaultTemplate);
@@ -90,10 +94,10 @@ async function saveVersion(trx, work, parsed, { author, userId, call, ideasById 
   const known = new Map((await trx('WorkIdea').where({ workId: work.id }).select('id', 'text')).map(i => [normalize(i.text), i.id]));
   const presence = [];
   for (const idea of parsed.ideas) {
-    let id = idea.ref ? ideasById.get(idea.ref) : known.get(normalize(idea.text));
+    let id = idea.ideaId || (idea.ref ? ideasById.get(idea.ref) : known.get(normalize(idea.text)));
     if (!id && idea.text) {
       id = randomUUID();
-      await trx('WorkIdea').insert({ id, workId: work.id, text: idea.text, source: author === 'history' ? 'historique' : (number === 1 ? 'recit' : 'commentaire'), displayOrder: ideaOrder++ });
+      await trx('WorkIdea').insert({ id, workId: work.id, text: idea.text, source: author === 'history' ? 'historique' : (number === 1 ? 'recit' : ideaSource), displayOrder: ideaOrder++ });
       known.set(normalize(idea.text), id);
     }
     if (id && !presence.some(p => p.ideaId === id)) presence.push({ ideaId: id, present: idea.present, where: idea.where });
@@ -111,7 +115,7 @@ async function saveVersion(trx, work, parsed, { author, userId, call, ideasById 
       kept.add(prev.id);
       const ownerChose = prev.state === 'changed' || prev.state === 'applied';
       await trx('WorkAssumption').where({ id: prev.id }).update({
-        value: ownerChose ? prev.value : a.value, state: ownerChose ? 'applied' : 'assumed', displayOrder: order++,
+        value: ownerChose ? prev.value : a.value, state: changedSince(prev, asOf) ? 'changed' : ownerChose ? 'applied' : 'assumed', displayOrder: order++,
       });
     } else {
       await trx('WorkAssumption').insert({ id: randomUUID(), workId: work.id, statement: a.statement, value: a.value, displayOrder: order++ });
@@ -120,7 +124,7 @@ async function saveVersion(trx, work, parsed, { author, userId, call, ideasById 
   for (const a of current) {
     if (kept.has(a.id)) continue;
     // Choisie par le porteur : jamais perdue ; sinon retirée de l'affichage
-    if (a.state === 'changed' || a.state === 'applied') await trx('WorkAssumption').where({ id: a.id }).update({ state: 'applied', displayOrder: order++ });
+    if (a.state === 'changed' || a.state === 'applied') await trx('WorkAssumption').where({ id: a.id }).update({ state: changedSince(a, asOf) ? 'changed' : 'applied', displayOrder: order++ });
     else await trx('WorkAssumption').where({ id: a.id }).update({ state: 'retired' });
   }
 
@@ -180,8 +184,24 @@ async function runFirst(work, { projectId, userId, fromHistory, model }) {
 // Récit du porteur : le brief sans l'étiquette « OBJECTIF : » de la création v6
 const storyOf = project => String(project.brief || project.description || project.name).replace(/^OBJECTIF : /, '');
 
-// ── Version suivante : suppositions changées et commentaires du porteur ──────
-async function runNext(work, { projectId, userId, model }) {
+// ── Version suivante : une PROPOSITION (phase 2) ─────────────────────────────
+// Le constructeur écrit la version suivante à partir des suppositions changées, des
+// remarques du porteur et, après une réunion, de ce qui s'y est dit. Rien n'est appliqué
+// avant que le porteur l'accepte (acceptProposal) : il voit ce qui change, puis accepte,
+// corrige ou refuse.
+const PROPOSAL_ORIGINS = ['changes', 'review', 'retouch'];
+const json = (v, fallback) => (v == null ? fallback : typeof v === 'string' ? JSON.parse(v) : v);
+
+// Transcription d'une réunion de revue pour le constructeur
+async function meetingTranscript(sessionId) {
+  if (!sessionId) return null;
+  const s = await db('Session').where({ id: sessionId }).first('messages');
+  const lines = json(s?.messages, []).filter(m => m.content && (m.role === 'human' || m.role === 'agent'))
+    .map(m => `${m.role === 'human' ? 'Porteur' : m.agentName} : ${String(m.content).trim()}`);
+  return lines.length ? lines.join('\n\n').slice(-30000) : null;
+}
+
+async function runProposal(work, { projectId, userId, model, origin, sessionId, corrected }) {
   try {
     const project = await db('Project').where({ id: projectId }).first();
     const current = await db('WorkVersion').where({ workId: work.id, number: work.currentVersion }).first();
@@ -189,18 +209,65 @@ async function runNext(work, { projectId, userId, model }) {
     const comments = await db('WorkComment').where({ workId: work.id, status: 'open' }).orderBy('createdAt');
     const ideaRows = await db('WorkIdea').where({ workId: work.id, state: 'active' }).orderBy('displayOrder');
     const ideas = ideaRows.map((i, k) => ({ ...i, ref: `I${k + 1}` }));
-    const criteria = Array.isArray(work.criteria) ? work.criteria : JSON.parse(work.criteria || '[]');
+    const criteria = json(work.criteria, []);
+    const meeting = await meetingTranscript(sessionId);
+    const startedAt = new Date();
     await setStage(work.id, 'writing');
-    const call = await callBuilder(nextVersionPrompt({ story: storyOf(project), current, assumptions, comments, ideas, criteria }), { model });
+    const call = await callBuilder(nextVersionPrompt({ story: storyOf(project), current, assumptions, comments, ideas, criteria, meeting, corrected: corrected?.content || null }), { model });
     const parsed = parseBuilderOutput(call.text);
     if (!parsed.content || parsed.content.length < 80) throw new BuildError('La version reçue était vide. Vous pouvez réessayer.', 502);
     await setStage(work.id, 'saving');
+    const refs = new Map(ideas.map(i => [i.ref, i.id]));
+    const { content, summary, ...rest } = parsed;
+    rest.ideas = rest.ideas.map(i => (i.ref && refs.has(i.ref) ? { ...i, ideaId: refs.get(i.ref) } : i));
+    rest.asOf = startedAt.toISOString();
     await db.transaction(async trx => {
-      const fresh = await trx('Work').where({ id: work.id }).first();
-      const number = await saveVersion(trx, fresh, parsed, { author: 'builder', userId, call, ideasById: new Map(ideas.map(i => [i.ref, i.id])) });
-      if (comments.length) await trx('WorkComment').whereIn('id', comments.map(c => c.id)).update({ status: 'addressed', addressedInVersion: number });
+      await trx('WorkProposal').insert({
+        id: randomUUID(), workId: work.id, baseVersion: work.currentVersion, origin, sessionId: sessionId || null,
+        content, changeSummary: summary || null, parsed: JSON.stringify(rest), commentIds: JSON.stringify(comments.map(c => c.id)),
+        sources: JSON.stringify(call.sources), model: call.model, durationMs: call.durationMs, createdBy: userId || null,
+      });
+      await trx('Work').where({ id: work.id }).update({ buildStatus: 'idle', buildStage: null, buildError: null, updatedAt: new Date() });
+      if (sessionId && summary) await trx('Session').where({ id: sessionId }).update({ summary: `Ce qui change dans la version proposée :\n${summary}` });
     });
   } catch (err) { await fail(work.id, err); }
+}
+
+const openProposal = workId => db('WorkProposal').where({ workId, status: 'proposed' }).orderBy('createdAt', 'desc').first();
+
+// Le porteur garde la proposition : elle devient la version suivante (suppositions, idées et
+// remarques appliquées à ce moment-là)
+async function acceptProposal(projectId, proposalId, userId) {
+  const work = await workOf(projectId);
+  const proposal = work && await db('WorkProposal').where({ id: proposalId, workId: work.id }).first();
+  if (!proposal) throw new BuildError('Proposition introuvable.', 404);
+  if (proposal.status !== 'proposed') throw new BuildError('Cette proposition a déjà reçu votre réponse.', 409);
+  const parsed = json(proposal.parsed, {});
+  const commentIds = json(proposal.commentIds, []);
+  return db.transaction(async trx => {
+    const fresh = await trx('Work').where({ id: work.id }).forUpdate().first();
+    if (fresh.currentVersion !== proposal.baseVersion) throw new BuildError('Le projet a changé depuis cette proposition.', 409);
+    const number = await saveVersion(trx, fresh, { ...parsed, content: proposal.content, summary: proposal.changeSummary, criteria: [] }, {
+      author: 'builder', userId,
+      call: { sources: json(proposal.sources, []), model: proposal.model, durationMs: proposal.durationMs },
+      ideasById: new Map(),
+      asOf: parsed.asOf ? new Date(parsed.asOf) : null,
+      ideaSource: proposal.origin === 'review' ? 'reunion' : 'commentaire',
+    });
+    if (commentIds.length) await trx('WorkComment').whereIn('id', commentIds).where({ status: 'open' }).update({ status: 'addressed', addressedInVersion: number });
+    await trx('WorkProposal').where({ id: proposal.id }).update({ status: 'accepted', acceptedVersion: number, decidedAt: new Date() });
+    if (proposal.sessionId) await trx('Session').where({ id: proposal.sessionId }).update({ summary: `Version ${number} acceptée. Ce qui a changé :\n${proposal.changeSummary || ''}`.trim() });
+    return number;
+  });
+}
+
+// Le porteur refuse : rien n'est appliqué ; ses remarques restent en attente
+async function refuseProposal(projectId, proposalId) {
+  const work = await workOf(projectId);
+  const proposal = work && await db('WorkProposal').where({ id: proposalId, workId: work.id, status: 'proposed' }).first();
+  if (!proposal) throw new BuildError('Proposition introuvable ou déjà traitée.', 404);
+  await db('WorkProposal').where({ id: proposal.id }).update({ status: 'refused', decidedAt: new Date() });
+  if (proposal.sessionId) await db('Session').where({ id: proposal.sessionId }).update({ summary: `Version proposée, refusée par le porteur.\n${proposal.changeSummary || ''}`.trim() });
 }
 
 // ── Points d'entrée (les routes n'attendent pas la fin) ──────────────────────
@@ -208,19 +275,70 @@ async function runNext(work, { projectId, userId, model }) {
 async function startFirstVersion(projectId, userId, { fromHistory = false, model, wait = false } = {}) {
   const work = await ensureWork(projectId);
   if (work.currentVersion > 0) throw new BuildError('Ce projet a déjà sa première version.', 409);
-  await claimBuild(work, 'reading');
+  await claimBuild(work, 'reading', { kind: 'first', fromHistory });
   const job = runFirst(work, { projectId, userId, fromHistory, model });
   if (wait) await job;
   return work.id;
 }
 
-async function startNextVersion(projectId, userId, { model, wait = false } = {}) {
+// Version suivante proposée. origin : changes (suppositions, remarques), review (réunion),
+// retouch (le porteur écrit ce qu'il veut changer). Une seule proposition ouverte à la fois.
+async function startProposal(projectId, userId, { origin = 'changes', sessionId = null, corrected = null, model, wait = false } = {}) {
+  if (!PROPOSAL_ORIGINS.includes(origin)) throw new BuildError('Origine inconnue.', 400);
   const work = await workOf(projectId);
   if (!work || work.currentVersion < 1) throw new BuildError('Ce projet n’a pas encore de première version.', 409);
-  const pending = await pendingChanges(work.id);
-  if (!pending.assumptions && !pending.comments) throw new BuildError('Rien à changer : modifiez une supposition ou commentez une partie d’abord.', 400);
-  await claimBuild(work, 'reading');
-  const job = runNext(work, { projectId, userId, model });
+  if (!corrected && await openProposal(work.id)) throw new BuildError('Une proposition de version attend déjà votre réponse.', 409);
+  if (origin !== 'review') {
+    const pending = await pendingChanges(work.id);
+    if (!pending.assumptions && !pending.comments) throw new BuildError('Rien à changer : modifiez une supposition ou commentez une partie d’abord.', 400);
+  }
+  await claimBuild(work, 'reading', { kind: 'proposal', origin, sessionId, correctedId: corrected?.id || null });
+  const job = runProposal(work, { projectId, userId, model, origin, sessionId, corrected });
+  if (wait) await job;
+  return work.id;
+}
+
+const startNextVersion = (projectId, userId, opts = {}) => startProposal(projectId, userId, { ...opts, origin: 'changes' });
+
+// Le porteur corrige : sa correction devient une remarque, et la proposition est réécrite à
+// partir d'elle-même (même origine, même réunion)
+async function correctProposal(projectId, proposalId, userId, text, { model, wait = false } = {}) {
+  const work = await workOf(projectId);
+  const proposal = work && await db('WorkProposal').where({ id: proposalId, workId: work.id, status: 'proposed' }).first();
+  if (!proposal) throw new BuildError('Proposition introuvable ou déjà traitée.', 404);
+  // Réservée avant tout changement : rien n'est touché si une écriture est déjà en cours
+  await claimBuild(work, 'reading', { kind: 'proposal', origin: proposal.origin, sessionId: proposal.sessionId, correctedId: proposal.id });
+  await db('WorkComment').insert({ id: randomUUID(), workId: work.id, versionNumber: work.currentVersion, section: null, content: text, userId });
+  await db('WorkProposal').where({ id: proposal.id }).update({ status: 'corrected', decidedAt: new Date() });
+  const job = runProposal(work, { projectId, userId, model, origin: proposal.origin, sessionId: proposal.sessionId, corrected: proposal });
+  if (wait) await job;
+  return work.id;
+}
+
+// Retouche : le porteur écrit ce qu'il veut changer, sans réunion
+async function startRetouch(projectId, userId, text, { model, wait = false } = {}) {
+  const work = await workOf(projectId);
+  if (!work || work.currentVersion < 1) throw new BuildError('Ce projet n’a pas encore de première version.', 409);
+  if (await openProposal(work.id)) throw new BuildError('Une proposition de version attend déjà votre réponse.', 409);
+  await claimBuild(work, 'reading', { kind: 'proposal', origin: 'retouch' });
+  await db('WorkComment').insert({ id: randomUUID(), workId: work.id, versionNumber: work.currentVersion, section: null, content: text, userId });
+  const job = runProposal(work, { projectId, userId, model, origin: 'retouch', sessionId: null, corrected: null });
+  if (wait) await job;
+  return work.id;
+}
+
+// « Réessayer » après un échec : la même écriture, avec les mêmes entrées
+async function retryBuild(projectId, userId, { model, wait = false } = {}) {
+  const work = await workOf(projectId);
+  if (!work || (work.buildStatus !== 'failed' && !isStale(work))) throw new BuildError('Aucune écriture à reprendre.', 409);
+  const request = json(work.buildRequest, null) || (work.currentVersion ? { kind: 'proposal', origin: 'changes' } : { kind: 'first' });
+  await claimBuild(work, 'reading', request);
+  let job;
+  if (!work.currentVersion) job = runFirst(work, { projectId, userId, fromHistory: !!request.fromHistory, model });
+  else {
+    const corrected = request.correctedId ? await db('WorkProposal').where({ id: request.correctedId, workId: work.id }).first() : null;
+    job = runProposal(work, { projectId, userId, model, origin: request.origin || 'changes', sessionId: request.sessionId || null, corrected });
+  }
   if (wait) await job;
   return work.id;
 }
@@ -231,4 +349,7 @@ async function pendingChanges(workId) {
   return { assumptions: Number(a), comments: Number(c) };
 }
 
-module.exports = { startFirstVersion, startNextVersion, pendingChanges, workOf, isStale, callBuilder, BuildError, STALE_MS };
+module.exports = {
+  startFirstVersion, startNextVersion, startProposal, startRetouch, retryBuild, acceptProposal, refuseProposal, correctProposal,
+  openProposal, pendingChanges, workOf, isStale, callBuilder, BuildError, STALE_MS,
+};

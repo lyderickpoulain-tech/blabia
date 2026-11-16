@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Send, Sparkles, Radio, ArrowUpDown } from 'lucide-react';
+import { Send, Sparkles, Radio, ArrowUpDown, Wand2 } from 'lucide-react';
 import api from '../../utils/api';
 import { Button } from '../ui';
 import Markdown from '../Markdown';
@@ -102,6 +102,32 @@ function ReorderCard({ projectId, messageId, proposal, onDecided }) {
         </div>
       ) : (
         <p className={`text-xs font-bold ${proposal.status === 'applied' ? 'text-ok' : 'text-ink-muted'}`}>{proposal.status === 'applied' ? 'Fait : le plan est à jour.' : 'Vous avez gardé l’ordre actuel.'}</p>
+      )}
+    </div>
+  );
+}
+
+// v6 phase 2 : retouche du projet par le bras droit, confirmée d'un clic ; la version suivante
+// est ensuite proposée sur « Mon projet »
+function RetouchCard({ projectId, messageId, proposal, onDecided }) {
+  const [busy, setBusy] = useState(false);
+  const start = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/assistant/${messageId}/retouch`);
+      onDecided(data.message);
+      notifySuccess('La retouche est en cours : la nouvelle version vous sera proposée sur « Mon projet ».');
+    } catch (err) { notifyError(err, 'La retouche n’a pas pu démarrer.'); }
+    setBusy(false);
+  };
+  return (
+    <div className="border border-ai-border bg-white rounded-xl px-3.5 py-3 space-y-2.5">
+      <p className="text-[11px] font-extrabold uppercase tracking-wider text-ai flex items-center gap-1.5"><Wand2 size={13} aria-hidden="true" /> Retouche de votre projet</p>
+      <p className="text-sm text-ink-soft">« {proposal.text} »</p>
+      {proposal.status === 'pending' ? (
+        <Button size="sm" variant="primary" disabled={busy} onClick={start}>Faire la retouche</Button>
+      ) : (
+        <p className="text-xs font-bold text-ok">Lancée : la nouvelle version vous attend sur « <Link to={`/projects/${projectId}`} className="underline">Mon projet</Link> ».</p>
       )}
     </div>
   );
@@ -317,6 +343,8 @@ export default function AssistantChat({ project, compact = false, reloadKey = nu
                 <div className="border border-ai-border rounded-xl overflow-hidden bg-white"><ArtifactCard artifact={m.proposal.artifact} /></div>
               ) : m.proposal?.kind === 'delegate' && !project.isDemo ? (
                 <DelegateCard projectId={project.id} proposal={m.proposal} onFallback={choices} />
+              ) : m.proposal?.kind === 'retouch' ? (
+                !project.isDemo && <RetouchCard projectId={project.id} messageId={m.id} proposal={m.proposal} onDecided={proposalDecided} />
               ) : m.proposal?.kind === 'reorder' && !project.isDemo ? (
                 <ReorderCard projectId={project.id} messageId={m.id} proposal={m.proposal} onDecided={proposalDecided} />
               ) : m.proposal?.kind === 'evolution' ? (

@@ -129,7 +129,7 @@ router.get('/', async (req, res) => {
     const sessions = await db('Session')
       .select(
         'id', 'task', 'status', 'mode', 'createdAt', 'parentSessionId',
-        'hasCode', 'codeStatus', 'suggestedTools',
+        'hasCode', 'codeStatus', 'suggestedTools', 'reviewOfVersion',
         db.raw('jsonb_array_length(agents) as "agentCount"')
       )
       .where({ projectId })

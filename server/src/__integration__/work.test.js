@@ -131,6 +131,15 @@ describe.skipIf(!harness.enabled)('v6 : l’ouvrage du projet', () => {
     expect(prompt).toContain('Moins de cartes');
     expect(prompt).toContain('I1 « thème des volcans »');
 
+    // Phase 2 : une proposition, rien n'est appliqué avant la réponse du porteur
+    expect(w.current.number).toBe(1);
+    expect(w.proposal).toMatchObject({ number: 2, origin: 'changes', baseVersion: 1 });
+    expect(w.proposal.changeSummary).toMatch(/6 joueurs/);
+    expect(w.pending.comments).toBe(1);
+    expect((await h.request('POST', `/api/projects/${pid}/work/next`, { token: owner.token })).status).toBe(409); // une proposition attend
+    w = (await h.request('POST', `/api/projects/${pid}/work/proposals/${w.proposal.id}/accept`, { token: owner.token })).body;
+    expect(w.proposal).toBeNull();
+
     expect(w.current.number).toBe(2);
     expect(w.current.changeSummary).toMatch(/6 joueurs/);
     expect(w.versions.map(v => v.number)).toEqual([2, 1]);
@@ -160,7 +169,7 @@ describe.skipIf(!harness.enabled)('v6 : l’ouvrage du projet', () => {
     expect(w.build.status).toBe('failed');
     expect(w.build.error).toMatch(/réessayer/);
     expect(w.current).toBeNull();
-    expect((await h.request('POST', `/api/projects/${r.body.id}/work/first`, { token: owner.token, body: {} })).status).toBe(202);
+    expect((await h.request('POST', `/api/projects/${r.body.id}/work/retry`, { token: owner.token })).status).toBe(202);
     w = await waitBuilt(r.body.id);
     expect(w.current.number).toBe(1);
   });

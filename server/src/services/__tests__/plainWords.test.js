@@ -15,9 +15,11 @@ const SCREENS = [
   'client/src/pages/project/ProjectHome.jsx',
   'client/src/pages/project/ProjectWork.jsx',
   'client/src/components/work/WorkDocument.jsx',
+  'client/src/pages/ReviewRoom.jsx',   // phase 2 : réunion de revue
+  'client/src/pages/MeetingRoute.jsx',
 ];
 // Messages renvoyés à l'écran par le serveur v6
-const SERVER = ['server/src/routes/work.js', 'server/src/services/work/builder.js'];
+const SERVER = ['server/src/routes/work.js', 'server/src/services/work/builder.js', 'server/src/services/work/review.js'];
 
 const FORBIDDEN = [
   /\bgithub\b/i, /\bclaude\b/i, /\brailway\b/i, /\bAPI\b/, /\bsonnet\b/i, /\bopus\b/i, /\bhaiku\b/i, /\bfable\b/i,
@@ -44,7 +46,7 @@ function visibleTexts(source) {
 }
 
 // Serveur : seulement les messages renvoyés à l'écran (« error: '…' », « new BuildError('…') »)
-const MESSAGE = /(?:error:\s*|BuildError\(|message = [^?\n]*\?\s*)'((?:[^'\\\n]|\\.)*)'/g;
+const MESSAGE = /(?:error:\s*|BuildError\(|ReviewError\(|message = [^?\n]*\?\s*)'((?:[^'\\\n]|\\.)*)'/g;
 const serverMessages = source => [...source.matchAll(MESSAGE)].map(m => m[1]);
 
 describe('règle du minimum de technique (v6)', () => {

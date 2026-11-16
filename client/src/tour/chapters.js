@@ -38,6 +38,9 @@ export const CHAPTERS = [
       { target: 'pw-criteria', placement: 'left',
         title: 'Ce sera fini quand…',
         body: 'Quelques phrases tirées de votre récit pour savoir quand votre projet est terminé. Corrigez-les si besoin.' },
+      { target: 'pw-forward', placement: 'left',
+        title: 'Faire avancer votre projet',
+        body: 'Deux gestes. Écrivez ce que vous voulez changer : le bras droit fait la retouche. Ou « Demander l’avis de l’équipe » : deux ou trois assistants relisent la version avec vous ; la réunion commence par votre avis. Dans les deux cas, la version suivante vous est d’abord proposée : vous voyez ce qui change, puis vous la gardez, la corrigez ou la refusez.' },
     ],
   },
   {

@@ -11,6 +11,7 @@ const { getProjectTools } = require('./tools/toolsStore');
 const { meetingState, openCards } = require('./meetingState');
 const { parseJsonField } = require('../utils/parseJsonField');
 
+const WORK_CHARS = 30000; // v6 : la version en cours du projet
 const REPORTS_CHARS = 40000; // comptes rendus : les plus récents en entier, les plus anciens tronqués
 const REPORT_CHARS = 4000;
 const fmtDate = d => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -59,7 +60,18 @@ async function projectKnowledge(project) {
     return `### Réunion « ${s.task} » — ${fmtDate(s.createdAt)}\n${text || '(pas de compte rendu)'}`;
   }).reverse().join('\n\n');
 
-  const text = `Brief : ${project.brief || 'non défini'}${project.visionStatus === 'validated' && project.vision ? `
+  // v6 : le projet lui-même (sa version en cours), avant tout le reste
+  const work = await db('Work').where({ projectId: project.id }).first();
+  const version = work?.currentVersion ? await db('WorkVersion').where({ workId: work.id, number: work.currentVersion }).first('number', 'content') : null;
+  const proposal = work ? await db('WorkProposal').where({ workId: work.id, status: 'proposed' }).first('changeSummary') : null;
+  const workText = version ? `LE PROJET LUI-MÊME (${version.number === 1 ? 'première version' : `version ${version.number}`}, celle que le porteur voit sur « Mon projet ») :
+${String(version.content).slice(0, WORK_CHARS)}
+${proposal ? `
+UNE VERSION SUIVANTE EST PROPOSÉE, en attente de sa réponse : ${proposal.changeSummary || ''}
+` : ''}
+` : '';
+
+  const text = `${workText}Brief : ${project.brief || 'non défini'}${project.visionStatus === 'validated' && project.vision ? `
 Sa vision, validée par lui (la référence ; signale tout écart) : ${project.vision}` : ''}
 Réunions du plan (repère — titre — statut) :${milestones.length ? milestones.map((m, i) => `\nR${i + 1} — ${m.title} — ${STATUS[m.status] || 'à venir'}`).join('') : ' aucune'}
 
@@ -81,7 +93,7 @@ ${openText || '(aucune)'}
 Mémoire du projet :
 ${memoryForPrompt(project) || 'aucune'}
 ${documentsText ? `\nDocuments de référence du projet (cite-les entre « » quand tu t'en sers) :\n${documentsText}\n` : ''}`;
-  return { text, milestones };
+  return { text, milestones, hasWork: !!version };
 }
 
 module.exports = { projectKnowledge };
