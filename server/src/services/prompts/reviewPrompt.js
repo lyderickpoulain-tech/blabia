@@ -18,6 +18,7 @@ const LOOKS = {
   'Synthésiseur': 'la clarté d\'ensemble : ce qui se lit mal, ce qui se répète, ce qui manque pour que le dossier se suffise à lui-même.',
   'Chercheur': 'les faits : ce qui existe vraiment (produits, lieux, prix, règles), ce qui est daté ou douteux, et ce qu\'il faudrait vérifier.',
   'Stratège': 'l\'ordre et le réalisme : ce qu\'il faut faire d\'abord, les délais, le budget, ce qui risque de bloquer le jour venu.',
+  'Juriste': 'ce que la loi impose à ce projet : mentions légales, conditions de vente et droit de rétractation, données personnelles, droits sur les images et la musique, déclarations, assurances. Tu proposes le texte à écrire et tu cites la source officielle quand tu en es sûr ; sinon « à vérifier ». Tu n’es pas avocat : pour un engagement important, tu le dis en une phrase.',
   'Rédacteur': 'les textes : ce qui gagnerait à être dit autrement pour les lecteurs du projet ; tu proposes le texte réécrit.',
 };
 const lookOf = agent => LOOKS[agent.name] || `ton rôle (${agent.role}), appliqué à cette version.`;

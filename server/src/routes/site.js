@@ -66,6 +66,25 @@ router.post('/projects/:id/site/publish', authMiddleware, async (req, res) => {
   } catch (err) { sendError(res, err, 'publish'); }
 });
 
+// Adresse au nom du porteur : { hostname } (ex. www.petrin-sonore.fr), ou la retirer
+router.post('/projects/:id/site/domain', authMiddleware, async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.userId !== req.user.id && !isAdminOf(req)) return res.status(403).json({ error: 'Seul le propriétaire du projet peut choisir son adresse.' });
+    await publisher.attachDomain(project.id, req.body?.hostname);
+    res.json(await stateOf(project.id));
+  } catch (err) { sendError(res, err, 'domain'); }
+});
+
+router.delete('/projects/:id/site/domain', authMiddleware, async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.userId !== req.user.id && !isAdminOf(req)) return res.status(403).json({ error: 'Seul le propriétaire du projet peut retirer son adresse.' });
+    await publisher.detachDomain(project.id);
+    res.json(await stateOf(project.id));
+  } catch (err) { sendError(res, err, 'domain delete'); }
+});
+
 // Retirer le site d'Internet
 router.post('/projects/:id/site/unpublish', authMiddleware, async (req, res) => {
   try {
@@ -74,6 +93,45 @@ router.post('/projects/:id/site/unpublish', authMiddleware, async (req, res) => 
     await publisher.unpublish(project.id);
     res.json(await stateOf(project.id));
   } catch (err) { sendError(res, err, 'unpublish'); }
+});
+
+// Chemin C : « Télécharger mon site » — tout le site dans un fichier .zip, prêt à déposer chez
+// l'hébergeur de son choix, avec un mode d'emploi (le porteur n'est jamais prisonnier de BlabIA)
+const LISEZMOI = name => `${name} — votre site, prêt à mettre en ligne
+${'='.repeat(Math.min(60, name.length + 34))}
+
+Ce dossier contient tout votre site : des pages (.html), le style (.css) et les images.
+Il n'a besoin de rien d'autre : pas de base de données, pas d'installation.
+
+Pour le mettre en ligne chez l'hébergeur de votre choix, déposez TOUS ces fichiers, tels quels,
+à la racine de votre espace (le fichier index.html doit être au premier niveau) :
+
+- Hébergement web OVHcloud, Gandi, o2switch… : dans l'espace client, « Gestionnaire de fichiers »
+  (ou un logiciel de transfert comme FileZilla), dossier « www » ou « public_html ».
+- Cloudflare Pages : « Workers et Pages » > « Créer » > « Pages » > « Charger des ressources »,
+  puis glissez ce dossier.
+- Netlify : « Add new site » > « Deploy manually », puis glissez ce dossier.
+
+Votre adresse (par exemple www.mon-site.fr) se règle ensuite chez l'hébergeur.
+Avant de publier, complétez la page des mentions légales (votre nom, votre adresse, l'hébergeur).
+
+Fichier préparé par BlabIA le ${new Date().toLocaleDateString('fr-FR')}.
+`;
+
+router.get('/projects/:id/site/download', authMiddleware, async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    const files = await site.readyFiles(project.id);
+    if (!files) return res.status(404).json({ error: 'Votre site n’est pas encore construit.' });
+    const JSZip = require('jszip');
+    const zip = new JSZip();
+    for (const f of files) zip.file(f.path, f.content);
+    zip.file('LISEZMOI.txt', LISEZMOI(project.name));
+    const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const name = `${publisher.slugify(project.name)}-site`;
+    res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${name}.zip"` });
+    res.send(buffer);
+  } catch (err) { sendError(res, err, 'download'); }
 });
 
 // « Construire mon site » (ou reconstruire après des changements du dossier)

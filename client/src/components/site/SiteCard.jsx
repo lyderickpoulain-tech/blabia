@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Clock, ExternalLink, Globe, RotateCcw, Rocket, Wand2 } from 'lucide-react';
+import { Clock, Download, ExternalLink, Globe, RotateCcw, Rocket, Wand2 } from 'lucide-react';
+import { downloadFile } from '../../utils/download';
 import { Button, Card, SectionLabel } from '../ui';
 import Markdown from '../Markdown';
 import api from '../../utils/api';
@@ -24,6 +25,75 @@ function elapsed(from, now) {
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')}`;
 }
 
+// Adresse au nom du porteur. Il achète son nom chez le vendeur de son choix et ajoute une ligne
+// que BlabIA lui dicte ; BlabIA vérifie, active le certificat, et le site y répond.
+const SELLERS = [
+  ['OVHcloud', 'Espace client › « Noms de domaine » › votre nom › « Zone DNS » › « Ajouter une entrée » › « CNAME ». Pour l’adresse courte : onglet « Redirection » › vers l’adresse en www.'],
+  ['Gandi', '« Noms de domaine » › votre nom › « Enregistrements DNS » › « Ajouter » › type « CNAME ». Pour l’adresse courte : « Redirections web » › vers l’adresse en www.'],
+  ['Cloudflare', '« Domaines » › votre nom › « DNS » › « Ajouter un enregistrement » › type « CNAME », et décochez le nuage orange (« DNS uniquement »). Pour l’adresse courte : « Règles » › « Règles de redirection » › vers l’adresse en www.'],
+  ['Autre vendeur', 'Cherchez « zone DNS » ou « enregistrements DNS » dans votre espace client, ajoutez un enregistrement de type CNAME, puis une redirection de l’adresse courte vers l’adresse en www.'],
+];
+
+function OwnDomain({ projectId, pub, onChanged, isDemo }) {
+  const [host, setHost] = useState('');
+  const [busy, setBusy] = useState(false);
+  const d = pub.customDomain;
+  const call = async (method, body, message) => {
+    setBusy(true);
+    try { const { data } = await api[method](`/projects/${projectId}/site/domain`, method === 'delete' ? undefined : body); onChanged(data); }
+    catch (err) { notifyError(err, message); }
+    setBusy(false);
+  };
+  if (!d) {
+    return (
+      <details className="text-sm">
+        <summary className="cursor-pointer font-semibold text-ink-soft">Utiliser une adresse à votre nom (par exemple www.mon-site.fr)</summary>
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-ink-muted">Achetez d’abord votre nom chez le vendeur de votre choix (OVHcloud, Gandi, Cloudflare… ; comptez environ 10 € par an). Puis indiquez-le ici : BlabIA vous dira la ligne à ajouter chez ce vendeur.</p>
+          <div className="flex flex-wrap gap-2">
+            <label htmlFor="own-domain" className="sr-only">Votre adresse</label>
+            <input id="own-domain" value={host} onChange={e => setHost(e.target.value)} placeholder="www.mon-site.fr"
+              className="min-w-0 flex-1 px-2.5 py-1.5 border border-line rounded-lg text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action" />
+            <Button size="sm" variant="secondary" onClick={() => call('post', { hostname: host }, 'Cette adresse n’a pas pu être enregistrée')} disabled={!host.trim() || busy || isDemo}>Utiliser cette adresse</Button>
+          </div>
+        </div>
+      </details>
+    );
+  }
+  if (d.status === 'active') {
+    return (
+      <p className="text-sm text-ink">
+        Votre adresse à votre nom fonctionne : <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-bold text-action underline break-all">{d.url}</a>{' '}
+        <button type="button" onClick={() => call('delete', null, 'L’adresse n’a pas pu être retirée')} disabled={busy} className="text-xs text-ink-muted underline">Ne plus l’utiliser</button>
+      </p>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-await-border bg-await-bg p-3 space-y-2 text-sm" data-tour="pw-site-domain">
+      <p className="font-bold text-ink">Dernière étape pour {d.hostname}</p>
+      <p className="text-ink-soft">Chez le vendeur de votre nom, ajoutez cette ligne :</p>
+      <div className="overflow-x-auto">
+        <table className="text-sm border border-line bg-white rounded-lg">
+          <thead><tr className="text-left text-xs text-ink-muted"><th className="px-3 py-1.5">Type</th><th className="px-3 py-1.5">Nom</th><th className="px-3 py-1.5">Cible (ou valeur)</th></tr></thead>
+          <tbody><tr className="font-mono"><td className="px-3 py-1.5">{d.record.type}</td><td className="px-3 py-1.5">{d.record.name}</td><td className="px-3 py-1.5">{d.record.target}</td></tr></tbody>
+        </table>
+      </div>
+      <p className="text-ink-soft">Et pour que <strong>{d.apex}</strong> (sans www) fonctionne aussi, demandez à ce vendeur une redirection de {d.apex} vers https://{d.hostname}.</p>
+      <details>
+        <summary className="cursor-pointer font-semibold text-ink-soft">Où cliquer, selon votre vendeur</summary>
+        <ul className="mt-2 space-y-1.5">
+          {SELLERS.map(([name, how]) => <li key={name}><strong>{name} :</strong> {how}</li>)}
+        </ul>
+      </details>
+      <p className="text-xs text-ink-muted">BlabIA vérifie tout seul. Selon le vendeur, cela prend de quelques minutes à quelques heures ; cette page vous dira quand c’est prêt.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={() => onChanged(null)} disabled={busy}>Vérifier maintenant</Button>
+        <button type="button" onClick={() => call('delete', null, 'L’adresse n’a pas pu être retirée')} disabled={busy} className="text-xs text-ink-muted underline">Annuler cette adresse</button>
+      </div>
+    </div>
+  );
+}
+
 // Lot 3 : mettre le site en ligne, à une adresse du type « mon-site.sites-blabia.com »
 function Publication({ projectId, pub, onChanged, isDemo }) {
   const [slug, setSlug] = useState(pub.suggestedSlug || '');
@@ -42,6 +112,7 @@ function Publication({ projectId, pub, onChanged, isDemo }) {
         <p className="text-sm font-bold text-ink flex items-center gap-1.5"><Rocket size={15} className="text-ok" aria-hidden="true" /> Votre site est en ligne</p>
         <a href={pub.url} target="_blank" rel="noopener noreferrer" className="block text-[15px] font-bold text-action underline break-all">{pub.url}</a>
         <p className="text-xs text-ink-muted">Tout le monde peut le voir à cette adresse. Google le découvrira : son plan lui est déjà préparé.</p>
+        <OwnDomain projectId={projectId} pub={pub} onChanged={onChanged} isDemo={isDemo} />
         <div className="flex flex-wrap items-center gap-2">
           {!pub.upToDate && <Button size="sm" variant="primary" onClick={() => call('publish', {}, 'La mise à jour n’a pas pu se faire')} disabled={busy || isDemo}>Mettre en ligne la dernière version</Button>}
           {confirmOff ? (
@@ -162,7 +233,14 @@ export default function SiteCard({ projectId, dossierVersion, isDemo }) {
               <Wand2 size={15} aria-hidden="true" /> Retoucher le site
             </Button>
           </div>
-          {site.publication && <Publication projectId={projectId} pub={site.publication} onChanged={setSite} isDemo={isDemo} />}
+          {site.publication && <Publication projectId={projectId} pub={site.publication} onChanged={data => (data ? setSite(data) : load().catch(() => {}))} isDemo={isDemo} />}
+          <p className="text-sm">
+            <button type="button" onClick={() => downloadFile(`/projects/${projectId}/site/download`, 'mon-site.zip').catch(err => notifyError(err, 'Le téléchargement n’a pas pu se faire'))}
+              className="inline-flex items-center gap-1.5 font-semibold text-action hover:underline">
+              <Download size={15} aria-hidden="true" /> Télécharger mon site
+            </button>
+            <span className="block text-xs text-ink-muted">Pour le mettre en ligne ailleurs, où vous voulez : tout le site dans un fichier, avec le mode d’emploi.</span>
+          </p>
           {newerDossier && (
             <p className="text-sm text-ink-soft">
               Votre dossier a changé depuis la construction du site.{' '}

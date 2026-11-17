@@ -127,6 +127,87 @@ async function ensureInfra() {
   return state;
 }
 
+// ── Adresse au nom du porteur (chemins A et B) ───────────────────────────────
+// Le porteur achète son nom où il veut et ajoute UNE ligne (CNAME www → fallback.<domaine>) chez
+// son vendeur ; BlabIA déclare l'adresse à Cloudflare (Cloudflare for SaaS : certificat
+// automatique), et le programme sert le site quand on le demande à cette adresse.
+const FALLBACK = () => `fallback.${config().domain}`;
+
+async function ensureSaas() {
+  const infra = await ensureInfra();
+  if (infra.saasOk) return infra;
+  const zone = await zoneId(config().domain);
+  const { result } = await cf('GET', `/zones/${zone}/dns_records?name=${encodeURIComponent(FALLBACK())}`);
+  if (!result?.length) await cf('POST', `/zones/${zone}/dns_records`, { json: { type: 'AAAA', name: FALLBACK(), content: '100::', proxied: true, comment: 'BlabIA + : adresses des porteurs' } });
+  try {
+    await cf('PUT', `/zones/${zone}/custom_hostnames/fallback_origin`, { json: { origin: FALLBACK() } });
+  } catch (err) {
+    if (/\b1404\b|quota/i.test(err.message)) throw new PublishError('Les adresses à votre nom ne sont pas encore ouvertes dans BlabIA.', 503);
+    throw err;
+  }
+  // Les visites à une adresse de porteur arrivent aussi au programme
+  const routes = (await cf('GET', `/zones/${zone}/workers/routes`)).result || [];
+  if (!routes.some(r => r.pattern === '*/*')) await cf('POST', `/zones/${zone}/workers/routes`, { json: { pattern: '*/*', script: SCRIPT } });
+  infra.saasOk = true;
+  infra.zoneId = zone;
+  await saveSetting('sites.cloudflare', infra);
+  return infra;
+}
+
+// « petrin-sonore.fr » → « www.petrin-sonore.fr » : une adresse courte ne peut pas recevoir de
+// CNAME chez la plupart des vendeurs ; elle renverra vers le www (redirection chez le vendeur)
+function normalizeHostname(raw) {
+  let h = String(raw || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/\.$/, '');
+  if (!/^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(h)) return null;
+  if (h.split('.').length === 2) h = `www.${h}`;
+  return h;
+}
+
+async function attachDomain(projectId, raw) {
+  const pub = await db('SitePublication').where({ projectId }).first();
+  if (!pub || pub.status !== 'online') throw new PublishError('Mettez d’abord votre site en ligne.', 409);
+  const hostname = normalizeHostname(raw);
+  if (!hostname) throw new PublishError('Cette adresse n’est pas valable. Exemple : www.mon-site.fr', 400);
+  const { domain } = config();
+  if (hostname === domain || hostname.endsWith(`.${domain}`)) throw new PublishError('Choisissez une adresse à vous, pas une adresse de BlabIA.', 400);
+  const taken = await db('SitePublication').where({ customHostname: hostname }).whereNot({ projectId }).first('id');
+  if (taken) throw new PublishError('Cette adresse est déjà utilisée par un autre site.', 409);
+  if (pub.customHostnameId) await detachDomain(projectId, { keepState: true });
+  const infra = await ensureSaas();
+  const { result } = await cf('POST', `/zones/${infra.zoneId}/custom_hostnames`, {
+    json: { hostname, ssl: { method: 'http', type: 'dv', settings: { min_tls_version: '1.2' } } },
+  });
+  await cf('PUT', `/accounts/${config().account}/storage/kv/namespaces/${infra.namespaceId}/values/${encodeURIComponent(`host:${hostname}`)}`, { body: pub.slug, headers: { 'Content-Type': 'text/plain' } });
+  await db('SitePublication').where({ id: pub.id }).update({ customHostname: hostname, customHostnameId: result.id, customStatus: 'pending' });
+  return publicationState(projectId, { refresh: false });
+}
+
+async function detachDomain(projectId, { keepState = false } = {}) {
+  const pub = await db('SitePublication').where({ projectId }).first();
+  if (!pub?.customHostnameId) { if (keepState) return null; throw new PublishError('Votre site n’a pas d’adresse à votre nom.', 409); }
+  const infra = await ensureSaas();
+  await cf('DELETE', `/zones/${infra.zoneId}/custom_hostnames/${pub.customHostnameId}`).catch(err => { if (!/\b404\b|not found/i.test(err.message)) throw err; });
+  await cf('DELETE', `/accounts/${config().account}/storage/kv/namespaces/${infra.namespaceId}/values/${encodeURIComponent(`host:${pub.customHostname}`)}`).catch(() => {});
+  await db('SitePublication').where({ id: pub.id }).update({ customHostname: null, customHostnameId: null, customStatus: null });
+  return keepState ? null : publicationState(projectId, { refresh: false });
+}
+
+// État de l'adresse chez Cloudflare : active quand la ligne est en place et le certificat émis
+async function refreshDomain(pub) {
+  if (!pub?.customHostnameId || pub.customStatus === 'active') return pub;
+  try {
+    const infra = await ensureSaas();
+    const { result } = await cf('GET', `/zones/${infra.zoneId}/custom_hostnames/${pub.customHostnameId}`);
+    const status = result?.status === 'active' && result?.ssl?.status === 'active' ? 'active'
+      : /blocked|moved|deleted/.test(result?.status || '') ? 'failed' : 'pending';
+    if (status !== pub.customStatus) await db('SitePublication').where({ id: pub.id }).update({ customStatus: status });
+    return { ...pub, customStatus: status };
+  } catch (err) {
+    console.error('[site/domaine]', err.message);
+    return pub;
+  }
+}
+
 // ── Adresse du site ──────────────────────────────────────────────────────────
 function slugify(name) {
   return String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -215,8 +296,9 @@ async function unpublish(projectId) {
   return publicationState(projectId);
 }
 
-async function publicationState(projectId) {
-  const pub = await db('SitePublication').where({ projectId }).first();
+async function publicationState(projectId, { refresh = true } = {}) {
+  let pub = await db('SitePublication').where({ projectId }).first();
+  if (refresh && pub?.status === 'online') pub = await refreshDomain(pub);
   const ready = await db('SiteBuild').where({ projectId, status: 'ready' }).orderBy('createdAt', 'desc').first('id');
   const project = await db('Project').where({ id: projectId }).first('name');
   return {
@@ -228,7 +310,14 @@ async function publicationState(projectId) {
     slug: pub?.slug || null,
     publishedAt: pub?.publishedAt || null,
     upToDate: !!(pub?.status === 'online' && ready && pub.buildId === ready.id),
+    // Adresse au nom du porteur : la ligne à ajouter chez son vendeur, et son état
+    customDomain: pub?.customHostname ? {
+      hostname: pub.customHostname, status: pub.customStatus || 'pending',
+      url: `https://${pub.customHostname}/`,
+      record: { type: 'CNAME', name: pub.customHostname.split('.')[0], fullName: pub.customHostname, target: FALLBACK() },
+      apex: pub.customHostname.replace(/^www\./, ''),
+    } : null,
   };
 }
 
-module.exports = { publish, unpublish, publicationState, ensureInfra, setFetch, PublishError, slugify, validSlug, WORKER };
+module.exports = { attachDomain, detachDomain, normalizeHostname, publish, unpublish, publicationState, ensureInfra, setFetch, PublishError, slugify, validSlug, WORKER };

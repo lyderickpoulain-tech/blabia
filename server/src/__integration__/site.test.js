@@ -141,6 +141,17 @@ describe.skipIf(!harness.enabled)('BlabIA + : le site construit par un agent', (
     expect((await h.request('GET', `/api/apercu/${'0'.repeat(48)}/`)).status).toBe(404);
   });
 
+  it('« Télécharger mon site » : tout le site dans un .zip, avec un mode d’emploi', async () => {
+    const res = await fetch(`${h.base}/api/projects/${pid}/site/download`, { headers: { Authorization: `Bearer ${owner.token}` } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/zip');
+    const JSZip = require('jszip');
+    const zip = await JSZip.loadAsync(Buffer.from(await res.arrayBuffer()));
+    expect(Object.keys(zip.files).sort()).toEqual(['LISEZMOI.txt', 'concerts.html', 'index.html', 'style.css']);
+    expect(await zip.file('LISEZMOI.txt').async('string')).toMatch(/index\.html doit être au premier niveau/);
+    expect((await fetch(`${h.base}/api/projects/${pid}/site/download`)).status).toBe(401);
+  });
+
   it('retouche : repart du site existant, nouvel aperçu ; une seule construction à la fois', async () => {
     expect((await h.request('POST', `/api/projects/${pid}/site/retouch`, { token: owner.token, body: { text: '' } })).status).toBe(400);
     const before = (await getSite()).ready;
@@ -188,6 +199,8 @@ describe.skipIf(!harness.enabled)('BlabIA + : le site construit par un agent', (
 // Lot 3 : mise en ligne sur le compte Cloudflare de BlabIA (API simulée : aucun appel réel)
 describe.skipIf(!harness.enabled)('BlabIA + : mettre le site en ligne', () => {
   let h, owner, other, pid, pub, calls, kv;
+  let saasEnabled = false, hostStatus = 'pending';
+  const hostnames = new Map();
   const ok = result => ({ ok: true, status: 200, json: async () => ({ success: true, result }) });
   function fakeCloudflare(url, init) {
     const u = new URL(url); const p = u.pathname.replace('/client/v4', ''); const m = init.method;
@@ -200,6 +213,11 @@ describe.skipIf(!harness.enabled)('BlabIA + : mettre le site en ligne', () => {
     if (p.endsWith('/workers/routes')) return ok(m === 'GET' ? [] : {});
     if (m === 'PUT' && p.endsWith('/bulk')) { for (const e of JSON.parse(init.body)) kv.set(e.key, e); return ok({}); }
     if (m === 'POST' && p.endsWith('/bulk/delete')) { for (const k of JSON.parse(init.body)) kv.delete(k); return ok({}); }
+    if (p.endsWith('/custom_hostnames/fallback_origin')) return saasEnabled ? ok({}) : { ok: false, status: 403, json: async () => ({ success: false, errors: [{ code: 1404, message: 'No quota has been allocated' }] }) };
+    if (m === 'POST' && p.endsWith('/custom_hostnames')) { hostnames.set('ch_1', JSON.parse(init.body).hostname); return ok({ id: 'ch_1' }); }
+    if (m === 'GET' && p.includes('/custom_hostnames/')) return ok({ status: hostStatus, ssl: { status: hostStatus } });
+    if (m === 'DELETE' && p.includes('/custom_hostnames/')) { hostnames.delete(p.split('/').pop()); return ok({}); }
+    if (p.includes('/values/')) { const key = decodeURIComponent(p.split('/values/')[1]); if (m === 'PUT') kv.set(key, init.body); else kv.delete(key); return ok({}); }
     if (m === 'GET' && p.endsWith('/keys')) { const prefix = u.searchParams.get('prefix'); return { ok: true, status: 200, json: async () => ({ success: true, result: [...kv.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })), result_info: {} }) }; }
     return { ok: false, status: 404, json: async () => ({ success: false, errors: [{ code: 0, message: `inattendu ${m} ${p}` }] }) };
   }
@@ -250,6 +268,30 @@ describe.skipIf(!harness.enabled)('BlabIA + : mettre le site en ligne', () => {
     expect(r.body.publication.url).toBe('https://petrin-sonore.sites-test.com/');
     expect([...kv.keys()].every(k => k.startsWith('petrin-sonore/'))).toBe(true);
     expect(calls.some(c => c.includes('/workers/scripts/'))).toBe(false);
+  });
+
+  it('adresse au nom du porteur : refusée tant que l’option n’est pas activée, puis la ligne à ajouter, puis active', async () => {
+    let r = await h.request('POST', `/api/projects/${pid}/site/domain`, { token: owner.token, body: { hostname: 'petrin-sonore.fr' } });
+    expect(r.status).toBe(503);
+    expect(r.body.error).toMatch(/pas encore ouvertes/);
+    saasEnabled = true;
+    expect((await h.request('POST', `/api/projects/${pid}/site/domain`, { token: owner.token, body: { hostname: 'pas une adresse' } })).status).toBe(400);
+    expect((await h.request('POST', `/api/projects/${pid}/site/domain`, { token: owner.token, body: { hostname: 'x.sites-test.com' } })).status).toBe(400);
+    r = await h.request('POST', `/api/projects/${pid}/site/domain`, { token: owner.token, body: { hostname: 'https://Petrin-Sonore.fr/' } });
+    expect(r.status).toBe(200);
+    expect(r.body.publication.customDomain).toMatchObject({
+      hostname: 'www.petrin-sonore.fr', status: 'pending', apex: 'petrin-sonore.fr',
+      record: { type: 'CNAME', name: 'www', target: 'fallback.sites-test.com' },
+    });
+    expect(kv.get('host:www.petrin-sonore.fr')).toBe('petrin-sonore');
+    expect(calls).toEqual(expect.arrayContaining(['POST /zones/zone_1/workers/routes']));
+    hostStatus = 'active';
+    r = await h.request('GET', `/api/projects/${pid}/site`, { token: owner.token });
+    expect(r.body.publication.customDomain).toMatchObject({ status: 'active', url: 'https://www.petrin-sonore.fr/' });
+    r = await h.request('DELETE', `/api/projects/${pid}/site/domain`, { token: owner.token });
+    expect(r.body.publication.customDomain).toBeNull();
+    expect(kv.has('host:www.petrin-sonore.fr')).toBe(false);
+    expect(hostnames.size).toBe(0);
   });
 
   it('seul le propriétaire met en ligne ou retire ; retirer vide l’adresse', async () => {

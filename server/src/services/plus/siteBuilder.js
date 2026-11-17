@@ -38,6 +38,7 @@ CONTRAINTES :
 - N'invente rien qui n'est pas dans le dossier : ni adresse de site, ni numéro, ni prix, ni date. Ce qui manque reste absent, ou s'affiche comme « à venir », et figure dans le rapport.
 - Ce que le dossier marque « à vérifier » reste, avec un commentaire HTML pour le porteur (pas à l'écran).
 - Adapté au téléphone, accessible (contrastes, textes alternatifs, navigation au clavier), en français.
+- Pages légales : une page « Mentions légales » conforme à la loi pour la confiance dans l'économie numérique (éditeur, directeur de la publication, hébergeur) ; une politique de confidentialité si le site recueille des données (formulaire) ; des conditions générales de vente avec le droit de rétractation de 14 jours si le site vend. Ce que le dossier ne donne pas (nom, adresse, numéro d'entreprise) reste visiblement « à compléter », et figure dans le rapport.
 - Référencement : chaque page a un <title> et une <meta name="description"> propres, des balises Open Graph (og:title, og:description, og:type), un seul <h1> ; un fichier robots.txt qui autorise tout ; des données structurées JSON-LD quand le dossier s'y prête (événements pour des concerts, organisation ou personne). Le plan du site (sitemap) sera produit à la mise en ligne, quand l'adresse sera connue.
 
 LIVRAISON : tout le site dans ${OUTPUTS} (index.html à la racine, rien d'autre que le site et le rapport). Avant de finir, vérifie toi-même : chaque lien interne mène à un fichier existant, aucune ressource externe, HTML bien formé (un petit script Python suffit, que tu ne livres pas). Termine par ${OUTPUTS}${REPORT}, en français courant pour le porteur : les pages faites, ce que tu as dû supposer, ce qui reste à faire par lui. Sois économe : pas de relectures inutiles.`;
@@ -286,4 +287,10 @@ async function previewFile(token, name) {
   return db('SiteFile').where({ buildId: build.id, path }).first('path', 'contentType', 'content');
 }
 
-module.exports = { startBuild, startRetouch, siteState, previewFile, setClient, SiteError, MODEL, SYSTEM, safeName };
+// Fichiers de la dernière construction prête (téléchargement, mise en ligne ailleurs)
+async function readyFiles(projectId) {
+  const ready = await latestReady(projectId);
+  return ready ? db('SiteFile').where({ buildId: ready.id }).orderBy('path').select('path', 'contentType', 'content') : null;
+}
+
+module.exports = { readyFiles, startBuild, startRetouch, siteState, previewFile, setClient, SiteError, MODEL, SYSTEM, safeName };

@@ -129,7 +129,7 @@ describe.skipIf(!harness.enabled)('v6 phase 2 : la réunion améliore le projet'
 
   it('le porteur parle librement ; chaque assistant répond une fois, celui qu’il nomme d’abord', async () => {
     const calls = h.ai.calls.length;
-    agentDelay = 80;
+    agentDelay = 300; // marge : la seconde demande doit arriver pendant que l'équipe parle
     expect((await post(`/api/projects/${pid}/sessions/${sid}/review/message`, { text: 'Je voudrais un dé en forme de volcan. Qu’en pense Expert ?' })).status).toBe(202);
     expect((await post(`/api/projects/${pid}/sessions/${sid}/review/message`, { text: 'Et aussi…' })).status).toBe(409); // l'équipe parle encore
     const s = await waitRound();
@@ -265,5 +265,15 @@ describe.skipIf(!harness.enabled)('v6 phase 2 : la réunion améliore le projet'
     expect(w.proposal).toMatchObject({ origin: 'retouch' });
     expect(h.ai.calls.at(-1).messages[0].content).toContain('un plateau de 50 cases');
     expect((await post(`/api/projects/${pid}/assistant/${r.body.reply.id}/retouch`)).status).toBe(404); // déjà faite
+  });
+
+  it('un dossier de site est relu par le Rédacteur, le Critique et le Juriste, même ajouté après la création du projet', async () => {
+    await h.db('Agent').insert({ id: crypto.randomUUID(), name: 'Juriste', role: 'Ce qui est obligatoire', systemPrompt: 'Tu es Juriste.', isDefault: true, createdAt: new Date() });
+    builderReply = FIRST.replace('<gabarit>jeu</gabarit>', '<gabarit>site</gabarit>');
+    const siteId = (await post('/api/projects/from-story', { story: 'Un site pour partager mes disques préférés et les concerts de Rennes.' })).body.id;
+    for (let i = 0; i < 100; i++) { if ((await get(`/api/projects/${siteId}/work`)).body.current) break; await new Promise(r => setTimeout(r, 50)); }
+    const r = await post(`/api/projects/${siteId}/work/review`);
+    const s = (await get(`/api/projects/${siteId}/sessions/${r.body.sessionId}/review`)).body;
+    expect(s.agents.map(a => a.name)).toEqual(['Rédacteur', 'Critique', 'Juriste']);
   });
 });

@@ -60,20 +60,20 @@ registerGenre({
       label: 'Commerce ou entreprise',
       when: 'un commerce, une entreprise, une activité à lancer ou à développer',
       parts: ['L’offre et la clientèle', 'Ce qui vous distingue', 'Les chiffres du lancement', 'Le plan de lancement', 'Les démarches'],
-      reviewers: ['Stratège', 'Analyste', 'Créatif'],
+      reviewers: ['Stratège', 'Analyste', 'Juriste'],
     },
     association: {
       label: 'Association',
       when: 'une association à créer ou à faire vivre',
       parts: ['L’objet et les membres', 'Le fonctionnement', 'Les statuts (projet)', 'Les démarches', 'Le budget de la première année', 'Les premières actions'],
-      reviewers: ['Stratège', 'Rédacteur', 'Critique'],
+      reviewers: ['Stratège', 'Rédacteur', 'Juriste'],
     },
     site: {
       label: 'Site ou application (dossier)',
       when: 'un site ou une application à faire réaliser : le dossier qui le décrit, sans le construire',
       parts: ['Le site en bref', 'Pour qui', 'Les pages', 'Les textes', 'Le style', 'Ce qu’il faudra pour le construire'],
       illustration: 'L’allure de la page d’accueil, en un croquis simple (bloc svg).',
-      reviewers: ['Rédacteur', 'Créatif', 'Critique'],
+      reviewers: ['Rédacteur', 'Critique', 'Juriste'],
     },
     autre: {
       label: 'Projet',

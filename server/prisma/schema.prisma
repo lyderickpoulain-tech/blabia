@@ -613,6 +613,9 @@ model SitePublication {
   buildId     String?
   status      String     @default("online") // online | offline
   publishedAt DateTime?
+  customHostname   String? @unique // v6 : adresse au nom du porteur (ex. www.petrin-sonore.fr)
+  customHostnameId String?
+  customStatus     String? // pending | active | failed (état chez l'hébergeur)
   createdBy   String?
   createdAt   DateTime   @default(now())
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)

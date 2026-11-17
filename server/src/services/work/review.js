@@ -42,6 +42,10 @@ async function reviewers(projectId, work) {
     .orderBy('ProjectAgent.displayOrder').select('Agent.id', 'Agent.name', 'Agent.role', 'Agent.emoji', 'Agent.systemPrompt');
   if (!rows.length) rows = await db('Agent').where({ isDefault: true }).orderBy('createdAt').select('id', 'name', 'role', 'emoji', 'systemPrompt');
   const wanted = templateOf(work.genre, work.template).reviewers || [];
+  // Un assistant prévu pour ce genre de dossier mais absent du projet (ajouté depuis, comme le
+  // Juriste) est pris parmi les assistants par défaut
+  const missing = wanted.filter(n => !rows.some(r => r.name === n));
+  if (missing.length) rows = [...rows, ...await db('Agent').whereIn('name', missing).where({ isDefault: true }).select('id', 'name', 'role', 'emoji', 'systemPrompt')];
   const picked = wanted.map(n => rows.find(r => r.name === n)).filter(Boolean);
   for (const r of rows) if (picked.length < MAX_AGENTS && !picked.includes(r)) picked.push(r);
   return picked.slice(0, MAX_AGENTS);
