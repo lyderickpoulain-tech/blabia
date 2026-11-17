@@ -4,12 +4,13 @@ const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const { findProject } = require('../utils/projectHelpers');
 const site = require('../services/plus/siteBuilder');
+const publisher = require('../services/plus/sitePublisher');
 
 const router = express.Router();
 const isAdminOf = req => ['admin', 'supervisor'].includes(req.user.role);
 
 const sendError = (res, err, where) => {
-  if (err instanceof site.SiteError) return res.status(err.status).json({ error: err.message });
+  if (err instanceof site.SiteError || err instanceof publisher.PublishError) return res.status(err.status).json({ error: err.message });
   console.error(`[site ${where}]`, err.message);
   return res.status(500).json({ error: 'Erreur serveur' });
 };
@@ -47,8 +48,32 @@ async function projectOr404(req, res) {
 router.get('/projects/:id/site', authMiddleware, async (req, res) => {
   try {
     const project = await projectOr404(req, res); if (!project) return;
-    res.json(await site.siteState(project.id));
+    res.json(await stateOf(project.id));
   } catch (err) { sendError(res, err, 'GET'); }
+});
+
+// État complet : constructions et mise en ligne
+const stateOf = async projectId => ({ ...(await site.siteState(projectId)), publication: await publisher.publicationState(projectId) });
+
+// « Mettre en ligne » (ou mettre à jour le site en ligne) : { slug } facultatif, l'adresse choisie
+router.post('/projects/:id/site/publish', authMiddleware, async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
+    if (project.userId !== req.user.id && !isAdminOf(req)) return res.status(403).json({ error: 'Seul le propriétaire du projet peut mettre son site en ligne.' });
+    await publisher.publish(project.id, req.user.id, { slug: req.body?.slug ? String(req.body.slug) : undefined });
+    res.json(await stateOf(project.id));
+  } catch (err) { sendError(res, err, 'publish'); }
+});
+
+// Retirer le site d'Internet
+router.post('/projects/:id/site/unpublish', authMiddleware, async (req, res) => {
+  try {
+    const project = await projectOr404(req, res); if (!project) return;
+    if (project.userId !== req.user.id && !isAdminOf(req)) return res.status(403).json({ error: 'Seul le propriétaire du projet peut retirer son site.' });
+    await publisher.unpublish(project.id);
+    res.json(await stateOf(project.id));
+  } catch (err) { sendError(res, err, 'unpublish'); }
 });
 
 // « Construire mon site » (ou reconstruire après des changements du dossier)
@@ -57,7 +82,7 @@ router.post('/projects/:id/site/build', authMiddleware, async (req, res) => {
     const project = await projectOr404(req, res); if (!project) return;
     if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
     await site.startBuild(project.id, req.user.id);
-    res.status(202).json(await site.siteState(project.id));
+    res.status(202).json(await stateOf(project.id));
   } catch (err) { sendError(res, err, 'build'); }
 });
 
@@ -67,7 +92,7 @@ router.post('/projects/:id/site/retouch', authMiddleware, async (req, res) => {
     const project = await projectOr404(req, res); if (!project) return;
     if (project.isDemo) return res.status(400).json({ error: 'Indisponible sur le projet exemple.' });
     await site.startRetouch(project.id, req.user.id, req.body?.text);
-    res.status(202).json(await site.siteState(project.id));
+    res.status(202).json(await stateOf(project.id));
   } catch (err) { sendError(res, err, 'retouch'); }
 });
 

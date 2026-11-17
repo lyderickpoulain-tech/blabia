@@ -127,6 +127,7 @@ model Project {
   missions      AgentMission[]
   devTasks      DevTask[]
   siteBuilds    SiteBuild[]
+  sitePublication SitePublication?
 }
 
 model ProjectAgent {
@@ -587,6 +588,7 @@ model SiteBuild {
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   work         Work       @relation(fields: [workId], references: [id], onDelete: Cascade)
   files        SiteFile[]
+  publications SitePublication[]
 
   @@index([projectId, createdAt])
 }
@@ -601,4 +603,18 @@ model SiteFile {
   build       SiteBuild @relation(fields: [buildId], references: [id], onDelete: Cascade)
 
   @@unique([buildId, path])
+}
+
+// BlabIA + : le site en ligne d'un projet (sous-domaine de SITES_DOMAIN)
+model SitePublication {
+  id          String     @id @default(uuid())
+  projectId   String     @unique
+  slug        String     @unique
+  buildId     String?
+  status      String     @default("online") // online | offline
+  publishedAt DateTime?
+  createdBy   String?
+  createdAt   DateTime   @default(now())
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  build       SiteBuild? @relation(fields: [buildId], references: [id], onDelete: SetNull)
 }

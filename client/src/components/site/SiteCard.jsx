@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Clock, ExternalLink, Globe, RotateCcw, Wand2 } from 'lucide-react';
+import { Clock, ExternalLink, Globe, RotateCcw, Rocket, Wand2 } from 'lucide-react';
 import { Button, Card, SectionLabel } from '../ui';
 import Markdown from '../Markdown';
 import api from '../../utils/api';
@@ -22,6 +22,56 @@ const STAGES = {
 function elapsed(from, now) {
   const s = Math.max(0, Math.round((now - new Date(from).getTime()) / 1000));
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')}`;
+}
+
+// Lot 3 : mettre le site en ligne, à une adresse du type « mon-site.sites-blabia.com »
+function Publication({ projectId, pub, onChanged, isDemo }) {
+  const [slug, setSlug] = useState(pub.suggestedSlug || '');
+  const [busy, setBusy] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
+  if (!pub.available) return null;
+  const call = async (path, body, message) => {
+    setBusy(true);
+    try { const { data } = await api.post(`/projects/${projectId}/site/${path}`, body); onChanged(data); setConfirmOff(false); }
+    catch (err) { notifyError(err, message); }
+    setBusy(false);
+  };
+  if (pub.online) {
+    return (
+      <div className="rounded-xl border border-ok-border bg-ok-light/50 p-3 space-y-2" data-tour="pw-site-online">
+        <p className="text-sm font-bold text-ink flex items-center gap-1.5"><Rocket size={15} className="text-ok" aria-hidden="true" /> Votre site est en ligne</p>
+        <a href={pub.url} target="_blank" rel="noopener noreferrer" className="block text-[15px] font-bold text-action underline break-all">{pub.url}</a>
+        <p className="text-xs text-ink-muted">Tout le monde peut le voir à cette adresse. Google le découvrira : son plan lui est déjà préparé.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {!pub.upToDate && <Button size="sm" variant="primary" onClick={() => call('publish', {}, 'La mise à jour n’a pas pu se faire')} disabled={busy || isDemo}>Mettre en ligne la dernière version</Button>}
+          {confirmOff ? (
+            <>
+              <span className="text-xs font-semibold text-ink">Retirer le site d’Internet ?</span>
+              <Button size="sm" variant="danger" onClick={() => call('unpublish', {}, 'Le site n’a pas pu être retiré')} disabled={busy}>Oui, le retirer</Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmOff(false)}>Non</Button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmOff(true)} className="text-xs font-semibold text-ink-muted hover:text-ink underline">Retirer d’Internet</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-line p-3 space-y-2">
+      <p className="text-sm font-bold text-ink">Mettre votre site sur Internet</p>
+      <label htmlFor="site-slug" className="block text-xs text-ink-muted">Son adresse (vous pourrez avoir plus tard une adresse à votre nom) :</label>
+      <div className="flex flex-wrap items-center gap-1 text-sm">
+        <span className="text-ink-muted">https://</span>
+        <input id="site-slug" value={slug} onChange={e => setSlug(e.target.value.toLowerCase())} maxLength={40}
+          className="min-w-0 flex-1 px-2 py-1.5 border border-line rounded-lg text-sm text-ink bg-white outline-none focus:ring-2 focus:ring-action" />
+        <span className="text-ink-muted">.{pub.domain}</span>
+      </div>
+      <Button size="sm" variant="primary" onClick={() => call('publish', { slug }, 'Le site n’a pas pu être mis en ligne')} disabled={!slug.trim() || busy || isDemo}>
+        <Rocket size={15} aria-hidden="true" /> Mettre mon site en ligne
+      </Button>
+    </div>
+  );
 }
 
 export default function SiteCard({ projectId, dossierVersion, isDemo }) {
@@ -88,11 +138,14 @@ export default function SiteCard({ projectId, dossierVersion, isDemo }) {
       {ready && !building && (
         <div className="space-y-3">
           <p className="text-[15px] text-ink">
-            {last?.id === ready.id && ready.kind === 'retouch' ? `Retouche faite : « ${ready.request} ».` : 'Votre site est prêt.'} Ouvrez-le, sur votre ordinateur ou sur votre téléphone : c’est une adresse d’essai, que vous seul connaissez.
+            {last?.id === ready.id && ready.kind === 'retouch' ? `Retouche faite : « ${ready.request} ».` : 'Votre site est prêt.'}{' '}
+            {site.publication?.online
+              ? 'Chaque retouche s’essaie d’abord ici, à une adresse que vous seul connaissez ; vous la mettez ensuite en ligne.'
+              : 'Ouvrez-le, sur votre ordinateur ou sur votre téléphone : c’est une adresse d’essai, que vous seul connaissez.'}
           </p>
           <a href={ready.previewPath} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-[10px] font-bold bg-action text-white hover:bg-action-dark">
-            <ExternalLink size={16} aria-hidden="true" /> Voir mon site
+            <ExternalLink size={16} aria-hidden="true" /> {site.publication?.online ? 'Voir la version d’essai' : 'Voir mon site'}
           </a>
           {ready.report && (
             <details className="text-sm">
@@ -109,6 +162,7 @@ export default function SiteCard({ projectId, dossierVersion, isDemo }) {
               <Wand2 size={15} aria-hidden="true" /> Retoucher le site
             </Button>
           </div>
+          {site.publication && <Publication projectId={projectId} pub={site.publication} onChanged={setSite} isDemo={isDemo} />}
           {newerDossier && (
             <p className="text-sm text-ink-soft">
               Votre dossier a changé depuis la construction du site.{' '}

@@ -24,7 +24,7 @@ const SCREENS = [
   'client/src/components/site/SiteCard.jsx', // BlabIA + : construction du site
 ];
 // Messages renvoyés à l'écran par le serveur v6
-const SERVER = ['server/src/routes/work.js', 'server/src/services/work/builder.js', 'server/src/services/work/review.js', 'server/src/routes/site.js', 'server/src/services/plus/siteBuilder.js'];
+const SERVER = ['server/src/routes/work.js', 'server/src/services/work/builder.js', 'server/src/services/work/review.js', 'server/src/routes/site.js', 'server/src/services/plus/siteBuilder.js', 'server/src/services/plus/sitePublisher.js'];
 
 const FORBIDDEN = [
   /\bgithub\b/i, /\bclaude\b/i, /\brailway\b/i, /\bAPI\b/, /\bsonnet\b/i, /\bopus\b/i, /\bhaiku\b/i, /\bfable\b/i,
@@ -51,7 +51,7 @@ function visibleTexts(source) {
 }
 
 // Serveur : seulement les messages renvoyés à l'écran (« error: '…' », « new BuildError('…') »)
-const MESSAGE = /(?:error:\s*|BuildError\(|ReviewError\(|SiteError\(|message = [^?\n]*\?\s*)'((?:[^'\\\n]|\\.)*)'/g;
+const MESSAGE = /(?:error:\s*|BuildError\(|ReviewError\(|SiteError\(|PublishError\(|message = [^?\n]*\?\s*)'((?:[^'\\\n]|\\.)*)'/g;
 const serverMessages = source => [...source.matchAll(MESSAGE)].map(m => m[1]);
 
 describe('règle du minimum de technique (v6)', () => {

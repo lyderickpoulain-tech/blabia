@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'module';
+import crypto from 'crypto';
 
 // BlabIA + : construction du site par un agent hébergé (Managed Agents), retouche, aperçu.
 // Le service d'agents d'Anthropic est simulé (setClient) : aucun appel réel, aucun coût.
@@ -100,7 +101,7 @@ describe.skipIf(!harness.enabled)('BlabIA + : le site construit par un agent', (
       await new Promise(r => setTimeout(r, 50));
     }
   });
-  afterAll(async () => { site?.setClient(null); h.ai.responder = null; await h?.stop(); });
+  afterAll(async () => { site?.setClient(null); h.ai.responder = null; }); // base fermée à la fin du fichier (bloc suivant)
 
   it('« Construire mon site » : session plafonnée, dossier fourni, site conservé, coût journalisé', async () => {
     expect((await getSite()).last).toBeNull();
@@ -181,5 +182,81 @@ describe.skipIf(!harness.enabled)('BlabIA + : le site construit par un agent', (
     const other = (await h.request('POST', '/api/projects/from-story', { token: owner.token, body: { story: 'Un jeu de société sur les volcans, pour jouer en famille.' } })).body.id;
     for (let i = 0; i < 100; i++) { if ((await h.request('GET', `/api/projects/${other}/work`, { token: owner.token })).body.current) break; await new Promise(r => setTimeout(r, 50)); }
     expect((await h.request('POST', `/api/projects/${other}/site/build`, { token: owner.token })).status).toBe(400);
+  });
+});
+
+// Lot 3 : mise en ligne sur le compte Cloudflare de BlabIA (API simulée : aucun appel réel)
+describe.skipIf(!harness.enabled)('BlabIA + : mettre le site en ligne', () => {
+  let h, owner, other, pid, pub, calls, kv;
+  const ok = result => ({ ok: true, status: 200, json: async () => ({ success: true, result }) });
+  function fakeCloudflare(url, init) {
+    const u = new URL(url); const p = u.pathname.replace('/client/v4', ''); const m = init.method;
+    calls.push(`${m} ${p}`);
+    if (m === 'GET' && p.endsWith('/storage/kv/namespaces')) return ok([]);
+    if (m === 'POST' && p.endsWith('/storage/kv/namespaces')) return ok({ id: 'ns_1' });
+    if (m === 'PUT' && p.includes('/workers/scripts/')) return ok({});
+    if (m === 'GET' && p === '/zones') return ok([{ id: 'zone_1' }]);
+    if (p.endsWith('/dns_records')) return ok(m === 'GET' ? [] : {});
+    if (p.endsWith('/workers/routes')) return ok(m === 'GET' ? [] : {});
+    if (m === 'PUT' && p.endsWith('/bulk')) { for (const e of JSON.parse(init.body)) kv.set(e.key, e); return ok({}); }
+    if (m === 'POST' && p.endsWith('/bulk/delete')) { for (const k of JSON.parse(init.body)) kv.delete(k); return ok({}); }
+    if (m === 'GET' && p.endsWith('/keys')) { const prefix = u.searchParams.get('prefix'); return { ok: true, status: 200, json: async () => ({ success: true, result: [...kv.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })), result_info: {} }) }; }
+    return { ok: false, status: 404, json: async () => ({ success: false, errors: [{ code: 0, message: `inattendu ${m} ${p}` }] }) };
+  }
+
+  beforeAll(async () => {
+    h = await harness.start();
+    Object.assign(process.env, { CLOUDFLARE_API_TOKEN: 'jeton-de-test', CLOUDFLARE_ACCOUNT_ID: 'compte_test', SITES_DOMAIN: 'sites-test.com' });
+    pub = require('../services/plus/sitePublisher');
+    calls = []; kv = new Map();
+    pub.setFetch(fakeCloudflare);
+    owner = await h.createUser('member', 'porteur-enligne@test.local');
+    other = await h.createUser('member', 'invite-enligne@test.local');
+    const [p] = await h.db('Project').insert({ id: crypto.randomUUID(), name: 'Le Pétrin Sonore', status: 'active', userId: owner.id, createdAt: new Date(), updatedAt: new Date() }).returning('id');
+    pid = p.id;
+    const workId = crypto.randomUUID();
+    await h.db('Work').insert({ id: workId, projectId: pid, template: 'site', currentVersion: 1 });
+    const buildId = crypto.randomUUID();
+    await h.db('SiteBuild').insert({ id: buildId, projectId: pid, workId, baseVersion: 1, status: 'ready', previewToken: crypto.randomBytes(24).toString('hex'), createdAt: new Date() });
+    await h.db('SiteFile').insert([
+      { id: crypto.randomUUID(), buildId, path: 'index.html', contentType: 'text/html; charset=utf-8', size: 10, content: Buffer.from('<h1>Accueil</h1>') },
+      { id: crypto.randomUUID(), buildId, path: 'concerts.html', contentType: 'text/html; charset=utf-8', size: 10, content: Buffer.from('<h1>Concerts</h1>') },
+      { id: crypto.randomUUID(), buildId, path: 'robots.txt', contentType: 'text/plain; charset=utf-8', size: 10, content: Buffer.from('User-agent: *\nAllow: /\n') },
+    ]);
+    await h.db('ProjectMember').insert({ id: crypto.randomUUID(), projectId: pid, userId: other.id, role: 'member' }).catch(() => {});
+  });
+  afterAll(async () => { pub?.setFetch(null); for (const k of ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SITES_DOMAIN']) delete process.env[k]; await h?.stop(); });
+
+  it('première mise en ligne : installation une fois, adresse tirée du nom, plan du site pour Google', async () => {
+    const before = (await h.request('GET', `/api/projects/${pid}/site`, { token: owner.token })).body.publication;
+    expect(before).toMatchObject({ available: true, online: false, suggestedSlug: 'le-petrin-sonore', domain: 'sites-test.com' });
+    const r = await h.request('POST', `/api/projects/${pid}/site/publish`, { token: owner.token, body: {} });
+    expect(r.status).toBe(200);
+    expect(r.body.publication).toMatchObject({ online: true, url: 'https://le-petrin-sonore.sites-test.com/', upToDate: true });
+    expect(calls).toEqual(expect.arrayContaining(['POST /accounts/compte_test/storage/kv/namespaces', 'PUT /accounts/compte_test/workers/scripts/blabia-sites', 'POST /zones/zone_1/dns_records', 'POST /zones/zone_1/workers/routes']));
+    expect([...kv.keys()].sort()).toEqual(['le-petrin-sonore/concerts.html', 'le-petrin-sonore/index.html', 'le-petrin-sonore/robots.txt', 'le-petrin-sonore/sitemap.xml']);
+    const sitemap = Buffer.from(kv.get('le-petrin-sonore/sitemap.xml').value, 'base64').toString();
+    expect(sitemap).toContain('<loc>https://le-petrin-sonore.sites-test.com/</loc>');
+    expect(sitemap).toContain('<loc>https://le-petrin-sonore.sites-test.com/concerts.html</loc>');
+    expect(Buffer.from(kv.get('le-petrin-sonore/robots.txt').value, 'base64').toString()).toContain('Sitemap: https://le-petrin-sonore.sites-test.com/sitemap.xml');
+    expect(kv.get('le-petrin-sonore/index.html').metadata).toEqual({ ct: 'text/html; charset=utf-8' });
+  });
+
+  it('nouvelle adresse choisie : l’ancienne disparaît ; adresse invalide ou réservée refusée ; installation pas refaite', async () => {
+    calls = [];
+    expect((await h.request('POST', `/api/projects/${pid}/site/publish`, { token: owner.token, body: { slug: 'Le Pétrin' } })).status).toBe(400);
+    expect((await h.request('POST', `/api/projects/${pid}/site/publish`, { token: owner.token, body: { slug: 'admin' } })).status).toBe(400);
+    const r = await h.request('POST', `/api/projects/${pid}/site/publish`, { token: owner.token, body: { slug: 'petrin-sonore' } });
+    expect(r.body.publication.url).toBe('https://petrin-sonore.sites-test.com/');
+    expect([...kv.keys()].every(k => k.startsWith('petrin-sonore/'))).toBe(true);
+    expect(calls.some(c => c.includes('/workers/scripts/'))).toBe(false);
+  });
+
+  it('seul le propriétaire met en ligne ou retire ; retirer vide l’adresse', async () => {
+    expect((await h.request('POST', `/api/projects/${pid}/site/unpublish`, { token: other.token })).status).toBeGreaterThanOrEqual(403);
+    const r = await h.request('POST', `/api/projects/${pid}/site/unpublish`, { token: owner.token });
+    expect(r.body.publication).toMatchObject({ online: false, url: null });
+    expect(kv.size).toBe(0);
+    expect((await h.request('POST', `/api/projects/${pid}/site/unpublish`, { token: owner.token })).status).toBe(409);
   });
 });
