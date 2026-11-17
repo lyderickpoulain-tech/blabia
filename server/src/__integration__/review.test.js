@@ -267,13 +267,14 @@ describe.skipIf(!harness.enabled)('v6 phase 2 : la réunion améliore le projet'
     expect((await post(`/api/projects/${pid}/assistant/${r.body.reply.id}/retouch`)).status).toBe(404); // déjà faite
   });
 
-  it('un dossier de site est relu par le Rédacteur, le Critique et le Juriste, même ajouté après la création du projet', async () => {
+  it('un dossier de site est relu par le Rédacteur, le Juriste et Sécurité, même ajouté après la création du projet', async () => {
     await h.db('Agent').insert({ id: crypto.randomUUID(), name: 'Juriste', role: 'Ce qui est obligatoire', systemPrompt: 'Tu es Juriste.', isDefault: true, createdAt: new Date() });
+    await h.db('Agent').insert({ id: crypto.randomUUID(), name: 'Sécurité', role: 'Protège le projet', systemPrompt: 'Tu es Sécurité.', isDefault: true, createdAt: new Date() });
     builderReply = FIRST.replace('<gabarit>jeu</gabarit>', '<gabarit>site</gabarit>');
     const siteId = (await post('/api/projects/from-story', { story: 'Un site pour partager mes disques préférés et les concerts de Rennes.' })).body.id;
     for (let i = 0; i < 100; i++) { if ((await get(`/api/projects/${siteId}/work`)).body.current) break; await new Promise(r => setTimeout(r, 50)); }
     const r = await post(`/api/projects/${siteId}/work/review`);
     const s = (await get(`/api/projects/${siteId}/sessions/${r.body.sessionId}/review`)).body;
-    expect(s.agents.map(a => a.name)).toEqual(['Rédacteur', 'Critique', 'Juriste']);
+    expect(s.agents.map(a => a.name)).toEqual(['Rédacteur', 'Juriste', 'Sécurité']);
   });
 });

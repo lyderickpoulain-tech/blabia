@@ -91,6 +91,20 @@ router.delete('/invitations/:id', async (req, res) => {
 });
 
 // POST /api/admin/test-email
+// v6 : veille mensuelle des outils de BlabIA (services/veille.js) — rapports et lancement à la main
+router.get('/veille', async (req, res) => {
+  try { res.json(await require('../services/veille').status()); }
+  catch (err) { console.error('[admin/veille]', err.message); res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+router.post('/veille/run', async (req, res) => {
+  try {
+    const veille = require('../services/veille');
+    if (!(await veille.status()).enabled) return res.status(400).json({ error: 'La veille ne tourne que sur le BlabIA en ligne.' });
+    res.status(202).json(await veille.runNow());
+  } catch (err) { console.error('[admin/veille/run]', err.message); res.status(500).json({ error: 'La veille n’a pas pu être lancée.' }); }
+});
+
 router.post('/test-email', async (req, res) => {
   try {
     await sendTestEmail(req.user.email);

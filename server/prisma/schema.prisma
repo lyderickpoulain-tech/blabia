@@ -621,3 +621,16 @@ model SitePublication {
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   build       SiteBuild? @relation(fields: [buildId], references: [id], onDelete: SetNull)
 }
+
+// v6 : rapport de la veille mensuelle des outils de BlabIA (agent programmé chez Anthropic)
+model VeilleReport {
+  id           String    @id @default(uuid())
+  agentSession String    @unique
+  runId        String?
+  trigger      String?   // schedule | manual
+  content      String?   // le rapport (Markdown)
+  status       String    @default("ready") // ready | empty | failed
+  costUSD      Decimal?  @db.Decimal(10, 4)
+  emailedAt    DateTime?
+  createdAt    DateTime  @default(now())
+}

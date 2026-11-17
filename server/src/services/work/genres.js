@@ -73,7 +73,7 @@ registerGenre({
       when: 'un site ou une application à faire réaliser : le dossier qui le décrit, sans le construire',
       parts: ['Le site en bref', 'Pour qui', 'Les pages', 'Les textes', 'Le style', 'Ce qu’il faudra pour le construire'],
       illustration: 'L’allure de la page d’accueil, en un croquis simple (bloc svg).',
-      reviewers: ['Rédacteur', 'Critique', 'Juriste'],
+      reviewers: ['Rédacteur', 'Juriste', 'Sécurité'],
     },
     autre: {
       label: 'Projet',

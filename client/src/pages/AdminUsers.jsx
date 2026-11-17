@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Users, Mail, MailCheck, UserPlus, Trash2, Copy, Check, X } from 'lucide-react';
+import { Users, Mail, MailCheck, UserPlus, Trash2, Copy, Check, X, Radar } from 'lucide-react';
+import VeillePanel from '../components/admin/VeillePanel';
 import Layout from '../components/Layout';
 import { Button, IconButton, Badge, Card } from '../components/ui';
 import api from '../utils/api';
@@ -83,7 +84,7 @@ function RoleDropdown({ user: target, requesterRole, onRoleChange, updating }) {
 export default function AdminUsers() {
   const { user: me } = useAuth();
   const [params, setParams] = useSearchParams();
-  const tab = params.get('onglet') === 'invitations' ? 'invitations' : 'users';
+  const tab = ['invitations', 'veille'].includes(params.get('onglet')) ? params.get('onglet') : 'users';
   const setTab = t => setParams(t === 'users' ? {} : { onglet: t }, { replace: true });
 
   // État utilisateurs
@@ -222,13 +223,16 @@ export default function AdminUsers() {
 
       {/* Onglets */}
       <div data-tour="admin-tabs" role="tablist" className="inline-flex bg-white border border-line rounded-[10px] p-1 gap-1 mb-5">
-        {[{ id: 'users', label: 'Comptes', icon: Users }, { id: 'invitations', label: 'Invitations', icon: Mail }].map(t => (
+        {[{ id: 'users', label: 'Comptes', icon: Users }, { id: 'invitations', label: 'Invitations', icon: Mail }, { id: 'veille', label: 'Veille', icon: Radar }].map(t => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
             className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm transition ${tab === t.id ? 'bg-action-light text-action font-extrabold' : 'text-ink-muted font-semibold hover:bg-canvas'}`}>
             <t.icon size={15} aria-hidden="true" /> {t.label}
           </button>
         ))}
       </div>
+
+      {/* ── Veille (v6) ───────────────────────────────────────────────────── */}
+      {tab === 'veille' && <VeillePanel />}
 
       {/* ── Comptes ───────────────────────────────────────────────────────── */}
       {tab === 'users' && (

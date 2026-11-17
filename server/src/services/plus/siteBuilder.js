@@ -39,6 +39,7 @@ CONTRAINTES :
 - Ce que le dossier marque « à vérifier » reste, avec un commentaire HTML pour le porteur (pas à l'écran).
 - Adapté au téléphone, accessible (contrastes, textes alternatifs, navigation au clavier), en français.
 - Pages légales : une page « Mentions légales » conforme à la loi pour la confiance dans l'économie numérique (éditeur, directeur de la publication, hébergeur) ; une politique de confidentialité si le site recueille des données (formulaire) ; des conditions générales de vente avec le droit de rétractation de 14 jours si le site vend. Ce que le dossier ne donne pas (nom, adresse, numéro d'entreprise) reste visiblement « à compléter », et figure dans le rapport.
+- Sécurité (recommandations de l'ANSSI) : aucune clé, aucun mot de passe ni identifiant secret dans les fichiers ; aucun eval, new Function ni document.write ; du texte inséré par le programme passe par textContent, jamais innerHTML ; tout lien qui s'ouvre dans un nouvel onglet porte rel="noopener noreferrer" ; uniquement des adresses en https:// ; un formulaire s'envoie par la messagerie du visiteur (mailto), jamais vers un autre site ; aucune statistique ni publicité sans bandeau de consentement aux cookies.
 - Référencement : chaque page a un <title> et une <meta name="description"> propres, des balises Open Graph (og:title, og:description, og:type), un seul <h1> ; un fichier robots.txt qui autorise tout ; des données structurées JSON-LD quand le dossier s'y prête (événements pour des concerts, organisation ou personne). Le plan du site (sitemap) sera produit à la mise en ligne, quand l'adresse sera connue.
 
 LIVRAISON : tout le site dans ${OUTPUTS} (index.html à la racine, rien d'autre que le site et le rapport). Avant de finir, vérifie toi-même : chaque lien interne mène à un fichier existant, aucune ressource externe, HTML bien formé (un petit script Python suffit, que tu ne livres pas). Termine par ${OUTPUTS}${REPORT}, en français courant pour le porteur : les pages faites, ce que tu as dû supposer, ce qui reste à faire par lui. Sois économe : pas de relectures inutiles.`;
@@ -275,7 +276,9 @@ async function siteState(projectId) {
     previewPath: b.status === 'ready' ? `/api/apercu/${b.previewToken}/` : null,
     costUSD: b.costUSD == null ? null : Number(b.costUSD), model: b.model,
   });
-  return { last: shape(last), ready: shape(ready) };
+  // Contrôle juridique et sécurité de la version prête, avant sa mise en ligne (sans IA)
+  const checks = ready ? require('./siteChecks').checkSite(await db('SiteFile').where({ buildId: ready.id }).select('path', 'content')) : [];
+  return { last: shape(last), ready: shape(ready), checks };
 }
 
 // Aperçu : un fichier d'une construction prête, par son jeton

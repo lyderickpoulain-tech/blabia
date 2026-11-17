@@ -103,6 +103,8 @@ if (require.main === module) {
     if (isProd && !process.env.SECRETS_ENCRYPTION_KEY) console.warn('[secretBox] SECRETS_ENCRYPTION_KEY absente : secrets encore chiffrés avec JWT_SECRET (illisibles si ce secret change).');
     // Rappels hebdomadaires des actions (services/reminders.js) : vérification horaire
     require('./services/reminders').startReminderScheduler();
+    // v6 : veille mensuelle des outils (agent programmé, production seulement)
+    require('./services/veille').startVeille();
     // Missions des agents en attente : reprise au démarrage puis toutes les 5 minutes
     if (process.env.REMINDERS_DISABLED !== '1') {
       const { processMissions } = require('./services/missionRunner');

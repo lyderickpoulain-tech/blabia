@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Clock, Download, ExternalLink, Globe, RotateCcw, Rocket, Wand2 } from 'lucide-react';
+import { Clock, Download, ExternalLink, Globe, RotateCcw, Rocket, ShieldCheck, TriangleAlert, Wand2 } from 'lucide-react';
 import { downloadFile } from '../../utils/download';
 import { Button, Card, SectionLabel } from '../ui';
 import Markdown from '../Markdown';
@@ -23,6 +23,40 @@ const STAGES = {
 function elapsed(from, now) {
   const s = Math.max(0, Math.round((now - new Date(from).getTime()) / 1000));
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')}`;
+}
+
+// Contrôle juridique et sécurité avant la mise en ligne (sans IA) : chaque point se corrige
+// d'un clic par une retouche ; le porteur décide, rien ne bloque.
+const TOPIC = { 'loi': 'Loi', 'sécurité': 'Sécurité', 'référencement': 'Google' };
+function Checks({ checks, onFix, busy, isDemo }) {
+  if (!checks) return null;
+  if (!checks.length) {
+    return <p className="text-sm text-ok font-semibold flex items-center gap-1.5" data-tour="pw-site-checks"><ShieldCheck size={15} aria-hidden="true" /> Contrôle juridique et sécurité : rien à signaler.</p>;
+  }
+  const important = checks.filter(c => c.level === 'important').length;
+  return (
+    <div className="rounded-xl border border-await-border bg-await-bg p-3 space-y-2" data-tour="pw-site-checks">
+      <p className="text-sm font-bold text-ink flex items-center gap-1.5">
+        <TriangleAlert size={15} className="text-await" aria-hidden="true" />
+        Contrôle juridique et sécurité : {checks.length} point{checks.length > 1 ? 's' : ''}{important ? `, dont ${important} important${important > 1 ? 's' : ''}` : ''}
+      </p>
+      <ul className="space-y-2">
+        {checks.map((c, i) => (
+          <li key={i} className="text-sm flex flex-wrap items-start gap-x-2 gap-y-1">
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider shrink-0 mt-0.5 ${c.level === 'important' ? 'text-await' : 'text-ink-muted'}`}>{TOPIC[c.topic] || c.topic}</span>
+            <span className="flex-1 min-w-[200px] text-ink">{c.text}</span>
+            <button type="button" onClick={() => onFix(c.fix)} disabled={busy || isDemo} className="text-xs font-bold text-action hover:underline shrink-0">Corriger</button>
+          </li>
+        ))}
+      </ul>
+      {checks.length > 1 && (
+        <Button size="sm" variant="secondary" onClick={() => onFix(checks.map(c => `- ${c.fix}`).join('\n'))} disabled={busy || isDemo}>
+          <Wand2 size={15} aria-hidden="true" /> Tout corriger en une retouche
+        </Button>
+      )}
+      <p className="text-xs text-ink-muted">Vous pouvez mettre le site en ligne quand même : c’est vous qui décidez.</p>
+    </div>
+  );
 }
 
 // Adresse au nom du porteur. Il achète son nom chez le vendeur de son choix et ajoute une ligne
@@ -233,6 +267,7 @@ export default function SiteCard({ projectId, dossierVersion, isDemo }) {
               <Wand2 size={15} aria-hidden="true" /> Retoucher le site
             </Button>
           </div>
+          <Checks checks={site.checks} onFix={retouch} busy={busy} isDemo={isDemo} />
           {site.publication && <Publication projectId={projectId} pub={site.publication} onChanged={data => (data ? setSite(data) : load().catch(() => {}))} isDemo={isDemo} />}
           <p className="text-sm">
             <button type="button" onClick={() => downloadFile(`/projects/${projectId}/site/download`, 'mon-site.zip').catch(err => notifyError(err, 'Le téléchargement n’a pas pu se faire'))}

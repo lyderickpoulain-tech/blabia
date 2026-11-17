@@ -207,4 +207,36 @@ async function sendDelegationReport(toEmail, { meetingTitle, headline, decidedCo
   await client.emails.send({ from: FROM_ADDRESS, to: toEmail, subject: `Réunion tenue par votre bras droit : ${String(meetingTitle).slice(0, 80)}`, html: baseLayout(content) });
 }
 
-module.exports = { sendInvitation, sendTestEmail, sendActionsDigest, sendQuestionRequest, sendDelegationReport };
+// ── Veille mensuelle (v6, services/veille.js) : le rapport de l'agent, en e-mail ──
+// Markdown simple → HTML (titres, listes, gras, liens) ; tout le texte est échappé
+function markdownToEmailHtml(md) {
+  const inline = t => escapeHtml(t)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, label, url) => `<a href="${url.replace(/&amp;/g, '&').replace(/"/g, '%22')}" style="color:#3352E0;">${label}</a>`);
+  const out = [];
+  let list = false;
+  for (const raw of String(md || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    const h = line.match(/^(#{1,3})\s+(.*)$/);
+    const li = line.match(/^[-*]\s+(.*)$/);
+    if (!li && list) { out.push('</ul>'); list = false; }
+    if (h) out.push(`<h${h[1].length + 1} style="color:#1E2238;margin:18px 0 8px;font-size:${h[1].length === 1 ? 20 : 16}px;">${inline(h[2])}</h${h[1].length + 1}>`);
+    else if (li) { if (!list) { out.push('<ul style="padding-left:18px;margin:0 0 12px;">'); list = true; } out.push(`<li style="margin:0 0 6px;color:#1E2238;font-size:14px;">${inline(li[1])}</li>`); }
+    else if (line) out.push(`<p style="margin:0 0 10px;color:#1E2238;font-size:14px;">${inline(line)}</p>`);
+  }
+  if (list) out.push('</ul>');
+  return out.join('\n');
+}
+
+async function sendVeilleReport(toEmail, markdown) {
+  const client = getClient();
+  const title = (String(markdown).match(/^#\s+(.+)$/m) || [])[1] || 'Veille de BlabIA';
+  const content = `${markdownToEmailHtml(markdown)}
+    <p style="margin:16px 0 0;color:#9ca3af;font-size:11px;">Rapport rédigé par l'agent de veille de BlabIA (premier lundi du mois). Il ne modifie rien : c'est vous qui décidez. Aussi dans Administration › Veille.</p>`;
+  if (!client) { console.log(`[email] Veille (RESEND_API_KEY absent) pour ${toEmail} : ${title}`); return; }
+  const { error } = await client.emails.send({ from: FROM_ADDRESS, to: toEmail, subject: `[BlabIA] ${title}`, html: baseLayout(content) });
+  if (error) throw new Error(error.message);
+}
+
+module.exports = {
+  sendVeilleReport, markdownToEmailHtml, sendInvitation, sendTestEmail, sendActionsDigest, sendQuestionRequest, sendDelegationReport };

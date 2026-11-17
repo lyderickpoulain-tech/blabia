@@ -1,5 +1,5 @@
 # ── Étape 1 : build du client Vite ────────────────────────────────────────────
-FROM node:20-alpine AS client-builder
+FROM node:24-alpine AS client-builder
 
 WORKDIR /app/client
 COPY client/package*.json ./
@@ -9,7 +9,7 @@ COPY client/ ./
 RUN npm run build
 
 # ── Étape 2 : serveur de production ───────────────────────────────────────────
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
