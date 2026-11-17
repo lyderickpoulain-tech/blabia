@@ -143,6 +143,7 @@ router.put('/users/:id/role', async (req, res) => {
     }
 
     await db('User').where({ id: req.params.id }).update({ role: newRole });
+    require('../middleware/auth').forget(req.params.id); // le nouveau rôle vaut aussitôt
     res.json({ message: 'Rôle mis à jour', role: newRole });
   } catch (err) {
     console.error('[admin/users/:id/role PUT]', err.message);

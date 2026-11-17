@@ -9,10 +9,28 @@ const app    = express();
 const PORT   = process.env.PORT || 3001;   // Railway injecte toujours PORT ; 3001 = fallback local uniquement
 const isProd = process.env.NODE_ENV === 'production';
 
-// En production, le frontend est servi depuis le même serveur → pas de restriction CORS
-// En développement, on autorise uniquement Vite (5173)
+// Contrôle de sécurité du 18/11/2026 (feuille de route, § 7) :
+// - derrière le proxy de Railway, l'adresse du visiteur est dans X-Forwarded-For : sans ce
+//   réglage, les limites de tentatives de connexion comptaient tous les visiteurs ensemble ;
+// - le serveur ne dit plus quel logiciel il utilise ;
+// - en production, le site est servi par ce même serveur : aucune autre origine n'est autorisée
+//   à l'appeler (avant : toutes les origines étaient acceptées) ;
+// - en-têtes de protection du navigateur (le site ne s'affiche pas dans le cadre d'un autre site,
+//   type de fichier respecté, pas de caméra ni de micro, connexion chiffrée imposée).
+if (isProd) app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    ...(isProd ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
+  });
+  next();
+});
 app.use(cors({
-  origin: isProd ? true : (process.env.FRONTEND_URL || 'http://localhost:5173'),
+  origin: isProd ? false : (process.env.FRONTEND_URL || 'http://localhost:5173'),
   credentials: true
 }));
 

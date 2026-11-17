@@ -872,7 +872,8 @@ router.post('/:sessionId/chat', async (req, res) => {
     }
     console.error('[sessions/chat]', err.message, err.stack);
     if (delegate) await delegation.setStatus(sessionId, { status: 'failed', error: String(err.message).slice(0, 300) }).catch(() => {});
-    try { send('error', { message: `Erreur : ${err.message}` }); } catch {} // navigateur déjà déconnecté
+    // Le détail technique reste dans les journaux du serveur : rien d'interne n'est montré à l'écran
+    try { send('error', { message: 'Les assistants n’ont pas pu répondre. Réessayez dans un instant.' }); } catch {} // navigateur déjà déconnecté
     res.end();
   } finally {
     clearInterval(heartbeatInterval);
